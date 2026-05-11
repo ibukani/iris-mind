@@ -19,6 +19,7 @@ class PersonalityConfig(BaseModel):
 class MemoryConfig(BaseModel):
     episodic_path: str = "memory/episodes.jsonl"
     semantic_path: str = "memory/semantic.jsonl"
+    vector_db_path: str = "memory/chroma_db"
     episodic_max_entries: int = 30
     semantic_max_entries: int = 100
     rag_max_results: int = 3

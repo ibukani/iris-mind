@@ -38,6 +38,7 @@ def run_cli():
     semantic = SemanticStore(
         path=str(PROJECT_ROOT / config.memory.semantic_path),
         max_entries=config.memory.semantic_max_entries,
+        vector_db_path=str(PROJECT_ROOT / config.memory.vector_db_path),
     )
 
     registry = CapabilityRegistry()

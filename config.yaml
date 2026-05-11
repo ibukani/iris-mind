@@ -11,6 +11,7 @@ personality:
 memory:
   episodic_path: memory/episodes.jsonl
   semantic_path: memory/semantic.jsonl
+  vector_db_path: memory/chroma_db
   episodic_max_entries: 30
   semantic_max_entries: 100
   rag_max_results: 3

@@ -39,18 +39,23 @@
     "content": "ファイル書き込み前に存在確認が必要",
     "tags": ["file_ops", "error"],
     "timestamp": "2026-05-11",
-    "context": "capability開発中に発生"
 }
 
 # 検索方式: ハイブリッド検索（ベクトル類似度 + BM25全文検索）
-#   ChromaDB:   意味的類似性（ベクトル埋め込み）
-#   BM25:       キーワード一致（コード断片・固有名詞に有効）
+#   ChromaDB ONNX MiniLM: 意味的類似性（384次元ベクトル、組み込み、追加DL不要）
+#   BM25:                 キーワード一致（コード断片・固有名詞に有効）
 #   統合スコア: weight_vector * 0.6 + weight_bm25 * 0.4
 
-# max_results=3 で固定
-# 統合スコア 0.85 以下の結果は捨てる
+# max_results=3, min_score=0.2
 # 上限100エントリ、超過時は古いものから削除
 ```
+
+### 実装: `memory/vector_store.py`
+
+- `VectorStore` — ChromaDB PersistentClient + ONNXMiniLM_L6_V2 組み込み埋め込み
+- `_bm25_search()` — BM25 OKAPI アルゴリズム（IDF + TF正規化）
+- `search()` — ベクトル検索 + BM25 の統合スコアでソート
+- ChromaDB 1.5.9 以上、ONNXランタイムはpip依存関係に含まれず（ChromaDB内蔵）
 
 ## 手続き記憶設計（将来拡張）
 

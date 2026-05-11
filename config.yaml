@@ -1,0 +1,17 @@
+model:
+  name: qwen3.5:9b
+  base_url: http://localhost:11434
+  max_tokens: 4096
+  temperature: 0.7
+
+personality:
+  name: Iris
+  thinking_mode_default: false
+
+memory:
+  vector_db_path: memory/chroma_db
+  episodic_max_entries: 30
+  semantic_max_entries: 100
+  rag_max_results: 3
+  agents_md_path: AGENTS.md
+  agents_md_max_bytes: 2048

@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+memory/chroma_db/
+memory/episodes.jsonl
+memory/semantic.jsonl
+.DS_Store
+*.log

@@ -13,6 +13,8 @@ from core.config import Config
 from core.llm_bridge import LLMBridge
 from core.personality import Personality
 from core.reflexion import Reflexion
+from core.planner import Planner
+from core.executor import Executor
 from memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
 from capabilities.registry import CapabilityRegistry
 
@@ -46,6 +48,8 @@ def run_cli():
     console.print(f"[green]Loaded {len(registry._capabilities)} capabilities[/green]")
 
     reflexion = Reflexion(llm=llm)
+    planner = Planner(llm=llm)
+    executor = Executor(llm=llm, registry=registry)
 
     recent_episodes = episodic.get_recent(3)
     if recent_episodes:
@@ -60,6 +64,7 @@ def run_cli():
 
     messages: list[dict] = []
     thinking_mode = config.personality.thinking_mode_default
+    plan_mode = False
 
     while True:
         try:
@@ -73,9 +78,9 @@ def run_cli():
             continue
 
         if user_input.startswith("/"):
-            handled, thinking_mode = _handle_command(
+            handled, thinking_mode, plan_mode = _handle_command(
                 user_input, llm, config, messages, thinking_mode, registry,
-                reflexion, episodic, semantic,
+                reflexion, episodic, semantic, planner, executor, plan_mode,
             )
             if handled:
                 continue
@@ -94,43 +99,65 @@ def run_cli():
             lesson_text = "\n".join(f"- {e['content']}" for e in relevant_lessons)
             system_prompt += f"\n\n## Related Lessons\n{lesson_text}"
 
-        with console.status("[cyan]Thinking...[/cyan]", spinner="dots"):
-            response = llm.chat(
-                messages=[{"role": "system", "content": system_prompt}, *messages],
-                enable_thinking=thinking_mode,
-                temperature=config.model.temperature,
-                max_tokens=config.model.max_tokens,
-                tools=registry.list_tools(),
-            )
+        should_plan = plan_mode or (thinking_mode and _detect_complex(user_input, llm))
+        if should_plan and not plan_mode:
+            plan_result = planner.analyze(user_input, system_prompt[:300])
+            should_plan = planner.is_complex(plan_result)
 
-        msg = response["message"]
-        messages.append(msg)
+        if should_plan:
+            if not plan_mode:
+                plan_result = planner.analyze(user_input, system_prompt[:300])
+            console.print(f"[yellow]Planning mode: {len(plan_result.get('subtasks', []))} subtasks[/yellow]")
+            for st in plan_result.get("subtasks", []):
+                console.print(f"  [dim]→ {st['name']}: {st['description'][:60]}[/dim]")
 
-        if msg.get("tool_calls"):
-            for tc in msg["tool_calls"]:
-                func_name = tc["function"]["name"]
-                args = tc["function"]["arguments"]
-                result = registry.execute(func_name, **args)
-                messages.append({
-                    "role": "tool",
-                    "name": func_name,
-                    "content": result,
-                })
-                console.print(f"[dim]  → {func_name}(...): {result[:120]}[/dim]")
+            with console.status("[cyan]Executing plan...[/cyan]", spinner="dots"):
+                step_results = executor.execute_plan(plan_result, system_prompt)
 
-            with console.status("[cyan]Processing results...[/cyan]", spinner="dots"):
-                final = llm.chat(
+            with console.status("[cyan]Synthesizing results...[/cyan]", spinner="dots"):
+                final_content = executor.synthesize(plan_result, step_results, system_prompt)
+
+            messages.append({"role": "assistant", "content": final_content})
+            if final_content:
+                console.print(Panel(Markdown(final_content), border_style="cyan"))
+        else:
+            with console.status("[cyan]Thinking...[/cyan]", spinner="dots"):
+                response = llm.chat(
                     messages=[{"role": "system", "content": system_prompt}, *messages],
                     enable_thinking=thinking_mode,
                     temperature=config.model.temperature,
                     max_tokens=config.model.max_tokens,
+                    tools=registry.list_tools(),
                 )
-                msg = final["message"]
-                messages.append(msg)
 
-        content = msg.get("content", "")
-        if content:
-            console.print(Panel(Markdown(content), border_style="cyan"))
+            msg = response["message"]
+            messages.append(msg)
+
+            if msg.get("tool_calls"):
+                for tc in msg["tool_calls"]:
+                    func_name = tc["function"]["name"]
+                    args = tc["function"]["arguments"]
+                    result = registry.execute(func_name, **args)
+                    messages.append({
+                        "role": "tool",
+                        "name": func_name,
+                        "content": result,
+                    })
+                    console.print(f"[dim]  → {func_name}(...): {result[:120]}[/dim]")
+
+                with console.status("[cyan]Processing results...[/cyan]", spinner="dots"):
+                    final = llm.chat(
+                        messages=[{"role": "system", "content": system_prompt}, *messages],
+                        enable_thinking=thinking_mode,
+                        temperature=config.model.temperature,
+                        max_tokens=config.model.max_tokens,
+                    )
+                    msg = final["message"]
+                    messages.append(msg)
+
+            content = msg.get("content", "")
+            if content:
+                console.print(Panel(Markdown(content), border_style="cyan"))
 
 
 def _run_reflexion_and_save(
@@ -173,6 +200,16 @@ def _ensure_ollama(config: Config) -> LLMBridge | None:
     return llm
 
 
+def _detect_complex(user_input: str, llm: LLMBridge) -> bool:
+    """クイック判定：複数ツール・複数ステップが必要そうか"""
+    triggers = [
+        "調査", "調べて", "比較", "分析", "設計", "構築", "作成して",
+        "research", "compare", "analyze", "design", "build", "create",
+        "まず", "最初に", "その後", "step", "steps",
+    ]
+    return any(t in user_input.lower() for t in triggers)
+
+
 def _inject_thinking_context(messages: list[dict], personality: Personality, user_input: str):
     messages[-1]["content"] = personality.build_thinking_prompt(user_input)
 
@@ -182,13 +219,17 @@ def _handle_command(cmd: str, llm: LLMBridge, config: Config,
                     registry: CapabilityRegistry,
                     reflexion: Reflexion | None = None,
                     episodic: EpisodicStore | None = None,
-                    semantic: SemanticStore | None = None) -> tuple[bool, bool]:
+                    semantic: SemanticStore | None = None,
+                    planner: Planner | None = None,
+                    executor: Executor | None = None,
+                    plan_mode: bool = False) -> tuple[bool, bool, bool]:
     from rich.table import Table
 
     match cmd.lower().split():
         case ["/help"]:
             console.print(Panel(
                 "[bold]/think[/bold] - toggle thinking mode\n"
+                "[bold]/plan[/bold] - toggle plan-and-execute mode\n"
                 "/model <name> - switch model\n"
                 "/capabilities - list registered capabilities\n"
                 "/memory - show memory stats\n"
@@ -197,17 +238,22 @@ def _handle_command(cmd: str, llm: LLMBridge, config: Config,
                 title="Commands",
                 border_style="yellow",
             ))
-            return True, thinking_mode
+            return True, thinking_mode, plan_mode
         case ["/think"]:
             thinking_mode = not thinking_mode
             state = "ON" if thinking_mode else "OFF"
             console.print(f"[yellow]Thinking mode: {state}[/yellow]")
-            return True, thinking_mode
+            return True, thinking_mode, plan_mode
+        case ["/plan"]:
+            plan_mode = not plan_mode
+            state = "ON" if plan_mode else "OFF"
+            console.print(f"[yellow]Plan mode: {state}[/yellow]")
+            return True, thinking_mode, plan_mode
         case ["/model", name]:
             llm.set_model(name)
             config.model.name = name
             console.print(f"[green]Switched to model: {name}[/green]")
-            return True, thinking_mode
+            return True, thinking_mode, plan_mode
         case ["/capabilities"]:
             table = Table(title="Registered Capabilities")
             table.add_column("Name", style="cyan")
@@ -215,11 +261,11 @@ def _handle_command(cmd: str, llm: LLMBridge, config: Config,
             for cap in registry._capabilities.values():
                 table.add_row(cap.name, cap.description)
             console.print(table)
-            return True, thinking_mode
+            return True, thinking_mode, plan_mode
         case ["/memory"]:
             if not episodic or not semantic:
                 console.print("[yellow]Memory stores not initialized[/yellow]")
-                return True, thinking_mode
+                return True, thinking_mode, plan_mode
             from pathlib import Path
             from rich.table import Table
             recent_eps = episodic.get_recent(3)
@@ -237,17 +283,17 @@ def _handle_command(cmd: str, llm: LLMBridge, config: Config,
                 console.print("\n[bold]Recent Episodes:[/bold]")
                 for e in recent_eps:
                     console.print(f"  [dim]• {e[:100]}[/dim]")
-            return True, thinking_mode
+            return True, thinking_mode, plan_mode
         case ["/clear"]:
             messages.clear()
             console.print("[yellow]Conversation cleared[/yellow]")
-            return True, thinking_mode
+            return True, thinking_mode, plan_mode
         case ["/exit"] | ["/quit"]:
             console.print("[yellow]Goodbye![/yellow]")
             if reflexion and episodic and semantic:
                 _run_reflexion_and_save(reflexion, messages, episodic, semantic)
             sys.exit(0)
-    return False, thinking_mode
+    return False, thinking_mode, plan_mode
 
 
 if __name__ == "__main__":

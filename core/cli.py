@@ -37,7 +37,7 @@ def _ensure_ollama(config: Config) -> LLMBridge | None:
     return llm
 
 
-def _detect_complex(user_input: str, llm: LLMBridge) -> bool:
+def _detect_complex(user_input: str) -> bool:
     triggers = [
         "調査", "調べて", "比較", "分析", "設計", "構築", "作成して",
         "research", "compare", "analyze", "design", "build", "create",
@@ -126,24 +126,23 @@ def run_cli():
             lesson_text = "\n".join(f"- {e['content']}" for e in relevant_lessons)
             system_prompt += f"\n\n## Related Lessons\n{lesson_text}"
 
-        should_plan = plan_mode or (thinking_mode and _detect_complex(user_input, llm))
+        should_plan = plan_mode or (thinking_mode and _detect_complex(user_input))
         plan_result = None
-        if should_plan and not plan_mode:
+        if should_plan:
             plan_result = planner.analyze(user_input, system_prompt[:300])
-            should_plan = planner.is_complex(plan_result)
+            if not plan_mode:
+                should_plan = planner.is_complex(plan_result)
 
         if should_plan:
-            if plan_result is None:
-                plan_result = planner.analyze(user_input, system_prompt[:300])
             console.print(f"[yellow]Planning mode: {len(plan_result.get('subtasks', []))} subtasks[/yellow]")
             for st in plan_result.get("subtasks", []):
                 console.print(f"  [dim]→ {st['name']}: {st['description'][:60]}[/dim]")
 
             with console.status("[cyan]Executing plan...[/cyan]", spinner="dots"):
-                step_results = executor.execute_plan(plan_result, system_prompt)
+                step_results = executor.execute_plan(plan_result, user_input, config.personality.name)
 
             with console.status("[cyan]Synthesizing results...[/cyan]", spinner="dots"):
-                final_content = executor.synthesize(plan_result, step_results, system_prompt)
+                final_content = executor.synthesize(plan_result, step_results, user_input, config.personality.name)
 
             messages.append({"role": "assistant", "content": final_content})
             if final_content:

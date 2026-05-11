@@ -14,14 +14,20 @@ class Executor:
         self.llm = llm
         self.registry = registry
 
-    def execute_plan(self, plan: dict, system_prompt: str) -> list[dict]:
+    def execute_plan(self, plan: dict, user_input: str, personality_name: str = "Iris") -> list[dict]:
         subtasks = plan.get("subtasks", [])
         results: list[dict] = []
 
         for i, task in enumerate(subtasks):
             name = task.get("name", f"step_{i}")
             desc = task.get("description", "")
-            step_prompt = f"{system_prompt}\n\n## Current Task ({i+1}/{len(subtasks)})\n{name}: {desc}"
+            step_prompt = (
+                f"あなたは{personality_name}です。与えられたタスクを正確に実行してください。\n\n"
+                f"## Current Task ({i+1}/{len(subtasks)})\n"
+                f"Task: {name}\n"
+                f"Description: {desc}\n"
+                f"Original request: {user_input}"
+            )
 
             messages = [{"role": "user", "content": f"Execute this task: {desc}"}]
             step_result = self._run_react(step_prompt, messages)
@@ -29,17 +35,22 @@ class Executor:
 
         return results
 
-    def synthesize(self, plan: dict, results: list[dict], system_prompt: str) -> str:
+    def synthesize(self, plan: dict, results: list[dict], user_input: str, personality_name: str = "Iris") -> str:
         summary_lines = []
         for r in results:
             summary_lines.append(f"### {r['name']}\n{r['output'][:500]}")
         summary = "\n\n".join(summary_lines)
 
+        sys_prompt = (
+            f"あなたは{personality_name}です。マルチステップ計画の実行結果を"
+            f"ユーザーにわかりやすく要約してください。"
+        )
         resp = self.llm.chat(
             messages=[
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": sys_prompt},
                 {"role": "user", "content":
                  f"I executed a multi-step plan. Summarize the results:\n\n"
+                 f"## Original Request\n{user_input}\n\n"
                  f"## Plan\n{json.dumps(plan, ensure_ascii=False)}\n\n"
                  f"## Results\n{summary}"},
             ],

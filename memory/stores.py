@@ -44,7 +44,7 @@ class EpisodicStore:
         entries = self._load_all()
         entries.append({"summary": summary})
         if len(entries) > self.max_entries:
-            entries = self._compress(entries)
+            entries = self._merge_and_trim(entries)
         self.path.write_text(
             "\n".join(json.dumps(e) for e in entries),
             encoding="utf-8",
@@ -54,8 +54,8 @@ class EpisodicStore:
         entries = self._load_all()
         return [e["summary"] for e in entries[-n:]]
 
-    def _compress(self, entries: list[dict]) -> list[dict]:
-        """古いエントリを1つにマージ"""
+    def _merge_and_trim(self, entries: list[dict]) -> list[dict]:
+        """上限超過時、古いエントリを1つにマージして削減"""
         keep = self.max_entries - 1
         merged_text = " | ".join(e["summary"] for e in entries[:len(entries) - keep])
         return [{"summary": merged_text[:500]}] + entries[-(keep):]

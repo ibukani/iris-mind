@@ -159,6 +159,7 @@ def _handle_command(cmd: str, llm: LLMBridge, config: Config,
                 title="Commands",
                 border_style="yellow",
             ))
+            return True, thinking_mode
         case ["/think"]:
             thinking_mode = not thinking_mode
             state = "ON" if thinking_mode else "OFF"

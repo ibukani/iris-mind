@@ -55,11 +55,31 @@ class LLMBridge:
 
 
 def _extract_answer_from_thinking(text: str) -> str:
-    lines = text.strip().splitlines()
-    non_thinking = [l for l in lines if not re.match(
-        r"^\s*(思考|Thinking|Reasoning|Step|Hmm|Wait|Let|I need|Actually|Re-evaluat|Draft|Final Decision)",
-        l.strip()
+    stripped = text.strip()
+    if not stripped:
+        return stripped
+
+    final_lines = []
+    in_thinking_block = False
+    for line in stripped.splitlines():
+        if re.match(r"^\s*```?\s*(think|thought|reasoning|思考)\s*", line, re.IGNORECASE):
+            in_thinking_block = True
+            continue
+        if in_thinking_block and re.match(r"^\s*```?\s*", line):
+            in_thinking_block = False
+            continue
+        if not in_thinking_block:
+            final_lines.append(line)
+
+    if final_lines:
+        return "\n".join(final_lines).strip()
+
+    lines = stripped.splitlines()
+    content_lines = [l for l in lines if not re.match(
+        r"^\s*(思考|Thinking|Reasoning|Step \d|Hmm|Wait|Let me|I need|Actually|Re-evaluat|Draft|Final|I'll|I think|I should|Maybe|Perhaps|First,?|Next,?|Finally,?)",
+        l.strip(), re.IGNORECASE
     )]
-    if non_thinking:
-        return non_thinking[-1].strip()
-    return text.strip()
+    if content_lines:
+        return content_lines[-1].strip()
+
+    return stripped

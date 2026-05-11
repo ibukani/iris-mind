@@ -1,8 +1,32 @@
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 from capabilities.registry import CapabilityRegistry
+
+
+_BLOCKED_COMMANDS = [
+    "rm -rf /", "rm -rf ~", "mkfs", "format", "dd if=", ":(){ :|:& };:",
+    "wget ", "curl ", "nc ", "netcat", "chmod 777", "chown ",
+    "> /dev/sda", "> /dev/", "| sh", "| bash", "| cmd",
+    "shutdown", "reboot", "init 0", "init 6",
+]
+_BLOCKED_PATTERNS = [
+    r"rm\s+(-rf?\s+)?[/~]", r"mkfs\.\w+", r"dd\s+if=",
+    r"wget\s+\w+\.\w+", r"curl\s+\w+\.\w+",
+    r"chmod\s+777", r"chown\s",
+]
+
+
+def _is_dangerous(command: str) -> str | None:
+    cmd_lower = command.lower().strip()
+    for blocked in _BLOCKED_COMMANDS:
+        if blocked in cmd_lower:
+            return f"blocked: '{blocked}' is not allowed"
+    import re
+    for pattern in _BLOCKED_PATTERNS:
+        if re.search(pattern, cmd_lower):
+            return f"blocked: pattern '{pattern}' matched"
+    return None
 
 
 def register(registry: CapabilityRegistry):
@@ -42,7 +66,7 @@ def register(registry: CapabilityRegistry):
 
     @registry.register_func(
         name="run_shell",
-        description="指定されたシェルコマンドを実行します",
+        description="指定されたシェルコマンドを実行します（危険コマンドはブロックされます）",
         parameters={
             "command": {
                 "type": "string",
@@ -56,6 +80,9 @@ def register(registry: CapabilityRegistry):
         },
     )
     def run_shell(command: str, timeout: int = 15) -> str:
+        blocked = _is_dangerous(command)
+        if blocked:
+            return f"Error: {blocked}"
         try:
             result = subprocess.run(
                 command,

@@ -12,8 +12,8 @@ class ModelConfig(BaseModel):
 
 class PersonalityConfig(BaseModel):
     name: str = "Iris"
-    description_file: str = "memory/iris_profile.md"
     thinking_mode_default: bool = False
+    prompt_file: str = "memory/personality_default.md"
 
 
 class MemoryConfig(BaseModel):

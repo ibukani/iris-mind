@@ -49,4 +49,10 @@ def register(registry: CapabilityRegistry):
         if not p.is_dir():
             return f"Error: not a directory: {path}"
         files = [str(f.relative_to(p)) for f in p.rglob("*") if f.is_file()]
-        return "\n".join(files[:200]) if files else "(empty)"
+        if not files:
+            return "(empty)"
+        truncated = len(files) > 200
+        result = "\n".join(files[:200])
+        if truncated:
+            result += f"\n... and {len(files) - 200} more files"
+        return result

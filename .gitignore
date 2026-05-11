@@ -7,3 +7,6 @@ memory/episodes.jsonl
 memory/semantic.jsonl
 .DS_Store
 *.log
+*.egg-info/
+dist/
+build/

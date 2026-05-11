@@ -7,6 +7,7 @@ model:
 personality:
   name: Iris
   thinking_mode_default: false
+  prompt_file: memory/personality_default.md
 
 memory:
   episodic_path: memory/episodes.jsonl

@@ -1,5 +1,4 @@
 from __future__ import annotations
-import inspect
 from pathlib import Path
 from typing import Any, Callable
 
@@ -18,6 +17,12 @@ class Capability:
         self.func = func
 
     def to_openai_tool(self) -> dict:
+        required = []
+        clean_params = {}
+        for k, v in self.parameters.items():
+            if v.get("required"):
+                required.append(k)
+            clean_params[k] = {kk: vv for kk, vv in v.items() if kk != "required"}
         return {
             "type": "function",
             "function": {
@@ -25,8 +30,8 @@ class Capability:
                 "description": self.description,
                 "parameters": {
                     "type": "object",
-                    "properties": self.parameters,
-                    "required": [k for k, v in self.parameters.items() if v.get("required")],
+                    "properties": clean_params,
+                    "required": required,
                 },
             },
         }

@@ -1,12 +1,7 @@
-AGENTS_MD_PATH = "memory/iris_profile.md"
+from pathlib import Path
 
 
-class Personality:
-    """キャラクター管理。構造記憶（iris_profile.md）を読み込みシステムプロンプトを構築する。"""
-
-    def __init__(self, name: str = "Iris"):
-        self.name = name
-        self.system_prompt_template = """あなたは{name}です。以下の性格と知識に基づいて会話してください。
+_DEFAULT_SYSTEM_PROMPT = """あなたは{name}です。以下の性格と知識に基づいて会話してください。
 
 ## 基本性格
 - 知的で物知りだが、たまにズレたことを言う
@@ -24,6 +19,29 @@ class Personality:
 {agents_md_content}
 """
 
+_DEFAULT_THINKING_PROMPT = """## 思考モード ON
+以下のタスクについて、ステップバイステップで考えてから回答してください。
+
+### タスク
+{user_input}
+"""
+
+
+class Personality:
+    def __init__(self, name: str = "Iris", prompt_file: str | None = None):
+        self.name = name
+        self.system_prompt_template = self._load_template(prompt_file)
+        self.thinking_prompt_template = _DEFAULT_THINKING_PROMPT
+
+    @staticmethod
+    def _load_template(path: str | None) -> str:
+        if not path:
+            return _DEFAULT_SYSTEM_PROMPT
+        p = Path(path)
+        if p.exists():
+            return p.read_text(encoding="utf-8")
+        return _DEFAULT_SYSTEM_PROMPT
+
     def build_system_prompt(self, agents_md_content: str = "") -> str:
         return self.system_prompt_template.format(
             name=self.name,
@@ -31,15 +49,4 @@ class Personality:
         )
 
     def build_thinking_prompt(self, user_input: str) -> str:
-        return (
-            f"## 思考モード ON\n"
-            f"以下のタスクについて、ステップバイステップで考えてから回答してください。\n\n"
-            f"### タスク\n{user_input}"
-        )
-
-    def build_casual_prompt(self, user_input: str) -> str:
-        return (
-            f"## 思考モード OFF\n"
-            f"軽い会話として返答してください。\n\n"
-            f"{user_input}"
-        )
+        return self.thinking_prompt_template.format(user_input=user_input)

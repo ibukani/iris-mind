@@ -50,35 +50,36 @@ class Executor:
 
     def _run_react(self, system_prompt: str, messages: list[dict], max_turns: int = 3) -> str:
         tools = self.registry.list_tools()
+        ctx = list(messages)
 
         for _ in range(max_turns):
             resp = self.llm.chat(
-                messages=[{"role": "system", "content": system_prompt}, *messages],
+                messages=[{"role": "system", "content": system_prompt}, *ctx],
                 tools=tools,
                 temperature=0.5,
                 max_tokens=1000,
             )
             msg = resp["message"]
-            messages.append(msg)
+            ctx.append(msg)
 
             if msg.get("tool_calls"):
                 for tc in msg["tool_calls"]:
                     func_name = tc["function"]["name"]
                     args = tc["function"]["arguments"]
                     result = self.registry.execute(func_name, **args)
-                    messages.append({
+                    ctx.append({
                         "role": "tool",
                         "name": func_name,
                         "content": result,
                     })
 
                 final = self.llm.chat(
-                    messages=[{"role": "system", "content": system_prompt}, *messages],
+                    messages=[{"role": "system", "content": system_prompt}, *ctx],
                     temperature=0.5,
                     max_tokens=1000,
                 )
                 msg = final["message"]
-                messages.append(msg)
+                ctx.append(msg)
 
             content = msg.get("content", "").strip()
             if content:

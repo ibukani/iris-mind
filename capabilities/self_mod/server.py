@@ -1,6 +1,5 @@
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 from capabilities.registry import CapabilityRegistry
 
@@ -79,7 +78,7 @@ def _sandbox_test(filepath: Path) -> dict:
     try:
         result = subprocess.run(
             [sys.executable, "-c",
-             f"import py_compile; py_compile.compile(r'{filepath}', doraise=True)"],
+             f"import py_compile; py_compile.compile({str(filepath)!r}, doraise=True)"],
             capture_output=True, text=True, timeout=5,
         )
         if result.returncode != 0:

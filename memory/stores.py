@@ -23,10 +23,14 @@ class AgentsMdStore:
         self.path.write_text(new_content, encoding="utf-8")
 
     def _truncate(self, content: str) -> str:
-        while len(content.encode("utf-8")) > self.max_bytes:
-            lines = content.split("\n")
-            content = "\n".join(lines[:-2])
-        return content
+        lines = content.split("\n")
+        sizes = [len(l.encode("utf-8")) + 1 for l in lines]
+        total = sum(sizes)
+        keep_from = 0
+        while keep_from < len(lines) and total > self.max_bytes:
+            total -= sizes[keep_from]
+            keep_from += 1
+        return "\n".join(lines[keep_from:])
 
 
 class EpisodicStore:
@@ -74,16 +78,16 @@ class SemanticStore:
         self.path = Path(path)
         self.max_entries = max_entries
         self.vector = VectorStore(path=vector_db_path)
+        self._synced_count = self.vector.count()
         self._sync_from_jsonl()
 
     def _sync_from_jsonl(self):
-        if not self.path.exists():
-            return
-        if self.vector.count() > 0:
-            return
         entries = self._load_all()
-        for e in entries:
+        if len(entries) <= self._synced_count:
+            return
+        for e in entries[self._synced_count:]:
             self.vector.add(e)
+        self._synced_count = len(entries)
 
     def add(self, entry: dict):
         entries = self._load_all()
@@ -101,6 +105,7 @@ class SemanticStore:
             encoding="utf-8",
         )
         self.vector.add(entry)
+        self._synced_count = len(entries)
 
     def search(self, query: str, max_results: int = 3) -> list[dict]:
         return self.vector.search(query, max_results=max_results)

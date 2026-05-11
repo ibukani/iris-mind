@@ -10,19 +10,64 @@ Iris は自律的に行動・進化できるAIアシスタント。Python製でO
 ## ディレクトリ構成
 - `core/` → エンジン本体（config, llm_bridge, personality, reflexion）
 - `capabilities/` → 機能モジュール（file_ops, code_exec, self_mod など）
-- `memory/` → 記憶管理（iris_profile.md, stores.py）
+- `memory/` → 記憶管理（stores.py, vector_store.py, iris_profile.md）
 - `docs/` → 設計ドキュメント
+- `.agent/` → コーディングエージェント用コンテキスト
+- `config.yaml` → Irisの設定ファイル
+- `main.py` → エントリーポイント（CLIループ）
+
+## コンポーネント間依存関係
+```
+main.py
+  ├── core/config.py       (pydantic BaseModel, yaml読込)
+  ├── core/llm_bridge.py   (ollama.Client ラッパー)
+  ├── core/personality.py   (システムプロンプト構築)
+  ├── core/reflexion.py     (LLMに内省させる外側ループ)
+  ├── memory/stores.py      (AgentsMdStore, EpisodicStore, SemanticStore)
+  │     └── memory/vector_store.py (ChromaDB + BM25 ハイブリッド検索)
+  └── capabilities/registry.py (動的モジュール発見・ツール登録)
+        ├── capabilities/file_ops/server.py
+        ├── capabilities/code_exec/server.py
+        └── capabilities/self_mod/server.py
+```
 
 ## Iris の記憶体系
 - `memory/iris_profile.md`: Irisの構造記憶（自己認識用、上限2KB固定）
-- EpisodicStore + SemanticStore: JSONLベースの作業・意味記憶
+- EpisodicStore: JSONLベースの作業記憶（上限30エントリ、古いものをマージ圧縮）
+- SemanticStore: JSONL永続化 + ChromaDB + BM25 ハイブリッド検索（上限100エントリ）
+- VectorStore: ONNXMiniLM_L6_V2 埋め込み、cosine類似度、統合スコア = vector*0.6 + bm25*0.4
+
+## capability の追加ルール
+1. `capabilities/<name>/server.py` に配置
+2. `register(registry: CapabilityRegistry)` 関数をエクスポート
+3. `@registry.register_func(...)` デコレータでツール定義
+4. `__init__.py` を各パッケージに配置（必須）
+5. 新しいcapabilityを追加したら `memory/iris_profile.md` の「My Capabilities」セクションも更新する
 
 ## コーディング規約
 - 変更差分はユーザーに提示→承認を得てから適用
-- コード変更時の lint/typecheck は必須
-- 新capabilityは `capabilities/<name>/server.py` に配置
-- `__init__.py` を各パッケージに配置する
+- lint/typecheck は必須
+- 既存のコードスタイル・パターンに従う（インポート順、型ヒント、docstring等）
+- 新機能追加時は既存のcapabilityパターンを参考にする
+- Python 3.13+ の型ヒントを積極的に使用
+- コメントは最小限に
+
+## ドキュメント更新義務
+機能追加・変更を行った場合、該当する以下のドキュメントを必ず同時に更新する：
+- `docs/*.md` — 設計ドキュメント（概念・アーキテクチャ・記憶システム等）
+- `memory/iris_profile.md` — Irisの構造記憶（自己認識用capability一覧）
+- `.agent/*.md` — コーディングエージェント用コンテキスト（必要に応じて）
+
+ドキュメントの更新漏れはタスク完了とみなさない。
+
+## git コミットルール
+- 1タスク完了ごとに必ずgitコミットを行う
+- コミットメッセージは日本語で、変更内容が一目でわかるように書く
+  - 良い例: 「feat: ファイル検索capabilityを追加」「fix: ReflexionのJSONパースエラーを修正」「docs: アーキテクチャ図を最新化」
+- コード変更とドキュメント更新は同一コミットに含める（不整合防止）
 
 ## 技術スタック
 - Python 3.13+, ollama, pydantic, pyyaml, rich, prompt_toolkit
+- ChromaDB + ONNX（ベクトル検索）
 - OS: Windows 11, GPU: RTX 4070 SUPER (12GB VRAM)
+- 使用モデル: Qwen3.5:9b（デフォルト）、Ollama経由

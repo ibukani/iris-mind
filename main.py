@@ -150,7 +150,7 @@ def _handle_command(cmd: str, llm: LLMBridge, config: Config,
     match cmd.lower().split():
         case ["/help"]:
             console.print(Panel(
-                "[/bold]/think[/bold] - toggle thinking mode\n"
+                "[bold]/think[/bold] - toggle thinking mode\n"
                 "/model <name> - switch model\n"
                 "/capabilities - list registered capabilities\n"
                 "/memory - show memory stats\n"

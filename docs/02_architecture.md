@@ -80,6 +80,6 @@ my-iris/
 │   └── vector_store.py  # ベクトルDB
 ├── docs/                # ドキュメント
 ├── config.yaml          # 設定ファイル
-├── AGENTS.md            # 構造記憶（上限2KB）
+├── memory/iris_profile.md  # 構造記憶（上限2KB）
 └── main.py              # エントリーポイント
 ```

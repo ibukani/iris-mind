@@ -1,8 +1,8 @@
-AGENTS_MD_PATH = "AGENTS.md"
+AGENTS_MD_PATH = "memory/iris_profile.md"
 
 
 class Personality:
-    """キャラクター管理。構造記憶（AGENTS.md）を読み込みシステムプロンプトを構築する。"""
+    """キャラクター管理。構造記憶（iris_profile.md）を読み込みシステムプロンプトを構築する。"""
 
     def __init__(self, name: str = "Iris"):
         self.name = name

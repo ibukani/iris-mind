@@ -13,5 +13,5 @@ memory:
   episodic_max_entries: 30
   semantic_max_entries: 100
   rag_max_results: 3
-  agents_md_path: AGENTS.md
+  agents_md_path: memory/iris_profile.md
   agents_md_max_bytes: 2048

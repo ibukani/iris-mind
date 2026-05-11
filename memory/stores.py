@@ -4,9 +4,9 @@ import json
 
 
 class AgentsMdStore:
-    """構造記憶。AGENTS.mdの読み書き。サイズ上限を超えないよう制御。"""
+    """構造記憶。memory/iris_profile.mdの読み書き。サイズ上限を超えないよう制御。"""
 
-    def __init__(self, path: str = "AGENTS.md", max_bytes: int = 2048):
+    def __init__(self, path: str = "memory/iris_profile.md", max_bytes: int = 2048):
         self.path = Path(path)
         self.max_bytes = max_bytes
 

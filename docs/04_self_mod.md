@@ -49,7 +49,7 @@ def example_tool(param1: str) -> str:
    - モック実行
 
 5. テストOK → Capability Registry に登録
-           → AGENTS.md に記録
+           → memory/iris_profile.md に記録
    テストNG → 修正コードを再生成 → ユーザーに再提示
 ```
 

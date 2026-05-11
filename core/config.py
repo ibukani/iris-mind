@@ -12,7 +12,7 @@ class ModelConfig(BaseModel):
 
 class PersonalityConfig(BaseModel):
     name: str = "Iris"
-    description_file: str = "AGENTS.md"
+    description_file: str = "memory/iris_profile.md"
     thinking_mode_default: bool = False
 
 
@@ -21,7 +21,7 @@ class MemoryConfig(BaseModel):
     episodic_max_entries: int = 30
     semantic_max_entries: int = 100
     rag_max_results: int = 3
-    agents_md_path: str = "AGENTS.md"
+    agents_md_path: str = "memory/iris_profile.md"
     agents_md_max_bytes: int = 2048
 
 

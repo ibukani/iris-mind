@@ -68,7 +68,7 @@ my-iris/
 │   ├── personality.py   # キャラクター管理
 │   ├── reflexion.py     # 外側ループ
 │   └── config.py        # 設定管理
-├── capabilities/        # MCPツール郡
+├── capabilities/        # 機能モジュール（5:self_modはPhase5 TODO）
 │   ├── __init__.py
 │   ├── registry.py      # Capability Registry
 │   ├── file_ops/        # ファイル操作

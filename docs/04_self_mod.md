@@ -1,5 +1,8 @@
 # 自己改変モジュール
 
+> **ステータス: TODO（Phase 5）** — 基本ツール（generate_capability, modify_file, sandbox_test）は実装済み。
+> 以下のフロー完成は未着手。
+
 ## 基本方針
 
 LLMの重みは変更せず、「AIが利用できる環境」を変更することで自己拡張を実現する。

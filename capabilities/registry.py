@@ -75,9 +75,9 @@ class CapabilityRegistry:
 
     def discover_modules(self, base_path: str = "capabilities"):
         """capabilities/ 以下のserver.pyを動的に発見・登録"""
-        p = Path(base_path)
+        p = Path(base_path).resolve()
         for server_file in p.rglob("server.py"):
-            rel = server_file.relative_to(p.absolute().parent)
+            rel = server_file.relative_to(p.parent)
             module_path = str(rel.with_suffix("")).replace("/", ".").replace("\\", ".")
             try:
                 import importlib

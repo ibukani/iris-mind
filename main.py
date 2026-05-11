@@ -12,6 +12,7 @@ from rich.markdown import Markdown
 from core.config import Config
 from core.llm_bridge import LLMBridge
 from core.personality import Personality
+from core.reflexion import Reflexion
 from memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
 from capabilities.registry import CapabilityRegistry
 
@@ -31,17 +32,23 @@ def run_cli():
         max_bytes=config.memory.agents_md_max_bytes,
     )
     episodic = EpisodicStore(
-        path=str(PROJECT_ROOT / config.memory.vector_db_path / ".." / "episodes.jsonl"),
+        path=str(PROJECT_ROOT / config.memory.episodic_path),
         max_entries=config.memory.episodic_max_entries,
     )
     semantic = SemanticStore(
-        path=str(PROJECT_ROOT / config.memory.vector_db_path / ".." / "semantic.jsonl"),
+        path=str(PROJECT_ROOT / config.memory.semantic_path),
         max_entries=config.memory.semantic_max_entries,
     )
 
     registry = CapabilityRegistry()
     registry.discover_modules(str(PROJECT_ROOT / "capabilities"))
     console.print(f"[green]Loaded {len(registry._capabilities)} capabilities[/green]")
+
+    reflexion = Reflexion(llm=llm)
+
+    recent_episodes = episodic.get_recent(3)
+    if recent_episodes:
+        console.print(f"[dim]Loaded {len(recent_episodes)} recent episodes from memory[/dim]")
 
     console.print(Panel.fit(
         f"[bold cyan]Iris[/bold cyan] - v0.1.0\n"
@@ -58,6 +65,7 @@ def run_cli():
             user_input = Prompt.ask("[bold cyan]You[/bold cyan]")
         except (EOFError, KeyboardInterrupt):
             console.print("\n[yellow]Goodbye![/yellow]")
+            _run_reflexion_and_save(reflexion, messages, episodic, semantic)
             break
 
         if not user_input.strip():
@@ -65,7 +73,8 @@ def run_cli():
 
         if user_input.startswith("/"):
             handled, thinking_mode = _handle_command(
-                user_input, llm, config, messages, thinking_mode, registry
+                user_input, llm, config, messages, thinking_mode, registry,
+                reflexion, episodic, semantic,
             )
             if handled:
                 continue
@@ -73,6 +82,8 @@ def run_cli():
         messages.append({"role": "user", "content": user_input})
 
         system_prompt = personality.build_system_prompt(agents_md.load())
+        if recent_episodes:
+            system_prompt += "\n\n## Recent Sessions\n" + "\n".join(f"- {e}" for e in recent_episodes)
 
         if thinking_mode:
             _inject_thinking_context(messages, personality, user_input)
@@ -121,6 +132,29 @@ def run_cli():
             console.print(Panel(Markdown(content), border_style="cyan"))
 
 
+def _run_reflexion_and_save(
+    reflexion: Reflexion, messages: list, episodic: EpisodicStore, semantic: SemanticStore
+):
+    if len(messages) < 2:
+        return
+    console.print("[yellow]Reflecting on session...[/yellow]")
+    result = reflexion.reflect(messages)
+    summary = result.get("summary", "").strip()
+    lesson = result.get("lesson", "").strip()
+    if summary:
+        episodic.add(summary)
+        console.print(f"[dim]Episode saved: {summary[:80]}[/dim]")
+    if lesson:
+        semantic.add({
+            "type": "lesson",
+            "content": lesson,
+            "tags": result.get("missing_capability", "").split() if result.get("missing_capability") else [],
+            "timestamp": "",
+            "context": "session_end",
+        })
+        console.print(f"[dim]Lesson saved: {lesson[:80]}[/dim]")
+
+
 def _ensure_ollama(config: Config) -> LLMBridge | None:
     llm = LLMBridge(
         model_name=config.model.name,
@@ -144,7 +178,10 @@ def _inject_thinking_context(messages: list[dict], personality: Personality, use
 
 def _handle_command(cmd: str, llm: LLMBridge, config: Config,
                     messages: list, thinking_mode: bool,
-                    registry: CapabilityRegistry) -> tuple[bool, bool]:
+                    registry: CapabilityRegistry,
+                    reflexion: Reflexion | None = None,
+                    episodic: EpisodicStore | None = None,
+                    semantic: SemanticStore | None = None) -> tuple[bool, bool]:
     from rich.table import Table
 
     match cmd.lower().split():
@@ -178,12 +215,36 @@ def _handle_command(cmd: str, llm: LLMBridge, config: Config,
                 table.add_row(cap.name, cap.description)
             console.print(table)
             return True, thinking_mode
+        case ["/memory"]:
+            if not episodic or not semantic:
+                console.print("[yellow]Memory stores not initialized[/yellow]")
+                return True, thinking_mode
+            from pathlib import Path
+            from rich.table import Table
+            recent_eps = episodic.get_recent(3)
+            all_sem = semantic._load_all()
+            profile_path = Path(config.memory.agents_md_path)
+            profile_size = profile_path.read_text(encoding="utf-8").__len__() if profile_path.exists() else 0
+            table = Table(title="Memory Stats")
+            table.add_column("Store", style="cyan")
+            table.add_column("Entries")
+            table.add_row("Episodic", str(len(recent_eps)) + " recent" if recent_eps else "0")
+            table.add_row("Semantic", str(len(all_sem)))
+            table.add_row("Profile", str(profile_size) + " bytes")
+            console.print(table)
+            if recent_eps:
+                console.print("\n[bold]Recent Episodes:[/bold]")
+                for e in recent_eps:
+                    console.print(f"  [dim]• {e[:100]}[/dim]")
+            return True, thinking_mode
         case ["/clear"]:
             messages.clear()
             console.print("[yellow]Conversation cleared[/yellow]")
             return True, thinking_mode
         case ["/exit"] | ["/quit"]:
             console.print("[yellow]Goodbye![/yellow]")
+            if reflexion and episodic and semantic:
+                _run_reflexion_and_save(reflexion, messages, episodic, semantic)
             sys.exit(0)
     return False, thinking_mode
 

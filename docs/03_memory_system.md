@@ -1,5 +1,13 @@
 # 記憶システム
 
+## 記憶の削除
+
+Iris起動中に `/memory-clear` コマンドで以下の全記憶を一度に削除できます：
+- エピソード記憶 (`memory/episodes.jsonl`)
+- 意味記憶 (`memory/semantic.jsonl` + ChromaDBベクトルストア)
+
+構造記憶 (`memory/iris_profile.md`) は削除されず維持されます。
+
 ## 4階層記憶アーキテクチャ
 
 | 記憶種別 | 保存先 | 内容 | 上限 | 取得方法 |

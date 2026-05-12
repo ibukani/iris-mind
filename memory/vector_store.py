@@ -18,7 +18,11 @@ class VectorStore:
             embedding_function=self.dense_ef,
             metadata={"hnsw:space": "cosine"},
         )
-        self._bm25_index: dict[str, float] = {}
+        self._all_docs: dict[str, str] = {}
+        self._doc_lengths: dict[str, int] = {}
+        self._inverted_index: dict[str, dict[str, int]] = {}
+        self._bm25_doc_freq: dict[str, int] = {}
+        self._avgdl: float = 1.0
         self._bm25_dirty = True
 
     def add(self, entry: dict):
@@ -55,6 +59,17 @@ class VectorStore:
 
     def delete(self, eid: str):
         self.collection.delete(ids=[eid])
+
+    def clear(self):
+        all_ids = self.collection.get()["ids"]
+        if all_ids:
+            self.collection.delete(ids=all_ids)
+        self._all_docs = {}
+        self._doc_lengths = {}
+        self._inverted_index = {}
+        self._bm25_doc_freq = {}
+        self._avgdl = 1.0
+        self._bm25_dirty = True
 
     def count(self) -> int:
         return self.collection.count()
@@ -115,46 +130,53 @@ class VectorStore:
         if not query_terms:
             return {}
 
-        N = self.collection.count()
+        N = len(self._all_docs)
         if N == 0:
             return {}
 
-        avgdl = sum(
-            len(doc.split()) for doc in self._all_docs.values()
-        ) / N if self._all_docs else 1.0
-
-        scores: dict[str, float] = {}
         k1, b = 1.5, 0.75
+        scores: dict[str, float] = {}
 
-        for eid, doc in self._all_docs.items():
-            doc_terms = doc.lower().split()
-            dl = len(doc_terms)
-            score = 0.0
-            for qt in query_terms:
-                tf = doc_terms.count(qt)
-                if tf == 0:
-                    continue
-                idf = math.log((N - self._bm25_doc_freq.get(qt, 0) + 0.5) / (self._bm25_doc_freq.get(qt, 0) + 0.5) + 1)
-                score += idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * dl / avgdl))
-            if score > 0:
-                scores[eid] = min(score / 10.0, 1.0)
+        for qt in query_terms:
+            if qt not in self._inverted_index:
+                continue
+            idf = math.log((N - self._bm25_doc_freq.get(qt, 0) + 0.5) / (self._bm25_doc_freq.get(qt, 0) + 0.5) + 1)
+            for eid, tf in self._inverted_index[qt].items():
+                dl = self._doc_lengths[eid]
+                s = idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * dl / self._avgdl))
+                scores[eid] = scores.get(eid, 0.0) + s
 
-        return scores
+        return {eid: min(score / 10.0, 1.0) for eid, score in scores.items()}
 
     def _rebuild_bm25(self):
         if self.collection.count() == 0:
             self._all_docs = {}
+            self._doc_lengths = {}
+            self._inverted_index = {}
             self._bm25_doc_freq = {}
+            self._avgdl = 1.0
             self._bm25_dirty = False
             return
 
         results = self.collection.get()
         self._all_docs = dict(zip(results["ids"], results["documents"]))
+        self._inverted_index = {}
         self._bm25_doc_freq = {}
-        for doc in self._all_docs.values():
+        total_terms = 0
+
+        for eid, doc in self._all_docs.items():
+            terms = doc.lower().split()
+            dl = len(terms)
+            self._doc_lengths[eid] = dl
+            total_terms += dl
             seen = set()
-            for t in doc.lower().split():
+            for t in terms:
+                if t not in self._inverted_index:
+                    self._inverted_index[t] = {}
+                self._inverted_index[t][eid] = self._inverted_index[t].get(eid, 0) + 1
                 if t not in seen:
                     self._bm25_doc_freq[t] = self._bm25_doc_freq.get(t, 0) + 1
                     seen.add(t)
+
+        self._avgdl = total_terms / len(self._all_docs)
         self._bm25_dirty = False

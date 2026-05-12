@@ -40,6 +40,10 @@ class EpisodicStore:
         self.path = Path(path)
         self.max_entries = max_entries
 
+    def clear(self):
+        if self.path.exists():
+            self.path.unlink()
+
     def add(self, summary: str):
         entries = self._load_all()
         entries.append({"summary": summary})
@@ -106,6 +110,12 @@ class SemanticStore:
         )
         self.vector.add(entry)
         self._synced_count = len(entries)
+
+    def clear(self):
+        if self.path.exists():
+            self.path.unlink()
+        self.vector.clear()
+        self._synced_count = 0
 
     def search(self, query: str, max_results: int = 3) -> list[dict]:
         return self.vector.search(query, max_results=max_results)

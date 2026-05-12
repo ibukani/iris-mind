@@ -72,6 +72,7 @@ def handle_command(cmd: str, ctx: IrisContext,
                 "/model <name> - switch model\n"
                 "/capabilities - list registered capabilities\n"
                 "/memory - show memory stats\n"
+                "/memory-clear - clear all memory (episodic, semantic, vector store)\n"
                 "/clear - clear conversation history\n"
                 "/exit - exit Iris",
                 title="Commands",
@@ -125,6 +126,14 @@ def handle_command(cmd: str, ctx: IrisContext,
                 console.print("\n[bold]Recent Episodes:[/bold]")
                 for e in recent_eps:
                     console.print(f"  [dim]• {e[:100]}[/dim]")
+            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+        case ["/memory-clear"]:
+            if ctx.episodic and ctx.semantic:
+                ctx.episodic.clear()
+                ctx.semantic.clear()
+                console.print("[yellow]All memory cleared (episodic, semantic, vector store)[/yellow]")
+            else:
+                console.print("[yellow]Memory stores not initialized[/yellow]")
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
         case ["/clear"]:
             messages.clear()

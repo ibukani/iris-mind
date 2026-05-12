@@ -185,7 +185,7 @@ def _detect_complex(user_input: str) -> bool:
 
 _COMMANDS = [
     "/help", "/think", "/plan", "/model", "/clear", "/exit", "/quit",
-    "/capabilities", "/memory",
+    "/capabilities", "/memory", "/memory-clear",
 ]
 
 
@@ -319,10 +319,10 @@ def run_cli():
         if not use_fast and (plan_mode or (thinking_mode and _detect_complex(user_input))):
             rag_future = _RAG_EXECUTOR.submit(semantic.search, user_input, max_results=config.memory.rag_max_results)
             console.print(f"[dim]Analyzing task ({config.model.smart_model})...[/dim]")
+            plan_result = planner.analyze(user_input, system_prompt[:300])
             _rag_results = rag_future.result()
             if _rag_results:
                 system_prompt += "\n\n## Related Lessons\n" + "\n".join(f"- {e['content']}" for e in _rag_results)
-            plan_result = planner.analyze(user_input, system_prompt[:300])
             if not plan_mode:
                 should_plan = planner.is_complex(plan_result)
 
@@ -352,7 +352,7 @@ def run_cli():
             rag_future = _RAG_EXECUTOR.submit(semantic.search, user_input, max_results=config.memory.rag_max_results)
 
             spinner_text = f"[dim]{active_model} ({scenario}, max_tokens={max_tokens})...[/dim]"
-            with Live(Panel(Spinner("dots", text=spinner_text), border_style="cyan"), console=console, refresh_per_second=15, vertical_overflow="visible") as live:
+            with Live(Panel(Spinner("dots", text=spinner_text), border_style="cyan"), console=console, refresh_per_second=4, vertical_overflow="visible") as live:
                 _rag_results = rag_future.result()
                 if _rag_results:
                     system_prompt += "\n\n## Related Lessons\n" + "\n".join(f"- {e['content']}" for e in _rag_results)
@@ -398,7 +398,7 @@ def run_cli():
                     messages.append(msg)
                 else:
                     tool_spinner = f"[dim]{active_model} (tool result)...[/dim]"
-                    with Live(Panel(Spinner("dots", text=tool_spinner), border_style="cyan"), console=console, refresh_per_second=15, vertical_overflow="visible") as live:
+                    with Live(Panel(Spinner("dots", text=tool_spinner), border_style="cyan"), console=console, refresh_per_second=4, vertical_overflow="visible") as live:
                         final = llm.chat(
                             messages=[{"role": "system", "content": system_prompt}, *messages],
                             enable_thinking=thinking_mode,

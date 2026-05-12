@@ -12,7 +12,8 @@ Iris は自律的に行動・進化できるAIアシスタント。Python製でO
 - `capabilities/` → 機能モジュール（file_ops, code_exec, self_mod など）
 - `memory/` → 記憶管理（stores.py, vector_store.py, iris_profile.md）
 - `docs/` → 設計ドキュメント
-- `.agent/` → コーディングエージェント用コンテキスト
+- `.agent/` → コーディングエージェント用コンテキスト（context.md, project.md, tasks.md）
+- `AGENTS.md` → プロジェクトルール（このファイル）
 - `config.yaml` → Irisの設定ファイル
 - `main.py` → エントリーポイント（CLIループ）
 
@@ -56,6 +57,7 @@ main.py
 機能追加・変更を行った場合、該当する以下のドキュメントを必ず同時に更新する：
 - `docs/*.md` — 設計ドキュメント（概念・アーキテクチャ・記憶システム等）
 - `memory/iris_profile.md` — Irisの構造記憶（自己認識用capability一覧）
+- `AGENTS.md` — コーディングエージェント用ルール（必要に応じて）
 - `.agent/*.md` — コーディングエージェント用コンテキスト（必要に応じて）
 
 ドキュメントの更新漏れはタスク完了とみなさない。

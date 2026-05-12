@@ -382,7 +382,7 @@ def run_cli():
 
             rag_future = _RAG_EXECUTOR.submit(semantic.search, user_input, max_results=config.memory.rag_max_results)
 
-            spinner_text = f"[dim]{active_model} ({scenario}, max_tokens={max_tokens})...[/dim]"
+            spinner_text = f"[cyan]Generating...[/cyan]"
             with Live(Panel(Spinner("dots", text=spinner_text), border_style="cyan"), console=console, refresh_per_second=4, vertical_overflow="visible") as live:
                 _rag_results = rag_future.result()
                 if _rag_results:
@@ -429,7 +429,7 @@ def run_cli():
                     msg = {"role": "assistant", "content": combined}
                     messages.append(msg)
                 else:
-                    tool_spinner = f"[dim]{active_model} (tool result)...[/dim]"
+                    tool_spinner = f"[cyan]Generating...[/cyan]"
                     with Live(Panel(Spinner("dots", text=tool_spinner), border_style="cyan"), console=console, refresh_per_second=4, vertical_overflow="visible") as live:
                         final = llm.chat(
                             messages=[{"role": "system", "content": system_prompt}, *messages],

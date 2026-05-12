@@ -30,10 +30,24 @@ PROJECT_ROOT = Path(__file__).parent.parent
 _RAG_EXECUTOR = ThreadPoolExecutor(max_workers=1)
 
 _GREETING_WORDS = {
-    "hello", "hi", "bye", "hey", "thanks", "thank", "yes", "no",
-    "good morning", "good evening", "good night",
-    "おはよう", "こんにちは", "こんばんは", "おやすみ",
-    "はい", "いいえ", "ありがとう", "おっす", "やあ",
+     "hello", "hi", "bye", "hey", "thanks", "thank", "yes", "no",
+     "good morning", "good evening", "good night",
+     "おはよう", "こんにちは", "こんばんは", "おやすみ",
+     "はい", "いいえ", "ありがとう", "おっす", "やあ",
+}
+
+_ENDING_WORDS = {
+     "終わる", "終わります", "終わり", "終了",
+     "さようなら", "バイバイ", "またね", "それじゃ",
+     "quit", "exit", "bye bye", "see you",
+}
+
+_MAX_TOKENS_BY_SCENARIO = {
+     "greeting": 64,
+     "simple": 256,
+     "qa": 1024,
+     "tool": 1024,
+     "complex": 1024,
 }
 
 _TOOL_HINTS = [
@@ -64,20 +78,32 @@ _CLASSIFY_PROMPT = (
 )
 
 
-def _quick_classify(user_input: str) -> str | None:
-    lower = user_input.lower().strip()
-    words = set(lower.split())
-    is_short = len(lower) <= 15
-    if is_short:
-        if words & _GREETING_WORDS:
-            return "greeting"
-        if any(g in lower for g in _GREETING_WORDS):
-            return "greeting"
-    if any(h in lower for h in _TOOL_HINTS):
-        return "tool"
-    if _detect_complex(user_input):
-        return "complex"
-    return None
+def _quick_classify(user_input: str, messages: list[dict] | None = None) -> str | None:
+     lower = user_input.lower().strip()
+     words = set(lower.split())
+     is_short = len(lower) <= 15
+
+     # 終了フレーズ検出（文脈考慮）
+     if is_short and any(e in lower for e in _ENDING_WORDS):
+         return "ending"
+
+     if is_short:
+         if words & _GREETING_WORDS:
+             return "greeting"
+         if any(g in lower for g in _GREETING_WORDS):
+             return "greeting"
+
+     # 前の発言が終了系の場合、続きの発言も終了扱いにする
+     if messages and len(messages) >= 2:
+         prev = messages[-2].get("content", "").lower()
+         if any(e in prev for e in _ENDING_WORDS):
+             return "ending"
+
+     if any(h in lower for h in _TOOL_HINTS):
+         return "tool"
+     if _detect_complex(user_input):
+         return "complex"
+     return None
 
 
 def _classify_input(llm: LLMBridge, user_input: str, fast_model: str) -> str:

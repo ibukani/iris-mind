@@ -135,7 +135,7 @@ class PersonaProfile:
                 parts.append(content)
                 parts.append("")
 
-        md = "\n".join(parts).strip()
+        md = "\n".join(parts).strip() + "\n"
         self.store.update(md)
 
     # ============================================================

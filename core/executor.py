@@ -1,5 +1,4 @@
 from __future__ import annotations
-import json
 from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
@@ -15,7 +14,7 @@ class Executor:
         self.registry = registry
 
     def execute_plan(self, plan: dict, user_input: str, personality_name: str = "Iris",
-                     on_subtask: Callable[[int, str], None] | None = None) -> list[dict]:
+                     on_subtask: Callable[[int, str], None] | None = None) -> str:
         subtasks = plan.get("subtasks", [])
         results: list[dict] = []
 
@@ -24,6 +23,8 @@ class Executor:
             if on_subtask:
                 on_subtask(i, name)
             desc = task.get("description", "")
+            is_last = (i == len(subtasks) - 1)
+
             step_prompt = (
                 f"あなたは{personality_name}です。与えられたタスクを正確に実行してください。\n\n"
                 f"## Current Task ({i+1}/{len(subtasks)})\n"
@@ -32,35 +33,24 @@ class Executor:
                 f"Original request: {user_input}"
             )
 
+            if is_last and len(subtasks) > 1 and results:
+                summaries = "\n".join(
+                    f"- {r['name']}: {r['output'][:300]}"
+                    for r in results
+                )
+                step_prompt += (
+                    f"\n\n## Previous Steps Results\n{summaries}\n\n"
+                    f"This is the final step. Synthesize all previous steps "
+                    f"and present the complete results to the user."
+                )
+
             messages = [{"role": "user", "content": f"Execute this task: {desc}"}]
             step_result = self._run_react(step_prompt, messages)
             results.append({"name": name, "output": step_result})
 
-        return results
-
-    def synthesize(self, plan: dict, results: list[dict], user_input: str, personality_name: str = "Iris") -> str:
-        summary_lines = []
-        for r in results:
-            summary_lines.append(f"### {r['name']}\n{r['output'][:500]}")
-        summary = "\n\n".join(summary_lines)
-
-        sys_prompt = (
-            f"あなたは{personality_name}です。マルチステップ計画の実行結果を"
-            f"ユーザーにわかりやすく要約してください。"
-        )
-        resp = self.llm.chat(
-            messages=[
-                {"role": "system", "content": sys_prompt},
-                {"role": "user", "content":
-                 f"I executed a multi-step plan. Summarize the results:\n\n"
-                 f"## Original Request\n{user_input}\n\n"
-                 f"## Plan\n{json.dumps(plan, ensure_ascii=False)}\n\n"
-                 f"## Results\n{summary}"},
-            ],
-            temperature=0.5,
-            max_tokens=1000,
-        )
-        return resp["message"].get("content", "").strip()
+        if not results:
+            return ""
+        return results[-1]["output"]
 
     def _run_react(self, system_prompt: str, messages: list[dict], max_turns: int = 3) -> str:
         tools = self.registry.list_tools()

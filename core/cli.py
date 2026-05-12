@@ -177,12 +177,9 @@ def run_cli():
                 console.print(f"  [dim]Step {i+1}: {name}...[/dim]")
 
             with console.status("[cyan]Executing plan...[/cyan]", spinner="dots"):
-                step_results = executor.execute_plan(
+                final_content = executor.execute_plan(
                     plan_result, user_input, config.personality.name, on_subtask=_on_step,
                 )
-
-            with console.status("[cyan]Synthesizing results...[/cyan]", spinner="dots"):
-                final_content = executor.synthesize(plan_result, step_results, user_input, config.personality.name)
 
             messages.append({"role": "assistant", "content": final_content})
             if final_content:

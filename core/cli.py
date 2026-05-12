@@ -15,12 +15,16 @@ from prompt_toolkit.history import FileHistory
 from prompt_toolkit.completion import WordCompleter
 
 from core.config import Config
+from core.constants import (
+    CLASSIFY_PROMPT, SCENARIOS,
+    GREETING_WORDS, ENDING_WORDS, TOOL_HINTS, COMPLEX_TRIGGERS,
+)
 from core.llm_bridge import LLMBridge
 from core.personality import Personality
 from core.reflexion import Reflexion
 from core.planner import Planner
 from core.executor import Executor
-from core.commands import IrisContext, handle_command, _run_reflexion_and_save
+from core.commands import CommandContext, handle_command, _run_reflexion_and_save
 from memory.persona_profile import PersonaProfile
 from memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
 from capabilities.registry import CapabilityRegistry
@@ -29,81 +33,40 @@ console = Console(safe_box=True, legacy_windows=False)
 PROJECT_ROOT = Path(__file__).parent.parent
 _RAG_EXECUTOR = ThreadPoolExecutor(max_workers=1)
 
-_GREETING_WORDS = {
-     "hello", "hi", "bye", "hey", "thanks", "thank", "yes", "no",
-     "good morning", "good evening", "good night",
-     "おはよう", "こんにちは", "こんばんは", "おやすみ",
-     "はい", "いいえ", "ありがとう", "おっす", "やあ",
-}
-
-_ENDING_WORDS = {
-     "終わる", "終わります", "終わり", "終了",
-     "さようなら", "バイバイ", "またね", "それじゃ",
-     "quit", "exit", "bye bye", "see you",
-}
-
-_MAX_TOKENS_BY_SCENARIO = {
-     "greeting": 64,
-     "simple": 256,
-     "qa": 1024,
-     "tool": 1024,
-     "complex": 1024,
-}
-
-_TOOL_HINTS = [
-    "ファイル", "実行", "コード", "作成", "変更", "削除", "読み込み",
-    "file", "write", "create", "run", "execute", "read", "delete",
-    "list", "modify", "edit", "shell",
+_COMMANDS = [
+    "/help", "/think", "/plan", "/model", "/clear", "/exit", "/quit",
+    "/capabilities", "/memory", "/memory-clear", "/persona",
 ]
 
-_SCENARIOS: dict[str, tuple[bool, int]] = {
-    "greeting": (True, 256),
-    "simple": (True, 512),
-    "qa": (True, 1024),
-    "tool": (False, 1024),
-    "complex": (False, 1024),
-}
 
-_CLASSIFY_PROMPT = (
-    "Classify the following user input into exactly ONE category. "
-    "Reply with only the category word, nothing else.\n"
-    "Categories:\n"
-    "- greeting: simple hello, thanks, goodbye (no real request)\n"
-    "- simple: short factual question, simple chat (fits in 1-2 sentences)\n"
-    "- qa: requires explanation but no tool calls\n"
-    "- tool: requires file operations, code execution, or shell commands\n"
-    "- complex: multi-step task requiring planning and subtasks\n\n"
-    "Input: {input}\n"
-    "Category:"
-)
+def _detect_complex(user_input: str) -> bool:
+    return any(t in user_input.lower() for t in COMPLEX_TRIGGERS)
 
 
 def _quick_classify(user_input: str, messages: list[dict] | None = None) -> str | None:
-     lower = user_input.lower().strip()
-     words = set(lower.split())
-     is_short = len(lower) <= 15
+    lower = user_input.lower().strip()
+    words = set(lower.split())
+    is_short = len(lower) <= 15
 
-     # 終了フレーズ検出（文脈考慮）
-     if is_short and any(e in lower for e in _ENDING_WORDS):
-         return "ending"
+    if is_short and any(e in lower for e in ENDING_WORDS):
+        return "ending"
 
-     if is_short:
-         if words & _GREETING_WORDS:
-             return "greeting"
-         if any(g in lower for g in _GREETING_WORDS):
-             return "greeting"
+    if is_short:
+        if words & GREETING_WORDS:
+            return "greeting"
+        if any(g in lower for g in GREETING_WORDS):
+            return "greeting"
 
-     # 前の発言が終了系の場合、続きの発言も終了扱いにする
-     if messages and len(messages) >= 2:
-         prev = messages[-2].get("content", "").lower()
-         if any(e in prev for e in _ENDING_WORDS):
-             return "ending"
+    if messages and len(messages) >= 2:
+        prev = messages[-2].get("content", "").lower()
+        if any(e in prev for e in ENDING_WORDS):
+            return "ending"
 
-     if any(h in lower for h in _TOOL_HINTS):
-         return "tool"
-     if _detect_complex(user_input):
-         return "complex"
-     return None
+    if any(h in lower for h in TOOL_HINTS):
+        return "tool"
+    if _detect_complex(user_input):
+        return "complex"
+    return None
 
 
 def _classify_input(llm: LLMBridge, user_input: str, fast_model: str) -> str:
@@ -112,12 +75,12 @@ def _classify_input(llm: LLMBridge, user_input: str, fast_model: str) -> str:
     try:
         resp = llm.chat(
             messages=[{"role": "user",
-                       "content": _CLASSIFY_PROMPT.format(input=user_input)}],
+                       "content": CLASSIFY_PROMPT.format(input=user_input)}],
             temperature=0,
             max_tokens=10,
         )
         raw = resp["message"].get("content", "").strip().lower()
-        return raw if raw in _SCENARIOS else "simple"
+        return raw if raw in SCENARIOS else "simple"
     except Exception:
         return "simple"
     finally:
@@ -202,31 +165,6 @@ def _ensure_ollama(config: Config) -> LLMBridge | None:
     return llm
 
 
-def _quick_reflect_and_update(reflexion: Reflexion, messages: list, persona_profile: PersonaProfile):
-    try:
-        slice_for_reflect = messages[-8:] if len(messages) >= 8 else messages
-        result = reflexion.quick_reflect(slice_for_reflect)
-        if result.get("speech_style") or result.get("expressed_traits"):
-            persona_profile.update_from_reflection(result)
-    except Exception:
-        pass
-
-
-def _detect_complex(user_input: str) -> bool:
-    triggers = [
-        "調査", "調べて", "比較", "分析", "設計", "構築", "作成して",
-        "research", "compare", "analyze", "design", "build", "create",
-        "まず", "最初に", "その後", "step", "steps",
-    ]
-    return any(t in user_input.lower() for t in triggers)
-
-
-_COMMANDS = [
-    "/help", "/think", "/plan", "/model", "/clear", "/exit", "/quit",
-    "/capabilities", "/memory", "/memory-clear", "/persona",
-]
-
-
 def _make_prompt(thinking: bool, plan: bool, model: str, msg_count: int) -> HTML:
     t = "[ON]" if thinking else "[OFF]"
     p = "[ON]" if plan else "[OFF]"
@@ -238,246 +176,288 @@ def _make_prompt(thinking: bool, plan: bool, model: str, msg_count: int) -> HTML
     )
 
 
-def run_cli():
-    config = Config.load(str(PROJECT_ROOT / "config.yaml"))
+def _update_display(live: Live, parts: list[str]):
+    try:
+        live.update(Panel(Markdown("".join(parts)), border_style="cyan"))
+    except Exception:
+        pass
 
-    if not (llm := _ensure_ollama(config)):
-        return
 
-    personality = Personality(
-        name=config.personality.name,
-        prompt_file=str(PROJECT_ROOT / config.personality.prompt_file),
-    )
-    agents_md = AgentsMdStore(
-        path=str(PROJECT_ROOT / config.memory.agents_md_path),
-        max_bytes=config.memory.agents_md_max_bytes,
-    )
-    episodic = EpisodicStore(
-        path=str(PROJECT_ROOT / config.memory.episodic_path),
-        max_entries=config.memory.episodic_max_entries,
-    )
-    semantic = SemanticStore(
-        path=str(PROJECT_ROOT / config.memory.semantic_path),
-        max_entries=config.memory.semantic_max_entries,
-        vector_db_path=str(PROJECT_ROOT / config.memory.vector_db_path),
-    )
+# ── 定数 ────────────────────────────────────────────────────
+_SHORT_GREET_TOKENS = 64
 
-    registry = CapabilityRegistry()
-    registry.discover_modules(str(PROJECT_ROOT / "capabilities"))
-    console.print(f"[green]Loaded {len(registry._capabilities)} capabilities[/green]")
 
-    persona_profile = PersonaProfile(store=agents_md, semantic=semantic)
-    persona_profile.regenerate_view()
-    speech_style = persona_profile.get_speech_style()
-    if speech_style:
-        console.print(f"[dim]Speech: {speech_style[:60]}...[/dim]")
-    traits = persona_profile.get_traits()
-    if traits:
-        console.print(f"[dim]Traits: {traits[:60]}...[/dim]")
-    console.print(f"[dim]Persona JSON: {len(persona_profile._data.get('speech_style',[]))} speech, {len(persona_profile._data.get('personality_traits',[]))} traits[/dim]")
+class CliSession:
+    """CLI セッション。対話ループとその補助ロジックをカプセル化する。"""
 
-    reflexion = Reflexion(llm=llm)
-    planner = Planner(llm=llm)
-    executor = Executor(llm=llm, registry=registry)
-    ctx = IrisContext(llm=llm, config=config, config_path=str(PROJECT_ROOT / "config.yaml"),
-                      registry=registry,
-                      reflexion=reflexion, episodic=episodic,
-                      semantic=semantic, planner=planner, executor=executor,
-                      persona_profile=persona_profile)
+    def __init__(self, config: Config, llm: LLMBridge):
+        self.config = config
+        self.llm = llm
 
-    console.print(Panel.fit(
-        f"[bold cyan]Iris[/bold cyan] - v0.1.0\n"
-        f"Model: {config.model.smart_model} | Thinking mode: OFF\n"
-        f"Type /help for commands, /think to toggle thinking mode",
-        border_style="cyan",
-    ))
+        self.personality = Personality(
+            name=config.personality.name,
+            prompt_file=str(PROJECT_ROOT / config.personality.prompt_file),
+        )
+        self.agents_md = AgentsMdStore(
+            path=str(PROJECT_ROOT / config.memory.agents_md_path),
+            max_bytes=config.memory.agents_md_max_bytes,
+        )
+        self.episodic = EpisodicStore(
+            path=str(PROJECT_ROOT / config.memory.episodic_path),
+            max_entries=config.memory.episodic_max_entries,
+        )
+        self.semantic = SemanticStore(
+            path=str(PROJECT_ROOT / config.memory.semantic_path),
+            max_entries=config.memory.semantic_max_entries,
+            vector_db_path=str(PROJECT_ROOT / config.memory.vector_db_path),
+        )
 
-    messages: list[dict] = []
-    thinking_mode = config.personality.thinking_mode_default
-    plan_mode = False
-    active_model = config.model.fast_model or config.model.smart_model
-    _msg_count_since_reflect = 0
+        self.registry = CapabilityRegistry()
+        self.registry.discover_modules(str(PROJECT_ROOT / "capabilities"))
+        console.print(f"[green]Loaded {len(self.registry._capabilities)} capabilities[/green]")
 
-    def _update_display(live: Live, p: list[str]):
-        try:
-            live.update(Panel(Markdown("".join(p)), border_style="cyan"))
-        except Exception:
-            pass
+        self.persona_profile = PersonaProfile(store=self.agents_md, semantic=self.semantic)
+        self.persona_profile.regenerate_view()
+        speech_style = self.persona_profile.get_speech_style()
+        if speech_style:
+            console.print(f"[dim]Speech: {speech_style[:60]}...[/dim]")
+        traits = self.persona_profile.get_traits()
+        if traits:
+            console.print(f"[dim]Traits: {traits[:60]}...[/dim]")
+        console.print(
+            f"[dim]Persona JSON: "
+            f"{len(self.persona_profile._template.get('My Speech Style', ''))} speech, "
+            f"{len(self.persona_profile._template.get('My Personality Traits', ''))} traits[/dim]"
+        )
 
-    session = PromptSession(
-        history=FileHistory(str(PROJECT_ROOT / ".iris_history")),
-        completer=WordCompleter(_COMMANDS, ignore_case=True),
-    )
+        self.reflexion = Reflexion(llm=llm)
+        self.planner = Planner(llm=llm)
+        self.executor = Executor(llm=llm, registry=self.registry)
 
-    while True:
-        try:
-            user_input = session.prompt(
-                lambda: _make_prompt(thinking_mode, plan_mode, active_model, len(messages))
-            )
-        except (EOFError, KeyboardInterrupt):
-            console.print("\n[yellow]Goodbye![/yellow]")
-            _run_reflexion_and_save(reflexion, messages, episodic, semantic, persona_profile)
-            break
+        self.ctx = CommandContext(
+            llm=llm, config=config,
+            config_path=str(PROJECT_ROOT / "config.yaml"),
+            registry=self.registry,
+            reflexion=self.reflexion,
+            episodic=self.episodic,
+            semantic=self.semantic,
+            planner=self.planner,
+            executor=self.executor,
+            persona_profile=self.persona_profile,
+        )
+        self.messages: list[dict] = []
 
-        if not user_input.strip():
-            continue
+    # ── メインループ ──────────────────────────────────────────
 
-        if user_input.startswith("/"):
-            cmd_result = handle_command(user_input, ctx, messages, thinking_mode, plan_mode)
-            if cmd_result.handled:
-                thinking_mode = cmd_result.thinking_mode
-                plan_mode = cmd_result.plan_mode
+    def run(self):
+        console.print(Panel.fit(
+            f"[bold cyan]Iris[/bold cyan] - v0.1.0\n"
+            f"Model: {self.config.model.smart_model} | Thinking mode: OFF\n"
+            f"Type /help for commands, /think to toggle thinking mode",
+            border_style="cyan",
+        ))
+
+        thinking_mode = self.config.personality.thinking_mode_default
+        plan_mode = False
+        active_model = self.config.model.fast_model or self.config.model.smart_model
+        msg_count_since_reflect = 0
+
+        session = PromptSession(
+            history=FileHistory(str(PROJECT_ROOT / ".iris_history")),
+            completer=WordCompleter(_COMMANDS, ignore_case=True),
+        )
+
+        while True:
+            try:
+                user_input = session.prompt(
+                    lambda: _make_prompt(thinking_mode, plan_mode, active_model, len(self.messages))
+                )
+            except (EOFError, KeyboardInterrupt):
+                console.print("\n[yellow]Goodbye![/yellow]")
+                self._cleanup()
+                break
+
+            if not user_input.strip():
                 continue
 
-        messages.append({"role": "user", "content": user_input})
+            if user_input.startswith("/"):
+                cmd_result = handle_command(user_input, self.ctx, self.messages, thinking_mode, plan_mode)
+                if cmd_result.handled:
+                    thinking_mode = cmd_result.thinking_mode
+                    plan_mode = cmd_result.plan_mode
+                    continue
 
-        _pref_results = semantic.search("ユーザーの好み user preference", max_results=3)
-        _pref_text = "\n".join(f"- {p['content'][:120]}" for p in _pref_results) if _pref_results else ""
-        system_prompt = personality.build_system_prompt(
-            agents_md_content=agents_md.load(),
-            speech_style=persona_profile.get_speech_style(),
-            personality_traits=persona_profile.get_traits(),
-            user_preferences=_pref_text,
-        )
-        recent_episodes = episodic.get_recent(3)
-        if recent_episodes:
-            system_prompt += "\n\n## Recent Sessions\n" + "\n".join(f"- {e}" for e in recent_episodes)
+            self.messages.append({"role": "user", "content": user_input})
 
-        has_fast = config.model.fast_model is not None
+            has_fast = self.config.model.fast_model is not None
+            category = _quick_classify(user_input)
+            if category is None and has_fast:
+                console.print("[dim]Classifying...[/dim]")
+                category = _classify_input(self.llm, user_input, self.config.model.fast_model)
+            scenario = category or "simple"
+            use_fast, scenario_max_tokens = SCENARIOS.get(scenario, (True, 256))
 
-        category = _quick_classify(user_input)
-        if category is None and has_fast:
-            console.print("[dim]Classifying...[/dim]")
-            category = _classify_input(llm, user_input, config.model.fast_model)
-        scenario = category or "simple"
-        use_fast, scenario_max_tokens = _SCENARIOS.get(scenario, (True, 256))
+            force_smart = plan_mode or thinking_mode
+            if force_smart or not use_fast or not has_fast:
+                use_fast = False
+                self.llm.set_model(self.config.model.smart_model)
+                active_model = self.config.model.smart_model
+                max_tokens = self.config.model.max_tokens
+                tools_list = self.registry.list_tools()
+                console.print(f"[blue]  Model:[/blue] {self.config.model.smart_model} [dim]({scenario})[/dim]")
+            else:
+                self.llm.set_model(self.config.model.fast_model)
+                active_model = self.config.model.fast_model
+                max_tokens = min(self.config.model.max_tokens_fast, scenario_max_tokens)
+                tools_list = None
+                console.print(f"[blue]  Model:[/blue] {self.config.model.fast_model} [dim]({scenario}, max_tokens={max_tokens})[/dim]")
 
-        force_smart = plan_mode or thinking_mode
-        if force_smart or not use_fast or not has_fast:
-            use_fast = False
-            llm.set_model(config.model.smart_model)
-            active_model = config.model.smart_model
-            max_tokens = config.model.max_tokens
-            tools_list = registry.list_tools()
-            console.print(f"[blue]  Model:[/blue] {config.model.smart_model} [dim]({scenario})[/dim]")
-        else:
-            llm.set_model(config.model.fast_model)
-            active_model = config.model.fast_model
-            max_tokens = min(config.model.max_tokens_fast, scenario_max_tokens)
-            tools_list = None
-            console.print(f"[blue]  Model:[/blue] {config.model.fast_model} [dim]({scenario}, max_tokens={max_tokens})[/dim]")
+            # 系統プロンプト構築
+            _pref_results = self.semantic.search("ユーザーの好み user preference", max_results=3)
+            _pref_text = "\n".join(f"- {p['content'][:120]}" for p in _pref_results) if _pref_results else ""
+            system_prompt = self.personality.build_system_prompt(
+                agents_md_content=self.agents_md.load(),
+                speech_style=self.persona_profile.get_speech_style(),
+                personality_traits=self.persona_profile.get_traits(),
+                user_preferences=_pref_text,
+            )
 
-        if thinking_mode:
-            messages[-1] = messages[-1].copy()
-            messages[-1]["content"] = personality.build_thinking_prompt(user_input)
+            recent_episodes = self.episodic.get_recent(3)
+            if recent_episodes:
+                system_prompt += "\n\n## Recent Sessions\n" + "\n".join(f"- {e}" for e in recent_episodes)
 
-        should_plan = False
-        plan_result = None
-        if not use_fast and (plan_mode or (thinking_mode and _detect_complex(user_input))):
-            rag_future = _RAG_EXECUTOR.submit(semantic.search, user_input, max_results=config.memory.rag_max_results)
-            console.print(f"[dim]Analyzing task ({config.model.smart_model})...[/dim]")
-            plan_result = planner.analyze(user_input, system_prompt[:300])
-            _rag_results = rag_future.result()
-            if _rag_results:
-                system_prompt += "\n\n## Related Lessons\n" + "\n".join(f"- {e['content']}" for e in _rag_results)
-            if not plan_mode:
-                should_plan = planner.is_complex(plan_result)
+            # thinking mode 変換
+            if thinking_mode:
+                self.messages[-1] = self.messages[-1].copy()
+                self.messages[-1]["content"] = self.personality.build_thinking_prompt(user_input)
 
-        if not use_fast and not plan_mode and not thinking_mode and user_input.strip().lower() in ("hello", "hi", "bye", "thanks", "ありがとう"):
-            max_tokens = 64
-
-        if should_plan:
-            console.print(f"[yellow]Planning mode: {len(plan_result.get('subtasks', []))} subtasks[/yellow]")
-            for st in plan_result.get("subtasks", []):
-                console.print(f"  [dim]→ {st['name']}: {st['description'][:60]}[/dim]")
-
-            def _on_step(i: int, name: str):
-                console.print(f"  [dim]Step {i+1}: {name}...[/dim]")
-
-            with console.status(f"[cyan]{active_model} executing {len(plan_result.get('subtasks', []))} subtasks...[/cyan]", spinner="dots"):
-                final_content = executor.execute_plan(
-                    plan_result, user_input, config.personality.name, on_subtask=_on_step,
-                )
-
-            messages.append({"role": "assistant", "content": final_content})
-            if final_content:
-                console.print(Panel(Markdown(final_content), border_style="cyan"))
-        else:
-            parts: list[str] = []
-            trimmed = _trim_context(messages, config.model.context_window)
-
-            rag_future = _RAG_EXECUTOR.submit(semantic.search, user_input, max_results=config.memory.rag_max_results)
-
-            spinner_text = f"[cyan]Generating...[/cyan]"
-            with Live(Panel(Spinner("dots", text=spinner_text), border_style="cyan"), console=console, refresh_per_second=4, vertical_overflow="visible") as live:
+            # ── プランニングフェーズ ────────────────────────────
+            should_plan = False
+            plan_result = None
+            if not use_fast and (plan_mode or (thinking_mode and _detect_complex(user_input))):
+                rag_future = _RAG_EXECUTOR.submit(self.semantic.search, user_input, max_results=self.config.memory.rag_max_results)
+                console.print(f"[dim]Analyzing task ({self.config.model.smart_model})...[/dim]")
+                plan_result = self.planner.analyze(user_input, system_prompt[:300])
                 _rag_results = rag_future.result()
                 if _rag_results:
                     system_prompt += "\n\n## Related Lessons\n" + "\n".join(f"- {e['content']}" for e in _rag_results)
-                live.update(Panel(Spinner("dots", text=spinner_text), border_style="cyan"))
-                response = llm.chat(
-                    messages=[{"role": "system", "content": system_prompt}, *trimmed],
-                    enable_thinking=thinking_mode,
-                    temperature=config.model.temperature,
-                    max_tokens=max_tokens,
-                    tools=tools_list,
-                    on_token=lambda tok: (
-                        parts.append(tok),
-                        _update_display(live, parts),
-                    ),
-                    keep_alive="0" if not use_fast else None,
-                )
+                if not plan_mode:
+                    should_plan = self.planner.is_complex(plan_result)
 
-            msg = response["message"]
-            messages.append(msg)
+            # 短い挨拶のトークン制限
+            if not use_fast and not plan_mode and not thinking_mode and user_input.strip().lower() in ("hello", "hi", "bye", "thanks", "ありがとう"):
+                max_tokens = _SHORT_GREET_TOKENS
 
-            if msg.get("tool_calls"):
-                skip_llm = True
-                tool_results = []
-                for tc in msg["tool_calls"]:
-                    func_name = tc["function"]["name"]
-                    args = tc["function"]["arguments"]
-                    result = registry.execute(func_name, **args)
-                    messages.append({
-                        "role": "tool",
-                        "name": func_name,
-                        "content": result,
-                    })
-                    console.print(f"[dim]  → {func_name}(...): {result[:120]}[/dim]")
-                    tool_results.append((func_name, result))
-                    if len(result) > 200 or any(w in result.lower() for w in ["error", "fail", "exception", "traceback"]):
-                        skip_llm = False
+            # ── 実行フェーズ ────────────────────────────────────
+            if should_plan:
+                subtasks = plan_result.get("subtasks", [])
+                console.print(f"[yellow]Planning mode: {len(subtasks)} subtasks[/yellow]")
+                for st in subtasks:
+                    console.print(f"  [dim]→ {st['name']}: {st['description'][:60]}[/dim]")
 
-                parts.clear()
-                if skip_llm:
-                    combined = "\n\n".join(
-                        f"**{name}** result:\n{res}" for name, res in tool_results
+                def _on_step(i: int, name: str):
+                    console.print(f"  [dim]Step {i+1}: {name}...[/dim]")
+
+                with console.status(f"[cyan]{active_model} executing {len(subtasks)} subtasks...[/cyan]", spinner="dots"):
+                    final_content = self.executor.execute_plan(
+                        plan_result, user_input, self.config.personality.name, on_subtask=_on_step,
                     )
-                    msg = {"role": "assistant", "content": combined}
-                    messages.append(msg)
-                else:
-                    tool_spinner = f"[cyan]Generating...[/cyan]"
-                    with Live(Panel(Spinner("dots", text=tool_spinner), border_style="cyan"), console=console, refresh_per_second=4, vertical_overflow="visible") as live:
-                        final = llm.chat(
-                            messages=[{"role": "system", "content": system_prompt}, *messages],
-                            enable_thinking=thinking_mode,
-                            temperature=config.model.temperature,
-                            max_tokens=config.model.max_tokens,
-                            on_token=lambda tok: (
-                                parts.append(tok),
-                                _update_display(live, parts),
-                            ),
-                            keep_alive="0",
+
+                self.messages.append({"role": "assistant", "content": final_content})
+                if final_content:
+                    console.print(Panel(Markdown(final_content), border_style="cyan"))
+            else:
+                parts: list[str] = []
+                trimmed = _trim_context(self.messages, self.config.model.context_window)
+
+                rag_future = _RAG_EXECUTOR.submit(self.semantic.search, user_input, max_results=self.config.memory.rag_max_results)
+
+                spinner_text = "[cyan]Generating...[/cyan]"
+                with Live(Panel(Spinner("dots", text=spinner_text), border_style="cyan"),
+                          console=console, refresh_per_second=4, vertical_overflow="visible") as live:
+                    _rag_results = rag_future.result()
+                    if _rag_results:
+                        system_prompt += "\n\n## Related Lessons\n" + "\n".join(f"- {e['content']}" for e in _rag_results)
+                    live.update(Panel(Spinner("dots", text=spinner_text), border_style="cyan"))
+                    response = self.llm.chat(
+                        messages=[{"role": "system", "content": system_prompt}, *trimmed],
+                        enable_thinking=thinking_mode,
+                        temperature=self.config.model.temperature,
+                        max_tokens=max_tokens,
+                        tools=tools_list,
+                        on_token=lambda tok: (
+                            parts.append(tok),
+                            _update_display(live, parts),
+                        ),
+                        keep_alive="0" if not use_fast else None,
+                    )
+
+                msg = response["message"]
+                self.messages.append(msg)
+
+                if msg.get("tool_calls"):
+                    skip_llm = True
+                    tool_results = []
+                    for tc in msg["tool_calls"]:
+                        func_name = tc["function"]["name"]
+                        args = tc["function"]["arguments"]
+                        result = self.registry.execute(func_name, **args)
+                        self.messages.append({
+                            "role": "tool",
+                            "name": func_name,
+                            "content": result,
+                        })
+                        console.print(f"[dim]  → {func_name}(...): {result[:120]}[/dim]")
+                        tool_results.append((func_name, result))
+                        if len(result) > 200 or any(w in result.lower() for w in ["error", "fail", "exception", "traceback"]):
+                            skip_llm = False
+
+                    parts.clear()
+                    if skip_llm:
+                        combined = "\n\n".join(
+                            f"**{name}** result:\n{res}" for name, res in tool_results
                         )
+                        msg = {"role": "assistant", "content": combined}
+                        self.messages.append(msg)
+                    else:
+                        tool_spinner_text = "[cyan]Generating...[/cyan]"
+                        with Live(Panel(Spinner("dots", text=tool_spinner_text), border_style="cyan"),
+                                  console=console, refresh_per_second=4, vertical_overflow="visible") as live:
+                            final = self.llm.chat(
+                                messages=[{"role": "system", "content": system_prompt}, *self.messages],
+                                enable_thinking=thinking_mode,
+                                temperature=self.config.model.temperature,
+                                max_tokens=self.config.model.max_tokens,
+                                on_token=lambda tok: (
+                                    parts.append(tok),
+                                    _update_display(live, parts),
+                                ),
+                                keep_alive="0",
+                            )
 
-                    msg = final["message"]
-                    messages.append(msg)
+                        msg = final["message"]
+                        self.messages.append(msg)
 
-            content = msg.get("content", "")
-            if not parts and content:
-                console.print()
-                console.print(Panel(Markdown(content), border_style="cyan"))
+                content = msg.get("content", "")
+                if not parts and content:
+                    console.print()
+                    console.print(Panel(Markdown(content), border_style="cyan"))
 
-        _msg_count_since_reflect += 1
-        if _msg_count_since_reflect >= 5:
-            _msg_count_since_reflect = 0
-            _quick_reflect_and_update(reflexion, messages, persona_profile)
+            # ── 定期的な自己反省 ────────────────────────────────
+            msg_count_since_reflect += 1
+            if msg_count_since_reflect >= 5:
+                msg_count_since_reflect = 0
+                try:
+                    slice_for_reflect = self.messages[-8:] if len(self.messages) >= 8 else self.messages
+                    result = self.reflexion.quick_reflect(slice_for_reflect)
+                    if result.get("speech_style") or result.get("expressed_traits"):
+                        self.persona_profile.update_from_reflection(result)
+                except Exception:
+                    pass
+
+    def _cleanup(self):
+        """終了時の後処理。"""
+        _run_reflexion_and_save(
+            self.reflexion, self.messages,
+            self.episodic, self.semantic, self.persona_profile,
+        )

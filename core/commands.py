@@ -1,6 +1,6 @@
 from __future__ import annotations
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from rich.console import Console
@@ -10,11 +10,9 @@ from rich.table import Table
 from core.config import Config
 from core.llm_bridge import LLMBridge
 from core.reflexion import Reflexion
-from core.planner import Planner
-from core.executor import Executor
 from memory.persona_profile import PersonaProfile
 from memory.stores import EpisodicStore, SemanticStore
-from capabilities.registry import CapabilityRegistry
+
 
 console = Console(safe_box=True, legacy_windows=False)
 
@@ -27,22 +25,24 @@ class CommandResult:
 
 
 @dataclass
-class IrisContext:
+class CommandContext:
+    """コマンド実行に必要な最小限の依存を集約。"""
     llm: LLMBridge
     config: Config
-    registry: CapabilityRegistry
-    reflexion: Reflexion
-    episodic: EpisodicStore
-    semantic: SemanticStore
-    planner: Planner
-    executor: Executor
-    persona_profile: PersonaProfile | None = None
     config_path: str = ""
+    registry: object = field(default=None, repr=False)
+    reflexion: Reflexion | None = None
+    episodic: EpisodicStore | None = None
+    semantic: SemanticStore | None = None
+    planner: object = field(default=None, repr=False)
+    executor: object = field(default=None, repr=False)
+    persona_profile: PersonaProfile | None = None
 
 
 def _run_reflexion_and_save(
-    reflexion: Reflexion, messages: list, episodic: EpisodicStore, semantic: SemanticStore,
-    persona_profile: PersonaProfile | None = None,
+    reflexion: Reflexion, messages: list,
+    episodic: EpisodicStore, semantic: SemanticStore,
+    persona_profile=None,
 ):
     if len(messages) < 2:
         return
@@ -59,7 +59,8 @@ def _run_reflexion_and_save(
         semantic.add({
             "type": "lesson",
             "content": lesson,
-            "tags": result.get("missing_capability", "").split() if result.get("missing_capability") else [],
+            "tags": result.get("missing_capability", "").split()
+            if result.get("missing_capability") else [],
             "timestamp": "",
             "context": "session_end",
         })
@@ -79,7 +80,7 @@ def _run_reflexion_and_save(
         console.print("[dim]Persona profile updated[/dim]")
 
 
-def handle_command(cmd: str, ctx: IrisContext,
+def handle_command(cmd: str, ctx: CommandContext,
                    messages: list, thinking_mode: bool,
                    plan_mode: bool = False) -> CommandResult:
     match cmd.lower().split():
@@ -101,19 +102,20 @@ def handle_command(cmd: str, ctx: IrisContext,
                 border_style="yellow",
             ))
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+
         case ["/think"]:
             thinking_mode = not thinking_mode
-            state = "ON" if thinking_mode else "OFF"
             ctx.config.personality.thinking_mode_default = thinking_mode
             if ctx.config_path:
                 ctx.config.save(ctx.config_path)
-            console.print(f"[yellow]Thinking mode: {state}[/yellow]")
+            console.print(f"[yellow]Thinking mode: {'ON' if thinking_mode else 'OFF'}[/yellow]")
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+
         case ["/plan"]:
             plan_mode = not plan_mode
-            state = "ON" if plan_mode else "OFF"
-            console.print(f"[yellow]Plan mode: {state}[/yellow]")
+            console.print(f"[yellow]Plan mode: {'ON' if plan_mode else 'OFF'}[/yellow]")
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+
         case ["/model", name]:
             ctx.llm.set_model(name)
             ctx.config.model.smart_model = name
@@ -121,101 +123,132 @@ def handle_command(cmd: str, ctx: IrisContext,
                 ctx.config.save(ctx.config_path)
             console.print(f"[green]Switched to model: {name}[/green]")
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+
         case ["/capabilities"]:
-            table = Table(title="Registered Capabilities")
-            table.add_column("Name", style="cyan")
-            table.add_column("Description")
-            for cap in ctx.registry._capabilities.values():
-                table.add_row(cap.name, cap.description)
-            console.print(table)
+            _handle_capabilities(ctx)
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+
         case ["/memory"]:
-            if not ctx.episodic or not ctx.semantic:
-                console.print("[yellow]Memory stores not initialized[/yellow]")
-                return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
-            recent_eps = ctx.episodic.get_recent(3)
-            all_sem = ctx.semantic._load_all()
-            profile_path = Path(ctx.config.memory.agents_md_path)
-            profile_size = len(profile_path.read_text(encoding="utf-8")) if profile_path.exists() else 0
-            table = Table(title="Memory Stats")
-            table.add_column("Store", style="cyan")
-            table.add_column("Entries")
-            table.add_row("Episodic", str(len(recent_eps)) + " recent" if recent_eps else "0")
-            table.add_row("Semantic", str(len(all_sem)))
-            table.add_row("Profile", str(profile_size) + " bytes")
-            console.print(table)
-            if recent_eps:
-                console.print("\n[bold]Recent Episodes:[/bold]")
-                for e in recent_eps:
-                    console.print(f"  [dim]• {e[:100]}[/dim]")
+            _handle_memory_status(ctx)
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+
         case ["/memory-clear"]:
-            if ctx.episodic and ctx.semantic:
-                ctx.episodic.clear()
-                ctx.semantic.clear()
-                console.print("[yellow]All memory cleared (episodic, semantic, vector store)[/yellow]")
-            else:
-                console.print("[yellow]Memory stores not initialized[/yellow]")
+            _handle_memory_clear(ctx)
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+
         case ["/clear"]:
             messages.clear()
             console.print("[yellow]Conversation cleared[/yellow]")
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+
         case ["/exit"] | ["/quit"]:
             console.print("[yellow]Goodbye![/yellow]")
             if ctx.reflexion and ctx.episodic and ctx.semantic:
-                _run_reflexion_and_save(ctx.reflexion, messages, ctx.episodic, ctx.semantic, ctx.persona_profile)
+                _run_reflexion_and_save(
+                    ctx.reflexion, messages, ctx.episodic, ctx.semantic,
+                    ctx.persona_profile,
+                )
             sys.exit(0)
+
         case ["/persona"]:
-            if not ctx.persona_profile:
-                console.print("[yellow]Persona profile not initialized[/yellow]")
-                return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
-            styles = ctx.persona_profile.get_all_speech_styles()
-            traits = ctx.persona_profile.get_all_traits()
-
-            table = Table(title="Iris's Personality - accumulated data")
-            table.add_column("Aspect", style="cyan")
-            table.add_column("Entries")
-
-            if styles:
-                style_lines = "\n".join(f"  [{s.get('count',1)}x] {s['text'][:60]}" for s in styles)
-            else:
-                style_lines = "(未収集)"
-            if traits:
-                trait_lines = "\n".join(f"  [{t.get('count',1)}x] {t['text'][:60]}" for t in traits)
-            else:
-                trait_lines = "(未収集)"
-
-            table.add_row("Speech Style", style_lines)
-            table.add_row("Personality Traits", trait_lines)
-
-            profile_path = Path(ctx.config.memory.agents_md_path)
-            profile_size = len(profile_path.read_text(encoding="utf-8")) if profile_path.exists() else 0
-            table.add_row("Profile Size", f"{profile_size} bytes")
-            console.print(table)
+            _handle_persona_list(ctx)
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+
         case ["/persona", "view"]:
             if ctx.persona_profile:
                 ctx.persona_profile.regenerate_view()
                 console.print("[green]Persona view regenerated from JSON data[/green]")
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+
         case ["/persona", "set", target, *rest]:
-            if not ctx.persona_profile:
-                console.print("[yellow]Persona profile not initialized[/yellow]")
-                return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
-            text = " ".join(rest)
-            if target == "speech_style":
-                ctx.persona_profile.set_speech_style(text)
-                console.print("[green]Speech style updated[/green]")
-            elif target == "traits":
-                ctx.persona_profile.set_traits(text)
-                console.print("[green]Personality traits updated[/green]")
-            else:
-                console.print(f"[yellow]Unknown target: {target}. Use speech_style or traits.[/yellow]")
+            _handle_persona_set(ctx, target, rest)
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+
         case ["/persona", "reset"]:
             if ctx.persona_profile:
                 ctx.persona_profile.reset()
                 console.print("[green]Persona reset to defaults[/green]")
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+
     return CommandResult(handled=False, thinking_mode=thinking_mode, plan_mode=plan_mode)
+
+
+def _handle_capabilities(ctx: CommandContext):
+    if not hasattr(ctx.registry, "_capabilities"):
+        return
+    table = Table(title="Registered Capabilities")
+    table.add_column("Name", style="cyan")
+    table.add_column("Description")
+    for cap in ctx.registry._capabilities.values():
+        table.add_row(cap.name, cap.description)
+    console.print(table)
+
+
+def _handle_memory_status(ctx: CommandContext):
+    if not ctx.episodic or not ctx.semantic:
+        console.print("[yellow]Memory stores not initialized[/yellow]")
+        return
+    recent_eps = ctx.episodic.get_recent(3)
+    all_sem = ctx.semantic._load_all()
+    profile_path = Path(ctx.config.memory.agents_md_path)
+    profile_size = len(profile_path.read_text(encoding="utf-8")) if profile_path.exists() else 0
+
+    table = Table(title="Memory Stats")
+    table.add_column("Store", style="cyan")
+    table.add_column("Entries")
+    table.add_row("Episodic", str(len(recent_eps)) + " recent" if recent_eps else "0")
+    table.add_row("Semantic", str(len(all_sem)))
+    table.add_row("Profile", str(profile_size) + " bytes")
+    console.print(table)
+
+    if recent_eps:
+        console.print("\n[bold]Recent Episodes:[/bold]")
+        for e in recent_eps:
+            console.print(f"  [dim]• {e[:100]}[/dim]")
+
+
+def _handle_memory_clear(ctx: CommandContext):
+    if ctx.episodic and ctx.semantic:
+        ctx.episodic.clear()
+        ctx.semantic.clear()
+        console.print("[yellow]All memory cleared (episodic, semantic, vector store)[/yellow]")
+    else:
+        console.print("[yellow]Memory stores not initialized[/yellow]")
+
+
+def _handle_persona_list(ctx: CommandContext):
+    if not ctx.persona_profile:
+        console.print("[yellow]Persona profile not initialized[/yellow]")
+        return
+    styles = ctx.persona_profile.get_all_speech_styles()
+    traits = ctx.persona_profile.get_all_traits()
+
+    table = Table(title="Iris's Personality - accumulated data")
+    table.add_column("Aspect", style="cyan")
+    table.add_column("Entries")
+
+    style_lines = "\n".join(f"  [{s.get('count',1)}x] {s['text'][:60]}" for s in styles) if styles else "(未収集)"
+    trait_lines = "\n".join(f"  [{t.get('count',1)}x] {t['text'][:60]}" for t in traits) if traits else "(未収集)"
+
+    table.add_row("Speech Style", style_lines)
+    table.add_row("Personality Traits", trait_lines)
+
+    profile_path = Path(ctx.config.memory.agents_md_path)
+    profile_size = len(profile_path.read_text(encoding="utf-8")) if profile_path.exists() else 0
+    table.add_row("Profile Size", f"{profile_size} bytes")
+    console.print(table)
+
+
+def _handle_persona_set(ctx: CommandContext, target: str, rest: list[str]):
+    if not ctx.persona_profile:
+        console.print("[yellow]Persona profile not initialized[/yellow]")
+        return
+    text = " ".join(rest)
+    if target == "speech_style":
+        ctx.persona_profile.set_speech_style(text)
+        console.print("[green]Speech style updated[/green]")
+    elif target == "traits":
+        ctx.persona_profile.set_traits(text)
+        console.print("[green]Personality traits updated[/green]")
+    else:
+        console.print(f"[yellow]Unknown target: {target}. Use speech_style or traits.[/yellow]")

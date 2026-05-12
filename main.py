@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 os.environ.setdefault("OLLAMA_GPU_LAYERS", "99")
 
@@ -53,10 +54,8 @@ def _ensure_model_pulled(model_name: str) -> bool:
     return False
 
 
-def _cleanup_ollama_models():
-    """GPU向け環境変数が反映された状態でOllamaサーバーを再起動し、
-    config.yamlに記載のモデルがpull済みか確認する。"""
-    # 既存Ollamaプロセスを強制終了
+def _restart_ollama():
+    """既存Ollamaプロセスを終了し、GPU向け設定で再起動する。"""
     try:
         subprocess.run(["taskkill", "/F", "/IM", "ollama.exe"],
                        capture_output=True, timeout=5)
@@ -64,7 +63,6 @@ def _cleanup_ollama_models():
         pass
     time.sleep(2)
 
-    # 環境変数 OLLAMA_GPU_LAYERS=99 を反映して起動
     subprocess.Popen(
         ["ollama", "serve"],
         stdout=subprocess.DEVNULL,
@@ -73,48 +71,72 @@ def _cleanup_ollama_models():
     )
     time.sleep(5)
 
-    # config.yamlに記載のモデルを解放
-    try:
-        import yaml
-        from pathlib import Path
-        p = Path(__file__).parent / "config.yaml"
-        raw = yaml.safe_load(p.read_text(encoding="utf-8")) if p.exists() else {}
-        model_section = raw.get("model", {})
-        for key in ("smart_model", "fast_model", "draft_model"):
-            m = model_section.get(key)
-            if m:
+
+def _stop_config_models(config: dict):
+    """config.yamlに記載されたモデルを停止する。"""
+    model_section = config.get("model", {})
+    for key in ("smart_model", "fast_model", "draft_model"):
+        m = model_section.get(key)
+        if m:
+            try:
                 subprocess.run(["ollama", "stop", m],
                                capture_output=True, timeout=10)
-    except Exception:
-        pass
+            except Exception:
+                pass
+
+
+def _ensure_config_models(config_path: Path) -> bool:
+    """config.yamlのモデルがpull済みか確認する（yamlはここで1回だけパース）。"""
+    import yaml
+    raw = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
+    config = yaml.safe_load(raw) if raw else {}
+
+    # 設定モデルを一旦停止
+    _stop_config_models(config)
     time.sleep(0.5)
 
-
-_cleanup_ollama_models()
-
-# config.yamlに記載のモデルがpull済みか確認・ダウンロード
-_config_available = True
-try:
-    import yaml
-    from pathlib import Path
-    p = Path(__file__).parent / "config.yaml"
-    raw = yaml.safe_load(p.read_text(encoding="utf-8")) if p.exists() else {}
-    model_section = raw.get("model", {})
+    # pull済み確認・ダウンロード
+    model_section = config.get("model", {})
     for key in ("smart_model", "fast_model", "draft_model"):
         m = model_section.get(key)
         if m and not _ensure_model_pulled(m):
-            _config_available = False
-except Exception:
-    pass
-
-if not _config_available:
-    print("必要なモデルが利用できません。プログラムを終了します。", file=sys.stderr)
-    sys.exit(1)
+            return False
+    return True
 
 
-_cleanup_ollama_models()
+def run():
+    """アプリケーションのエントリーポイント。"""
+    project_root = Path(__file__).parent
+    config_path = project_root / "config.yaml"
 
-from core.cli import run_cli
+    # 1. Ollama再起動（GPUレイヤー設定反映）
+    _restart_ollama()
 
-if __name__ == "__main__":
-    run_cli()
+    # 2. 設定モデルのpull確認
+    if not _ensure_config_models(config_path):
+        print("必要なモデルが利用できません。プログラムを終了します。", file=sys.stderr)
+        sys.exit(1)
+
+    # 3. Configロード & LLM接続確認
+    from core.config import Config
+    from core.llm_bridge import LLMBridge
+    from core.cli import CliSession
+
+    config = Config.load(str(config_path))
+
+    llm = LLMBridge(
+        model_name=config.model.smart_model,
+        base_url=config.model.base_url,
+        draft_model=config.model.draft_model,
+        num_draft=config.model.num_draft,
+        num_gpu=config.model.num_gpu,
+        num_ctx=config.model.num_ctx,
+    )
+
+    if not llm.is_available():
+        print("Ollamaサーバーに接続できませんでした。", file=sys.stderr)
+        sys.exit(1)
+
+    # 4. CLIセッション開始
+    session = CliSession(config, llm)
+    session.run()

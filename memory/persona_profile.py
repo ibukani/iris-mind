@@ -1,7 +1,6 @@
 from __future__ import annotations
 import re
 from datetime import datetime
-from pathlib import Path
 
 from memory.stores import AgentsMdStore, SemanticStore
 
@@ -23,6 +22,7 @@ class PersonaProfile:
         self.semantic = semantic
         self._template: dict[str, str] = {}
         self._load_template()
+        self._migrate_if_needed()
 
     # ============================================================
     # テンプレート管理（静的部分の抽出・保持）
@@ -63,24 +63,20 @@ class PersonaProfile:
         if not self.semantic:
             return []
 
-        search_tags = {"speech_style": "speech_style", "personality_traits": "personality_trait"}
-        tag = search_tags.get(category)
+        tag_map = {"speech_style": "speech_style", "personality_traits": "personality_trait"}
+        tag = tag_map.get(category)
         if not tag:
             return []
 
-        # 全件検索して集約
         results = self.semantic.search(tag, max_results=50)
         text_counts: dict[str, dict] = {}
         for r in results:
-            # content からテキスト部分を抽出: "[tag] text (source: X, count: N)"
             c = r.get("content", "")
             start = c.find("] ")
             if start == -1:
                 continue
             text = c[start + 2:]
-            # 末尾の (source: ..., count: N) を分離
-            import re as _re
-            m = _re.search(r"\(source: (\w+),\s*count: (\d+)\)\s*$", text)
+            m = re.search(r"\(source: (\w+),\s*count: (\d+)\)\s*$", text)
             if m:
                 text = text[:m.start()].strip()
                 source = m.group(1)
@@ -111,8 +107,8 @@ class PersonaProfile:
     def _get_all_entries(self, category: str) -> list[dict]:
         return self._aggregate_feedback(category)
 
-# ============================================================
-    # ビュー再生成
+    # ============================================================
+    # マイグレーション
     # ============================================================
 
     def _migrate_if_needed(self):
@@ -176,7 +172,6 @@ class PersonaProfile:
                 "tags": [tag, source],
                 "timestamp": now,
             })
-        self.regenerate_view()
 
     # ============================================================
     # パブリックAPI
@@ -212,11 +207,15 @@ class PersonaProfile:
         if traits:
             self._add_entry("personality_traits", traits)
 
+        self.regenerate_view()
+
     def set_speech_style(self, text: str):
         self._add_entry("speech_style", text, source="manual")
+        self.regenerate_view()
 
     def set_traits(self, text: str):
         self._add_entry("personality_traits", text, source="manual")
+        self.regenerate_view()
 
     def reset(self):
         if self.semantic:

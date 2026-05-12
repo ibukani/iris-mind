@@ -19,6 +19,15 @@ class LLMBridge:
     def set_model(self, model_name: str):
         self.model_name = model_name
 
+    @staticmethod
+    def _process_message(msg: dict) -> dict:
+        """LLM応答メッセージの後処理（contentの抽出・クリーニング）を共通化。"""
+        if not msg.get("content") and msg.get("thinking"):
+            msg["content"] = _extract_answer_from_thinking(msg["thinking"])
+        if msg.get("content"):
+            msg["content"] = msg["content"].strip()
+        return msg
+
     def chat(
         self,
         messages: list[dict],
@@ -52,7 +61,7 @@ class LLMBridge:
 
         if on_token is not None:
             stream = self.client.chat(**kwargs)
-            content_parts = []
+            content_parts: list[str] = []
             tool_calls = None
             final = None
             for chunk in stream:
@@ -74,22 +83,11 @@ class LLMBridge:
             if tool_calls:
                 final["message"]["tool_calls"] = tool_calls
 
-            msg = final["message"]
-            if not msg.get("content") and msg.get("thinking"):
-                msg["content"] = _extract_answer_from_thinking(msg["thinking"])
-            if msg.get("content"):
-                msg["content"] = msg["content"].strip()
-
+            final["message"] = self._process_message(final["message"])
             return final
 
         resp = self.client.chat(**kwargs)
-
-        msg = resp["message"]
-        if not msg.content and msg.thinking:
-            msg.content = _extract_answer_from_thinking(msg.thinking)
-        if msg.content:
-            msg.content = msg.content.strip()
-
+        resp["message"] = self._process_message(resp["message"])
         return resp
 
     def is_available(self) -> bool:
@@ -120,10 +118,9 @@ def _extract_answer_from_thinking(text: str) -> str:
     if final_lines:
         return "\n".join(final_lines).strip()
 
-    lines = stripped.splitlines()
-    content_lines = [l for l in lines if not re.match(
+    content_lines = [line for line in stripped.splitlines() if not re.match(
         r"^\s*(思考|Thinking|Reasoning|Step \d|Hmm|Wait|Let me|I need|Actually|Re-evaluat|Draft|Final|I'll|I think|I should|Maybe|Perhaps|First,?|Next,?|Finally,?)",
-        l.strip(), re.IGNORECASE
+        line.strip(), re.IGNORECASE
     )]
     if content_lines:
         return content_lines[-1].strip()

@@ -24,7 +24,7 @@ class AgentsMdStore:
 
     def _truncate(self, content: str) -> str:
         lines = content.split("\n")
-        sizes = [len(l.encode("utf-8")) + 1 for l in lines]
+        sizes = [len(line.encode("utf-8")) + 1 for line in lines]
         total = sum(sizes)
         while len(lines) > 1 and total > self.max_bytes:
             last = sizes.pop()

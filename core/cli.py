@@ -43,7 +43,7 @@ _TOOL_HINTS = [
 ]
 
 _SCENARIOS: dict[str, tuple[bool, int]] = {
-    "greeting": (True, 128),
+    "greeting": (True, 256),
     "simple": (True, 512),
     "qa": (True, 1024),
     "tool": (False, 1024),

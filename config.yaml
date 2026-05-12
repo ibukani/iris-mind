@@ -1,6 +1,6 @@
 model:
   smart_model: qwen3.5:9b
-  fast_model: qwen3.5:0.8b
+  fast_model: qwen3.5:2b
   base_url: http://localhost:11434
   max_tokens: 1024
   max_tokens_fast: 512

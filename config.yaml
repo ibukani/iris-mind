@@ -13,14 +13,11 @@ model:
 personality:
   name: Iris
   thinking_mode_default: false
-  prompt_file: memory/personality_default.md
+  prompt_file: memory/config/personality_default.md
 
 memory:
-  episodic_path: memory/episodes.jsonl
-  semantic_path: memory/semantic.jsonl
-  vector_db_path: memory/chroma_db
-  episodic_max_entries: 30
-  semantic_max_entries: 100
-  rag_max_results: 3
-  agents_md_path: memory/iris_profile.md
+  episodic_path: memory/data/episodes.jsonl
+  semantic_path: memory/data/semantic.jsonl
+  vector_db_path: memory/data/chroma_db
+  agents_md_path: memory/data/iris_profile.md
   agents_md_max_bytes: 2048

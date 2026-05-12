@@ -6,9 +6,9 @@ from memory.vector_store import VectorStore
 
 
 class AgentsMdStore:
-    """構造記憶。memory/iris_profile.mdの読み書き。サイズ上限を超えないよう制御。"""
+    """構造記憶。memory/data/iris_profile.mdの読み書き。サイズ上限を超えないよう制御。"""
 
-    def __init__(self, path: str = "memory/iris_profile.md", max_bytes: int = 2048):
+    def __init__(self, path: str = "memory/data/iris_profile.md", max_bytes: int = 2048):
         self.path = Path(path)
         self.max_bytes = max_bytes
 
@@ -36,7 +36,7 @@ class AgentsMdStore:
 class EpisodicStore:
     """エピソード記憶。日次サマリーを管理。上限到達時は古いものをマージして圧縮。"""
 
-    def __init__(self, path: str = "memory/episodes.jsonl", max_entries: int = 30):
+    def __init__(self, path: str = "memory/data/episodes.jsonl", max_entries: int = 30):
         self.path = Path(path)
         self.max_entries = max_entries
 
@@ -75,8 +75,8 @@ class EpisodicStore:
 class SemanticStore:
     """意味記憶。JSONL永続化 + VectorStore（ChromaDB + BM25）によるハイブリッド検索。"""
 
-    def __init__(self, path: str = "memory/semantic.jsonl", max_entries: int = 100,
-                 vector_db_path: str = "memory/chroma_db"):
+    def __init__(self, path: str = "memory/data/semantic.jsonl", max_entries: int = 100,
+                 vector_db_path: str = "memory/data/chroma_db"):
         self.path = Path(path)
         self.max_entries = max_entries
         self.vector = VectorStore(path=vector_db_path)

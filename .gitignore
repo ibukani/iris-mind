@@ -2,9 +2,9 @@
 __pycache__/
 *.pyc
 *.pyo
-memory/chroma_db/
-memory/episodes.jsonl
-memory/semantic.jsonl
+memory/data/chroma_db/
+memory/data/episodes.jsonl
+memory/data/semantic.jsonl
 memory/persona_data.json
 .DS_Store
 *.log

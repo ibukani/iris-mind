@@ -26,11 +26,11 @@ class AgentsMdStore:
         lines = content.split("\n")
         sizes = [len(l.encode("utf-8")) + 1 for l in lines]
         total = sum(sizes)
-        keep_from = 0
-        while keep_from < len(lines) and total > self.max_bytes:
-            total -= sizes[keep_from]
-            keep_from += 1
-        return "\n".join(lines[keep_from:])
+        while len(lines) > 1 and total > self.max_bytes:
+            last = sizes.pop()
+            total -= last
+            lines.pop()
+        return "\n".join(lines)
 
 
 class EpisodicStore:
@@ -59,10 +59,8 @@ class EpisodicStore:
         return [e["summary"] for e in entries[-n:]]
 
     def _merge_and_trim(self, entries: list[dict]) -> list[dict]:
-        """上限超過時、古いエントリを1つにマージして削減"""
-        keep = self.max_entries - 1
-        merged_text = " | ".join(e["summary"] for e in entries[:len(entries) - keep])
-        return [{"summary": merged_text[:500]}] + entries[-(keep):]
+        """上限超過時、古いエントリを単純にドロップ（マージはノイズになるため）"""
+        return entries[-self.max_entries:]
 
     def _load_all(self) -> list[dict]:
         if not self.path.exists():

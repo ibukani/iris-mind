@@ -17,12 +17,12 @@ class Reflexion:
         msgs = [
             {"role": "system", "content": (
                 "You are Iris's reflection engine. Analyze the conversation and extract:\n"
-                "1. summary: one-sentence session summary\n"
-                "2. lesson: what you learned (or empty)\n"
-                "3. preference: user preference you noticed (or empty)\n"
-                "4. improvement: what you could have done better (or empty)\n"
-                "5. missing_capability: a tool you wished you had (or empty)\n"
-                "Respond in JSON only."
+                "1. summary: one-sentence session summary (日本語で)\n"
+                "2. lesson: what you learned (日本語で、または空文字)\n"
+                "3. preference: user preference you noticed (日本語で、または空文字)\n"
+                "4. improvement: what you could have done better (日本語で、または空文字)\n"
+                "5. missing_capability: a tool you wished you had (日本語で、または空文字)\n"
+                "Respond in JSON only. All values must be in Japanese."
             )},
             {"role": "user", "content": json.dumps(
                 [{"role": m["role"], "content": str(m.get("content", ""))[:200]}

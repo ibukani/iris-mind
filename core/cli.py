@@ -1,4 +1,6 @@
 from __future__ import annotations
+import subprocess
+import time
 from pathlib import Path
 
 from rich.console import Console
@@ -33,14 +35,37 @@ def _ensure_ollama(config: Config) -> LLMBridge | None:
         num_draft=config.model.num_draft,
     )
     if not llm.is_available():
-        console.print(
-            "[red]Ollama is not running![/red]\n"
-            f"Please start Ollama and pull the model:\n"
-            f"  ollama pull {config.model.name}\n"
-            f"  ollama serve"
-        )
-        return None
-    console.print(f"[green]Connected to Ollama ({config.model.name})[/green]")
+        console.print("[yellow]Ollama is not running. Attempting to start it...[/yellow]")
+        try:
+            subprocess.Popen(
+                ["ollama", "serve"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW,
+            )
+        except FileNotFoundError:
+            console.print(
+                "[red]Could not find 'ollama' command![/red]\n"
+                "Please install Ollama and ensure it is in your PATH:\n"
+                "  https://ollama.com/download"
+            )
+            return None
+
+        for _ in range(15):
+            time.sleep(1)
+            if llm.is_available():
+                console.print(f"[green]Connected to Ollama ({config.model.name})[/green]")
+                break
+        else:
+            console.print(
+                "[red]Ollama failed to start within 15 seconds.[/red]\n"
+                f"Please start it manually:\n"
+                f"  ollama pull {config.model.name}\n"
+                f"  ollama serve"
+            )
+            return None
+    else:
+        console.print(f"[green]Connected to Ollama ({config.model.name})[/green]")
 
     if config.model.draft_model:
         try:

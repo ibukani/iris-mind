@@ -30,6 +30,7 @@ class Planner:
             ],
             temperature=0.3,
             max_tokens=500,
+            keep_alive="0",
         )
         content = resp["message"].get("content", "")
         try:

@@ -62,6 +62,7 @@ class Executor:
                 tools=tools,
                 temperature=0.5,
                 max_tokens=1000,
+                keep_alive="0",
             )
             msg = resp["message"]
             ctx.append(msg)
@@ -81,6 +82,7 @@ class Executor:
                     messages=[{"role": "system", "content": system_prompt}, *ctx],
                     temperature=0.5,
                     max_tokens=1000,
+                    keep_alive="0",
                 )
                 msg = final["message"]
                 ctx.append(msg)

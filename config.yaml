@@ -1,13 +1,13 @@
 model:
   smart_model: qwen3.5:9b
-  fast_model: qwen3.5:4b
+  fast_model: qwen3.5:0.8b
   base_url: http://localhost:11434
   max_tokens: 1024
   max_tokens_fast: 512
   temperature: 0.7
-  draft_model: qwen3.5:0.8b
-  num_draft: 5
+  num_draft: 0
   num_ctx: 8192
+  num_gpu: 99
   context_window: 4000
 
 personality:

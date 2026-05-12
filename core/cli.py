@@ -118,6 +118,7 @@ def _ensure_ollama(config: Config) -> LLMBridge | None:
         base_url=config.model.base_url,
         draft_model=config.model.draft_model,
         num_draft=config.model.num_draft,
+        num_gpu=config.model.num_gpu,
         num_ctx=config.model.num_ctx,
     )
     if not llm.is_available():
@@ -391,6 +392,7 @@ def run_cli():
                         parts.append(tok),
                         _update_display(live, parts),
                     ),
+                    keep_alive="0" if not use_fast else None,
                 )
 
             msg = response["message"]
@@ -432,6 +434,7 @@ def run_cli():
                                 parts.append(tok),
                                 _update_display(live, parts),
                             ),
+                            keep_alive="0",
                         )
 
                     msg = final["message"]

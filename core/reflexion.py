@@ -33,7 +33,7 @@ class Reflexion:
                  for m in conversation_history[-10:]], ensure_ascii=False
             )},
         ]
-        resp = self.llm.chat(messages=msgs, temperature=0.3, max_tokens=400)
+        resp = self.llm.chat(messages=msgs, temperature=0.3, max_tokens=400, keep_alive="0")
         content = resp["message"].get("content", "")
         try:
             return json.loads(content)
@@ -57,7 +57,7 @@ class Reflexion:
                  for m in conversation_slice[-4:]], ensure_ascii=False
             )},
         ]
-        resp = self.llm.chat(messages=msgs, temperature=0.3, max_tokens=200)
+        resp = self.llm.chat(messages=msgs, temperature=0.3, max_tokens=200, keep_alive="0")
         content = resp["message"].get("content", "")
         try:
             return json.loads(content)

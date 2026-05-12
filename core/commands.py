@@ -12,6 +12,7 @@ from core.llm_bridge import LLMBridge
 from core.reflexion import Reflexion
 from core.planner import Planner
 from core.executor import Executor
+from memory.persona_profile import PersonaProfile
 from memory.stores import EpisodicStore, SemanticStore
 from capabilities.registry import CapabilityRegistry
 
@@ -35,11 +36,13 @@ class IrisContext:
     semantic: SemanticStore
     planner: Planner
     executor: Executor
+    persona_profile: PersonaProfile | None = None
     config_path: str = ""
 
 
 def _run_reflexion_and_save(
-    reflexion: Reflexion, messages: list, episodic: EpisodicStore, semantic: SemanticStore
+    reflexion: Reflexion, messages: list, episodic: EpisodicStore, semantic: SemanticStore,
+    persona_profile: PersonaProfile | None = None,
 ):
     if len(messages) < 2:
         return
@@ -47,6 +50,8 @@ def _run_reflexion_and_save(
     result = reflexion.reflect(messages)
     summary = result.get("summary", "").strip()
     lesson = result.get("lesson", "").strip()
+    preference = result.get("preference", "").strip()
+
     if summary:
         episodic.add(summary)
         console.print(f"[dim]Episode saved: {summary[:80]}[/dim]")
@@ -59,6 +64,19 @@ def _run_reflexion_and_save(
             "context": "session_end",
         })
         console.print(f"[dim]Lesson saved: {lesson[:80]}[/dim]")
+    if preference:
+        semantic.add({
+            "type": "preference",
+            "content": preference,
+            "tags": ["user_preference"],
+            "timestamp": "",
+            "context": "session_end",
+        })
+        console.print(f"[dim]Preference saved: {preference[:80]}[/dim]")
+
+    if persona_profile:
+        persona_profile.update_from_reflection(result)
+        console.print("[dim]Persona profile updated[/dim]")
 
 
 def handle_command(cmd: str, ctx: IrisContext,
@@ -71,6 +89,9 @@ def handle_command(cmd: str, ctx: IrisContext,
                 "[bold]/plan[/bold] - toggle plan-and-execute mode\n"
                 "/model <name> - switch model\n"
                 "/capabilities - list registered capabilities\n"
+                "/persona - show/manage my personality\n"
+                "/persona set speech_style|traits <text> - override speech style or traits\n"
+                "/persona reset - reset personality to defaults\n"
                 "/memory - show memory stats\n"
                 "/memory-clear - clear all memory (episodic, semantic, vector store)\n"
                 "/clear - clear conversation history\n"
@@ -142,6 +163,40 @@ def handle_command(cmd: str, ctx: IrisContext,
         case ["/exit"] | ["/quit"]:
             console.print("[yellow]Goodbye![/yellow]")
             if ctx.reflexion and ctx.episodic and ctx.semantic:
-                _run_reflexion_and_save(ctx.reflexion, messages, ctx.episodic, ctx.semantic)
+                _run_reflexion_and_save(ctx.reflexion, messages, ctx.episodic, ctx.semantic, ctx.persona_profile)
             sys.exit(0)
+        case ["/persona"]:
+            if not ctx.persona_profile:
+                console.print("[yellow]Persona profile not initialized[/yellow]")
+                return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+            style = ctx.persona_profile.get_speech_style() or "(未設定)"
+            traits = ctx.persona_profile.get_traits() or "(未設定)"
+            prefs = ctx.persona_profile.get_preferences_summary() or "(未収集)"
+            table = Table(title="Iris's Personality")
+            table.add_column("Aspect", style="cyan")
+            table.add_column("Current State")
+            table.add_row("Speech Style", style[:200])
+            table.add_row("Personality Traits", traits[:200])
+            table.add_row("Known Preferences", prefs[:200])
+            console.print(table)
+            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+        case ["/persona", "set", target, *rest]:
+            if not ctx.persona_profile:
+                console.print("[yellow]Persona profile not initialized[/yellow]")
+                return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+            text = " ".join(rest)
+            if target == "speech_style":
+                ctx.persona_profile.set_speech_style(text)
+                console.print("[green]Speech style updated[/green]")
+            elif target == "traits":
+                ctx.persona_profile.set_traits(text)
+                console.print("[green]Personality traits updated[/green]")
+            else:
+                console.print(f"[yellow]Unknown target: {target}. Use speech_style or traits.[/yellow]")
+            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+        case ["/persona", "reset"]:
+            if ctx.persona_profile:
+                ctx.persona_profile.reset()
+                console.print("[green]Persona reset to defaults[/green]")
+            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
     return CommandResult(handled=False, thinking_mode=thinking_mode, plan_mode=plan_mode)

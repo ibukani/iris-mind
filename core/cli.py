@@ -21,6 +21,7 @@ from core.reflexion import Reflexion
 from core.planner import Planner
 from core.executor import Executor
 from core.commands import IrisContext, handle_command, _run_reflexion_and_save
+from memory.persona_profile import PersonaProfile
 from memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
 from capabilities.registry import CapabilityRegistry
 
@@ -174,6 +175,16 @@ def _ensure_ollama(config: Config) -> LLMBridge | None:
     return llm
 
 
+def _quick_reflect_and_update(reflexion: Reflexion, messages: list, persona_profile: PersonaProfile):
+    try:
+        slice_for_reflect = messages[-8:] if len(messages) >= 8 else messages
+        result = reflexion.quick_reflect(slice_for_reflect)
+        if result.get("speech_style") or result.get("expressed_traits"):
+            persona_profile.update_from_reflection(result)
+    except Exception:
+        pass
+
+
 def _detect_complex(user_input: str) -> bool:
     triggers = [
         "調査", "調べて", "比較", "分析", "設計", "構築", "作成して",
@@ -185,7 +196,7 @@ def _detect_complex(user_input: str) -> bool:
 
 _COMMANDS = [
     "/help", "/think", "/plan", "/model", "/clear", "/exit", "/quit",
-    "/capabilities", "/memory", "/memory-clear",
+    "/capabilities", "/memory", "/memory-clear", "/persona",
 ]
 
 
@@ -228,13 +239,20 @@ def run_cli():
     registry.discover_modules(str(PROJECT_ROOT / "capabilities"))
     console.print(f"[green]Loaded {len(registry._capabilities)} capabilities[/green]")
 
+    persona_profile = PersonaProfile(store=agents_md, semantic=semantic)
+    speech_style = persona_profile.get_speech_style()
+    if speech_style:
+        console.print(f"[dim]Speech style: {speech_style[:60]}...[/dim]")
+    console.print(f"[dim]Persona: {len(persona_profile._buf)} sections[/dim]")
+
     reflexion = Reflexion(llm=llm)
     planner = Planner(llm=llm)
     executor = Executor(llm=llm, registry=registry)
     ctx = IrisContext(llm=llm, config=config, config_path=str(PROJECT_ROOT / "config.yaml"),
                       registry=registry,
                       reflexion=reflexion, episodic=episodic,
-                      semantic=semantic, planner=planner, executor=executor)
+                      semantic=semantic, planner=planner, executor=executor,
+                      persona_profile=persona_profile)
 
     console.print(Panel.fit(
         f"[bold cyan]Iris[/bold cyan] - v0.1.0\n"
@@ -247,10 +265,11 @@ def run_cli():
     thinking_mode = config.personality.thinking_mode_default
     plan_mode = False
     active_model = config.model.fast_model or config.model.smart_model
+    _msg_count_since_reflect = 0
 
-    def _update_display(l: Live, p: list[str]):
+    def _update_display(live: Live, p: list[str]):
         try:
-            l.update(Panel(Markdown("".join(p)), border_style="cyan"))
+            live.update(Panel(Markdown("".join(p)), border_style="cyan"))
         except Exception:
             pass
 
@@ -266,7 +285,7 @@ def run_cli():
             )
         except (EOFError, KeyboardInterrupt):
             console.print("\n[yellow]Goodbye![/yellow]")
-            _run_reflexion_and_save(reflexion, messages, episodic, semantic)
+            _run_reflexion_and_save(reflexion, messages, episodic, semantic, persona_profile)
             break
 
         if not user_input.strip():
@@ -281,7 +300,12 @@ def run_cli():
 
         messages.append({"role": "user", "content": user_input})
 
-        system_prompt = personality.build_system_prompt(agents_md.load())
+        system_prompt = personality.build_system_prompt(
+            agents_md_content=agents_md.load(),
+            speech_style=persona_profile.get_speech_style(),
+            personality_traits=persona_profile.get_traits(),
+            user_preferences=persona_profile.get_preferences_summary(),
+        )
         recent_episodes = episodic.get_recent(3)
         if recent_episodes:
             system_prompt += "\n\n## Recent Sessions\n" + "\n".join(f"- {e}" for e in recent_episodes)
@@ -417,3 +441,8 @@ def run_cli():
             if not parts and content:
                 console.print()
                 console.print(Panel(Markdown(content), border_style="cyan"))
+
+        _msg_count_since_reflect += 1
+        if _msg_count_since_reflect >= 5:
+            _msg_count_since_reflect = 0
+            _quick_reflect_and_update(reflexion, messages, persona_profile)

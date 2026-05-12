@@ -8,6 +8,8 @@ class ModelConfig(BaseModel):
     base_url: str = "http://localhost:11434"
     max_tokens: int = 4096
     temperature: float = 0.7
+    draft_model: str | None = None
+    num_draft: int = 5
 
 
 class PersonalityConfig(BaseModel):

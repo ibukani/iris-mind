@@ -3,6 +3,8 @@ model:
   base_url: http://localhost:11434
   max_tokens: 4096
   temperature: 0.7
+  draft_model: qwen3.5:0.5b
+  num_draft: 5
 
 personality:
   name: Iris

@@ -29,6 +29,8 @@ def _ensure_ollama(config: Config) -> LLMBridge | None:
     llm = LLMBridge(
         model_name=config.model.name,
         base_url=config.model.base_url,
+        draft_model=config.model.draft_model,
+        num_draft=config.model.num_draft,
     )
     if not llm.is_available():
         console.print(
@@ -39,6 +41,26 @@ def _ensure_ollama(config: Config) -> LLMBridge | None:
         )
         return None
     console.print(f"[green]Connected to Ollama ({config.model.name})[/green]")
+
+    if config.model.draft_model:
+        try:
+            models = llm.client.list()
+            available = [m["name"] for m in models.get("models", [])]
+            if config.model.draft_model not in available:
+                console.print(
+                    f"[yellow]Draft model '{config.model.draft_model}' not found.[/yellow]\n"
+                    f"  Run: ollama pull {config.model.draft_model}\n"
+                    f"  Then set: $env:OLLAMA_DRAFT_MODEL='{config.model.draft_model}'; ollama serve"
+                )
+            else:
+                console.print(
+                    f"[green]Draft model '{config.model.draft_model}' available.[/green]\n"
+                    f"  [dim]To enable speculative decoding, restart Ollama with:\n"
+                    f"  $env:OLLAMA_DRAFT_MODEL='{config.model.draft_model}'; ollama serve[/dim]"
+                )
+        except Exception:
+            pass
+
     return llm
 
 

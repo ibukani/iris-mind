@@ -7,8 +7,11 @@ from ollama import Client
 class LLMBridge:
     """LLM抽象化層。Ollama APIをラップし、モデル切替を容易にする。"""
 
-    def __init__(self, model_name: str = "qwen3.5:9b", base_url: str = "http://localhost:11434"):
+    def __init__(self, model_name: str = "qwen3.5:9b", base_url: str = "http://localhost:11434",
+                 draft_model: str | None = None, num_draft: int = 5):
         self.model_name = model_name
+        self.draft_model = draft_model
+        self.num_draft = num_draft
         self.client = Client(host=base_url)
 
     def set_model(self, model_name: str):
@@ -26,6 +29,7 @@ class LLMBridge:
         options = {
             "temperature": temperature,
             "num_predict": max_tokens,
+            "num_draft": self.num_draft if self.draft_model else 0,
         }
 
         kwargs = {

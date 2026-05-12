@@ -2,11 +2,14 @@ from __future__ import annotations
 from pathlib import Path
 
 from rich.console import Console
-from rich.prompt import Prompt
 from rich.panel import Panel
 from rich.markdown import Markdown
 from rich.live import Live
 from rich.spinner import Spinner
+
+from prompt_toolkit import PromptSession, HTML
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.completion import WordCompleter
 
 from core.config import Config
 from core.llm_bridge import LLMBridge
@@ -18,7 +21,7 @@ from core.commands import IrisContext, handle_command, _run_reflexion_and_save
 from memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
 from capabilities.registry import CapabilityRegistry
 
-console = Console()
+console = Console(safe_box=True, legacy_windows=False)
 PROJECT_ROOT = Path(__file__).parent.parent
 
 
@@ -46,6 +49,23 @@ def _detect_complex(user_input: str) -> bool:
         "まず", "最初に", "その後", "step", "steps",
     ]
     return any(t in user_input.lower() for t in triggers)
+
+
+_COMMANDS = [
+    "/help", "/think", "/plan", "/model", "/clear", "/exit", "/quit",
+    "/capabilities", "/memory",
+]
+
+
+def _make_prompt(thinking: bool, plan: bool, model: str, msg_count: int) -> HTML:
+    t = "[ON]" if thinking else "[OFF]"
+    p = "[ON]" if plan else "[OFF]"
+    return HTML(
+        f"<ansicyan> Thinking:{t}</ansicyan> "
+        f"<ansiyellow>Plan:{p}</ansiyellow> "
+        f"<ansibrightblack>{model} | {msg_count} msgs</ansibrightblack>\n"
+        f"<ansicyan> You</ansicyan> > "
+    )
 
 
 def run_cli():
@@ -79,7 +99,8 @@ def run_cli():
     reflexion = Reflexion(llm=llm)
     planner = Planner(llm=llm)
     executor = Executor(llm=llm, registry=registry)
-    ctx = IrisContext(llm=llm, config=config, registry=registry,
+    ctx = IrisContext(llm=llm, config=config, config_path=str(PROJECT_ROOT / "config.yaml"),
+                      registry=registry,
                       reflexion=reflexion, episodic=episodic,
                       semantic=semantic, planner=planner, executor=executor)
 
@@ -94,9 +115,22 @@ def run_cli():
     thinking_mode = config.personality.thinking_mode_default
     plan_mode = False
 
+    def _update_display(l: Live, p: list[str]):
+        try:
+            l.update(Panel(Markdown("".join(p)), border_style="cyan"))
+        except Exception:
+            pass
+
+    session = PromptSession(
+        history=FileHistory(str(PROJECT_ROOT / ".iris_history")),
+        completer=WordCompleter(_COMMANDS, ignore_case=True),
+    )
+
     while True:
         try:
-            user_input = Prompt.ask("[bold cyan]You[/bold cyan]")
+            user_input = session.prompt(
+                lambda: _make_prompt(thinking_mode, plan_mode, config.model.name, len(messages))
+            )
         except (EOFError, KeyboardInterrupt):
             console.print("\n[yellow]Goodbye![/yellow]")
             _run_reflexion_and_save(reflexion, messages, episodic, semantic)
@@ -156,7 +190,7 @@ def run_cli():
         else:
             parts: list[str] = []
 
-            with Live(Panel(Spinner("dots", text="[dim]Memory search...[/dim]"), border_style="cyan"), refresh_per_second=15) as live:
+            with Live(Panel(Spinner("dots", text="[dim]Memory search...[/dim]"), border_style="cyan"), console=console, refresh_per_second=15, vertical_overflow="visible") as live:
                 _rag_results = semantic.search(user_input, max_results=config.memory.rag_max_results)
                 if _rag_results:
                     system_prompt += "\n\n## Related Lessons\n" + "\n".join(f"- {e['content']}" for e in _rag_results)
@@ -170,7 +204,7 @@ def run_cli():
                     tools=registry.list_tools(),
                     on_token=lambda tok: (
                         parts.append(tok),
-                        live.update(Panel(Markdown("".join(parts)), border_style="cyan")),
+                        _update_display(live, parts),
                     ),
                 )
 
@@ -190,7 +224,7 @@ def run_cli():
                     console.print(f"[dim]  → {func_name}(...): {result[:120]}[/dim]")
 
                 parts.clear()
-                with Live(Panel(Spinner("dots", text="[dim]Generating...[/dim]"), border_style="cyan"), refresh_per_second=15) as live:
+                with Live(Panel(Spinner("dots", text="[dim]Generating...[/dim]"), border_style="cyan"), console=console, refresh_per_second=15, vertical_overflow="visible") as live:
                     final = llm.chat(
                         messages=[{"role": "system", "content": system_prompt}, *messages],
                         enable_thinking=thinking_mode,
@@ -198,7 +232,7 @@ def run_cli():
                         max_tokens=config.model.max_tokens,
                         on_token=lambda tok: (
                             parts.append(tok),
-                            live.update(Panel(Markdown("".join(parts)), border_style="cyan")),
+                            _update_display(live, parts),
                         ),
                     )
 

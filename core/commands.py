@@ -15,7 +15,7 @@ from core.executor import Executor
 from memory.stores import EpisodicStore, SemanticStore
 from capabilities.registry import CapabilityRegistry
 
-console = Console()
+console = Console(safe_box=True, legacy_windows=False)
 
 
 @dataclass
@@ -35,6 +35,7 @@ class IrisContext:
     semantic: SemanticStore
     planner: Planner
     executor: Executor
+    config_path: str = ""
 
 
 def _run_reflexion_and_save(
@@ -80,6 +81,9 @@ def handle_command(cmd: str, ctx: IrisContext,
         case ["/think"]:
             thinking_mode = not thinking_mode
             state = "ON" if thinking_mode else "OFF"
+            ctx.config.personality.thinking_mode_default = thinking_mode
+            if ctx.config_path:
+                ctx.config.save(ctx.config_path)
             console.print(f"[yellow]Thinking mode: {state}[/yellow]")
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
         case ["/plan"]:
@@ -90,6 +94,8 @@ def handle_command(cmd: str, ctx: IrisContext,
         case ["/model", name]:
             ctx.llm.set_model(name)
             ctx.config.model.name = name
+            if ctx.config_path:
+                ctx.config.save(ctx.config_path)
             console.print(f"[green]Switched to model: {name}[/green]")
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
         case ["/capabilities"]:

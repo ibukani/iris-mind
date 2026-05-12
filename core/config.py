@@ -39,3 +39,10 @@ class Config(BaseModel):
             raw = yaml.safe_load(p.read_text(encoding="utf-8"))
             return cls.model_validate(raw)
         return cls()
+
+    def save(self, path: str):
+        p = Path(path)
+        p.write_text(
+            yaml.dump(self.model_dump(mode="python"), default_flow_style=False, allow_unicode=True),
+            encoding="utf-8",
+        )

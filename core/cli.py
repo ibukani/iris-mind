@@ -240,11 +240,15 @@ def run_cli():
     registry.discover_modules(str(PROJECT_ROOT / "capabilities"))
     console.print(f"[green]Loaded {len(registry._capabilities)} capabilities[/green]")
 
-    persona_profile = PersonaProfile(store=agents_md, semantic=semantic)
+    persona_profile = PersonaProfile(store=agents_md)
+    persona_profile.regenerate_view()
     speech_style = persona_profile.get_speech_style()
     if speech_style:
-        console.print(f"[dim]Speech style: {speech_style[:60]}...[/dim]")
-    console.print(f"[dim]Persona: {len(persona_profile._buf)} sections[/dim]")
+        console.print(f"[dim]Speech: {speech_style[:60]}...[/dim]")
+    traits = persona_profile.get_traits()
+    if traits:
+        console.print(f"[dim]Traits: {traits[:60]}...[/dim]")
+    console.print(f"[dim]Persona JSON: {len(persona_profile._data.get('speech_style',[]))} speech, {len(persona_profile._data.get('personality_traits',[]))} traits[/dim]")
 
     reflexion = Reflexion(llm=llm)
     planner = Planner(llm=llm)
@@ -301,11 +305,13 @@ def run_cli():
 
         messages.append({"role": "user", "content": user_input})
 
+        _pref_results = semantic.search("ユーザーの好み user preference", max_results=3)
+        _pref_text = "\n".join(f"- {p['content'][:120]}" for p in _pref_results) if _pref_results else ""
         system_prompt = personality.build_system_prompt(
             agents_md_content=agents_md.load(),
             speech_style=persona_profile.get_speech_style(),
             personality_traits=persona_profile.get_traits(),
-            user_preferences=persona_profile.get_preferences_summary(),
+            user_preferences=_pref_text,
         )
         recent_episodes = episodic.get_recent(3)
         if recent_episodes:

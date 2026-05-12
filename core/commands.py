@@ -90,6 +90,7 @@ def handle_command(cmd: str, ctx: IrisContext,
                 "/model <name> - switch model\n"
                 "/capabilities - list registered capabilities\n"
                 "/persona - show/manage my personality\n"
+                "/persona view - regenerate iris_profile.md from JSON data\n"
                 "/persona set speech_style|traits <text> - override speech style or traits\n"
                 "/persona reset - reset personality to defaults\n"
                 "/memory - show memory stats\n"
@@ -169,16 +170,34 @@ def handle_command(cmd: str, ctx: IrisContext,
             if not ctx.persona_profile:
                 console.print("[yellow]Persona profile not initialized[/yellow]")
                 return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
-            style = ctx.persona_profile.get_speech_style() or "(未設定)"
-            traits = ctx.persona_profile.get_traits() or "(未設定)"
-            prefs = ctx.persona_profile.get_preferences_summary() or "(未収集)"
-            table = Table(title="Iris's Personality")
+            styles = ctx.persona_profile.get_all_speech_styles()
+            traits = ctx.persona_profile.get_all_traits()
+
+            table = Table(title="Iris's Personality - accumulated data")
             table.add_column("Aspect", style="cyan")
-            table.add_column("Current State")
-            table.add_row("Speech Style", style[:200])
-            table.add_row("Personality Traits", traits[:200])
-            table.add_row("Known Preferences", prefs[:200])
+            table.add_column("Entries")
+
+            if styles:
+                style_lines = "\n".join(f"  [{s.get('count',1)}x] {s['text'][:60]}" for s in styles)
+            else:
+                style_lines = "(未収集)"
+            if traits:
+                trait_lines = "\n".join(f"  [{t.get('count',1)}x] {t['trait'][:60]}" for t in traits)
+            else:
+                trait_lines = "(未収集)"
+
+            table.add_row("Speech Style", style_lines)
+            table.add_row("Personality Traits", trait_lines)
+
+            profile_path = Path(ctx.config.memory.agents_md_path)
+            profile_size = len(profile_path.read_text(encoding="utf-8")) if profile_path.exists() else 0
+            table.add_row("Profile Size", f"{profile_size} bytes")
             console.print(table)
+            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+        case ["/persona", "view"]:
+            if ctx.persona_profile:
+                ctx.persona_profile.regenerate_view()
+                console.print("[green]Persona view regenerated from JSON data[/green]")
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
         case ["/persona", "set", target, *rest]:
             if not ctx.persona_profile:

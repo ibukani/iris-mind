@@ -5,6 +5,8 @@ from rich.console import Console
 from rich.prompt import Prompt
 from rich.panel import Panel
 from rich.markdown import Markdown
+from rich.live import Live
+from rich.spinner import Spinner
 
 from core.config import Config
 from core.llm_bridge import LLMBridge
@@ -121,14 +123,13 @@ def run_cli():
             messages[-1] = messages[-1].copy()
             messages[-1]["content"] = personality.build_thinking_prompt(user_input)
 
-        relevant_lessons = semantic.search(user_input, max_results=config.memory.rag_max_results)
-        if relevant_lessons:
-            lesson_text = "\n".join(f"- {e['content']}" for e in relevant_lessons)
-            system_prompt += f"\n\n## Related Lessons\n{lesson_text}"
-
         should_plan = plan_mode or (thinking_mode and _detect_complex(user_input))
         plan_result = None
         if should_plan:
+            console.print("[dim]Analyzing task...[/dim]")
+            _rag_results = semantic.search(user_input, max_results=config.memory.rag_max_results)
+            if _rag_results:
+                system_prompt += "\n\n## Related Lessons\n" + "\n".join(f"- {e['content']}" for e in _rag_results)
             plan_result = planner.analyze(user_input, system_prompt[:300])
             if not plan_mode:
                 should_plan = planner.is_complex(plan_result)
@@ -138,8 +139,13 @@ def run_cli():
             for st in plan_result.get("subtasks", []):
                 console.print(f"  [dim]→ {st['name']}: {st['description'][:60]}[/dim]")
 
+            def _on_step(i: int, name: str):
+                console.print(f"  [dim]Step {i+1}: {name}...[/dim]")
+
             with console.status("[cyan]Executing plan...[/cyan]", spinner="dots"):
-                step_results = executor.execute_plan(plan_result, user_input, config.personality.name)
+                step_results = executor.execute_plan(
+                    plan_result, user_input, config.personality.name, on_subtask=_on_step,
+                )
 
             with console.status("[cyan]Synthesizing results...[/cyan]", spinner="dots"):
                 final_content = executor.synthesize(plan_result, step_results, user_input, config.personality.name)
@@ -148,13 +154,24 @@ def run_cli():
             if final_content:
                 console.print(Panel(Markdown(final_content), border_style="cyan"))
         else:
-            with console.status("[cyan]Thinking...[/cyan]", spinner="dots"):
+            parts: list[str] = []
+
+            with Live(Panel(Spinner("dots", text="[dim]Memory search...[/dim]"), border_style="cyan"), refresh_per_second=15) as live:
+                _rag_results = semantic.search(user_input, max_results=config.memory.rag_max_results)
+                if _rag_results:
+                    system_prompt += "\n\n## Related Lessons\n" + "\n".join(f"- {e['content']}" for e in _rag_results)
+
+                live.update(Panel(Spinner("dots", text="[dim]Generating...[/dim]"), border_style="cyan"))
                 response = llm.chat(
                     messages=[{"role": "system", "content": system_prompt}, *messages],
                     enable_thinking=thinking_mode,
                     temperature=config.model.temperature,
                     max_tokens=config.model.max_tokens,
                     tools=registry.list_tools(),
+                    on_token=lambda tok: (
+                        parts.append(tok),
+                        live.update(Panel(Markdown("".join(parts)), border_style="cyan")),
+                    ),
                 )
 
             msg = response["message"]
@@ -172,16 +189,23 @@ def run_cli():
                     })
                     console.print(f"[dim]  → {func_name}(...): {result[:120]}[/dim]")
 
-                with console.status("[cyan]Processing results...[/cyan]", spinner="dots"):
+                parts.clear()
+                with Live(Panel(Spinner("dots", text="[dim]Generating...[/dim]"), border_style="cyan"), refresh_per_second=15) as live:
                     final = llm.chat(
                         messages=[{"role": "system", "content": system_prompt}, *messages],
                         enable_thinking=thinking_mode,
                         temperature=config.model.temperature,
                         max_tokens=config.model.max_tokens,
+                        on_token=lambda tok: (
+                            parts.append(tok),
+                            live.update(Panel(Markdown("".join(parts)), border_style="cyan")),
+                        ),
                     )
-                    msg = final["message"]
-                    messages.append(msg)
+
+                msg = final["message"]
+                messages.append(msg)
 
             content = msg.get("content", "")
-            if content:
+            if not parts and content:
+                console.print()
                 console.print(Panel(Markdown(content), border_style="cyan"))

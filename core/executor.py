@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 if TYPE_CHECKING:
     from core.llm_bridge import LLMBridge
@@ -14,12 +14,15 @@ class Executor:
         self.llm = llm
         self.registry = registry
 
-    def execute_plan(self, plan: dict, user_input: str, personality_name: str = "Iris") -> list[dict]:
+    def execute_plan(self, plan: dict, user_input: str, personality_name: str = "Iris",
+                     on_subtask: Callable[[int, str], None] | None = None) -> list[dict]:
         subtasks = plan.get("subtasks", [])
         results: list[dict] = []
 
         for i, task in enumerate(subtasks):
             name = task.get("name", f"step_{i}")
+            if on_subtask:
+                on_subtask(i, name)
             desc = task.get("description", "")
             step_prompt = (
                 f"あなたは{personality_name}です。与えられたタスクを正確に実行してください。\n\n"

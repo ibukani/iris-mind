@@ -1,4 +1,5 @@
 import re
+from typing import Callable
 
 from ollama import Client
 
@@ -20,6 +21,7 @@ class LLMBridge:
         temperature: float = 0.7,
         max_tokens: int = 4096,
         tools: list[dict] | None = None,
+        on_token: Callable[[str], None] | None = None,
     ) -> dict:
         options = {
             "temperature": temperature,
@@ -30,11 +32,43 @@ class LLMBridge:
             "model": self.model_name,
             "messages": messages,
             "options": options,
-            "stream": False,
+            "stream": on_token is not None,
         }
         if tools:
             kwargs["tools"] = tools
         kwargs["think"] = enable_thinking
+
+        if on_token is not None:
+            stream = self.client.chat(**kwargs)
+            content_parts = []
+            tool_calls = None
+            final = None
+            for chunk in stream:
+                if chunk.get("done"):
+                    final = dict(chunk)
+                    break
+                msg = chunk.get("message", {})
+                if msg.get("content"):
+                    content_parts.append(msg["content"])
+                    on_token(msg["content"])
+                if msg.get("tool_calls"):
+                    tool_calls = msg["tool_calls"]
+
+            if final is None:
+                final = {"message": {"role": "assistant", "content": ""}}
+
+            full_content = "".join(content_parts)
+            final["message"]["content"] = full_content
+            if tool_calls:
+                final["message"]["tool_calls"] = tool_calls
+
+            msg = final["message"]
+            if not msg.get("content") and msg.get("thinking"):
+                msg["content"] = _extract_answer_from_thinking(msg["thinking"])
+            if msg.get("content"):
+                msg["content"] = msg["content"].strip()
+
+            return final
 
         resp = self.client.chat(**kwargs)
 

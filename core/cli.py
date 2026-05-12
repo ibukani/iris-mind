@@ -28,10 +28,92 @@ console = Console(safe_box=True, legacy_windows=False)
 PROJECT_ROOT = Path(__file__).parent.parent
 _RAG_EXECUTOR = ThreadPoolExecutor(max_workers=1)
 
+_GREETING_WORDS = {
+    "hello", "hi", "bye", "hey", "thanks", "thank", "yes", "no",
+    "good morning", "good evening", "good night",
+    "おはよう", "こんにちは", "こんばんは", "おやすみ",
+    "はい", "いいえ", "ありがとう", "おっす", "やあ",
+}
+
+_TOOL_HINTS = [
+    "ファイル", "実行", "コード", "作成", "変更", "削除", "読み込み",
+    "file", "write", "create", "run", "execute", "read", "delete",
+    "list", "modify", "edit", "shell",
+]
+
+_SCENARIOS: dict[str, tuple[bool, int]] = {
+    "greeting": (True, 128),
+    "simple": (True, 512),
+    "qa": (True, 1024),
+    "tool": (False, 1024),
+    "complex": (False, 1024),
+}
+
+_CLASSIFY_PROMPT = (
+    "Classify the following user input into exactly ONE category. "
+    "Reply with only the category word, nothing else.\n"
+    "Categories:\n"
+    "- greeting: simple hello, thanks, goodbye (no real request)\n"
+    "- simple: short factual question, simple chat (fits in 1-2 sentences)\n"
+    "- qa: requires explanation but no tool calls\n"
+    "- tool: requires file operations, code execution, or shell commands\n"
+    "- complex: multi-step task requiring planning and subtasks\n\n"
+    "Input: {input}\n"
+    "Category:"
+)
+
+
+def _quick_classify(user_input: str) -> str | None:
+    lower = user_input.lower().strip()
+    words = set(lower.split())
+    is_short = len(lower) <= 15
+    if is_short:
+        if words & _GREETING_WORDS:
+            return "greeting"
+        if any(g in lower for g in _GREETING_WORDS):
+            return "greeting"
+    if any(h in lower for h in _TOOL_HINTS):
+        return "tool"
+    if _detect_complex(user_input):
+        return "complex"
+    return None
+
+
+def _classify_input(llm: LLMBridge, user_input: str, fast_model: str) -> str:
+    prev = llm.model_name
+    llm.set_model(fast_model)
+    try:
+        resp = llm.chat(
+            messages=[{"role": "user",
+                       "content": _CLASSIFY_PROMPT.format(input=user_input)}],
+            temperature=0,
+            max_tokens=10,
+        )
+        raw = resp["message"].get("content", "").strip().lower()
+        return raw if raw in _SCENARIOS else "simple"
+    except Exception:
+        return "simple"
+    finally:
+        llm.set_model(prev)
+
+
+def _trim_context(messages: list[dict], max_window: int) -> list[dict]:
+    if max_window <= 0:
+        return messages
+    total = 0
+    trimmed = []
+    for msg in reversed(messages):
+        rough = max(1, len(msg.get("content", "")) // 2)
+        if total + rough > max_window:
+            break
+        total += rough
+        trimmed.append(msg)
+    return list(reversed(trimmed))
+
 
 def _ensure_ollama(config: Config) -> LLMBridge | None:
     llm = LLMBridge(
-        model_name=config.model.name,
+        model_name=config.model.smart_model,
         base_url=config.model.base_url,
         draft_model=config.model.draft_model,
         num_draft=config.model.num_draft,
@@ -57,18 +139,18 @@ def _ensure_ollama(config: Config) -> LLMBridge | None:
         for _ in range(15):
             time.sleep(1)
             if llm.is_available():
-                console.print(f"[green]Connected to Ollama ({config.model.name})[/green]")
+                console.print(f"[green]Connected to Ollama ({config.model.smart_model})[/green]")
                 break
         else:
             console.print(
                 "[red]Ollama failed to start within 15 seconds.[/red]\n"
                 f"Please start it manually:\n"
-                f"  ollama pull {config.model.name}\n"
+                f"  ollama pull {config.model.smart_model}\n"
                 f"  ollama serve"
             )
             return None
     else:
-        console.print(f"[green]Connected to Ollama ({config.model.name})[/green]")
+        console.print(f"[green]Connected to Ollama ({config.model.smart_model})[/green]")
 
     if config.model.draft_model:
         try:
@@ -156,7 +238,7 @@ def run_cli():
 
     console.print(Panel.fit(
         f"[bold cyan]Iris[/bold cyan] - v0.1.0\n"
-        f"Model: {config.model.name} | Thinking mode: OFF\n"
+        f"Model: {config.model.smart_model} | Thinking mode: OFF\n"
         f"Type /help for commands, /think to toggle thinking mode",
         border_style="cyan",
     ))
@@ -164,6 +246,7 @@ def run_cli():
     messages: list[dict] = []
     thinking_mode = config.personality.thinking_mode_default
     plan_mode = False
+    active_model = config.model.fast_model or config.model.smart_model
 
     def _update_display(l: Live, p: list[str]):
         try:
@@ -179,7 +262,7 @@ def run_cli():
     while True:
         try:
             user_input = session.prompt(
-                lambda: _make_prompt(thinking_mode, plan_mode, config.model.name, len(messages))
+                lambda: _make_prompt(thinking_mode, plan_mode, active_model, len(messages))
             )
         except (EOFError, KeyboardInterrupt):
             console.print("\n[yellow]Goodbye![/yellow]")
@@ -203,21 +286,48 @@ def run_cli():
         if recent_episodes:
             system_prompt += "\n\n## Recent Sessions\n" + "\n".join(f"- {e}" for e in recent_episodes)
 
+        has_fast = config.model.fast_model is not None
+
+        category = _quick_classify(user_input)
+        if category is None and has_fast:
+            console.print("[dim]Classifying...[/dim]")
+            category = _classify_input(llm, user_input, config.model.fast_model)
+        scenario = category or "simple"
+        use_fast, scenario_max_tokens = _SCENARIOS.get(scenario, (True, 256))
+
+        force_smart = plan_mode or thinking_mode
+        if force_smart or not use_fast or not has_fast:
+            use_fast = False
+            llm.set_model(config.model.smart_model)
+            active_model = config.model.smart_model
+            max_tokens = config.model.max_tokens
+            tools_list = registry.list_tools()
+            console.print(f"[blue]  Model:[/blue] {config.model.smart_model} [dim]({scenario})[/dim]")
+        else:
+            llm.set_model(config.model.fast_model)
+            active_model = config.model.fast_model
+            max_tokens = min(config.model.max_tokens_fast, scenario_max_tokens)
+            tools_list = None
+            console.print(f"[blue]  Model:[/blue] {config.model.fast_model} [dim]({scenario}, max_tokens={max_tokens})[/dim]")
+
         if thinking_mode:
             messages[-1] = messages[-1].copy()
             messages[-1]["content"] = personality.build_thinking_prompt(user_input)
 
-        should_plan = plan_mode or (thinking_mode and _detect_complex(user_input))
+        should_plan = False
         plan_result = None
-        if should_plan:
+        if not use_fast and (plan_mode or (thinking_mode and _detect_complex(user_input))):
             rag_future = _RAG_EXECUTOR.submit(semantic.search, user_input, max_results=config.memory.rag_max_results)
-            console.print("[dim]Analyzing task...[/dim]")
+            console.print(f"[dim]Analyzing task ({config.model.smart_model})...[/dim]")
             _rag_results = rag_future.result()
             if _rag_results:
                 system_prompt += "\n\n## Related Lessons\n" + "\n".join(f"- {e['content']}" for e in _rag_results)
             plan_result = planner.analyze(user_input, system_prompt[:300])
             if not plan_mode:
                 should_plan = planner.is_complex(plan_result)
+
+        if not use_fast and not plan_mode and not thinking_mode and user_input.strip().lower() in ("hello", "hi", "bye", "thanks", "ありがとう"):
+            max_tokens = 64
 
         if should_plan:
             console.print(f"[yellow]Planning mode: {len(plan_result.get('subtasks', []))} subtasks[/yellow]")
@@ -227,7 +337,7 @@ def run_cli():
             def _on_step(i: int, name: str):
                 console.print(f"  [dim]Step {i+1}: {name}...[/dim]")
 
-            with console.status("[cyan]Executing plan...[/cyan]", spinner="dots"):
+            with console.status(f"[cyan]{active_model} executing {len(plan_result.get('subtasks', []))} subtasks...[/cyan]", spinner="dots"):
                 final_content = executor.execute_plan(
                     plan_result, user_input, config.personality.name, on_subtask=_on_step,
                 )
@@ -237,19 +347,22 @@ def run_cli():
                 console.print(Panel(Markdown(final_content), border_style="cyan"))
         else:
             parts: list[str] = []
+            trimmed = _trim_context(messages, config.model.context_window)
 
             rag_future = _RAG_EXECUTOR.submit(semantic.search, user_input, max_results=config.memory.rag_max_results)
 
-            with Live(Panel(Spinner("dots", text="[dim]Generating...[/dim]"), border_style="cyan"), console=console, refresh_per_second=15, vertical_overflow="visible") as live:
+            spinner_text = f"[dim]{active_model} ({scenario}, max_tokens={max_tokens})...[/dim]"
+            with Live(Panel(Spinner("dots", text=spinner_text), border_style="cyan"), console=console, refresh_per_second=15, vertical_overflow="visible") as live:
                 _rag_results = rag_future.result()
                 if _rag_results:
                     system_prompt += "\n\n## Related Lessons\n" + "\n".join(f"- {e['content']}" for e in _rag_results)
+                live.update(Panel(Spinner("dots", text=spinner_text), border_style="cyan"))
                 response = llm.chat(
-                    messages=[{"role": "system", "content": system_prompt}, *messages],
+                    messages=[{"role": "system", "content": system_prompt}, *trimmed],
                     enable_thinking=thinking_mode,
                     temperature=config.model.temperature,
-                    max_tokens=config.model.max_tokens,
-                    tools=registry.list_tools(),
+                    max_tokens=max_tokens,
+                    tools=tools_list,
                     on_token=lambda tok: (
                         parts.append(tok),
                         _update_display(live, parts),
@@ -284,7 +397,8 @@ def run_cli():
                     msg = {"role": "assistant", "content": combined}
                     messages.append(msg)
                 else:
-                    with Live(Panel(Spinner("dots", text="[dim]Generating...[/dim]"), border_style="cyan"), console=console, refresh_per_second=15, vertical_overflow="visible") as live:
+                    tool_spinner = f"[dim]{active_model} (tool result)...[/dim]"
+                    with Live(Panel(Spinner("dots", text=tool_spinner), border_style="cyan"), console=console, refresh_per_second=15, vertical_overflow="visible") as live:
                         final = llm.chat(
                             messages=[{"role": "system", "content": system_prompt}, *messages],
                             enable_thinking=thinking_mode,

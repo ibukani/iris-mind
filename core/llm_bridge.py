@@ -32,6 +32,7 @@ class LLMBridge:
             "num_predict": max_tokens,
             "num_draft": self.num_draft if self.draft_model else 0,
             "num_ctx": self.num_ctx,
+            "repeat_penalty": 1.1,
         }
 
         kwargs = {

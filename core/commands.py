@@ -93,7 +93,7 @@ def handle_command(cmd: str, ctx: IrisContext,
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
         case ["/model", name]:
             ctx.llm.set_model(name)
-            ctx.config.model.name = name
+            ctx.config.model.smart_model = name
             if ctx.config_path:
                 ctx.config.save(ctx.config_path)
             console.print(f"[green]Switched to model: {name}[/green]")

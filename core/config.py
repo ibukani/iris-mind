@@ -4,13 +4,16 @@ from pydantic import BaseModel
 
 
 class ModelConfig(BaseModel):
-    name: str = "qwen3.5:9b"
+    smart_model: str = "qwen3.5:9b"
+    fast_model: str | None = None
     base_url: str = "http://localhost:11434"
-    max_tokens: int = 4096
+    max_tokens: int = 1024
+    max_tokens_fast: int = 256
     temperature: float = 0.7
     draft_model: str | None = None
     num_draft: int = 5
     num_ctx: int = 8192
+    context_window: int = 0
 
 
 class PersonalityConfig(BaseModel):

@@ -25,4 +25,4 @@
 
 | 日付 | 内容 |
 |------|------|
-| - | - |
+| 2026-05-13 | 自動モデル切替実装: configにfast_model追加、2段階分類(greeting/simple/qa/tool/complex)、context window管理。Qwen3.5:0.5b→Qwen3.5:9bの自動切替 |

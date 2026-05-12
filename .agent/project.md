@@ -73,7 +73,7 @@ Self-Modification Module (差分生成→承認→テスト→登録)
 
 ## 設定（config.yaml）
 ```yaml
-model:        # name, base_url, max_tokens, temperature
+model:        # name, fast_model, base_url, max_tokens, max_tokens_fast, temperature, context_window
 personality:  # name, thinking_mode_default
 memory:       # paths, 各上限値, RAG設定
 ```

@@ -266,7 +266,7 @@ def run_cli():
     registry.discover_modules(str(PROJECT_ROOT / "capabilities"))
     console.print(f"[green]Loaded {len(registry._capabilities)} capabilities[/green]")
 
-    persona_profile = PersonaProfile(store=agents_md)
+    persona_profile = PersonaProfile(store=agents_md, semantic=semantic)
     persona_profile.regenerate_view()
     speech_style = persona_profile.get_speech_style()
     if speech_style:

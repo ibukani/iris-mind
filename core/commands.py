@@ -182,7 +182,7 @@ def handle_command(cmd: str, ctx: IrisContext,
             else:
                 style_lines = "(未収集)"
             if traits:
-                trait_lines = "\n".join(f"  [{t.get('count',1)}x] {t['trait'][:60]}" for t in traits)
+                trait_lines = "\n".join(f"  [{t.get('count',1)}x] {t['text'][:60]}" for t in traits)
             else:
                 trait_lines = "(未収集)"
 

@@ -1,41 +1,28 @@
 from __future__ import annotations
-import json
 import re
 from datetime import datetime
 from pathlib import Path
 
-from memory.stores import AgentsMdStore
+from memory.stores import AgentsMdStore, SemanticStore
 
 _STATIC_SECTIONS = ["Known Structure", "My Capabilities", "My Rules"]
 _DYNAMIC_SECTIONS = ["My Speech Style", "My Personality Traits"]
 _SECTION_TAG_RE = re.compile(r"^## (.+)$", re.MULTILINE)
 
-_DEFAULT_JSON = {
-    "version": "1.0",
-    "speech_style": [],
-    "personality_traits": [],
-    "created_at": "",
-    "updated_at": "",
-}
-
 
 class PersonaProfile:
     """ペルソナ管理クラス。
 
-    - 動的データ（speech_style / traits）は memory/persona_data.json（構造化JSON）で管理
+    - 動的データ（speech_style / traits）は SemanticStore（ChromaDB + JSONL）で管理
     - iris_profile.md は起動時/明示的指示時にビューとして再生成
     - 静的部分（Known Structure等）は iris_profile.md からテンプレートとして抽出
-    - SemanticStore操作は行わない（呼び出し元の _run_reflexion_and_save が担当）
     """
 
-    def __init__(self, store: AgentsMdStore, json_path: str = "memory/persona_data.json"):
+    def __init__(self, store: AgentsMdStore, semantic: SemanticStore | None = None):
         self.store = store
-        self.json_path = Path(json_path)
+        self.semantic = semantic
         self._template: dict[str, str] = {}
-        self._data: dict = {}
         self._load_template()
-        self._load_json()
-        self._migrate_if_needed()
 
     # ============================================================
     # テンプレート管理（静的部分の抽出・保持）
@@ -68,28 +55,64 @@ class PersonaProfile:
         return sections
 
     # ============================================================
-    # JSON管理（動的データの永続化）
+    # SemanticStore からの集約
     # ============================================================
 
-    def _load_json(self):
-        if self.json_path.exists():
-            try:
-                self._data = json.loads(self.json_path.read_text(encoding="utf-8"))
-                return
-            except (json.JSONDecodeError, OSError):
-                pass
-        self._data = dict(_DEFAULT_JSON)
+    def _aggregate_feedback(self, category: str) -> list[dict]:
+        """SemanticStore からフィードバックを集約して件数順に返す。"""
+        if not self.semantic:
+            return []
 
-    def _save_json(self):
-        self._data["updated_at"] = datetime.now().isoformat(timespec="minutes")
-        self.json_path.parent.mkdir(parents=True, exist_ok=True)
-        self.json_path.write_text(
-            json.dumps(self._data, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        search_tags = {"speech_style": "speech_style", "personality_traits": "personality_trait"}
+        tag = search_tags.get(category)
+        if not tag:
+            return []
 
-    # ============================================================
-    # マイグレーション（iris_profile.md の旧動的セクション → JSON）
+        # 全件検索して集約
+        results = self.semantic.search(tag, max_results=50)
+        text_counts: dict[str, dict] = {}
+        for r in results:
+            # content からテキスト部分を抽出: "[tag] text (source: X, count: N)"
+            c = r.get("content", "")
+            start = c.find("] ")
+            if start == -1:
+                continue
+            text = c[start + 2:]
+            # 末尾の (source: ..., count: N) を分離
+            import re as _re
+            m = _re.search(r"\(source: (\w+),\s*count: (\d+)\)\s*$", text)
+            if m:
+                text = text[:m.start()].strip()
+                source = m.group(1)
+                count = int(m.group(2))
+            else:
+                source = "unknown"
+                count = 1
+
+            key = text.replace(" ", "").replace("　", "").replace("\n", "").replace("\r", "")
+            if key in text_counts:
+                text_counts[key]["count"] += count
+                if text_counts[key].get("timestamp", "") < r.get("timestamp", ""):
+                    text_counts[key]["updated_at"] = r.get("timestamp", "")
+            else:
+                text_counts[key] = {
+                    "text": text,
+                    "source": source,
+                    "count": count,
+                    "timestamp": r.get("timestamp", ""),
+                    "updated_at": r.get("timestamp", ""),
+                }
+
+        return sorted(text_counts.values(), key=lambda e: e.get("count", 1), reverse=True)
+
+    def _get_top_entries(self, category: str, n: int = 3) -> list[dict]:
+        return self._aggregate_feedback(category)[:n]
+
+    def _get_all_entries(self, category: str) -> list[dict]:
+        return self._aggregate_feedback(category)
+
+# ============================================================
+    # ビュー再生成
     # ============================================================
 
     def _migrate_if_needed(self):
@@ -98,7 +121,7 @@ class PersonaProfile:
         migrated = False
 
         for section_name, json_key in [("My Speech Style", "speech_style"),
-                                       ("My Personality Traits", "personality_traits")]:
+                                        ("My Personality Traits", "personality_traits")]:
             if section_name not in sections:
                 continue
             text = sections[section_name].strip()
@@ -108,11 +131,10 @@ class PersonaProfile:
                 migrated = True
 
         if migrated:
-            self._save_json()
             self.regenerate_view()
 
     # ============================================================
-    # ビュー再生成（JSON → iris_profile.md）
+    # ビュー再生成（SemanticStore → iris_profile.md）
     # ============================================================
 
     def regenerate_view(self):
@@ -121,7 +143,7 @@ class PersonaProfile:
         parts = [header, ""]
 
         for section_name, json_key in [("My Speech Style", "speech_style"),
-                                       ("My Personality Traits", "personality_traits")]:
+                                        ("My Personality Traits", "personality_traits")]:
             entries = self._get_top_entries(json_key, 3)
             if entries:
                 parts.append(f"## {section_name}")
@@ -144,26 +166,17 @@ class PersonaProfile:
 
     def _add_entry(self, category: str, text: str, source: str = "reflection"):
         now = datetime.now().isoformat(timespec="minutes")
-        entries = self._data.setdefault(category, [])
-        norm = text.replace(" ", "").replace("　", "")
+        tag_map = {"speech_style": "speech_style", "personality_traits": "personality_trait"}
+        tag = tag_map.get(category, category)
 
-        for e in entries:
-            existing_norm = e.get("text", "").replace(" ", "").replace("　", "")
-            if existing_norm == norm:
-                e["count"] = e.get("count", 1) + 1
-                e["updated_at"] = now
-                return
-
-        entries.append({
-            "text": text,
-            "source": source,
-            "timestamp": now,
-            "count": 1,
-        })
-
-    def _get_top_entries(self, category: str, n: int = 3) -> list[dict]:
-        entries = self._data.get(category, [])
-        return sorted(entries, key=lambda e: e.get("count", 1), reverse=True)[:n]
+        if self.semantic:
+            self.semantic.add({
+                "type": "personality_feedback",
+                "content": f"[{tag}] {text} (source: {source}, count: 1)",
+                "tags": [tag, source],
+                "timestamp": now,
+            })
+        self.regenerate_view()
 
     # ============================================================
     # パブリックAPI
@@ -185,10 +198,10 @@ class PersonaProfile:
         return ""
 
     def get_all_speech_styles(self) -> list[dict]:
-        return list(self._data.get("speech_style", []))
+        return self._get_all_entries("speech_style")
 
     def get_all_traits(self) -> list[dict]:
-        return list(self._data.get("personality_traits", []))
+        return self._get_all_entries("personality_traits")
 
     def update_from_reflection(self, reflection: dict):
         speech = reflection.get("speech_style", "").strip()
@@ -199,24 +212,13 @@ class PersonaProfile:
         if traits:
             self._add_entry("personality_traits", traits)
 
-        if speech or traits:
-            self._save_json()
-
     def set_speech_style(self, text: str):
-        self._data["speech_style"] = [{"text": text, "source": "manual",
-                                        "timestamp": datetime.now().isoformat(timespec="minutes"),
-                                        "count": 99}]
-        self._save_json()
-        self.regenerate_view()
+        self._add_entry("speech_style", text, source="manual")
 
     def set_traits(self, text: str):
-        self._data["personality_traits"] = [{"text": text, "source": "manual",
-                                              "timestamp": datetime.now().isoformat(timespec="minutes"),
-                                              "count": 99}]
-        self._save_json()
-        self.regenerate_view()
+        self._add_entry("personality_traits", text, source="manual")
 
     def reset(self):
-        self._data = dict(_DEFAULT_JSON)
-        self._save_json()
+        if self.semantic:
+            self.semantic.clear()
         self.regenerate_view()

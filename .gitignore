@@ -10,3 +10,4 @@ memory/semantic.jsonl
 *.egg-info/
 dist/
 build/
+.iris_history

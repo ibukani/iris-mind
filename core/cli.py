@@ -1,6 +1,7 @@
 from __future__ import annotations
 import subprocess
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from rich.console import Console
@@ -25,6 +26,7 @@ from capabilities.registry import CapabilityRegistry
 
 console = Console(safe_box=True, legacy_windows=False)
 PROJECT_ROOT = Path(__file__).parent.parent
+_RAG_EXECUTOR = ThreadPoolExecutor(max_workers=1)
 
 
 def _ensure_ollama(config: Config) -> LLMBridge | None:
@@ -33,6 +35,7 @@ def _ensure_ollama(config: Config) -> LLMBridge | None:
         base_url=config.model.base_url,
         draft_model=config.model.draft_model,
         num_draft=config.model.num_draft,
+        num_ctx=config.model.num_ctx,
     )
     if not llm.is_available():
         console.print("[yellow]Ollama is not running. Attempting to start it...[/yellow]")
@@ -207,8 +210,9 @@ def run_cli():
         should_plan = plan_mode or (thinking_mode and _detect_complex(user_input))
         plan_result = None
         if should_plan:
+            rag_future = _RAG_EXECUTOR.submit(semantic.search, user_input, max_results=config.memory.rag_max_results)
             console.print("[dim]Analyzing task...[/dim]")
-            _rag_results = semantic.search(user_input, max_results=config.memory.rag_max_results)
+            _rag_results = rag_future.result()
             if _rag_results:
                 system_prompt += "\n\n## Related Lessons\n" + "\n".join(f"- {e['content']}" for e in _rag_results)
             plan_result = planner.analyze(user_input, system_prompt[:300])
@@ -234,12 +238,12 @@ def run_cli():
         else:
             parts: list[str] = []
 
-            with Live(Panel(Spinner("dots", text="[dim]Memory search...[/dim]"), border_style="cyan"), console=console, refresh_per_second=15, vertical_overflow="visible") as live:
-                _rag_results = semantic.search(user_input, max_results=config.memory.rag_max_results)
+            rag_future = _RAG_EXECUTOR.submit(semantic.search, user_input, max_results=config.memory.rag_max_results)
+
+            with Live(Panel(Spinner("dots", text="[dim]Generating...[/dim]"), border_style="cyan"), console=console, refresh_per_second=15, vertical_overflow="visible") as live:
+                _rag_results = rag_future.result()
                 if _rag_results:
                     system_prompt += "\n\n## Related Lessons\n" + "\n".join(f"- {e['content']}" for e in _rag_results)
-
-                live.update(Panel(Spinner("dots", text="[dim]Generating...[/dim]"), border_style="cyan"))
                 response = llm.chat(
                     messages=[{"role": "system", "content": system_prompt}, *messages],
                     enable_thinking=thinking_mode,
@@ -256,6 +260,8 @@ def run_cli():
             messages.append(msg)
 
             if msg.get("tool_calls"):
+                skip_llm = True
+                tool_results = []
                 for tc in msg["tool_calls"]:
                     func_name = tc["function"]["name"]
                     args = tc["function"]["arguments"]
@@ -266,22 +272,32 @@ def run_cli():
                         "content": result,
                     })
                     console.print(f"[dim]  → {func_name}(...): {result[:120]}[/dim]")
+                    tool_results.append((func_name, result))
+                    if len(result) > 200 or any(w in result.lower() for w in ["error", "fail", "exception", "traceback"]):
+                        skip_llm = False
 
                 parts.clear()
-                with Live(Panel(Spinner("dots", text="[dim]Generating...[/dim]"), border_style="cyan"), console=console, refresh_per_second=15, vertical_overflow="visible") as live:
-                    final = llm.chat(
-                        messages=[{"role": "system", "content": system_prompt}, *messages],
-                        enable_thinking=thinking_mode,
-                        temperature=config.model.temperature,
-                        max_tokens=config.model.max_tokens,
-                        on_token=lambda tok: (
-                            parts.append(tok),
-                            _update_display(live, parts),
-                        ),
+                if skip_llm:
+                    combined = "\n\n".join(
+                        f"**{name}** result:\n{res}" for name, res in tool_results
                     )
+                    msg = {"role": "assistant", "content": combined}
+                    messages.append(msg)
+                else:
+                    with Live(Panel(Spinner("dots", text="[dim]Generating...[/dim]"), border_style="cyan"), console=console, refresh_per_second=15, vertical_overflow="visible") as live:
+                        final = llm.chat(
+                            messages=[{"role": "system", "content": system_prompt}, *messages],
+                            enable_thinking=thinking_mode,
+                            temperature=config.model.temperature,
+                            max_tokens=config.model.max_tokens,
+                            on_token=lambda tok: (
+                                parts.append(tok),
+                                _update_display(live, parts),
+                            ),
+                        )
 
-                msg = final["message"]
-                messages.append(msg)
+                    msg = final["message"]
+                    messages.append(msg)
 
             content = msg.get("content", "")
             if not parts and content:

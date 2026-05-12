@@ -10,6 +10,7 @@ class ModelConfig(BaseModel):
     temperature: float = 0.7
     draft_model: str | None = None
     num_draft: int = 5
+    num_ctx: int = 8192
 
 
 class PersonalityConfig(BaseModel):

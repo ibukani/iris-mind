@@ -91,11 +91,9 @@ def _ensure_config_models(config_path: Path) -> bool:
     raw = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
     config = yaml.safe_load(raw) if raw else {}
 
-    # 設定モデルを一旦停止
     _stop_config_models(config)
     time.sleep(0.5)
 
-    # pull済み確認・ダウンロード
     model_section = config.get("model", {})
     for key in ("smart_model", "fast_model", "draft_model"):
         m = model_section.get(key)
@@ -109,15 +107,12 @@ def run():
     project_root = Path(__file__).parent
     config_path = project_root / "config.yaml"
 
-    # 1. Ollama再起動（GPUレイヤー設定反映）
     _restart_ollama()
 
-    # 2. 設定モデルのpull確認
     if not _ensure_config_models(config_path):
         print("必要なモデルが利用できません。プログラムを終了します。", file=sys.stderr)
         sys.exit(1)
 
-    # 3. Configロード & LLM接続確認
     from core.config import Config
     from core.llm_bridge import LLMBridge
     from core.cli import CliSession
@@ -137,6 +132,9 @@ def run():
         print("Ollamaサーバーに接続できませんでした。", file=sys.stderr)
         sys.exit(1)
 
-    # 4. CLIセッション開始
     session = CliSession(config, llm)
     session.run()
+
+
+if __name__ == "__main__":
+    run()

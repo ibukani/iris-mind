@@ -6,6 +6,7 @@ from prompt_toolkit import HTML, PromptSession
 from prompt_toolkit.completion import WordCompleter
 from prompt_toolkit.history import FileHistory
 from rich.console import Console
+from rich.live import Live
 from rich.markdown import Markdown
 from rich.panel import Panel
 
@@ -178,19 +179,39 @@ class CliSession:
             self.messages.append({"role": "user", "content": user_input})
 
             parts: list[str] = []
+            streaming = not plan_mode
 
-            def on_token(tok: str):
-                parts.append(tok)
+            if streaming:
+                live = Live(
+                    Panel(Markdown(""), border_style="cyan"),
+                    console=console,
+                    refresh_per_second=10,
+                    vertical_overflow="visible",
+                )
+                live.start()
 
-            result = self.conversation.process_input(
-                user_input,
-                self.messages,
-                thinking_mode,
-                plan_mode,
-                last_role,
-                msg_count_since_reflect,
-                on_token=on_token if not plan_mode else None,
-            )
+                def on_token(tok: str):
+                    parts.append(tok)
+                    live.update(Panel(Markdown("".join(parts)), border_style="cyan"))
+            else:
+                live = None
+
+                def on_token(tok: str):
+                    parts.append(tok)
+
+            try:
+                result = self.conversation.process_input(
+                    user_input,
+                    self.messages,
+                    thinking_mode,
+                    plan_mode,
+                    last_role,
+                    msg_count_since_reflect,
+                    on_token=on_token if streaming else None,
+                )
+            finally:
+                if live:
+                    live.stop()
 
             msg = result.response_message
             thinking_mode = result.thinking_mode
@@ -201,10 +222,11 @@ class CliSession:
             if result.escalated:
                 console.print(f"[dim]Escalated to {result.active_model}[/dim]")
 
-            content = msg.get("content", "")
-            if not parts and content:
-                console.print()
-                console.print(Panel(Markdown(content), border_style="cyan"))
+            if not streaming:
+                display = "".join(parts) or msg.get("content", "")
+                if display:
+                    console.print()
+                    console.print(Panel(Markdown(display), border_style="cyan"))
 
     def _cleanup(self):
         _run_reflexion_and_save(

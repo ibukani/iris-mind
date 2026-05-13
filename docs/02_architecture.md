@@ -14,7 +14,7 @@
 │  会話Compaction（要約 + 最新メッセージ保持）         │
 │  自動 compaction_threshold 判定                      │
 │  手動 /compact コマンド                              │
-│  fast_model 使用で高速LLM要約                        │
+│  base_model 使用で軽量LLM要約                        │
 └─────────────────────────────────────────────────────┘
                           │
 ┌─────────────────────────────────────────────────────┐
@@ -56,33 +56,77 @@
 └─────────────────────────────────────────────────────┘
 ```
 
-## 自動モデル切替
+## 自動モデル切替（タスク複雑性ベース）
 
-`config.yaml` の `fast_model` が設定されている場合、入力を2段階で分類しモデルを自動切替する。
+`config.yaml` の `models` リストで base / smart の2ロールを定義し、タスクの複雑性に応じてモデルを自動選択する。
 
-### 分類フロー
+### 複雑性判定フロー
 
 ```
 User input
-  ├─ キーワードフィルタ (O(1), 0ms)
-  │   └─ 不明 → 小モデルでLLM分類 (fast_model, max_tokens=10, ~0.5s)
   │
-  └─ シナリオ決定: greeting / simple / qa / tool / complex
-       ├─ greeting/simple/qa → 小モデル (fast_model, max_tokens=64-512)
-       └─ tool/complex       → 大モデル (smart_model, max_tokens=1024)
+  ├─ _compute_complexity_score()  (ヒューリスティックスコアリング)
+  │   入力長・文数・コードブロック・ツールヒント・多段トリガーを加算
+  │
+  ├─ LOW  (score < 2)   → base model, ツールなし
+  │   挨拶・短いQ&Aなど
+  │
+  ├─ MEDIUM (score 2-3) → base model, 許可ツールあり
+  │   説明・簡単なファイル操作など
+  │
+  └─ HIGH (score >= 4)  → smart model, 全ツール
+      コード生成・複数ステップのタスクなど
 ```
 
-Plan mode / Thinking mode がONの場合は常に大モデルを使用。小モデルにはツール定義を渡さない。
+Plan mode / Thinking mode がONの場合は常にsmart modelを使用。
 
-### 応答時間目標
+### ツール権限（allowed_roles）
 
-| シナリオ | 使用モデル | 目標時間 |
-|----------|-----------|---------|
-| 挨拶 | fast_model (max_tokens=64) | ~1s |
-| 簡単Q&A | fast_model (max_tokens=256) | ~2s |
-| 説明 | fast_model (max_tokens=512) | ~3-5s |
-| ツール呼び出し | smart_model (max_tokens=1024) | ~8-15s |
-| 複合タスク | smart_model + Planner | ~15-25s |
+| ツール | base | smart |
+|--------|------|-------|
+| read_file / write_file / list_files | ✅ | ✅ |
+| run_python / run_shell | ❌ | ✅ |
+| generate_capability / modify_file / sandbox_test | ❌ | ✅ |
+
+### エスカレーションメカニズム
+
+base model の応答が空またはエラーの場合、自動的に smart model にエスカレーションする。
+
+```
+base model で応答
+  ├─ 正常 → そのまま返す
+  └─ 空/エラー → _escalate()
+       ├─ base model を VRAM 解放 (keep_alive=0)  [swap_on_escalate=true時]
+       └─ smart model で再試行（全ツール有効）
+```
+
+### config.yaml 設定例
+
+```yaml
+model:
+  models:
+    - name: qwen3.5:2b
+      role: base
+      max_tokens: 512
+    - name: qwen3.5:9b
+      role: smart
+      max_tokens: 1024
+  escalation:
+    enabled: true
+    max_retries: 1
+    swap_on_escalate: true
+    keep_alive_duration: "5m"
+```
+
+### 応答時間目安
+
+| 複雑性 | 使用モデル | 目標時間 |
+|--------|-----------|---------|
+| LOW | base (max_tokens: 512) | ~1-2s |
+| MEDIUM | base (max_tokens: 512) | ~2-5s |
+| HIGH | smart (max_tokens: 1024) | ~5-10s |
+| エスカレーション | base→smart | +1-2s (swap時間) |
+| Plan実行 | smart + Planner | ~10-20s |
 
 ## 思考モード切替
 
@@ -104,7 +148,7 @@ my-iris/
 │   ├── personality.py   # キャラクター管理
 │   ├── reflexion.py     # 外側ループ
 │   ├── context.py       # 会話Compaction・Prune管理
-│   ├── conversation.py  # 会話オーケストレーション（分類→モデル選択→RAG→プロンプト構築→応答生成→Tool Call→Reflectionの10フェーズ）
+│   ├── conversation.py  # 会話オーケストレーション（複雑性判定→モデル選択→コンテキスト圧縮→RAG→プロンプト構築→Plan判定→応答生成→Tool Call→エスカレーション→Reflection）
 │   ├── tool_executor.py # Tool Call実行エンジン（Executor/CliSession共通利用）
 │   ├── cli.py           # CliSession (薄いUI層、会話ロジックはConversationService委譲。Ollama起動はmain.pyに一元化)
 │   ├── commands.py      # コマンド処理

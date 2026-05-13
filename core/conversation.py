@@ -254,7 +254,7 @@ class ConversationService:
             max_tokens=self.max_tokens_for_model(active_model),
             on_token=on_token,
         )
-        return final["message"]
+        return dict(final["message"])
 
     def max_tokens_for_model(self, model_name: str) -> int:
         for m in self.models:
@@ -295,7 +295,7 @@ class ConversationService:
             tools=smart_tools,
             on_token=on_token,
         )
-        return response["message"]
+        return dict(response["message"])
 
     def _handle_direct_response(
         self,
@@ -307,7 +307,7 @@ class ConversationService:
         on_token: Callable[[str], None] | None,
         active_model: str,
         active_role: str,
-    ) -> dict:
+    ) -> tuple[dict, bool]:
         escalated = False
 
         response = self.llm.chat(
@@ -320,7 +320,7 @@ class ConversationService:
             on_token=on_token,
         )
 
-        msg = response["message"]
+        msg = dict(response["message"])
         messages.append(msg)
 
         if msg.get("tool_calls"):
@@ -330,8 +330,7 @@ class ConversationService:
             msg = self._escalate(system_prompt, messages, thinking_mode, on_token)
             escalated = True
 
-        msg["_escalated"] = escalated
-        return msg
+        return msg, escalated
 
     # ── Quick Reflection ───────────────────────────────────
 
@@ -413,8 +412,9 @@ class ConversationService:
             assert plan_result is not None
             msg = self._handle_plan(plan_result, user_input)
             escalated = False
+            messages.append(msg)
         else:
-            msg = self._handle_direct_response(
+            msg, escalated = self._handle_direct_response(
                 system_prompt,
                 messages,
                 thinking_mode,
@@ -424,9 +424,6 @@ class ConversationService:
                 active_model,
                 active_role,
             )
-            escalated = msg.pop("_escalated", False)
-
-        messages.append(msg)
 
         # Phase 10: Quick Reflection
         msg_count_since_reflect = self._run_quick_reflection(messages, msg_count_since_reflect)

@@ -1,31 +1,32 @@
-model:
-  models:
-    - name: qwen3.5:2b
-      role: base
-      max_tokens: 512
-    - name: qwen3.5:9b
-      role: smart
-      max_tokens: 1024
-  escalation:
-    enabled: true
-    max_retries: 1
-    swap_on_escalate: true
-    keep_alive_duration: "5m"
-  base_url: http://localhost:11434
-  temperature: 0.7
-  num_gpu: 99
-  num_ctx: 8192
-  context_window: 4000
-  compaction_threshold: 0.85
-
-personality:
-  name: Iris
-  thinking_mode_default: false
-  prompt_file: memory/config/personality_default.md
-
 memory:
+  agents_md_max_bytes: 2048
+  agents_md_path: memory/data/iris_profile.md
+  episodic_max_entries: 30
   episodic_path: memory/data/episodes.jsonl
+  rag_max_results: 3
+  semantic_max_entries: 100
   semantic_path: memory/data/semantic.jsonl
   vector_db_path: memory/data/chroma_db
-  agents_md_path: memory/data/iris_profile.md
-  agents_md_max_bytes: 2048
+model:
+  base_url: http://localhost:11434
+  compaction_threshold: 0.85
+  context_window: 4000
+  escalation:
+    enabled: true
+    keep_alive_duration: 5m
+    max_retries: 1
+    swap_on_escalate: true
+  models:
+  - max_tokens: 512
+    name: qwen3.5:2b
+    role: base
+  - max_tokens: 1024
+    name: qwen3.5:9b
+    role: smart
+  num_ctx: 8192
+  num_gpu: 99
+  temperature: 0.7
+personality:
+  name: Iris
+  prompt_file: memory/config/personality_default.md
+  thinking_mode_default: false

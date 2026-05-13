@@ -318,7 +318,22 @@ class ProactiveEngine:
             result.content,
         )
 
-    # ── Public API（conversation からの連携用）─────────────
+    # ── Public API（conversation / AgentKernel からの連携用）─
+
+    def get_status(self) -> dict[str, object]:
+        """現在の抑制状態を返す（Tier3異常検知用）。"""
+        s = self._suppression
+        return {
+            "suppression": {
+                "last_proactive_time": s.last_proactive_time,
+                "last_user_activity": s.last_user_activity,
+                "consecutive_ignores": s.consecutive_ignores,
+                "confirmation_mode": s.confirmation_mode,
+                "negative_mood_score": s.negative_mood_score,
+                "cooldown_until": s.cooldown_until,
+                "is_sleeping": s.is_sleeping,
+            },
+        }
 
     def notify_user_activity(self) -> None:
         """ユーザー入力があったことを通知する。"""

@@ -86,7 +86,7 @@ mypy --install-types                  # 型スタブ初回インストール
 - 分類は2段階: (1) キーワードフィルタ (2) 小モデルでLLM分類（不明時のみ）
 - シナリオは `greeting/simple/qa/tool/complex` の5種類
 - `tool/complex` は大モデル、それ以外は小モデルを使用
-- plan_mode / thinking_mode がONの場合は常に大モデルを使用
+- mode が deep/stepwise の場合は常に大モデルを使用（auto は複雑性判定に従う）
 - 小モデルにはツール定義を渡さない（ツール呼び出し不可のため）
 - 会話履歴は `context_window`（トークン数）を超えた場合、`compaction_threshold` に基づき自動要約（ContextManager）
 - 要約は `## 会話の経緯` としてシステムプロンプトに注入。`/compact` コマンドで手動トリガー可能

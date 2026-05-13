@@ -27,10 +27,12 @@ from memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
 console = Console(safe_box=True, legacy_windows=False)
 PROJECT_ROOT = Path(__file__).parent.parent
 
+_MODE_LABELS = {"auto": "AUTO", "deep": "DEEP", "stepwise": "STEP"}
+
+
 _COMMANDS = [
     "/help",
-    "/think",
-    "/plan",
+    "/mode",
     "/compact",
     "/clear",
     "/exit",
@@ -42,12 +44,10 @@ _COMMANDS = [
 ]
 
 
-def _make_prompt(thinking: bool, plan: bool, role: str, model: str, msg_count: int) -> HTML:
-    t = "[ON]" if thinking else "[OFF]"
-    p = "[ON]" if plan else "[OFF]"
+def _make_prompt(mode: str, role: str, model: str, msg_count: int) -> HTML:
+    label = _MODE_LABELS.get(mode, mode.upper())
     return HTML(
-        f"<ansicyan> Thinking:{t}</ansicyan> "
-        f"<ansiyellow>Plan:{p}</ansiyellow> "
+        f"<ansicyan> Mode:{label}</ansicyan> "
         f"<ansibrightblack>{role}[{model}] | {msg_count} msgs</ansibrightblack>\n"
         f"<ansicyan> You</ansicyan> > "
     )
@@ -140,13 +140,12 @@ class CliSession:
             Panel.fit(
                 f"[bold cyan]Iris[/bold cyan] - v0.1.0\n"
                 f"Models: {self.config.model.base_model} (base) / {self.config.model.smart_model} (smart)\n"
-                f"Type /help for commands, /think to toggle thinking mode",
+                f"Type /help for commands, /mode to change behavior mode",
                 border_style="cyan",
             )
         )
 
-        thinking_mode = self.config.personality.thinking_mode_default
-        plan_mode = False
+        mode = self.config.personality.mode_default
         last_role = "base"
         msg_count_since_reflect = 0
 
@@ -158,9 +157,7 @@ class CliSession:
         while True:
             try:
                 current_model = self.config.model.base_model if last_role == "base" else self.config.model.smart_model
-                user_input = session.prompt(
-                    lambda: _make_prompt(thinking_mode, plan_mode, last_role, current_model, len(self.messages))
-                )
+                user_input = session.prompt(lambda: _make_prompt(mode, last_role, current_model, len(self.messages)))
             except (EOFError, KeyboardInterrupt):
                 console.print("\n[yellow]Goodbye![/yellow]")
                 self._cleanup()
@@ -170,16 +167,15 @@ class CliSession:
                 continue
 
             if user_input.startswith("/"):
-                cmd_result = handle_command(user_input, self.ctx, self.messages, thinking_mode, plan_mode)
+                cmd_result = handle_command(user_input, self.ctx, self.messages, mode)
                 if cmd_result.handled:
-                    thinking_mode = cmd_result.thinking_mode
-                    plan_mode = cmd_result.plan_mode
+                    mode = cmd_result.mode
                     continue
 
             self.messages.append({"role": "user", "content": user_input})
 
             parts: list[str] = []
-            streaming = not plan_mode
+            streaming = mode != "stepwise"
 
             if streaming:
                 live = Live(
@@ -203,8 +199,7 @@ class CliSession:
                 result = self.conversation.process_input(
                     user_input,
                     self.messages,
-                    thinking_mode,
-                    plan_mode,
+                    mode,
                     last_role,
                     msg_count_since_reflect,
                     on_token=on_token if streaming else None,
@@ -214,8 +209,7 @@ class CliSession:
                     live.stop()
 
             msg = result.response_message
-            thinking_mode = result.thinking_mode
-            plan_mode = result.plan_mode
+            mode = result.mode
             last_role = result.active_role
             msg_count_since_reflect = result.msg_count_since_reflect
 

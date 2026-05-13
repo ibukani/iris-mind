@@ -1,7 +1,7 @@
 # 自己改変モジュール
 
-> **ステータス: TODO（Phase 5）** — 基本ツール（generate_capability, modify_file, sandbox_test）は実装済み。
-> 以下のフロー完成は未着手。
+> **ステータス: 保留中** — 基本ツール（generate_capability, modify_file, sandbox_test）は実装済みだが、
+> Reflexion → 自己改変 の自動フローは将来実装予定。現時点では手動でのcapability追加が前提。
 
 ## 基本方針
 

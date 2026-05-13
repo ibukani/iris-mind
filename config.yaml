@@ -29,4 +29,4 @@ model:
 personality:
   name: Iris
   prompt_file: memory/config/personality_default.md
-  thinking_mode_default: false
+  mode_default: auto

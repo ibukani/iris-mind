@@ -18,7 +18,7 @@ Capability Registry (MCPベースのツール管理)
        │
 Outer Loop — Reflexion (セッション終了時の内省・教訓抽出)
        │
-Self-Modification Module (差分生成→承認→テスト→登録)
+Self-Modification Module (差分生成→承認→テスト→登録)  [保留中]
 ```
 
 ## 思考モード
@@ -58,7 +58,7 @@ Self-Modification Module (差分生成→承認→テスト→登録)
 |-----------|--------|------|
 | `file_ops/` | `read_file`, `write_file`, `list_files` | ファイル読み書き・一覧 |
 | `code_exec/` | `run_python`, `run_shell` | 隔離サブプロセスでのコード実行 |
-| `self_mod/` | `generate_capability`, `modify_file`, `sandbox_test` | 自己改変・差分適用・テスト |
+| `self_mod/` | `generate_capability`, `modify_file`, `sandbox_test` | 自己改変・差分適用・テスト（保留中、フロー未統合） |
 
 ### capabilities/registry.py — Capability Registry
 - `Capability`: ツール定義（name, description, parameters, func）
@@ -94,7 +94,7 @@ Self-Modification Module (差分生成→承認→テスト→登録)
 ## 設定（config.yaml）
 ```yaml
 model:        # name, fast_model, base_url, max_tokens, max_tokens_fast, temperature, context_window, compaction_threshold
-personality:  # name, thinking_mode_default
+personality:  # name, mode_default
 memory:       # paths, 各上限値, RAG設定
 ```
 

@@ -32,8 +32,7 @@ from core.tool_executor import ToolExecutionEngine
 @dataclass
 class ProcessResult:
     response_message: dict
-    thinking_mode: bool = False
-    plan_mode: bool = False
+    mode: str = "auto"
     active_model: str = ""
     active_role: str = ""
     msg_count_since_reflect: int = 0
@@ -161,11 +160,10 @@ class ConversationService:
     def _select_model_and_tools(
         self,
         complexity: Complexity,
-        thinking_mode: bool,
-        plan_mode: bool,
+        mode: str,
     ) -> tuple[str, str, int, list[dict] | None]:
         """(model_name, role, max_tokens, tools_list) を返す。副作用なし。"""
-        force_smart = thinking_mode or plan_mode
+        force_smart = mode in ("deep", "stepwise")
 
         if force_smart or complexity == Complexity.HIGH:
             entry = self.models_by_role["smart"]
@@ -232,7 +230,7 @@ class ConversationService:
         msg: dict,
         system_prompt: str,
         messages: list[dict],
-        thinking_mode: bool,
+        mode: str,
         on_token: Callable[[str], None] | None,
         active_model: str,
     ) -> dict:
@@ -249,7 +247,7 @@ class ConversationService:
         final = self.llm.chat(
             messages=[{"role": "system", "content": system_prompt}, *messages],
             model=active_model,
-            enable_thinking=thinking_mode,
+            enable_thinking=mode in ("deep", "stepwise"),
             temperature=self.temperature,
             max_tokens=self.max_tokens_for_model(active_model),
             on_token=on_token,
@@ -276,7 +274,7 @@ class ConversationService:
         self,
         system_prompt: str,
         messages: list[dict],
-        thinking_mode: bool,
+        mode: str,
         on_token: Callable[[str], None] | None,
     ) -> dict:
         if self.escalation_config.swap_on_escalate:
@@ -289,7 +287,7 @@ class ConversationService:
         response = self.llm.chat(
             messages=[{"role": "system", "content": system_prompt}, *messages],
             model=smart_entry.name,
-            enable_thinking=thinking_mode,
+            enable_thinking=mode in ("deep", "stepwise"),
             temperature=self.temperature,
             max_tokens=smart_entry.max_tokens,
             tools=smart_tools,
@@ -301,7 +299,7 @@ class ConversationService:
         self,
         system_prompt: str,
         messages: list[dict],
-        thinking_mode: bool,
+        mode: str,
         tools_list: list[dict] | None,
         max_tokens: int,
         on_token: Callable[[str], None] | None,
@@ -313,7 +311,7 @@ class ConversationService:
         response = self.llm.chat(
             messages=[{"role": "system", "content": system_prompt}, *messages],
             model=active_model,
-            enable_thinking=thinking_mode,
+            enable_thinking=mode in ("deep", "stepwise"),
             temperature=self.temperature,
             max_tokens=max_tokens,
             tools=tools_list,
@@ -324,10 +322,10 @@ class ConversationService:
         messages.append(msg)
 
         if msg.get("tool_calls"):
-            msg = self._execute_tool_calls(msg, system_prompt, messages, thinking_mode, on_token, active_model)
+            msg = self._execute_tool_calls(msg, system_prompt, messages, mode, on_token, active_model)
 
         if self._needs_escalation(msg, active_role):
-            msg = self._escalate(system_prompt, messages, thinking_mode, on_token)
+            msg = self._escalate(system_prompt, messages, mode, on_token)
             escalated = True
 
         return msg, escalated
@@ -353,8 +351,7 @@ class ConversationService:
         self,
         user_input: str,
         messages: list[dict],
-        thinking_mode: bool,
-        plan_mode: bool,
+        mode: str,
         last_role: str,
         msg_count_since_reflect: int,
         on_token: Callable[[str], None] | None = None,
@@ -365,8 +362,7 @@ class ConversationService:
         # Phase 2: モデル選択（ツール権限フィルタ込み）
         active_model, active_role, max_tokens, tools_list = self._select_model_and_tools(
             complexity,
-            thinking_mode,
-            plan_mode,
+            mode,
         )
 
         # Phase 3: コンテキスト圧縮判定
@@ -390,19 +386,19 @@ class ConversationService:
         should_plan = False
         plan_result = None
         has_complex_trigger = any(t in user_input.lower() for t in COMPLEX_TRIGGERS)
-        if active_role == "smart" and (plan_mode or (thinking_mode and has_complex_trigger)):
+        if active_role == "smart" and (mode == "stepwise" or (mode == "deep" and has_complex_trigger)):
             plan_result = self.planner.analyze(user_input, system_prompt[:300])
-            should_plan = self.planner.is_complex(plan_result) if not plan_mode else True
+            should_plan = self.planner.is_complex(plan_result) if mode != "stepwise" else True
 
         # Phase 7: 思考モードでユーザー入力をラップ
-        if thinking_mode:
+        if mode in ("deep", "stepwise"):
             messages[-1] = messages[-1].copy()
             messages[-1]["content"] = self.personality.build_thinking_prompt(user_input)
 
         # Phase 8: 簡易グリーティング抑制
         if (
-            active_role != "smart"
-            and not thinking_mode
+            mode == "auto"
+            and active_role != "smart"
             and user_input.strip().lower() in ("hello", "hi", "bye", "thanks", "ありがとう")
         ):
             max_tokens = SHORT_GREET_TOKENS
@@ -417,7 +413,7 @@ class ConversationService:
             msg, escalated = self._handle_direct_response(
                 system_prompt,
                 messages,
-                thinking_mode,
+                mode,
                 tools_list,
                 max_tokens,
                 on_token,
@@ -430,8 +426,7 @@ class ConversationService:
 
         return ProcessResult(
             response_message=msg,
-            thinking_mode=thinking_mode,
-            plan_mode=plan_mode,
+            mode=mode,
             active_model=active_model,
             active_role=active_role,
             msg_count_since_reflect=msg_count_since_reflect,

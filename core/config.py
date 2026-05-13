@@ -45,7 +45,7 @@ class ModelConfig(BaseModel):
 
 class PersonalityConfig(BaseModel):
     name: str = "Iris"
-    thinking_mode_default: bool = False
+    mode_default: str = "auto"
     prompt_file: str = "memory/personality_default.md"
 
 

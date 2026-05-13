@@ -28,8 +28,7 @@ console = Console(safe_box=True, legacy_windows=False)
 @dataclass
 class CommandResult:
     handled: bool
-    thinking_mode: bool
-    plan_mode: bool
+    mode: str
 
 
 @dataclass
@@ -95,15 +94,18 @@ def _run_reflexion_and_save(
         console.print("[dim]Persona profile updated[/dim]")
 
 
-def handle_command(
-    cmd: str, ctx: CommandContext, messages: list, thinking_mode: bool, plan_mode: bool = False
-) -> CommandResult:
+_MODE_LABELS = {"auto": "AUTO", "deep": "DEEP", "stepwise": "STEPWISE"}
+
+
+def handle_command(cmd: str, ctx: CommandContext, messages: list, mode: str = "auto") -> CommandResult:
     match cmd.lower().split():
         case ["/help"]:
             console.print(
                 Panel(
-                    "[bold]/think[/bold] - toggle thinking mode\n"
-                    "[bold]/plan[/bold] - toggle plan-and-execute mode\n"
+                    "[bold]/mode[/bold] - show current mode\n"
+                    "[bold]/mode auto[/bold] - auto mode (default, automatic model switching)\n"
+                    "[bold]/mode deep[/bold] - deep mode (force smart model + CoT)\n"
+                    "[bold]/mode stepwise[/bold] - stepwise mode (smart model + planning + execute)\n"
                     "/compact - compact conversation history (preserves summary)\n"
                     "/compact <instructions> - compact with custom instructions\n"
                     "/capabilities - list registered capabilities\n"
@@ -118,43 +120,49 @@ def handle_command(
                     border_style="yellow",
                 )
             )
-            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+            return CommandResult(handled=True, mode=mode)
 
-        case ["/think"]:
-            thinking_mode = not thinking_mode
-            ctx.config.personality.thinking_mode_default = thinking_mode
-            if ctx.config_path:
-                ctx.config.save(ctx.config_path)
-            console.print(f"[yellow]Thinking mode: {'ON' if thinking_mode else 'OFF'}[/yellow]")
-            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+        case ["/mode"]:
+            default = ctx.config.personality.mode_default
+            dflt = _MODE_LABELS.get(default, default)
+            console.print(f"[yellow]Mode: {_MODE_LABELS.get(mode, mode)} (default: {dflt})[/yellow]")
+            return CommandResult(handled=True, mode=mode)
 
-        case ["/plan"]:
-            plan_mode = not plan_mode
-            console.print(f"[yellow]Plan mode: {'ON' if plan_mode else 'OFF'}[/yellow]")
-            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+        case ["/mode", new_mode] if new_mode in ("auto", "deep", "stepwise"):
+            mode = new_mode
+            if mode != "stepwise":
+                ctx.config.personality.mode_default = mode
+                if ctx.config_path:
+                    ctx.config.save(ctx.config_path)
+            console.print(f"[yellow]Mode: {_MODE_LABELS.get(mode, mode)}[/yellow]")
+            return CommandResult(handled=True, mode=mode)
+
+        case ["/mode", *_]:
+            console.print("[yellow]Usage: /mode [auto|deep|stepwise][/yellow]")
+            return CommandResult(handled=True, mode=mode)
 
         case ["/capabilities"]:
             _handle_capabilities(ctx)
-            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+            return CommandResult(handled=True, mode=mode)
 
         case ["/memory"]:
             _handle_memory_status(ctx)
-            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+            return CommandResult(handled=True, mode=mode)
 
         case ["/memory-clear"]:
             _handle_memory_clear(ctx)
-            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+            return CommandResult(handled=True, mode=mode)
 
         case ["/compact", *rest]:
             _handle_compact(ctx, messages, rest)
-            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+            return CommandResult(handled=True, mode=mode)
 
         case ["/clear"]:
             if ctx.context_manager:
                 ctx.context_manager.clear()
             messages.clear()
             console.print("[yellow]Conversation cleared[/yellow]")
-            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+            return CommandResult(handled=True, mode=mode)
 
         case ["/exit"] | ["/quit"]:
             console.print("[yellow]Goodbye![/yellow]")
@@ -170,19 +178,19 @@ def handle_command(
 
         case ["/persona"]:
             _handle_persona_list(ctx)
-            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+            return CommandResult(handled=True, mode=mode)
 
         case ["/persona", "set", target, *rest]:
             _handle_persona_set(ctx, target, rest)
-            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+            return CommandResult(handled=True, mode=mode)
 
         case ["/persona", "reset"]:
             if ctx.persona_profile:
                 ctx.persona_profile.reset()
                 console.print("[green]Persona reset to defaults[/green]")
-            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+            return CommandResult(handled=True, mode=mode)
 
-    return CommandResult(handled=False, thinking_mode=thinking_mode, plan_mode=plan_mode)
+    return CommandResult(handled=False, mode=mode)
 
 
 def _handle_capabilities(ctx: CommandContext):

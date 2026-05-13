@@ -1,3 +1,14 @@
+# ⚠️ DEPRECATED — Iris v0.2 移行済み
+
+> **このドキュメントは古いアーキテクチャに基づいています。**
+> 最新の設計は以下を参照してください：
+> - [新アーキテクチャ設計書](./architecture.md)
+> - [AgentState 状態遷移設計書](./agent-state.md)
+> - [ProactiveEngine 設計仕様](./proactive-engine.md)
+> - [EventBus インターフェース仕様](./event-bus.md)
+
+---
+
 # Iris プロジェクト コンセプト
 
 ## プロジェクトの目的

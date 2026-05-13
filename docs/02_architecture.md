@@ -1,4 +1,13 @@
-# Iris アーキテクチャ
+# ⚠️ DEPRECATED — `architecture.md` / `agent-state.md` を参照してください
+
+> **このファイルは新設計書に置き換えられました。**
+> - [architecture.md](./architecture.md) — ヘキサゴナル＋イベント駆動アーキテクチャ
+> - [agent-state.md](./agent-state.md) — 状態遷移設計
+> - [proactive-engine.md](./proactive-engine.md) — 自律発話エンジン
+
+---
+
+# Iris アーキテクチャ（旧版）
 
 ## 全体構造
 

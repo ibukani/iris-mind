@@ -15,6 +15,7 @@ from iris.kernel.agent_kernel import AgentKernel, AnomalyDetector
 from iris.kernel.agent_state import AgentStateManager, State
 from iris.kernel.config import ProactiveConfig
 from iris.kernel.event_bus import (
+    AgentResponseEvent,
     AgentStateChangeEvent,
     EventBus,
     ProactiveSpeechEvent,
@@ -144,7 +145,7 @@ time.sleep(0.05)
 recent = memory.get_recent(3)
 check("input recorded to episodic", any("test user input" in r.get("summary", "") for r in recent))
 
-# Second input while processing
+# Input while processing should be rejected (AgentKernel waits for AgentResponseEvent)
 state.transition(State.PROCESSING)
 event_bus.publish(
     UserInputEvent(
@@ -156,8 +157,8 @@ event_bus.publish(
 time.sleep(0.05)
 entries = memory._episodic._load_all()
 check(
-    "processing state still accepts input",
-    any(e["summary"] == "during processing" for e in entries),
+    "processing state rejects input",
+    not any(e["summary"] == "during processing" for e in entries),
 )
 state.transition(State.IDLE)
 
@@ -209,7 +210,7 @@ event_bus.subscribe("AgentStateChangeEvent", on_state_change)
 kernel.startup()
 time.sleep(0.1)
 
-# Trigger a state change by publishing a UserInputEvent
+# Trigger a state change: UserInputEvent → PROCESSING, then AgentResponseEvent → IDLE
 event_bus.publish(
     UserInputEvent(
         timestamp=datetime.now(),
@@ -217,12 +218,20 @@ event_bus.publish(
         content="trigger state change",
     )
 )
+# Send response to trigger IDLE transition
+event_bus.publish(
+    AgentResponseEvent(
+        timestamp=datetime.now(),
+        source="assistant",
+        content="response",
+    )
+)
 time.sleep(0.05)
 
 kernel.shutdown()
 
 check(
-    "state transitions published during I/O",
+    "state transitions: IDLE→PROCESSING→IDLE",
     len(state_change_events) >= 2,
     f"got {len(state_change_events)}",
 )

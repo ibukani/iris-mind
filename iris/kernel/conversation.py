@@ -14,6 +14,7 @@ from typing import Any
 from .config import Config
 from .event_bus import AgentResponseEvent, EventBus, UserInputEvent
 from .memory_manager import MemoryManager
+from .tool_executor import ToolExecutionEngine
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class ConversationService:
         config: Config,
         reflexion: Any | None = None,
         reflect_interval: int = 3,
+        tool_executor: ToolExecutionEngine | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._memory = memory
@@ -46,6 +48,8 @@ class ConversationService:
         self._model_config = config.model
         self._reflexion = reflexion
         self._reflect_interval = reflect_interval
+        self._tool_executor = tool_executor
+        self._max_tool_iterations: int = 3
         self._messages: list[dict] = []
         self._msg_count_since_reflect: int = 0
 
@@ -58,7 +62,7 @@ class ConversationService:
         self._messages.append({"role": "user", "content": event.content})
 
         try:
-            response_text = self._call_llm()
+            response_text = self._call_llm_with_tools()
         except Exception as e:
             response_text = f"[Error: {e}]"
             logger.exception("LLM call failed")
@@ -149,17 +153,52 @@ class ConversationService:
 
     # ── LLM 呼び出し ─────────────────────────────────────
 
-    def _call_llm(self) -> str:
-        """LLM を呼び出し応答テキストを取得する。"""
+    def _call_llm(self, tools: list[dict] | None = None) -> dict:
+        """LLM を呼び出し応答を返す。"""
         system_prompt = self._personality.build_system_prompt()
         messages = [{"role": "system", "content": system_prompt}, *self._messages]
 
-        resp = self._llm.chat(
+        return self._llm.chat(
             messages=messages,
             model=self._model_config.base_model,
             temperature=self._model_config.temperature,
+            tools=tools,
         )
-        return resp.get("message", {}).get("content", "")
+
+    def _call_llm_with_tools(self) -> str:
+        """
+        Tool Call 対応の LLM 呼び出し。
+
+        1. 利用可能なツール定義を LLM に渡す
+        2. LLM が tool_calls を返したら ToolExecutionEngine で実行
+        3. 結果を追跡し、必要に応じて再度 LLM を呼び出す
+        4. 最終的なテキスト応答を返す
+        """
+        tools = self._get_tools()
+        iteration = 0
+        final_text = ""
+
+        while iteration < self._max_tool_iterations:
+            iteration += 1
+            resp = self._call_llm(tools=tools)
+            msg = resp.get("message", {})
+
+            if msg.get("tool_calls") and self._tool_executor is not None:
+                self._messages.append(msg)
+                self._tool_executor.execute_all(self._messages)
+                continue
+
+            final_text = msg.get("content", "")
+            if final_text:
+                break
+
+        return final_text
+
+    def _get_tools(self) -> list[dict] | None:
+        """利用可能なツール定義を取得する。"""
+        if self._tool_executor is None:
+            return None
+        return self._tool_executor.registry.list_tools() or None
 
     # ── 会話履歴管理 ─────────────────────────────────────
 

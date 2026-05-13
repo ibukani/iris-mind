@@ -14,6 +14,7 @@ from datetime import datetime
 from rich.console import Console
 from rich.panel import Panel
 
+from iris.capabilities.registry import CapabilityRegistry
 from iris.kernel.agent_kernel import AgentKernel
 from iris.kernel.agent_state import AgentStateManager
 from iris.kernel.config import Config
@@ -27,6 +28,7 @@ from iris.kernel.event_bus import (
 from iris.kernel.memory_manager import MemoryManager
 from iris.kernel.proactive import ProactiveEngine
 from iris.kernel.reflexion import Reflexion
+from iris.kernel.tool_executor import ToolExecutionEngine
 from iris.llm.llm_bridge import LLMBridge
 from iris.personality.personality import Personality
 from memory.stores import EpisodicStore, SemanticStore
@@ -100,6 +102,12 @@ class CLIAdapter:
         )
         self._personality = Personality(name=self._config.personality.name)
         self._reflexion = Reflexion(llm=self._llm)
+
+        # Capability registry + tool executor
+        self._registry = CapabilityRegistry()
+        self._registry.discover_modules()
+        self._tool_exec = ToolExecutionEngine(registry=self._registry)
+
         self._conversation = ConversationService(
             event_bus=self._event_bus,
             memory=self._memory,
@@ -107,6 +115,7 @@ class CLIAdapter:
             personality=self._personality,
             config=self._config,
             reflexion=self._reflexion,
+            tool_executor=self._tool_exec,
         )
 
     def _init_events(self) -> None:

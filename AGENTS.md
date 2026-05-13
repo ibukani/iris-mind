@@ -41,7 +41,7 @@ main.py
 ```
 
 ## Iris の記憶体系
-- `memory/iris_profile.md`: Irisの構造記憶（自己認識用、上限2KB固定）
+- `memory/iris_profile.md`: Irisの構造記憶（自己認識用、上限2KB固定）※話し方・性格は含まず、別JSONで動的管理
 - EpisodicStore: JSONLベースの作業記憶（上限30エントリ、古いものをマージ圧縮）
 - SemanticStore: JSONL永続化 + ChromaDB + BM25 ハイブリッド検索（上限100エントリ）
 - VectorStore: ONNXMiniLM_L6_V2 埋め込み、cosine類似度、統合スコア = vector*0.6 + bm25*0.4

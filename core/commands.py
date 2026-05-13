@@ -94,7 +94,6 @@ def handle_command(cmd: str, ctx: CommandContext,
                 "/model <name> - switch model\n"
                 "/capabilities - list registered capabilities\n"
                 "/persona - show/manage my personality\n"
-                "/persona view - regenerate iris_profile.md from JSON data\n"
                 "/persona set speech_style|traits <text> - override speech style or traits\n"
                 "/persona reset - reset personality to defaults\n"
                 "/memory - show memory stats\n"
@@ -161,12 +160,6 @@ def handle_command(cmd: str, ctx: CommandContext,
 
         case ["/persona"]:
             _handle_persona_list(ctx)
-            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
-
-        case ["/persona", "view"]:
-            if ctx.persona_profile:
-                ctx.persona_profile.regenerate_view()
-                console.print("[green]Persona view regenerated from JSON data[/green]")
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
 
         case ["/persona", "set", target, *rest]:

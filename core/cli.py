@@ -141,19 +141,13 @@ class CliSession:
         console.print(f"[green]Loaded {len(self.registry._capabilities)} capabilities[/green]")
 
         self.persona_data = PersonaData()
-        self.persona_profile = PersonaProfile(store=self.agents_md, persona_data=self.persona_data)
-        self.persona_profile.regenerate_view()
+        self.persona_profile = PersonaProfile(persona_data=self.persona_data)
         speech_style = self.persona_profile.get_speech_style()
         if speech_style:
             console.print(f"[dim]Speech: {speech_style[:60]}...[/dim]")
         traits = self.persona_profile.get_traits()
         if traits:
             console.print(f"[dim]Traits: {traits[:60]}...[/dim]")
-        console.print(
-            f"[dim]Persona JSON: "
-            f"{len(self.persona_profile._template.get('My Speech Style', ''))} speech, "
-            f"{len(self.persona_profile._template.get('My Personality Traits', ''))} traits[/dim]"
-        )
 
         self.reflexion = Reflexion(llm=llm)
         self.planner = Planner(llm=llm)

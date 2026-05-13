@@ -5,7 +5,7 @@ __pycache__/
 memory/data/chroma_db/
 memory/data/episodes.jsonl
 memory/data/semantic.jsonl
-memory/persona_data.json
+memory/data/persona_data.json
 .DS_Store
 *.log
 *.egg-info/

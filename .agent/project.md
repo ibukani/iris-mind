@@ -51,7 +51,7 @@ Self-Modification Module (差分生成→承認→テスト→登録)
 | `vector_store.py` | ベクトルDB + BM25（スレッドセーフ） | `VectorStore.add/update/search/delete/count` |
 | `persona_profile.py` | ペルソナ管理 | `PersonaProfile.get_speech_style()`, `get_traits()`, `update_from_reflection()` |
 | `persona_data.py` | ペルソナデータ（専用JSON） | `PersonaData.add_entry()`, `get_top()`, `get_all()`, `clear()` |
-| `iris_profile.md` | 構造記憶（2KB上限） | Iris自身の自己認識ファイル |
+| `iris_profile.md` | 構造記憶（2KB上限） | Iris自身の自己認識ファイル（話し方・性格は含まず） |
 
 ### capabilities/ — 機能モジュール
 | モジュール | ツール | 説明 |

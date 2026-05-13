@@ -18,7 +18,7 @@
 
 - Ollama が動作していないと Iris は起動しない（`main.py:_ensure_ollama`）
 - ChromaDB の ONNX 埋め込みは初回実行時にモデルを自動DLする（~80MB）
-- `memory/iris_profile.md` は上限2KB、超えると `AgentsMdStore` が行単位でtruncateする
+- `memory/iris_profile.md` は上限2KBの構造記憶のみ（話し方・性格は `persona_data.json` で動的管理）
 - Windows環境を前提としている（パス区切り文字、シェル実行等）
 
 ## 最近の作業履歴

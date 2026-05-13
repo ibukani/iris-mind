@@ -16,13 +16,18 @@ def _get_available_models() -> set[str]:
     """Ollamaに既にpull済みのモデル名のセットを返す。"""
     try:
         result = subprocess.run(
-            ["ollama", "list", "--format", "json"],
+            ["ollama", "list"],
             capture_output=True, text=True, timeout=10,
         )
         if result.returncode == 0 and result.stdout.strip():
-            import json
-            models = json.loads(result.stdout)
-            return {m["model"].split(":")[0] for m in models if "model" in m}
+            lines = result.stdout.strip().splitlines()
+            models: set[str] = set()
+            for line in lines[2:]:
+                if line.strip():
+                    name = line.strip().split()[0]
+                    if ":" in name:
+                        models.add(name.split(":")[0])
+            return models
     except Exception:
         pass
     return set()

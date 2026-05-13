@@ -18,6 +18,7 @@ from iris.capabilities.registry import CapabilityRegistry
 from iris.kernel.agent_kernel import AgentKernel
 from iris.kernel.agent_state import AgentStateManager
 from iris.kernel.config import Config
+from iris.kernel.context import ContextManager
 from iris.kernel.conversation import ConversationService
 from iris.kernel.event_bus import (
     AgentAnomalyEvent,
@@ -103,6 +104,10 @@ class CLIAdapter:
         )
         self._personality = Personality(name=self._config.personality.name)
         self._reflexion = Reflexion(llm=self._llm)
+        self._context_mgr = ContextManager(
+            llm=self._llm,
+            compact_model=self._config.model.base_model,
+        )
 
         # Capability registry + tool executor
         self._registry = CapabilityRegistry()
@@ -117,6 +122,7 @@ class CLIAdapter:
             config=self._config,
             reflexion=self._reflexion,
             tool_executor=self._tool_exec,
+            context_manager=self._context_mgr,
         )
 
     def _init_events(self) -> None:

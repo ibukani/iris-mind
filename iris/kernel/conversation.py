@@ -12,6 +12,7 @@ from datetime import datetime
 from typing import Any
 
 from .config import Config
+from .context import ContextManager
 from .event_bus import AgentResponseEvent, EventBus, UserInputEvent
 from .memory_manager import MemoryManager
 from .tool_executor import ToolExecutionEngine
@@ -40,6 +41,7 @@ class ConversationService:
         reflexion: Any | None = None,
         reflect_interval: int = 3,
         tool_executor: ToolExecutionEngine | None = None,
+        context_manager: ContextManager | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._memory = memory
@@ -49,6 +51,8 @@ class ConversationService:
         self._reflexion = reflexion
         self._reflect_interval = reflect_interval
         self._tool_executor = tool_executor
+        self._context_manager = context_manager
+        self._context_window = config.model.context_window
         self._max_tool_iterations: int = 3
         self._messages: list[dict] = []
         self._msg_count_since_reflect: int = 0
@@ -79,6 +83,7 @@ class ConversationService:
 
         self._msg_count_since_reflect += 1
         self._maybe_quick_reflect()
+        self._maybe_compact()
 
     # ── Reflexion ────────────────────────────────────────
 
@@ -153,10 +158,24 @@ class ConversationService:
 
     # ── LLM 呼び出し ─────────────────────────────────────
 
+    def _maybe_compact(self) -> None:
+        """トークン数が閾値を超えた場合、会話履歴を要約する。"""
+        if self._context_manager is None or self._context_window <= 0:
+            return
+        self._context_manager.check_and_summarize(
+            self._messages,
+            context_window=self._context_window,
+        )
+
     def _call_llm(self, tools: list[dict] | None = None) -> dict:
         """LLM を呼び出し応答を返す。"""
         system_prompt = self._personality.build_system_prompt()
-        messages = [{"role": "system", "content": system_prompt}, *self._messages]
+
+        if self._context_manager is not None and self._context_manager.has_summary:
+            messages = [{"role": "system", "content": system_prompt}]
+            messages += self._context_manager.build_compact_messages(self._messages)
+        else:
+            messages = [{"role": "system", "content": system_prompt}, *self._messages]
 
         return self._llm.chat(
             messages=messages,
@@ -206,4 +225,6 @@ class ConversationService:
         """会話履歴をクリアする。"""
         self._messages.clear()
         self._msg_count_since_reflect = 0
+        if self._context_manager is not None:
+            self._context_manager.clear()
         logger.info("Conversation history cleared")

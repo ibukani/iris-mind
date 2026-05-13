@@ -28,5 +28,22 @@ model:
   temperature: 0.7
 personality:
   name: Iris
-  prompt_file: memory/config/personality_default.md
+  prompt_file: memory/personality_default.md
   mode_default: auto
+# ===== 新規: 自律的会話設定 =====
+proactive:
+  enabled: false                  # デフォルトOFF（安全第一）
+  check_interval_sec: 5.0         # トリガー確認間隔（秒）
+  min_interval_sec: 30.0          # 最短発話間隔（秒）
+  max_interval_sec: 300.0         # 最大発話間隔（秒）
+  tier1_auto_approve: true        # Tier1（挨拶等）は自動許可
+  tier2_confidence_threshold: 0.75 # Tier2の自動承認閾値
+  tier2_cooldown_sec: 60.0        # Tier2承認待ちタイムアウト（秒）
+  max_proactive_tokens: 256       # 自発発話の最大文字数目安
+  user_cooldown_on_ignore: 300.0  # 無視された後のクールダウン（秒）
+  trigger_weights:
+    time: 0.25                    # 時間経過の重み
+    memory: 0.45                  # 記憶想起の重み
+    context: 0.15                 # 文脈変化の重み
+    mood: 0.15                    # ユーザー感情の重み
+  speak_threshold: 0.60           # 発話スコア閾値

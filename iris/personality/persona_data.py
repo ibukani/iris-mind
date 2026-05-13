@@ -45,9 +45,9 @@ class PersonaData:
         now = datetime.now().isoformat(timespec="minutes")
         entries = self._data.setdefault(key, [])
 
-        normalized = text.replace(" ", "").replace("\u3000", "").replace("\n", "").replace("\r", "")
+        normalized = text.replace(" ", "").replace("　", "").replace("\n", "").replace("\r", "")
         for e in entries:
-            en = e["text"].replace(" ", "").replace("\u3000", "").replace("\n", "").replace("\r", "")
+            en = e["text"].replace(" ", "").replace("　", "").replace("\n", "").replace("\r", "")
             if en == normalized:
                 e["count"] = e.get("count", 1) + 1
                 e["updated_at"] = now

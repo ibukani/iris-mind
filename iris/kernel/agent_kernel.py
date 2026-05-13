@@ -18,6 +18,7 @@ from typing import Any
 from .agent_state import AgentStateManager, State
 from .config import ProactiveConfig
 from .event_bus import (
+    AgentResponseEvent,
     AgentStateChangeEvent,
     EventBus,
     ProactiveSpeechEvent,
@@ -150,6 +151,9 @@ class AgentKernel:
         self._event_bus.subscribe(
             "AgentStateChangeEvent", self._on_state_change
         )
+        self._event_bus.subscribe(
+            "AgentResponseEvent", self._on_agent_response
+        )
 
     # ── タイマースレッド ──────────────────────────────────
 
@@ -181,17 +185,16 @@ class AgentKernel:
     def _on_user_input(self, event: UserInputEvent) -> None:
         """ユーザー入力イベントを処理する。
 
-        状態遷移 + ProactiveEngine 通知 + 記憶記録を行う。
-        会話応答は（将来）ConversationService が担当。
+        - 状態を PROCESSING に遷移（ConversationService が応答を生成中）
+        - ProactiveEngine にユーザー活動を通知
+        - 入力をエピソード記憶に記録
+        - AgentResponseEvent 到着まで IDLE に戻らない
         """
-        if not self._state.is_idle() and not self._state.is_processing():
+        if not self._state.is_idle():
             logger.debug("Ignoring input: state=%s", self._state.current)
             return
 
-        was_idle = self._state.is_idle()
-        if was_idle:
-            self._state.transition(State.PROCESSING)
-
+        self._state.transition(State.PROCESSING)
         self._proactive.notify_user_activity()
 
         self._memory.add_episodic(
@@ -200,7 +203,14 @@ class AgentKernel:
             metadata=event.metadata,
         )
 
-        if was_idle:
+    def _on_agent_response(self, event: AgentResponseEvent) -> None:
+        """応答イベント受信時に PROCESSING → IDLE に遷移する。"""
+        self._memory.add_episodic(
+            content=event.content,
+            kind="assistant",
+            metadata={"model": event.model} if event.model else None,
+        )
+        if self._state.is_processing():
             self._state.transition(State.IDLE)
 
     def _on_proactive_speech(self, event: ProactiveSpeechEvent) -> None:

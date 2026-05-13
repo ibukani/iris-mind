@@ -53,6 +53,13 @@ class MemoryUpdateEvent(Event):
     content: str
 
 
+@dataclass
+class AgentResponseEvent(Event):
+    """会話応答イベント。ConversationService が LLM 応答を発行する。"""
+    content: str
+    model: str = ""
+
+
 class EventBus:
     """
     同期インメモリEventBus。

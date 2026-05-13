@@ -40,6 +40,15 @@ class Config(BaseModel):
     personality: PersonalityConfig = PersonalityConfig()
     memory: MemoryConfig = MemoryConfig()
 
+    @property
+    def model_names(self) -> list[str]:
+        names = [self.model.smart_model]
+        if self.model.fast_model:
+            names.append(self.model.fast_model)
+        if self.model.draft_model:
+            names.append(self.model.draft_model)
+        return names
+
     @classmethod
     def load(cls, path: str = "config.yaml") -> "Config":
         p = Path(path)

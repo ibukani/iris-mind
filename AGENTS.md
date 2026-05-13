@@ -8,9 +8,9 @@ Iris は自律的に行動・進化できるAIアシスタント。Python製でO
 - **コーディングエージェント** → プロジェクトを支援するAI（あなた = 現在の会話相手）
 
 ## ディレクトリ構成
-- `core/` → エンジン本体（config, llm_bridge, personality, reflexion）
+- `core/` → エンジン本体（config, llm_bridge, personality, reflexion, conversation, tool_executor, planner, executor, commands, cli）
 - `capabilities/` → 機能モジュール（file_ops, code_exec, self_mod など）
-- `memory/` → 記憶管理（stores.py, vector_store.py, iris_profile.md）
+- `memory/` → 記憶管理（stores.py, vector_store.py, persona_profile.py, persona_data.py, iris_profile.md）
 - `docs/` → 設計ドキュメント
 - `.agent/` → コーディングエージェント用コンテキスト（context.md, project.md, tasks.md）
 - `AGENTS.md` → プロジェクトルール（このファイル）
@@ -26,8 +26,14 @@ main.py
   ├── core/reflexion.py      (LLMに内省させる外側ループ)
   ├── core/context.py        (会話Compaction・Prune管理)
   ├── core/cli.py            (CliSession: ContextManager使用)
+  ├── core/commands.py       (コマンド処理)
+  ├── core/conversation.py    (会話オーケストレーション: 入力分類→モデル選択→応答生成)
+  ├── core/planner.py        (タスク分解)
+  ├── core/executor.py       (サブタスク逐次実行)
+  ├── core/tool_executor.py  (Tool Call実行共通基盤)
   ├── memory/stores.py       (AgentsMdStore, EpisodicStore, SemanticStore)
-  │     └── memory/vector_store.py (ChromaDB + BM25 ハイブリッド検索)
+  │     └── memory/vector_store.py (ChromaDB + BM25 ハイブリッド検索、スレッドセーフ)
+  ├── memory/persona_data.py (ペルソナデータ専用JSON管理)
   └── capabilities/registry.py (動的モジュール発見・ツール登録)
         ├── capabilities/file_ops/server.py
         ├── capabilities/code_exec/server.py

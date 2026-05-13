@@ -1,5 +1,6 @@
 from __future__ import annotations
 import math
+import threading
 
 import chromadb
 from chromadb.utils import embedding_functions
@@ -22,61 +23,71 @@ class VectorStore:
         self._bm25_doc_freq: dict[str, int] = {}
         self._avgdl: float = 1.0
         self._bm25_dirty = True
+        self._lock = threading.Lock()
 
     def add(self, entry: dict):
-        eid = entry.get("id", str(hash(entry.get("content", ""))))
-        content = entry.get("content", "")
-        metadata = {
-            "type": entry.get("type", "lesson"),
-            "tags": ",".join(entry.get("tags", [])),
-            "timestamp": entry.get("timestamp", ""),
-        }
-        self.collection.add(
-            ids=[eid],
-            documents=[content],
-            metadatas=[metadata],
-        )
-        self._bm25_dirty = True
+        with self._lock:
+            eid = entry.get("id", str(hash(entry.get("content", ""))))
+            content = entry.get("content", "")
+            metadata = {
+                "type": entry.get("type", "lesson"),
+                "tags": ",".join(entry.get("tags", [])),
+                "timestamp": entry.get("timestamp", ""),
+            }
+            self.collection.add(
+                ids=[eid],
+                documents=[content],
+                metadatas=[metadata],
+            )
+            self._bm25_dirty = True
 
     def update(self, entry: dict):
-        eid = entry.get("id", "")
-        if not eid:
-            return
-        content = entry.get("content", "")
-        metadata = {
-            "type": entry.get("type", "lesson"),
-            "tags": ",".join(entry.get("tags", [])),
-            "timestamp": entry.get("timestamp", ""),
-        }
-        self.collection.update(
-            ids=[eid],
-            documents=[content],
-            metadatas=[metadata],
-        )
-        self._bm25_dirty = True
+        with self._lock:
+            eid = entry.get("id", "")
+            if not eid:
+                return
+            content = entry.get("content", "")
+            metadata = {
+                "type": entry.get("type", "lesson"),
+                "tags": ",".join(entry.get("tags", [])),
+                "timestamp": entry.get("timestamp", ""),
+            }
+            self.collection.update(
+                ids=[eid],
+                documents=[content],
+                metadatas=[metadata],
+            )
+            self._bm25_dirty = True
 
     def delete(self, eid: str):
-        self.collection.delete(ids=[eid])
+        with self._lock:
+            self.collection.delete(ids=[eid])
 
     def clear(self):
-        all_ids = self.collection.get()["ids"]
-        if all_ids:
-            self.collection.delete(ids=all_ids)
-        self._all_docs = {}
-        self._doc_lengths = {}
-        self._inverted_index = {}
-        self._bm25_doc_freq = {}
-        self._avgdl = 1.0
-        self._bm25_dirty = True
+        with self._lock:
+            all_ids = self.collection.get()["ids"]
+            if all_ids:
+                self.collection.delete(ids=all_ids)
+            self._all_docs = {}
+            self._doc_lengths = {}
+            self._inverted_index = {}
+            self._bm25_doc_freq = {}
+            self._avgdl = 1.0
+            self._bm25_dirty = True
 
     def count(self) -> int:
-        return self.collection.count()
+        with self._lock:
+            return self.collection.count()
 
     def search(self, query: str, max_results: int = 3, min_score: float = 0.2) -> list[dict]:
-        if self.collection.count() == 0:
-            return []
+        with self._lock:
+            if self.collection.count() == 0:
+                return []
 
-        dense_results = self.collection.query(
+            if self._bm25_dirty:
+                self._rebuild_bm25()
+
+            dense_results = self.collection.query(
             query_texts=[query],
             n_results=max_results * 2,
         )

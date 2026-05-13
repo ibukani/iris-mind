@@ -104,9 +104,14 @@ my-iris/
 │   ├── personality.py   # キャラクター管理
 │   ├── reflexion.py     # 外側ループ
 │   ├── context.py       # 会話Compaction・Prune管理
-│   ├── cli.py           # CliSession (ContextManager使用)
+│   ├── conversation.py  # 会話オーケストレーション（分類・RAG・モデル選択・応答生成）
+│   ├── tool_executor.py # Tool Call実行エンジン（Executor/CliSession共通利用）
+│   ├── cli.py           # CliSession (薄いUI層、会話ロジックはConversationService委譲)
+│   ├── commands.py      # コマンド処理
+│   ├── executor.py      # Plan-and-Execute サブタスク実行
+│   ├── planner.py       # タスク分解エンジン
 │   └── config.py        # 設定管理
-├── capabilities/        # 機能モジュール（5:self_modはPhase5 TODO）
+├── capabilities/        # 機能モジュール
 │   ├── __init__.py
 │   ├── registry.py      # Capability Registry
 │   ├── file_ops/        # ファイル操作
@@ -115,7 +120,9 @@ my-iris/
 ├── memory/              # 記憶管理
 │   ├── __init__.py
 │   ├── stores.py        # 記憶ストア定義
-│   └── vector_store.py  # ベクトルDB
+│   ├── vector_store.py  # ベクトルDB + BM25（スレッドセーフ）
+│   ├── persona_profile.py # ペルソナ管理
+│   └── persona_data.py  # ペルソナデータ（専用JSON、SemanticStore非依存）
 ├── docs/                # ドキュメント
 ├── config.yaml          # 設定ファイル
 ├── memory/iris_profile.md  # 構造記憶（上限2KB）

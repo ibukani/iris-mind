@@ -7,6 +7,8 @@ import sys
 import time
 from pathlib import Path
 
+from core.config import Config
+
 os.environ.setdefault("OLLAMA_GPU_LAYERS", "99")
 
 
@@ -72,32 +74,23 @@ def _restart_ollama():
     time.sleep(5)
 
 
-def _stop_config_models(config: dict):
-    """config.yamlに記載されたモデルを停止する。"""
-    model_section = config.get("model", {})
-    for key in ("smart_model", "fast_model", "draft_model"):
-        m = model_section.get(key)
-        if m:
-            try:
-                subprocess.run(["ollama", "stop", m],
-                               capture_output=True, timeout=10)
-            except Exception:
-                pass
+def _stop_config_models(config: Config):
+    """Configに記載されたモデルを停止する。"""
+    for name in config.model_names:
+        try:
+            subprocess.run(["ollama", "stop", name],
+                           capture_output=True, timeout=10)
+        except Exception:
+            pass
 
 
-def _ensure_config_models(config_path: Path) -> bool:
-    """config.yamlのモデルがpull済みか確認する（yamlはここで1回だけパース）。"""
-    import yaml
-    raw = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
-    config = yaml.safe_load(raw) if raw else {}
-
+def _ensure_config_models(config: Config) -> bool:
+    """Configのモデルがpull済みか確認する。"""
     _stop_config_models(config)
     time.sleep(0.5)
 
-    model_section = config.get("model", {})
-    for key in ("smart_model", "fast_model", "draft_model"):
-        m = model_section.get(key)
-        if m and not _ensure_model_pulled(m):
+    for name in config.model_names:
+        if not _ensure_model_pulled(name):
             return False
     return True
 
@@ -107,17 +100,16 @@ def run():
     project_root = Path(__file__).parent
     config_path = project_root / "config.yaml"
 
+    config = Config.load(str(config_path))
+
     _restart_ollama()
 
-    if not _ensure_config_models(config_path):
+    if not _ensure_config_models(config):
         print("必要なモデルが利用できません。プログラムを終了します。", file=sys.stderr)
         sys.exit(1)
 
-    from core.config import Config
     from core.llm_bridge import LLMBridge
     from core.cli import CliSession
-
-    config = Config.load(str(config_path))
 
     llm = LLMBridge(
         model_name=config.model.smart_model,

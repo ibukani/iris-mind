@@ -31,6 +31,7 @@ class LLMBridge:
     def chat(
         self,
         messages: list[dict],
+        model: str | None = None,
         enable_thinking: bool = False,
         temperature: float = 0.7,
         max_tokens: int = 4096,
@@ -38,6 +39,7 @@ class LLMBridge:
         on_token: Callable[[str], None] | None = None,
         keep_alive: str | None = None,
     ) -> dict:
+        effective_model = model or self.model_name
         options = {
             "temperature": temperature,
             "num_predict": max_tokens,
@@ -48,7 +50,7 @@ class LLMBridge:
         }
 
         kwargs = {
-            "model": self.model_name,
+            "model": effective_model,
             "messages": messages,
             "options": options,
             "stream": on_token is not None,

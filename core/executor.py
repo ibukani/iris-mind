@@ -5,11 +5,14 @@ if TYPE_CHECKING:
     from core.llm_bridge import LLMBridge
     from capabilities.registry import CapabilityRegistry
 
+from core.tool_executor import ToolExecutionEngine
+
 
 class Executor:
     """サブタスク逐次実行エンジン。Plan-and-Execute の実行フェーズ。"""
 
     def __init__(self, llm: LLMBridge, registry: CapabilityRegistry):
+        self.engine = ToolExecutionEngine(llm, registry)
         self.llm = llm
         self.registry = registry
 
@@ -68,15 +71,7 @@ class Executor:
             ctx.append(msg)
 
             if msg.get("tool_calls"):
-                for tc in msg["tool_calls"]:
-                    func_name = tc["function"]["name"]
-                    args = tc["function"]["arguments"]
-                    result = self.registry.execute(func_name, **args)
-                    ctx.append({
-                        "role": "tool",
-                        "name": func_name,
-                        "content": result,
-                    })
+                self.engine.execute_all(ctx)
 
                 final = self.llm.chat(
                     messages=[{"role": "system", "content": system_prompt}, *ctx],

@@ -32,17 +32,25 @@ Self-Modification Module (差分生成→承認→テスト→登録)
 ### core/ — エンジン本体
 | ファイル | 責務 | 公開API |
 |----------|------|---------|
-| `config.py` | 設定管理 | `Config.load()` → yaml → pydantic |
-| `llm_bridge.py` | LLM抽象化 | `chat()`, `set_model()`, `is_available()` |
+| `config.py` | 設定管理 | `Config.load()` → yaml → pydantic, `Config.model_names` プロパティ |
+| `llm_bridge.py` | LLM抽象化 | `chat(model=...)`, `set_model()`, `is_available()` |
 | `personality.py` | キャラ管理 | `build_system_prompt()`, `build_thinking_prompt()` |
-| `reflexion.py` | 内省ループ | `reflect()` → dict(summary, lesson, missing_capability...) |
+| `reflexion.py` | 内省ループ | `reflect()` → dict, `quick_reflect()` |
 | `context.py` | 会話Compaction管理 | `ContextManager.check_and_summarize()`, `force_summarize()`, `build_compact_messages()` |
+| `conversation.py` | 会話オーケストレーション | `ConversationService.process_input()` → ProcessResult |
+| `tool_executor.py` | Tool Call実行共通基盤 | `ToolExecutionEngine.execute_all()`, `should_follow_up()` |
+| `planner.py` | タスク分解 | `Planner.analyze()`, `is_complex()` |
+| `executor.py` | サブタスク逐次実行 | `Executor.execute_plan()`（内部でToolExecutionEngine利用） |
+| `commands.py` | コマンド処理 | `handle_command()` → `CommandResult` |
+| `cli.py` | 薄いUI層 | `CliSession.run()`（会話ロジックはConversationService委譲） |
 
 ### memory/ — 記憶管理
 | ファイル | 責務 | 公開API |
 |----------|------|---------|
 | `stores.py` | 3種の記憶ストア | `AgentsMdStore.load/update`, `EpisodicStore.add/get_recent`, `SemanticStore.add/search` |
-| `vector_store.py` | ベクトルDB + BM25 | `VectorStore.add/update/search/delete/count` |
+| `vector_store.py` | ベクトルDB + BM25（スレッドセーフ） | `VectorStore.add/update/search/delete/count` |
+| `persona_profile.py` | ペルソナ管理 | `PersonaProfile.get_speech_style()`, `get_traits()`, `update_from_reflection()` |
+| `persona_data.py` | ペルソナデータ（専用JSON） | `PersonaData.add_entry()`, `get_top()`, `get_all()`, `clear()` |
 | `iris_profile.md` | 構造記憶（2KB上限） | Iris自身の自己認識ファイル |
 
 ### capabilities/ — 機能モジュール
@@ -61,19 +69,22 @@ Self-Modification Module (差分生成→承認→テスト→登録)
 ## データフロー
 
 ### 起動時
-1. `Config.load()` → yaml読込
-2. `LLMBridge` → Ollama接続確認
-3. `CapabilityRegistry.discover_modules()` → tool定義収集
-4. `AgentsMdStore` → 構造記憶読込
-5. 直近のEpisodicStore, SemanticStoreを取得
-6. メインループ開始
+1. `Config.load()` → yaml読込（唯一のパース箇所）
+2. Ollama再起動 + Configから指定モデルを確認・pull
+3. `LLMBridge` → Ollama接続確認
+4. `CapabilityRegistry.discover_modules()` → tool定義収集
+5. `AgentsMdStore` → 構造記憶読込、`PersonaData` → ペルソナJSON読込
+6. 直近のEpisodicStore, SemanticStoreを取得
+7. メインループ開始
 
 ### 会話時
-1. ユーザー入力 → コマンド処理 or LLMへ送信
-2. コンテキスト要約判定: compaction_threshold超過時はContextManagerが自動要約（fast_model使用）
-3. システムプロンプト = personality + 会話要約 + 構造記憶 + 最近のepisode + 関連lesson(RAG)
-4. LLM応答 → tool_callがあれば実行 → 結果を再送 → 最終応答表示
-5. 終了時: Reflexion → エピソード保存 + 教訓抽出
+1. CliSession: ユーザー入力受付 → コマンド or ConversationServiceへ委譲
+2. ConversationService: 入力分類 + モデル選択 + コンテキスト要約判定
+3. システムプロンプト構築: personality + 会話要約 + 構造記憶 + 最近のepisode + 関連lesson(RAG)
+4. Plan-and-Execute or 通常応答: ToolExecutionEngineでtool_call共通処理
+5. 定期Reflection（5メッセージごとにquick_reflect）
+6. CliSession: 応答表示
+7. 終了時: Reflexion → エピソード保存 + 教訓抽出
 
 ## 設定（config.yaml）
 ```yaml

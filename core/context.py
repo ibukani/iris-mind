@@ -84,20 +84,14 @@ class ContextManager:
         ]
         prompt += "\n\n" + json.dumps(msgs, ensure_ascii=False)
 
-        prev_model = self.llm.model_name
-        if self.fast_model:
-            self.llm.set_model(self.fast_model)
-        try:
-            resp = self.llm.chat(
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
-                max_tokens=500,
-                keep_alive="0",
-            )
-            return resp["message"].get("content", "").strip()
-        finally:
-            if self.fast_model:
-                self.llm.set_model(prev_model)
+        resp = self.llm.chat(
+            messages=[{"role": "user", "content": prompt}],
+            model=self.fast_model,
+            temperature=0.3,
+            max_tokens=500,
+            keep_alive="0",
+        )
+        return resp["message"].get("content", "").strip()
 
     def build_compact_messages(
         self,

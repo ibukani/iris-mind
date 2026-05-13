@@ -2,6 +2,7 @@
 ConversationService — 会話処理パイプライン。
 
 UserInputEvent を購読し、LLM 応答を生成 → AgentResponseEvent を発行する。
+一定ターン数ごとに Reflexion による自己反省を実行し、結果を SemanticStore に保存する。
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ class ConversationService:
     1. Personality でシステムプロンプト構築
     2. LLM 呼び出し
     3. AgentResponseEvent 発行
+    4. Nターンごとに Reflexion.quick_reflect → SemanticStore 保存
     """
 
     def __init__(
@@ -34,13 +36,18 @@ class ConversationService:
         llm: Any,
         personality: Any,
         config: Config,
+        reflexion: Any | None = None,
+        reflect_interval: int = 3,
     ) -> None:
         self._event_bus = event_bus
         self._memory = memory
         self._llm = llm
         self._personality = personality
         self._model_config = config.model
+        self._reflexion = reflexion
+        self._reflect_interval = reflect_interval
         self._messages: list[dict] = []
+        self._msg_count_since_reflect: int = 0
 
         self._event_bus.subscribe("UserInputEvent", self._on_user_input)
 
@@ -66,6 +73,80 @@ class ConversationService:
             )
         )
 
+        self._msg_count_since_reflect += 1
+        self._maybe_quick_reflect()
+
+    # ── Reflexion ────────────────────────────────────────
+
+    def _maybe_quick_reflect(self) -> None:
+        """Nターンごとに quick_reflect を実行し結果を SemanticStore に保存する。"""
+        if self._reflexion is None:
+            return
+        if self._msg_count_since_reflect < self._reflect_interval:
+            return
+        if len(self._messages) < 2:
+            return
+
+        self._msg_count_since_reflect = 0
+        try:
+            result = self._reflexion.quick_reflect(self._messages)
+
+            if result.get("speech_style"):
+                self._memory.add_semantic_by_type(
+                    entry_type="trait",
+                    content=f"Irisの話し方: {result['speech_style']}",
+                    tags=["speech_style"],
+                )
+            if result.get("expressed_traits"):
+                self._memory.add_semantic_by_type(
+                    entry_type="trait",
+                    content=f"Irisの性格特性: {result['expressed_traits']}",
+                    tags=["personality_trait"],
+                )
+            if result.get("user_reaction"):
+                self._memory.add_semantic_by_type(
+                    entry_type="preference",
+                    content=f"ユーザーの反応傾向: {result['user_reaction']}",
+                    tags=["user_reaction"],
+                )
+            logger.info(
+                "Quick reflect stored: speech_style=%s traits=%s reaction=%s",
+                bool(result.get("speech_style")),
+                bool(result.get("expressed_traits")),
+                bool(result.get("user_reaction")),
+            )
+        except Exception as e:
+            logger.exception("Quick reflect failed: %s", e)
+
+    def session_reflect(self) -> None:
+        """セッション終了時に full reflect を実行する。"""
+        if self._reflexion is None:
+            return
+        if len(self._messages) < 2:
+            return
+
+        try:
+            result = self._reflexion.reflect(self._messages)
+            if result.get("summary"):
+                self._memory.add_episodic(
+                    content=f"[session summary] {result['summary']}",
+                    kind="system",
+                )
+            for key, entry_type in [
+                ("lesson", "lesson"),
+                ("preference", "preference"),
+                ("improvement", "lesson"),
+            ]:
+                val = result.get(key, "")
+                if val:
+                    self._memory.add_semantic_by_type(
+                        entry_type=entry_type,
+                        content=val,
+                    )
+            logger.info("Session reflect completed")
+        except Exception as e:
+            logger.exception("Session reflect failed: %s", e)
+
     # ── LLM 呼び出し ─────────────────────────────────────
 
     def _call_llm(self) -> str:
@@ -85,4 +166,5 @@ class ConversationService:
     def clear_history(self) -> None:
         """会話履歴をクリアする。"""
         self._messages.clear()
+        self._msg_count_since_reflect = 0
         logger.info("Conversation history cleared")

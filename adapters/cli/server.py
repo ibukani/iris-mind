@@ -26,6 +26,7 @@ from iris.kernel.event_bus import (
 )
 from iris.kernel.memory_manager import MemoryManager
 from iris.kernel.proactive import ProactiveEngine
+from iris.kernel.reflexion import Reflexion
 from iris.llm.llm_bridge import LLMBridge
 from iris.personality.personality import Personality
 from memory.stores import EpisodicStore, SemanticStore
@@ -98,12 +99,14 @@ class CLIAdapter:
             num_ctx=self._config.model.num_ctx,
         )
         self._personality = Personality(name=self._config.personality.name)
+        self._reflexion = Reflexion(llm=self._llm)
         self._conversation = ConversationService(
             event_bus=self._event_bus,
             memory=self._memory,
             llm=self._llm,
             personality=self._personality,
             config=self._config,
+            reflexion=self._reflexion,
         )
 
     def _init_events(self) -> None:
@@ -154,7 +157,8 @@ class CLIAdapter:
             self.shutdown()
 
     def shutdown(self) -> None:
-        """カーネルを停止する。"""
+        """カーネルを停止し、セッション反省を実行する。"""
+        self._conversation.session_reflect()
         self._kernel.shutdown()
         console.print("[dim]Shutdown complete.[/dim]")
 

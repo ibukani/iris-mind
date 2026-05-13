@@ -223,6 +223,62 @@ if response2_events:
 kernel.shutdown()
 
 
+# ── Test 6: Reflexion integration ───────────────────────
+print("\n=== Test 6: Reflexion integration ===")
+
+class MockReflexion:
+    def quick_reflect(self, _messages: list[dict]) -> dict[str, str]:
+        return {
+            "speech_style": "丁寧で親しみやすい",
+            "expressed_traits": "好奇心旺盛",
+            "user_reaction": "簡潔な回答を好む",
+        }
+    def reflect(self, _messages: list[dict]) -> dict[str, str]:
+        return {
+            "summary": "テストセッション",
+            "lesson": "テストの教訓",
+            "preference": "ユーザーは簡潔な回答を好む",
+            "improvement": "",
+            "missing_capability": "",
+            "speech_style": "丁寧",
+            "expressed_traits": "好奇心旺盛",
+            "user_reaction": "ポジティブ",
+        }
+
+_tmp3 = Path(tempfile.mkdtemp(prefix="iris_step6_reflect_"))
+episodic3 = EpisodicStore(str(_tmp3 / "episodes.jsonl"), max_entries=10)
+semantic3 = SemanticStore(str(_tmp3 / "semantic.jsonl"), max_entries=10, vector_db_path=str(_tmp3 / "chroma"))
+memory3 = MemoryManager(episodic=episodic3, semantic=semantic3)
+bus3 = EventBus()
+
+cs3 = ConversationService(
+    event_bus=bus3,
+    memory=memory3,
+    llm=MockLLM(),
+    personality=MockPersonality(),
+    config=config,
+    reflexion=MockReflexion(),
+    reflect_interval=1,  # every turn
+)
+
+bus3.publish(UserInputEvent(timestamp=datetime.now(), source="user_input", content="hello"))
+bus3.publish(UserInputEvent(timestamp=datetime.now(), source="user_input", content="how are you?"))
+
+semantic_results = memory3.search_semantic("話し方", max_results=5)
+check("semantic has speech_style from quick_reflect",
+      any("丁寧" in r.get("content", "") for r in semantic_results))
+
+semantic_results2 = memory3.search_semantic("性格", max_results=5)
+check("semantic has traits from quick_reflect",
+      any("好奇心旺盛" in r.get("content", "") for r in semantic_results2))
+
+# Session reflect
+cs3.session_reflect()
+recent2 = memory3.get_recent(5)
+check("session reflect stored to episodic",
+      any("summary]" in r.get("summary", "") for r in recent2))
+
+
 # ── Summary ─────────────────────────────────────────────
 print(f"\n{'='*40}")
 print(f"Results: {passed} passed, {failed} failed")

@@ -20,11 +20,13 @@ Iris は自律的に行動・進化できるAIアシスタント。Python製でO
 ## コンポーネント間依存関係
 ```
 main.py
-  ├── core/config.py       (pydantic BaseModel, yaml読込)
-  ├── core/llm_bridge.py   (ollama.Client ラッパー)
-  ├── core/personality.py   (システムプロンプト構築)
-  ├── core/reflexion.py     (LLMに内省させる外側ループ)
-  ├── memory/stores.py      (AgentsMdStore, EpisodicStore, SemanticStore)
+  ├── core/config.py        (pydantic BaseModel, yaml読込)
+  ├── core/llm_bridge.py    (ollama.Client ラッパー)
+  ├── core/personality.py    (システムプロンプト構築)
+  ├── core/reflexion.py      (LLMに内省させる外側ループ)
+  ├── core/context.py        (会話Compaction・Prune管理)
+  ├── core/cli.py            (CliSession: ContextManager使用)
+  ├── memory/stores.py       (AgentsMdStore, EpisodicStore, SemanticStore)
   │     └── memory/vector_store.py (ChromaDB + BM25 ハイブリッド検索)
   └── capabilities/registry.py (動的モジュール発見・ツール登録)
         ├── capabilities/file_ops/server.py
@@ -60,7 +62,9 @@ main.py
 - `tool/complex` は大モデル、それ以外は小モデルを使用
 - plan_mode / thinking_mode がONの場合は常に大モデルを使用
 - 小モデルにはツール定義を渡さない（ツール呼び出し不可のため）
-- 会話履歴は `context_window`（トークン数）を超えた場合、古いものから順に削除
+- 会話履歴は `context_window`（トークン数）を超えた場合、`compaction_threshold` に基づき自動要約（ContextManager）
+- 要約は `## 会話の経緯` としてシステムプロンプトに注入。`/compact` コマンドで手動トリガー可能
+- 要約時は `fast_model` を使用（コンパクション専用LLM呼び出しを高速化）
 
 ## ドキュメント更新義務
 機能追加・変更を行った場合、該当する以下のドキュメントを必ず同時に更新する：

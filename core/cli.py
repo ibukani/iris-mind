@@ -24,6 +24,7 @@ from core.personality import Personality
 from core.reflexion import Reflexion
 from core.planner import Planner
 from core.executor import Executor
+from core.context import ContextManager
 from core.commands import CommandContext, handle_command, _run_reflexion_and_save
 from memory.persona_profile import PersonaProfile
 from memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
@@ -34,7 +35,7 @@ PROJECT_ROOT = Path(__file__).parent.parent
 _RAG_EXECUTOR = ThreadPoolExecutor(max_workers=1)
 
 _COMMANDS = [
-    "/help", "/think", "/plan", "/model", "/clear", "/exit", "/quit",
+    "/help", "/think", "/plan", "/compact", "/model", "/clear", "/exit", "/quit",
     "/capabilities", "/memory", "/memory-clear", "/persona",
 ]
 
@@ -234,6 +235,11 @@ class CliSession:
         self.planner = Planner(llm=llm)
         self.executor = Executor(llm=llm, registry=self.registry)
 
+        self.context_manager = ContextManager(
+            llm=llm,
+            fast_model=config.model.fast_model,
+        )
+
         self.ctx = CommandContext(
             llm=llm, config=config,
             config_path=str(PROJECT_ROOT / "config.yaml"),
@@ -244,6 +250,7 @@ class CliSession:
             planner=self.planner,
             executor=self.executor,
             persona_profile=self.persona_profile,
+            context_manager=self.context_manager,
         )
         self.messages: list[dict] = []
 
@@ -312,6 +319,13 @@ class CliSession:
                 tools_list = None
                 console.print(f"[blue]  Model:[/blue] {self.config.model.fast_model} [dim]({scenario}, max_tokens={max_tokens})[/dim]")
 
+            # コンテキスト要約（閾値超過時のみLLM呼び出し）
+            _conversation_summary = self.context_manager.check_and_summarize(
+                self.messages,
+                context_window=self.config.model.context_window,
+                threshold=self.config.model.compaction_threshold,
+            )
+
             # 系統プロンプト構築
             _pref_results = self.semantic.search("ユーザーの好み user preference", max_results=3)
             _pref_text = "\n".join(f"- {p['content'][:120]}" for p in _pref_results) if _pref_results else ""
@@ -320,6 +334,7 @@ class CliSession:
                 speech_style=self.persona_profile.get_speech_style(),
                 personality_traits=self.persona_profile.get_traits(),
                 user_preferences=_pref_text,
+                conversation_summary=_conversation_summary,
             )
 
             recent_episodes = self.episodic.get_recent(3)

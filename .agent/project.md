@@ -10,6 +10,8 @@ Personality Layer (思考モード切替)
        │
 Conversation Manager (短期記憶 + 長期記憶)
        │
+Context Manager (会話Compaction・Prune管理)
+       │
 Task Engine (Simple ReAct / Complex Plan-then-Execute)
        │
 Capability Registry (MCPベースのツール管理)
@@ -34,6 +36,7 @@ Self-Modification Module (差分生成→承認→テスト→登録)
 | `llm_bridge.py` | LLM抽象化 | `chat()`, `set_model()`, `is_available()` |
 | `personality.py` | キャラ管理 | `build_system_prompt()`, `build_thinking_prompt()` |
 | `reflexion.py` | 内省ループ | `reflect()` → dict(summary, lesson, missing_capability...) |
+| `context.py` | 会話Compaction管理 | `ContextManager.check_and_summarize()`, `force_summarize()`, `build_compact_messages()` |
 
 ### memory/ — 記憶管理
 | ファイル | 責務 | 公開API |
@@ -67,13 +70,14 @@ Self-Modification Module (差分生成→承認→テスト→登録)
 
 ### 会話時
 1. ユーザー入力 → コマンド処理 or LLMへ送信
-2. システムプロンプト = personality + 構造記憶 + 最近のepisode + 関連lesson(RAG)
-3. LLM応答 → tool_callがあれば実行 → 結果を再送 → 最終応答表示
-4. 終了時: Reflexion → エピソード保存 + 教訓抽出
+2. コンテキスト要約判定: compaction_threshold超過時はContextManagerが自動要約（fast_model使用）
+3. システムプロンプト = personality + 会話要約 + 構造記憶 + 最近のepisode + 関連lesson(RAG)
+4. LLM応答 → tool_callがあれば実行 → 結果を再送 → 最終応答表示
+5. 終了時: Reflexion → エピソード保存 + 教訓抽出
 
 ## 設定（config.yaml）
 ```yaml
-model:        # name, fast_model, base_url, max_tokens, max_tokens_fast, temperature, context_window
+model:        # name, fast_model, base_url, max_tokens, max_tokens_fast, temperature, context_window, compaction_threshold
 personality:  # name, thinking_mode_default
 memory:       # paths, 各上限値, RAG設定
 ```

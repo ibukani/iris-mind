@@ -37,6 +37,7 @@ class CommandContext:
     planner: object = field(default=None, repr=False)
     executor: object = field(default=None, repr=False)
     persona_profile: PersonaProfile | None = None
+    context_manager: object = field(default=None, repr=False)
 
 
 def _run_reflexion_and_save(
@@ -88,6 +89,8 @@ def handle_command(cmd: str, ctx: CommandContext,
             console.print(Panel(
                 "[bold]/think[/bold] - toggle thinking mode\n"
                 "[bold]/plan[/bold] - toggle plan-and-execute mode\n"
+                "/compact - compact conversation history (preserves summary)\n"
+                "/compact <instructions> - compact with custom instructions\n"
                 "/model <name> - switch model\n"
                 "/capabilities - list registered capabilities\n"
                 "/persona - show/manage my personality\n"
@@ -136,7 +139,13 @@ def handle_command(cmd: str, ctx: CommandContext,
             _handle_memory_clear(ctx)
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
 
+        case ["/compact", *rest]:
+            _handle_compact(ctx, messages, rest)
+            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
+
         case ["/clear"]:
+            if ctx.context_manager:
+                ctx.context_manager.clear()
             messages.clear()
             console.print("[yellow]Conversation cleared[/yellow]")
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
@@ -237,6 +246,34 @@ def _handle_persona_list(ctx: CommandContext):
     profile_size = len(profile_path.read_text(encoding="utf-8")) if profile_path.exists() else 0
     table.add_row("Profile Size", f"{profile_size} bytes")
     console.print(table)
+
+
+def _handle_compact(ctx: CommandContext, messages: list, args: list[str]):
+    cm = ctx.context_manager
+    if not cm:
+        console.print("[yellow]Context manager not initialized[/yellow]")
+        return
+
+    instructions = " ".join(args) if args else ""
+    preserve = 6
+
+    try:
+        summary = cm.force_summarize(messages, instructions=instructions, preserve_last=preserve)
+    except Exception as e:
+        console.print(f"[red]Compaction failed: {e}[/red]")
+        return
+
+    if not summary:
+        console.print("[yellow]Compaction produced no summary[/yellow]")
+        return
+
+    compacted = cm.build_compact_messages(messages, preserve_last=preserve)
+    messages[:] = compacted
+
+    old_count = len(messages)
+    console.print(
+        f"[yellow]Conversation compacted: {old_count} messages retained[/yellow]"
+    )
 
 
 def _handle_persona_set(ctx: CommandContext, target: str, rest: list[str]):

@@ -15,6 +15,7 @@ class ModelConfig(BaseModel):
     num_gpu: int = 0
     num_ctx: int = 8192
     context_window: int = 0
+    compaction_threshold: float = 0.85
 
 
 class PersonalityConfig(BaseModel):

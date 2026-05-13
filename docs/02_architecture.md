@@ -10,6 +10,14 @@
 └─────────────────────────────────────────────────────┘
                           │
 ┌─────────────────────────────────────────────────────┐
+│          ContextManager (ContextLayer)                │
+│  会話Compaction（要約 + 最新メッセージ保持）         │
+│  自動 compaction_threshold 判定                      │
+│  手動 /compact コマンド                              │
+│  fast_model 使用で高速LLM要約                        │
+└─────────────────────────────────────────────────────┘
+                          │
+┌─────────────────────────────────────────────────────┐
 │                Conversation Manager                  │
 │  短期記憶（セッション内）                            │
 │  長期記憶（ベクトルDB + サマリー）                    │
@@ -95,6 +103,8 @@ my-iris/
 │   ├── llm_bridge.py   # LLM抽象化層
 │   ├── personality.py   # キャラクター管理
 │   ├── reflexion.py     # 外側ループ
+│   ├── context.py       # 会話Compaction・Prune管理
+│   ├── cli.py           # CliSession (ContextManager使用)
 │   └── config.py        # 設定管理
 ├── capabilities/        # 機能モジュール（5:self_modはPhase5 TODO）
 │   ├── __init__.py

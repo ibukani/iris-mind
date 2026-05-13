@@ -25,9 +25,9 @@ class SemanticStoreProtocol(Protocol):
 
 
 class AgentsMdStore:
-    """構造記憶。memory/data/iris_profile.mdの読み書き。"""
+    """構造記憶。.iris/data/iris_profile.mdの読み書き。"""
 
-    def __init__(self, path: str = "memory/data/iris_profile.md", max_bytes: int = 2048):
+    def __init__(self, path: str = ".iris/data/iris_profile.md", max_bytes: int = 2048):
         self.path = Path(path)
         self.max_bytes = max_bytes
 
@@ -55,7 +55,7 @@ class AgentsMdStore:
 class EpisodicStore:
     """エピソード記憶。上限到達時は古いものを削除。"""
 
-    def __init__(self, path: str = "memory/data/episodes.jsonl", max_entries: int = 30):
+    def __init__(self, path: str = ".iris/data/episodes.jsonl", max_entries: int = 30):
         self.path = Path(path)
         self.max_entries = max_entries
 
@@ -91,9 +91,9 @@ class SemanticStore:
 
     def __init__(
         self,
-        path: str = "memory/data/semantic.jsonl",
+        path: str = ".iris/data/semantic.jsonl",
         max_entries: int = 100,
-        vector_db_path: str = "memory/data/chroma_db",
+        vector_db_path: str = ".iris/data/chroma_db",
     ):
         self.path = Path(path)
         self.max_entries = max_entries

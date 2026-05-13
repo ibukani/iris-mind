@@ -86,17 +86,17 @@ class ProactiveConfig(BaseModel):
 class PersonalityConfig(BaseModel):
     name: str = "Iris"
     thinking_mode_default: bool = False
-    prompt_file: str = "memory/personality_default.md"
+    prompt_file: str = ".iris/config/personality_default.md"
 
 
 class MemoryConfig(BaseModel):
-    episodic_path: str = "memory/data/episodes.jsonl"
-    semantic_path: str = "memory/data/semantic.jsonl"
-    vector_db_path: str = "memory/data/chroma_db"
+    episodic_path: str = ".iris/data/episodes.jsonl"
+    semantic_path: str = ".iris/data/semantic.jsonl"
+    vector_db_path: str = ".iris/data/chroma_db"
     episodic_max_entries: int = 30
     semantic_max_entries: int = 100
     rag_max_results: int = 3
-    agents_md_path: str = "memory/data/iris_profile.md"
+    agents_md_path: str = ".iris/data/iris_profile.md"
     agents_md_max_bytes: int = 2048
 
 

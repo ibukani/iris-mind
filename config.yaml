@@ -1,12 +1,12 @@
 memory:
   agents_md_max_bytes: 2048
-  agents_md_path: memory/data/iris_profile.md
+  agents_md_path: .iris/data/iris_profile.md
   episodic_max_entries: 30
-  episodic_path: memory/data/episodes.jsonl
+  episodic_path: .iris/data/episodes.jsonl
   rag_max_results: 3
   semantic_max_entries: 100
-  semantic_path: memory/data/semantic.jsonl
-  vector_db_path: memory/data/chroma_db
+  semantic_path: .iris/data/semantic.jsonl
+  vector_db_path: .iris/data/chroma_db
 model:
   base_url: http://localhost:11434
   compaction_threshold: 0.85
@@ -28,7 +28,7 @@ model:
   temperature: 0.7
 personality:
   name: Iris
-  prompt_file: memory/personality_default.md
+  prompt_file: .iris/config/personality_default.md
   mode_default: auto
 # ===== 新規: 自律的会話設定 =====
 proactive:

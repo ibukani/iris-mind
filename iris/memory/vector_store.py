@@ -10,7 +10,7 @@ from chromadb.utils import embedding_functions
 class VectorStore:
     """ChromaDB + BM25 ハイブリッド検索エンジン"""
 
-    def __init__(self, path: str = "memory/data/chroma_db"):
+    def __init__(self, path: str = ".iris/data/chroma_db"):
         self.client = chromadb.PersistentClient(path=path)
         self.dense_ef = embedding_functions.ONNXMiniLM_L6_V2()
         self.collection = self.client.get_or_create_collection(

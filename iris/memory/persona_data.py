@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-_DEFAULT_PATH = "memory/data/persona_data.json"
+_DEFAULT_PATH = ".iris/data/persona_data.json"
 
 _PERSONA_CATEGORIES = {
     "speech_style": "speech_styles",

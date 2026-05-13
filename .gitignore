@@ -2,10 +2,6 @@
 __pycache__/
 *.pyc
 *.pyo
-memory/data/chroma_db/
-memory/data/episodes.jsonl
-memory/data/semantic.jsonl
-memory/data/persona_data.json
 .DS_Store
 *.log
 *.egg-info/
@@ -13,9 +9,10 @@ dist/
 build/
 .iris_history
 
+# Data files (runtime generated)
+.iris/data/
+
 # Test artifacts
 chroma_test/
 *tmp_chroma/
 tmp_chroma_test/
-__pycache__/
-*.pyc

@@ -20,13 +20,17 @@ metadata:
 
 | 変更対象 | 更新すべき文書 |
 |----------|---------------|
-| アーキテクチャ変更 | `02_architecture.md` |
-| 記憶システム変更 | `03_memory_system.md` |
-| 自己改変機能変更 | `04_self_mod.md` |
-| 概念・設計思想変更 | `01_concept.md` |
+| アーキテクチャ変更 | `architecture.md` |
+| 記憶システム変更 | `memory-manager.md` |
+| EventBus変更 | `event-bus.md` |
+| AgentState変更 | `agent-state.md` |
+| 自発発話変更 | `proactive-engine.md` |
+| AgentKernel変更 | `agent-kernel.md` |
+| ConversationService変更 | `conversation-service.md` |
+| 設定変更 | `config.md` |
 | 新機能全般 | 該当する文書がない場合は新規作成を検討 |
 
-### 2. 構造記憶 `memory/data/iris_profile.md`
+### 2. 構造記憶 `.iris/data/iris_profile.md`
 
 - `## My Capabilities` セクション：capability の追加・削除・名称変更があった場合
 - `## Known Structure` セクション：ディレクトリ構成やコアファイル構成が変わった場合

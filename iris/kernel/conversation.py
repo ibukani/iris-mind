@@ -145,7 +145,7 @@ class ConversationService:
             if result.get("summary"):
                 self._memory.add_episodic(
                     content=f"[session summary] {result['summary']}",
-                    kind="system",
+                    _kind="system",
                 )
             for key, entry_type in [
                 ("lesson", "lesson"),

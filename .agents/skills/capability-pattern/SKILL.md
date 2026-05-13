@@ -49,7 +49,7 @@ def register(registry: CapabilityRegistry):
 capability の `server.py` を作成すると、起動時に `CapabilityRegistry.discover_modules()` が自動発見する。
 手動での registry 登録は不要。
 
-### 3. Update `memory/data/iris_profile.md`
+### 3. Update `.iris/data/iris_profile.md`
 
 `## My Capabilities` セクションに追加する：
 ```markdown

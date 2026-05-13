@@ -83,16 +83,9 @@ class MemoryManager:
     def add_episodic(
         self,
         content: str,
-        kind: str = "user_input",
+        _kind: str = "user_input",
         metadata: dict[str, Any] | None = None,
     ) -> None:
-        """エピソード記憶に追加する。
-
-        Args:
-            content: 記憶の内容
-            kind: 種別（'user_input', 'assistant', 'proactive', 'system'）
-            metadata: 追加メタデータ
-        """
         summary = content
         if metadata:
             tags = " ".join(f"{k}={v}" for k, v in metadata.items())

@@ -80,13 +80,13 @@ trigger_weights:
 
 | フィールド | 型 | デフォルト | 説明 |
 |-----------|-----|-----------|------|
-| episodic_path | str | "memory/data/episodes.jsonl" | エピソード記憶ファイル |
-| semantic_path | str | "memory/data/semantic.jsonl" | 意味記憶ファイル |
-| vector_db_path | str | "memory/data/chroma_db" | ChromaDBディレクトリ |
+| episodic_path | str | ".iris/data/episodes.jsonl" | エピソード記憶ファイル |
+| semantic_path | str | ".iris/data/semantic.jsonl" | 意味記憶ファイル |
+| vector_db_path | str | ".iris/data/chroma_db" | ChromaDBディレクトリ |
 | episodic_max_entries | int | 30 | エピソード記憶上限 |
 | semantic_max_entries | int | 100 | 意味記憶上限 |
 | rag_max_results | int | 3 | RAG検索最大件数 |
-| agents_md_path | str | "memory/data/iris_profile.md" | 構造記憶ファイル |
+| agents_md_path | str | ".iris/data/iris_profile.md" | 構造記憶ファイル |
 | agents_md_max_bytes | int | 2048 | 構造記憶最大サイズ |
 
 ## config.yaml 例

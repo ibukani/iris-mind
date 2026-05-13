@@ -8,38 +8,42 @@ Iris は自律的に行動・進化できるAIアシスタント。Python製でO
 - **コーディングエージェント** → プロジェクトを支援するAI（あなた = 現在の会話相手）
 
 ## ディレクトリ構成
-### v0.1（旧、段階的移行中）
-- `core/` → エンジン本体（config, llm_bridge, personality, reflexion, conversation, tool_executor, planner, executor, commands, cli）
-- `capabilities/` → 機能モジュール（file_ops, code_exec, self_mod など）
-- `memory/` → 記憶管理（stores.py, vector_store.py, persona_profile.py, persona_data.py, data/iris_profile.md）
 
-### v0.2（新、移行先）
-- `adapters/` → 外部UI層（CLI, API, GUI）— `iris/` 外部に配置し依存方向を物理的に強制
-- `iris/kernel/` → ドメイン層（EventBus, AgentState, Config, MemoryManager, ProactiveEngine）
-- `iris/llm/` → Ollama通信（実装未着手）
-- `iris/memory/` → 記憶管理（実装未着手）
-- `iris/capabilities/` → ツール実行（実装未着手）
-- `iris/commands/` → コマンド処理（実装未着手）
-- `iris/personality/` → プロンプト管理（実装未着手）
-
-### 共通
-- `docs/` → 設計ドキュメント
-- `.agents/` → コーディングエージェント用コンテキスト（context.md, project.md, tasks.md）
-- `AGENTS.md` → プロジェクトルール（このファイル）
-- `config.yaml` → Irisの設定ファイル
-- `main.py` → エントリーポイント（CLIループ）
-
-## コンポーネント間依存関係
-
-### v0.1（現行）
 ```
-main.py
-  ├── core/*                 (エンジン本体)
-  ├── memory/*               (記憶管理)
-  └── capabilities/*         (ツール)
+.iris/
+├── config/
+│   └── personality_default.md   ← 静的テンプレート（git追跡）
+└── data/
+    ├── iris_profile.md           ← Irisの構造記憶（自己認識用、上限2KB固定）
+    ├── episodes.jsonl            ← エピソード記憶
+    ├── semantic.jsonl            ← 意味記憶
+    ├── persona_data.json         ← 話し方・性格（動的管理）
+    └── chroma_db/                ← ChromaDBベクトルストア
+
+adapters/                         ← 外部UI層（CLI, API, GUI）
+├── cli/                          ← CLIアダプター（実際の対話インターフェース）
+└── __init__.py
+
+iris/                             ← アプリケーションコア
+├── kernel/                       ← ドメイン層（EventBus, AgentState, Config,
+│                                  MemoryManager, ProactiveEngine, AgentKernel,
+│                                  ConversationService, Reflexion, ContextManager,
+│                                  ToolExecutionEngine）
+├── llm/                          ← Ollama通信（LLMBridge）
+├── memory/                       ← 記憶管理（stores, vector_store, persona）
+├── capabilities/                 ← ツール実行（registry + 8 tools）
+├── commands/                     ← コマンド処理（未実装）
+├── personality/                  ← プロンプト管理（Personality）
+└── __init__.py
+
+docs/                             ← 設計ドキュメント
+.agents/                          ← コーディングエージェント用コンテキスト
+config.yaml                       ← Irisの設定ファイル
+main.py                           ← エントリーポイント
 ```
 
-### v0.2（移行先 ヘキサゴナルアーキテクチャ）
+## コンポーネント間依存関係（ヘキサゴナルアーキテクチャ）
+
 ```
 adapters/          ──→ iris/kernel/   ──→ iris/llm/, iris/memory/, iris/capabilities/
 (UI層)               (ドメイン層)         (インフラ層)
@@ -48,24 +52,24 @@ adapters/          ──→ iris/kernel/   ──→ iris/llm/, iris/memory/, i
 - `iris/kernel/` は純粋なビジネスロジックに閉じ、外部サービスは kernel 外から注入
 
 ## Iris の記憶体系
-- `memory/data/iris_profile.md`: Irisの構造記憶（自己認識用、上限2KB固定）※話し方・性格は含まず、別JSONで動的管理
+- `.iris/data/iris_profile.md`: Irisの構造記憶（自己認識用、上限2KB固定）※話し方・性格は含まず、別JSONで動的管理
 - EpisodicStore: JSONLベースの作業記憶（上限30エントリ、古いものをマージ圧縮）
 - SemanticStore: JSONL永続化 + ChromaDB + BM25 ハイブリッド検索（上限100エントリ）
 - VectorStore: ONNXMiniLM_L6_V2 埋め込み、cosine類似度、統合スコア = vector*0.6 + bm25*0.4
 
 ## capability の追加ルール
-1. `capabilities/<name>/server.py` に配置
+1. `iris/capabilities/<name>/server.py` に配置
 2. `register(registry: CapabilityRegistry)` 関数をエクスポート
 3. `@registry.register_func(...)` デコレータでツール定義
 4. `__init__.py` を各パッケージに配置（必須）
 5. `allowed_roles` パラメータで利用可能なモデルロールを制限（デフォルトは全てのロールで利用可）
-6. 新しいcapabilityを追加したら `memory/iris_profile.md` の「My Capabilities」セクションも更新する
+6. 新しいcapabilityを追加したら `.iris/data/iris_profile.md` の「My Capabilities」セクションも更新する
 7. テンプレート化されたワークフローは `.agents/skills/capability-pattern/SKILL.md` を参照（`skill` ツールでロード可能）
 
 ## ドキュメント更新
 機能変更時のドキュメント更新手順は `.agents/skills/doc-sync/SKILL.md` を参照（`skill` ツールでロード可能）
 - 設計ドキュメント (`docs/*.md`)
-- 構造記憶 (`memory/data/iris_profile.md`)
+- 構造記憶 (`.iris/data/iris_profile.md`)
 - プロジェクトルール (`AGENTS.md`)
 - エージェントコンテキスト (`.agents/*.md`)
 - Skills (`.agents/skills/*/SKILL.md`)

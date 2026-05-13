@@ -5,14 +5,13 @@ from __future__ import annotations
 
 import sys
 import tempfile
-import time
 from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from iris.kernel.agent_kernel import AgentKernel
-from iris.kernel.agent_state import AgentStateManager, State
+from iris.kernel.agent_state import AgentStateManager
 from iris.kernel.config import Config, ProactiveConfig
 from iris.kernel.conversation import ConversationService
 from iris.kernel.event_bus import (
@@ -51,7 +50,7 @@ class MockLLM:
     def chat(
         self,
         messages: list[dict],
-        **kwargs: object,
+        **_kwargs: object,
     ) -> dict:
         self.last_messages = messages
         return {
@@ -63,7 +62,7 @@ class MockLLM:
 
 
 class MockPersonality:
-    def build_system_prompt(self, **kwargs: object) -> str:
+    def build_system_prompt(self, **_kwargs: object) -> str:
         return "You are a test AI."
 
 

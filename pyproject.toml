@@ -53,7 +53,6 @@ check_untyped_defs = true
 
 [[tool.mypy.overrides]]
 module = [
-  "core.llm_bridge",
   "memory.vector_store",
   "iris.llm.llm_bridge",
   "iris.memory.vector_store",

@@ -12,3 +12,10 @@ memory/data/persona_data.json
 dist/
 build/
 .iris_history
+
+# Test artifacts
+chroma_test/
+*tmp_chroma/
+tmp_chroma_test/
+__pycache__/
+*.pyc

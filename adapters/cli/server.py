@@ -20,6 +20,7 @@ from iris.kernel.agent_state import AgentStateManager
 from iris.kernel.config import Config
 from iris.kernel.conversation import ConversationService
 from iris.kernel.event_bus import (
+    AgentAnomalyEvent,
     AgentResponseEvent,
     EventBus,
     ProactiveSpeechEvent,
@@ -126,6 +127,9 @@ class CLIAdapter:
         self._event_bus.subscribe(
             "AgentResponseEvent", self._on_agent_response
         )
+        self._event_bus.subscribe(
+            "AgentAnomalyEvent", self._on_anomaly
+        )
 
     # ── ライフサイクル ────────────────────────────────────
 
@@ -198,6 +202,19 @@ class CLIAdapter:
                 border_style="green",
                 padding=(0, 1),
                 width=72,
+            )
+        )
+
+    def _on_anomaly(self, event: AgentAnomalyEvent) -> None:
+        """Tier3 異常検知イベントを表示する。"""
+        style = "bold red" if event.severity == "warning" else "bold yellow"
+        console.print(
+            Panel(
+                f"[{style}]{event.detail}[/{style}]",
+                title=f"[{style}]Tier3: {event.anomaly_type}[/{style}]",
+                border_style="red" if event.severity == "warning" else "yellow",
+                padding=(0, 1),
+                width=60,
             )
         )
 

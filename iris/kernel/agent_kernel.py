@@ -18,6 +18,7 @@ from typing import Any
 from .agent_state import AgentStateManager, State
 from .config import ProactiveConfig
 from .event_bus import (
+    AgentAnomalyEvent,
     AgentResponseEvent,
     AgentStateChangeEvent,
     EventBus,
@@ -227,6 +228,15 @@ class AgentKernel:
         anomaly_flags = self._anomaly.record_speech()
         for flag in anomaly_flags:
             logger.warning("Tier3 anomaly: %s", flag)
+            self._event_bus.publish(
+                AgentAnomalyEvent(
+                    timestamp=datetime.now(),
+                    source="system",
+                    anomaly_type=flag,
+                    severity="warning",
+                    detail="自発発話の頻度が高すぎます",
+                )
+            )
 
         health_issues = self._anomaly.check_suppression_health(
             self._proactive.get_status(),
@@ -234,6 +244,15 @@ class AgentKernel:
         for issue in health_issues:
             level = logging.WARNING if issue["severity"] == "warning" else logging.INFO
             logger.log(level, "Tier3 health: [%s] %s", issue["type"], issue["detail"])
+            self._event_bus.publish(
+                AgentAnomalyEvent(
+                    timestamp=datetime.now(),
+                    source="system",
+                    anomaly_type=issue["type"],
+                    severity=issue["severity"],
+                    detail=issue["detail"],
+                )
+            )
 
     @staticmethod
     def _on_state_change(event: AgentStateChangeEvent) -> None:

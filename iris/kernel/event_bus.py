@@ -60,6 +60,14 @@ class AgentResponseEvent(Event):
     model: str = ""
 
 
+@dataclass
+class AgentAnomalyEvent(Event):
+    """Tier3 異常検知イベント。AgentKernel が検出した異常を通知する。"""
+    anomaly_type: str  # "frequency_exceeded" | "confirmation_mode" | "high_ignore_rate"
+    severity: str  # "warning" | "info"
+    detail: str
+
+
 class EventBus:
     """
     同期インメモリEventBus。

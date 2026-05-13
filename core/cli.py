@@ -1,34 +1,44 @@
 from __future__ import annotations
+
 from pathlib import Path
 
-from rich.console import Console
-from rich.panel import Panel
-from rich.markdown import Markdown
-
-from prompt_toolkit import PromptSession, HTML
-from prompt_toolkit.history import FileHistory
+from prompt_toolkit import HTML, PromptSession
 from prompt_toolkit.completion import WordCompleter
+from prompt_toolkit.history import FileHistory
+from rich.console import Console
+from rich.markdown import Markdown
+from rich.panel import Panel
 
+from capabilities.registry import CapabilityRegistry
+from core.commands import CommandContext, _run_reflexion_and_save, handle_command
 from core.config import Config
-from core.llm_bridge import LLMBridge
-from core.personality import Personality
-from core.reflexion import Reflexion
-from core.planner import Planner
-from core.executor import Executor
 from core.context import ContextManager
 from core.conversation import ConversationService
-from core.commands import CommandContext, handle_command, _run_reflexion_and_save
-from memory.persona_profile import PersonaProfile
+from core.executor import Executor
+from core.llm_bridge import LLMBridge
+from core.personality import Personality
+from core.planner import Planner
+from core.reflexion import Reflexion
 from memory.persona_data import PersonaData
+from memory.persona_profile import PersonaProfile
 from memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
-from capabilities.registry import CapabilityRegistry
 
 console = Console(safe_box=True, legacy_windows=False)
 PROJECT_ROOT = Path(__file__).parent.parent
 
 _COMMANDS = [
-    "/help", "/think", "/plan", "/compact", "/model", "/clear", "/exit", "/quit",
-    "/capabilities", "/memory", "/memory-clear", "/persona",
+    "/help",
+    "/think",
+    "/plan",
+    "/compact",
+    "/model",
+    "/clear",
+    "/exit",
+    "/quit",
+    "/capabilities",
+    "/memory",
+    "/memory-clear",
+    "/persona",
 ]
 
 
@@ -113,7 +123,8 @@ class CliSession:
         )
 
         self.ctx = CommandContext(
-            llm=llm, config=config,
+            llm=llm,
+            config=config,
             config_path=str(PROJECT_ROOT / "config.yaml"),
             registry=self.registry,
             reflexion=self.reflexion,
@@ -127,19 +138,21 @@ class CliSession:
         self.messages: list[dict] = []
 
     def run(self):
-        console.print(Panel.fit(
-            f"[bold cyan]Iris[/bold cyan] - v0.1.0\n"
-            f"Model: {self.config.model.smart_model} | Thinking mode: OFF\n"
-            f"Type /help for commands, /think to toggle thinking mode",
-            border_style="cyan",
-        ))
+        console.print(
+            Panel.fit(
+                f"[bold cyan]Iris[/bold cyan] - v0.1.0\n"
+                f"Model: {self.config.model.smart_model} | Thinking mode: OFF\n"
+                f"Type /help for commands, /think to toggle thinking mode",
+                border_style="cyan",
+            )
+        )
 
         thinking_mode = self.config.personality.thinking_mode_default
         plan_mode = False
         active_model = self.config.model.fast_model or self.config.model.smart_model
         msg_count_since_reflect = 0
 
-        session = PromptSession(
+        session: PromptSession = PromptSession(
             history=FileHistory(str(PROJECT_ROOT / ".iris_history")),
             completer=WordCompleter(_COMMANDS, ignore_case=True),
         )
@@ -198,6 +211,9 @@ class CliSession:
 
     def _cleanup(self):
         _run_reflexion_and_save(
-            self.reflexion, self.messages,
-            self.episodic, self.semantic, self.persona_profile,
+            self.reflexion,
+            self.messages,
+            self.episodic,
+            self.semantic,
+            self.persona_profile,
         )

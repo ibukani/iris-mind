@@ -28,29 +28,90 @@ SCENARIOS: dict[str, tuple[bool, int]] = {
 }
 
 # ── 分類関連 ────────────────────────────────────────────────
-GREETING_WORDS = frozenset({
-    "hello", "hi", "bye", "hey", "thanks", "thank", "yes", "no",
-    "good morning", "good evening", "good night",
-    "おはよう", "こんにちは", "こんばんは", "おやすみ",
-    "はい", "いいえ", "ありがとう", "おっす", "やあ",
-})
+GREETING_WORDS = frozenset(
+    {
+        "hello",
+        "hi",
+        "bye",
+        "hey",
+        "thanks",
+        "thank",
+        "yes",
+        "no",
+        "good morning",
+        "good evening",
+        "good night",
+        "おはよう",
+        "こんにちは",
+        "こんばんは",
+        "おやすみ",
+        "はい",
+        "いいえ",
+        "ありがとう",
+        "おっす",
+        "やあ",
+    }
+)
 
-ENDING_WORDS = frozenset({
-    "終わる", "終わります", "終わり", "終了",
-    "さようなら", "バイバイ", "またね", "それじゃ",
-    "quit", "exit", "bye bye", "see you",
-})
+ENDING_WORDS = frozenset(
+    {
+        "終わる",
+        "終わります",
+        "終わり",
+        "終了",
+        "さようなら",
+        "バイバイ",
+        "またね",
+        "それじゃ",
+        "quit",
+        "exit",
+        "bye bye",
+        "see you",
+    }
+)
 
-TOOL_HINTS = frozenset({
-    "ファイル", "実行", "コード", "作成", "変更", "削除", "読み込み",
-    "file", "write", "create", "run", "execute", "read", "delete",
-    "list", "modify", "edit", "shell",
-})
+TOOL_HINTS = frozenset(
+    {
+        "ファイル",
+        "実行",
+        "コード",
+        "作成",
+        "変更",
+        "削除",
+        "読み込み",
+        "file",
+        "write",
+        "create",
+        "run",
+        "execute",
+        "read",
+        "delete",
+        "list",
+        "modify",
+        "edit",
+        "shell",
+    }
+)
 
 COMPLEX_TRIGGERS = [
-    "調査", "調べて", "比較", "分析", "設計", "構築", "作成して",
-    "research", "compare", "analyze", "design", "build", "create",
-    "まず", "最初に", "その後", "step", "steps",
+    "調査",
+    "調べて",
+    "比較",
+    "分析",
+    "設計",
+    "構築",
+    "作成して",
+    "research",
+    "compare",
+    "analyze",
+    "design",
+    "build",
+    "create",
+    "まず",
+    "最初に",
+    "その後",
+    "step",
+    "steps",
 ]
 
 # ── ハイブリッド検索重み ────────────────────────────────────

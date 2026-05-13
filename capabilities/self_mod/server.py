@@ -1,6 +1,7 @@
 import subprocess
 import sys
 from pathlib import Path
+
 from capabilities.registry import CapabilityRegistry
 
 
@@ -77,9 +78,10 @@ def register(registry: CapabilityRegistry):
 def _sandbox_test(filepath: Path) -> dict:
     try:
         result = subprocess.run(
-            [sys.executable, "-c",
-             f"import py_compile; py_compile.compile({str(filepath)!r}, doraise=True)"],
-            capture_output=True, text=True, timeout=5,
+            [sys.executable, "-c", f"import py_compile; py_compile.compile({str(filepath)!r}, doraise=True)"],
+            capture_output=True,
+            text=True,
+            timeout=5,
         )
         if result.returncode != 0:
             return {"ok": False, "error": result.stderr.strip()}

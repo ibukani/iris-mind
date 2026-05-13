@@ -1,9 +1,10 @@
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.llm_bridge import LLMBridge
     from capabilities.registry import CapabilityRegistry
+    from core.llm_bridge import LLMBridge
 
 
 class ToolExecutionEngine:
@@ -32,11 +33,13 @@ class ToolExecutionEngine:
             func_name = tc["function"]["name"]
             args = tc["function"]["arguments"]
             result = self.registry.execute(func_name, **args)
-            ctx.append({
-                "role": "tool",
-                "name": func_name,
-                "content": result,
-            })
+            ctx.append(
+                {
+                    "role": "tool",
+                    "name": func_name,
+                    "content": result,
+                }
+            )
             results.append((func_name, result))
         return results
 

@@ -1,18 +1,39 @@
 import subprocess
 import sys
+
 from capabilities.registry import CapabilityRegistry
 
-
 _BLOCKED_COMMANDS = [
-    "rm -rf /", "rm -rf ~", "mkfs", "format", "dd if=", ":(){ :|:& };:",
-    "wget ", "curl ", "nc ", "netcat", "chmod 777", "chown ",
-    "> /dev/sda", "> /dev/", "| sh", "| bash", "| cmd",
-    "shutdown", "reboot", "init 0", "init 6",
+    "rm -rf /",
+    "rm -rf ~",
+    "mkfs",
+    "format",
+    "dd if=",
+    ":(){ :|:& };:",
+    "wget ",
+    "curl ",
+    "nc ",
+    "netcat",
+    "chmod 777",
+    "chown ",
+    "> /dev/sda",
+    "> /dev/",
+    "| sh",
+    "| bash",
+    "| cmd",
+    "shutdown",
+    "reboot",
+    "init 0",
+    "init 6",
 ]
 _BLOCKED_PATTERNS = [
-    r"rm\s+(-rf?\s+)?[/~]", r"mkfs\.\w+", r"dd\s+if=",
-    r"wget\s+\w+\.\w+", r"curl\s+\w+\.\w+",
-    r"chmod\s+777", r"chown\s",
+    r"rm\s+(-rf?\s+)?[/~]",
+    r"mkfs\.\w+",
+    r"dd\s+if=",
+    r"wget\s+\w+\.\w+",
+    r"curl\s+\w+\.\w+",
+    r"chmod\s+777",
+    r"chown\s",
 ]
 
 
@@ -22,6 +43,7 @@ def _is_dangerous(command: str) -> str | None:
         if blocked in cmd_lower:
             return f"blocked: '{blocked}' is not allowed"
     import re
+
     for pattern in _BLOCKED_PATTERNS:
         if re.search(pattern, cmd_lower):
             return f"blocked: pattern '{pattern}' matched"

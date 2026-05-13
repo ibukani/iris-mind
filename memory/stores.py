@@ -1,6 +1,7 @@
 from __future__ import annotations
-from pathlib import Path
+
 import json
+from pathlib import Path
 from typing import Protocol
 
 from memory.vector_store import VectorStore
@@ -78,23 +79,23 @@ class EpisodicStore:
 
     def _merge_and_trim(self, entries: list[dict]) -> list[dict]:
         """上限超過時、古いエントリを単純にドロップ（マージはノイズになるため）"""
-        return entries[-self.max_entries:]
+        return entries[-self.max_entries :]
 
     def _load_all(self) -> list[dict]:
         if not self.path.exists():
             return []
-        return [
-            json.loads(line)
-            for line in self.path.read_text(encoding="utf-8").strip().split("\n")
-            if line.strip()
-        ]
+        return [json.loads(line) for line in self.path.read_text(encoding="utf-8").strip().split("\n") if line.strip()]
 
 
 class SemanticStore:
     """意味記憶。JSONL永続化 + VectorStore（ChromaDB + BM25）によるハイブリッド検索。"""
 
-    def __init__(self, path: str = "memory/data/semantic.jsonl", max_entries: int = 100,
-                 vector_db_path: str = "memory/data/chroma_db"):
+    def __init__(
+        self,
+        path: str = "memory/data/semantic.jsonl",
+        max_entries: int = 100,
+        vector_db_path: str = "memory/data/chroma_db",
+    ):
         self.path = Path(path)
         self.max_entries = max_entries
         self.vector = VectorStore(path=vector_db_path)
@@ -105,7 +106,7 @@ class SemanticStore:
         entries = self._load_all()
         if len(entries) <= self._synced_count:
             return
-        for e in entries[self._synced_count:]:
+        for e in entries[self._synced_count :]:
             self.vector.add(e)
         self._synced_count = len(entries)
 
@@ -119,7 +120,7 @@ class SemanticStore:
         entry.setdefault("type", "lesson")
         entries.append(entry)
         if len(entries) > self.max_entries:
-            entries = entries[-self.max_entries:]
+            entries = entries[-self.max_entries :]
         self.path.write_text(
             "\n".join(json.dumps(e) for e in entries),
             encoding="utf-8",

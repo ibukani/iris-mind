@@ -1,5 +1,5 @@
 import re
-from typing import Callable
+from collections.abc import Callable
 
 from ollama import Client
 
@@ -7,8 +7,15 @@ from ollama import Client
 class LLMBridge:
     """LLM抽象化層。Ollama APIをラップし、モデル切替を容易にする。"""
 
-    def __init__(self, model_name: str = "qwen3.5:9b", base_url: str = "http://localhost:11434",
-                 draft_model: str | None = None, num_draft: int = 5, num_gpu: int = 0, num_ctx: int = 8192):
+    def __init__(
+        self,
+        model_name: str = "qwen3.5:9b",
+        base_url: str = "http://localhost:11434",
+        draft_model: str | None = None,
+        num_draft: int = 5,
+        num_gpu: int = 0,
+        num_ctx: int = 8192,
+    ):
         self.model_name = model_name
         self.draft_model = draft_model
         self.num_draft = num_draft
@@ -120,10 +127,17 @@ def _extract_answer_from_thinking(text: str) -> str:
     if final_lines:
         return "\n".join(final_lines).strip()
 
-    content_lines = [line for line in stripped.splitlines() if not re.match(
-        r"^\s*(思考|Thinking|Reasoning|Step \d|Hmm|Wait|Let me|I need|Actually|Re-evaluat|Draft|Final|I'll|I think|I should|Maybe|Perhaps|First,?|Next,?|Finally,?)",
-        line.strip(), re.IGNORECASE
-    )]
+    content_lines = [
+        line
+        for line in stripped.splitlines()
+        if not re.match(
+            r"^\s*(思考|Thinking|Reasoning|Step \d|Hmm|Wait|Let me|I need|Actually|"
+            r"Re-evaluat|Draft|Final|I'll|I think|I should|Maybe|Perhaps|"
+            r"First,?|Next,?|Finally,?)",
+            line.strip(),
+            re.IGNORECASE,
+        )
+    ]
     if content_lines:
         return content_lines[-1].strip()
 

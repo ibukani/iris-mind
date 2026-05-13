@@ -1,8 +1,8 @@
 from __future__ import annotations
+
 import json
 from datetime import datetime
 from pathlib import Path
-
 
 _DEFAULT_PATH = "memory/data/persona_data.json"
 
@@ -54,13 +54,15 @@ class PersonaData:
                 self._save()
                 return
 
-        entries.append({
-            "text": text,
-            "source": source,
-            "count": 1,
-            "timestamp": now,
-            "updated_at": now,
-        })
+        entries.append(
+            {
+                "text": text,
+                "source": source,
+                "count": 1,
+                "timestamp": now,
+                "updated_at": now,
+            }
+        )
         self._save()
 
     def get_top(self, category: str, n: int = 3) -> list[dict]:

@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import json
 from typing import TYPE_CHECKING
 
@@ -12,9 +13,9 @@ class Planner:
     PLAN_SYSTEM_PROMPT = (
         "You are a task planner. Analyze the user's request and determine if it needs "
         "to be broken into subtasks. Reply in JSON only:\n"
-        "- For simple tasks: {\"mode\": \"simple\"}\n"
-        "- For complex tasks: {\"mode\": \"complex\", \"reason\": \"...\", "
-        "\"subtasks\": [{\"name\": \"...\", \"description\": \"...\"}]}\n"
+        '- For simple tasks: {"mode": "simple"}\n'
+        '- For complex tasks: {"mode": "complex", "reason": "...", '
+        '"subtasks": [{"name": "...", "description": "..."}]}\n'
         "A task is complex when it requires 2+ distinct steps like research then write, "
         "or multiple tool calls in sequence. Be concise."
     )

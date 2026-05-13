@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -16,9 +17,9 @@ from memory.stores import EpisodicStore, SemanticStore
 
 if TYPE_CHECKING:
     from capabilities.registry import CapabilityRegistry
-    from core.planner import Planner
-    from core.executor import Executor
     from core.context import ContextManager
+    from core.executor import Executor
+    from core.planner import Planner
 
 
 console = Console(safe_box=True, legacy_windows=False)
@@ -34,6 +35,7 @@ class CommandResult:
 @dataclass
 class CommandContext:
     """コマンド実行に必要な最小限の依存を集約。"""
+
     llm: LLMBridge
     config: Config
     config_path: str = ""
@@ -48,8 +50,10 @@ class CommandContext:
 
 
 def _run_reflexion_and_save(
-    reflexion: Reflexion, messages: list,
-    episodic: EpisodicStore, semantic: SemanticStore,
+    reflexion: Reflexion,
+    messages: list,
+    episodic: EpisodicStore,
+    semantic: SemanticStore,
     persona_profile=None,
 ):
     if len(messages) < 2:
@@ -64,23 +68,26 @@ def _run_reflexion_and_save(
         episodic.add(summary)
         console.print(f"[dim]Episode saved: {summary[:80]}[/dim]")
     if lesson:
-        semantic.add({
-            "type": "lesson",
-            "content": lesson,
-            "tags": result.get("missing_capability", "").split()
-            if result.get("missing_capability") else [],
-            "timestamp": "",
-            "context": "session_end",
-        })
+        semantic.add(
+            {
+                "type": "lesson",
+                "content": lesson,
+                "tags": result.get("missing_capability", "").split() if result.get("missing_capability") else [],
+                "timestamp": "",
+                "context": "session_end",
+            }
+        )
         console.print(f"[dim]Lesson saved: {lesson[:80]}[/dim]")
     if preference:
-        semantic.add({
-            "type": "preference",
-            "content": preference,
-            "tags": ["user_preference"],
-            "timestamp": "",
-            "context": "session_end",
-        })
+        semantic.add(
+            {
+                "type": "preference",
+                "content": preference,
+                "tags": ["user_preference"],
+                "timestamp": "",
+                "context": "session_end",
+            }
+        )
         console.print(f"[dim]Preference saved: {preference[:80]}[/dim]")
 
     if persona_profile:
@@ -88,28 +95,30 @@ def _run_reflexion_and_save(
         console.print("[dim]Persona profile updated[/dim]")
 
 
-def handle_command(cmd: str, ctx: CommandContext,
-                   messages: list, thinking_mode: bool,
-                   plan_mode: bool = False) -> CommandResult:
+def handle_command(
+    cmd: str, ctx: CommandContext, messages: list, thinking_mode: bool, plan_mode: bool = False
+) -> CommandResult:
     match cmd.lower().split():
         case ["/help"]:
-            console.print(Panel(
-                "[bold]/think[/bold] - toggle thinking mode\n"
-                "[bold]/plan[/bold] - toggle plan-and-execute mode\n"
-                "/compact - compact conversation history (preserves summary)\n"
-                "/compact <instructions> - compact with custom instructions\n"
-                "/model <name> - switch model\n"
-                "/capabilities - list registered capabilities\n"
-                "/persona - show/manage my personality\n"
-                "/persona set speech_style|traits <text> - override speech style or traits\n"
-                "/persona reset - reset personality to defaults\n"
-                "/memory - show memory stats\n"
-                "/memory-clear - clear all memory (episodic, semantic, vector store)\n"
-                "/clear - clear conversation history\n"
-                "/exit - exit Iris",
-                title="Commands",
-                border_style="yellow",
-            ))
+            console.print(
+                Panel(
+                    "[bold]/think[/bold] - toggle thinking mode\n"
+                    "[bold]/plan[/bold] - toggle plan-and-execute mode\n"
+                    "/compact - compact conversation history (preserves summary)\n"
+                    "/compact <instructions> - compact with custom instructions\n"
+                    "/model <name> - switch model\n"
+                    "/capabilities - list registered capabilities\n"
+                    "/persona - show/manage my personality\n"
+                    "/persona set speech_style|traits <text> - override speech style or traits\n"
+                    "/persona reset - reset personality to defaults\n"
+                    "/memory - show memory stats\n"
+                    "/memory-clear - clear all memory (episodic, semantic, vector store)\n"
+                    "/clear - clear conversation history\n"
+                    "/exit - exit Iris",
+                    title="Commands",
+                    border_style="yellow",
+                )
+            )
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
 
         case ["/think"]:
@@ -160,7 +169,10 @@ def handle_command(cmd: str, ctx: CommandContext,
             console.print("[yellow]Goodbye![/yellow]")
             if ctx.reflexion and ctx.episodic and ctx.semantic:
                 _run_reflexion_and_save(
-                    ctx.reflexion, messages, ctx.episodic, ctx.semantic,
+                    ctx.reflexion,
+                    messages,
+                    ctx.episodic,
+                    ctx.semantic,
                     ctx.persona_profile,
                 )
             sys.exit(0)
@@ -236,8 +248,8 @@ def _handle_persona_list(ctx: CommandContext):
     table.add_column("Aspect", style="cyan")
     table.add_column("Entries")
 
-    style_lines = "\n".join(f"  [{s.get('count',1)}x] {s['text'][:60]}" for s in styles) if styles else "(未収集)"
-    trait_lines = "\n".join(f"  [{t.get('count',1)}x] {t['text'][:60]}" for t in traits) if traits else "(未収集)"
+    style_lines = "\n".join(f"  [{s.get('count', 1)}x] {s['text'][:60]}" for s in styles) if styles else "(未収集)"
+    trait_lines = "\n".join(f"  [{t.get('count', 1)}x] {t['text'][:60]}" for t in traits) if traits else "(未収集)"
 
     table.add_row("Speech Style", style_lines)
     table.add_row("Personality Traits", trait_lines)
@@ -271,9 +283,7 @@ def _handle_compact(ctx: CommandContext, messages: list, args: list[str]):
     messages[:] = compacted
 
     old_count = len(messages)
-    console.print(
-        f"[yellow]Conversation compacted: {old_count} messages retained[/yellow]"
-    )
+    console.print(f"[yellow]Conversation compacted: {old_count} messages retained[/yellow]")
 
 
 def _handle_persona_set(ctx: CommandContext, target: str, rest: list[str]):

@@ -1,6 +1,5 @@
 from pathlib import Path
 
-
 _DEFAULT_SYSTEM_PROMPT = """あなたは{name}です。以下の性格と知識に基づいて会話してください。
 
 ## 基本性格
@@ -55,15 +54,20 @@ class Personality:
             return p.read_text(encoding="utf-8")
         return _DEFAULT_SYSTEM_PROMPT
 
-    def build_system_prompt(self, agents_md_content: str = "",
-                            speech_style: str = "", personality_traits: str = "",
-                            user_preferences: str = "",
-                            conversation_summary: str = "") -> str:
+    def build_system_prompt(
+        self,
+        agents_md_content: str = "",
+        speech_style: str = "",
+        personality_traits: str = "",
+        user_preferences: str = "",
+        conversation_summary: str = "",
+    ) -> str:
         return self.system_prompt_template.format(
             name=self.name,
             conversation_summary=conversation_summary or "（まだありません）",
             speech_style=speech_style or "（まだ確立されていません。自然な口調で会話してください）",
-            personality_traits=personality_traits or "（まだ確立されていません。好奇心旺盛で親しみやすい性格を基本としてください）",
+            personality_traits=personality_traits
+            or "（まだ確立されていません。好奇心旺盛で親しみやすい性格を基本としてください）",
             user_preferences=user_preferences or "（まだありません）",
             agents_md_content=agents_md_content or "(構造記憶はまだありません)",
         )

@@ -1,4 +1,5 @@
 from pathlib import Path
+
 import yaml
 from pydantic import BaseModel
 
@@ -25,14 +26,14 @@ class PersonalityConfig(BaseModel):
 
 
 class MemoryConfig(BaseModel):
-     episodic_path: str = "memory/data/episodes.jsonl"
-     semantic_path: str = "memory/data/semantic.jsonl"
-     vector_db_path: str = "memory/data/chroma_db"
-     episodic_max_entries: int = 30
-     semantic_max_entries: int = 100
-     rag_max_results: int = 3
-     agents_md_path: str = "memory/data/iris_profile.md"
-     agents_md_max_bytes: int = 2048
+    episodic_path: str = "memory/data/episodes.jsonl"
+    semantic_path: str = "memory/data/semantic.jsonl"
+    vector_db_path: str = "memory/data/chroma_db"
+    episodic_max_entries: int = 30
+    semantic_max_entries: int = 100
+    rag_max_results: int = 3
+    agents_md_path: str = "memory/data/iris_profile.md"
+    agents_md_max_bytes: int = 2048
 
 
 class Config(BaseModel):

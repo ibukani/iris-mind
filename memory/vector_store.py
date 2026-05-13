@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import math
 import threading
 
@@ -88,9 +89,9 @@ class VectorStore:
                 self._rebuild_bm25()
 
             dense_results = self.collection.query(
-            query_texts=[query],
-            n_results=max_results * 2,
-        )
+                query_texts=[query],
+                n_results=max_results * 2,
+            )
 
         bm25_scores = self._bm25_search(query)
 
@@ -126,10 +127,7 @@ class VectorStore:
                 scored.append((hybrid, data))
         scored.sort(key=lambda x: x[0], reverse=True)
 
-        return [
-            {"id": s["id"], "content": s["content"], "type": s["type"]}
-            for _, s in scored[:max_results]
-        ]
+        return [{"id": s["id"], "content": s["content"], "type": s["type"]} for _, s in scored[:max_results]]
 
     def _bm25_search(self, query: str) -> dict[str, float]:
         if self._bm25_dirty:
@@ -139,8 +137,8 @@ class VectorStore:
         if not query_terms:
             return {}
 
-        N = len(self._all_docs)
-        if N == 0:
+        n = len(self._all_docs)
+        if n == 0:
             return {}
 
         k1, b = 1.5, 0.75
@@ -149,7 +147,7 @@ class VectorStore:
         for qt in query_terms:
             if qt not in self._inverted_index:
                 continue
-            idf = math.log((N - self._bm25_doc_freq.get(qt, 0) + 0.5) / (self._bm25_doc_freq.get(qt, 0) + 0.5) + 1)
+            idf = math.log((n - self._bm25_doc_freq.get(qt, 0) + 0.5) / (self._bm25_doc_freq.get(qt, 0) + 0.5) + 1)
             for eid, tf in self._inverted_index[qt].items():
                 dl = self._doc_lengths[eid]
                 s = idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * dl / self._avgdl))
@@ -168,7 +166,7 @@ class VectorStore:
             return
 
         results = self.collection.get()
-        self._all_docs = dict(zip(results["ids"], results["documents"]))
+        self._all_docs = dict(zip(results["ids"], results["documents"], strict=False))
         self._inverted_index = {}
         self._bm25_doc_freq = {}
         total_terms = 0

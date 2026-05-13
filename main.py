@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Iris - 自律的に行動し進化できるAI"""
 
+import contextlib
 import os
 import subprocess
 import sys
@@ -17,7 +18,9 @@ def _get_available_models() -> set[str]:
     try:
         result = subprocess.run(
             ["ollama", "list"],
-            capture_output=True, text=True, timeout=10,
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if result.returncode == 0 and result.stdout.strip():
             lines = result.stdout.strip().splitlines()
@@ -41,15 +44,14 @@ def _ensure_model_pulled(model_name: str) -> bool:
         return True
 
     console_input = input(
-        f"モデル '{model_name}' が見つかりません。\n"
-        f"  ollama pull {model_name}\n"
-        f"を実行してダウンロードしますか？ [y/N] "
+        f"モデル '{model_name}' が見つかりません。\n  ollama pull {model_name}\nを実行してダウンロードしますか？ [y/N] "
     )
     if console_input.strip().lower() in ("y", "yes"):
         try:
             subprocess.run(
                 ["ollama", "pull", model_name],
-                check=True, timeout=600,
+                check=True,
+                timeout=600,
             )
             return True
         except subprocess.CalledProcessError:
@@ -63,11 +65,8 @@ def _ensure_model_pulled(model_name: str) -> bool:
 
 def _restart_ollama():
     """既存Ollamaプロセスを終了し、GPU向け設定で再起動する。"""
-    try:
-        subprocess.run(["taskkill", "/F", "/IM", "ollama.exe"],
-                       capture_output=True, timeout=5)
-    except Exception:
-        pass
+    with contextlib.suppress(Exception):
+        subprocess.run(["taskkill", "/F", "/IM", "ollama.exe"], capture_output=True, timeout=5)
     time.sleep(2)
 
     subprocess.Popen(
@@ -82,11 +81,8 @@ def _restart_ollama():
 def _stop_config_models(config: Config):
     """Configに記載されたモデルを停止する。"""
     for name in config.model_names:
-        try:
-            subprocess.run(["ollama", "stop", name],
-                           capture_output=True, timeout=10)
-        except Exception:
-            pass
+        with contextlib.suppress(Exception):
+            subprocess.run(["ollama", "stop", name], capture_output=True, timeout=10)
 
 
 def _ensure_config_models(config: Config) -> bool:
@@ -94,10 +90,7 @@ def _ensure_config_models(config: Config) -> bool:
     _stop_config_models(config)
     time.sleep(0.5)
 
-    for name in config.model_names:
-        if not _ensure_model_pulled(name):
-            return False
-    return True
+    return all(_ensure_model_pulled(name) for name in config.model_names)
 
 
 def run():
@@ -113,8 +106,8 @@ def run():
         print("必要なモデルが利用できません。プログラムを終了します。", file=sys.stderr)
         sys.exit(1)
 
-    from core.llm_bridge import LLMBridge
     from core.cli import CliSession
+    from core.llm_bridge import LLMBridge
 
     llm = LLMBridge(
         model_name=config.model.smart_model,

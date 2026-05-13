@@ -1,6 +1,7 @@
 from __future__ import annotations
+
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 
 class Capability:
@@ -64,6 +65,7 @@ class CapabilityRegistry:
             )
             self.register(c)
             return func
+
         return decorator
 
     def get(self, name: str) -> Capability | None:
@@ -86,6 +88,7 @@ class CapabilityRegistry:
             module_path = str(rel.with_suffix("")).replace("/", ".").replace("\\", ".")
             try:
                 import importlib
+
                 mod = importlib.import_module(module_path)
                 if hasattr(mod, "register"):
                     mod.register(self)

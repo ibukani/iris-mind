@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -75,13 +76,11 @@ class ContextManager:
 
     def _generate_summary(self, messages: list[dict], instructions: str = "") -> str:
         import json
+
         prompt = _COMPACT_PROMPT
         if instructions:
             prompt += f"\n\n追加指示: {instructions}"
-        msgs = [
-            {"role": m["role"], "content": str(m.get("content", ""))[:500]}
-            for m in messages
-        ]
+        msgs = [{"role": m["role"], "content": str(m.get("content", ""))[:500]} for m in messages]
         prompt += "\n\n" + json.dumps(msgs, ensure_ascii=False)
 
         resp = self.llm.chat(

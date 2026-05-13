@@ -1,9 +1,11 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Callable
+
+from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.llm_bridge import LLMBridge
     from capabilities.registry import CapabilityRegistry
+    from core.llm_bridge import LLMBridge
 
 from core.tool_executor import ToolExecutionEngine
 
@@ -16,8 +18,13 @@ class Executor:
         self.llm = llm
         self.registry = registry
 
-    def execute_plan(self, plan: dict, user_input: str, personality_name: str = "Iris",
-                     on_subtask: Callable[[int, str], None] | None = None) -> str:
+    def execute_plan(
+        self,
+        plan: dict,
+        user_input: str,
+        personality_name: str = "Iris",
+        on_subtask: Callable[[int, str], None] | None = None,
+    ) -> str:
         subtasks = plan.get("subtasks", [])
         results: list[dict] = []
 
@@ -26,21 +33,18 @@ class Executor:
             if on_subtask:
                 on_subtask(i, name)
             desc = task.get("description", "")
-            is_last = (i == len(subtasks) - 1)
+            is_last = i == len(subtasks) - 1
 
             step_prompt = (
                 f"あなたは{personality_name}です。与えられたタスクを正確に実行してください。\n\n"
-                f"## Current Task ({i+1}/{len(subtasks)})\n"
+                f"## Current Task ({i + 1}/{len(subtasks)})\n"
                 f"Task: {name}\n"
                 f"Description: {desc}\n"
                 f"Original request: {user_input}"
             )
 
             if is_last and len(subtasks) > 1 and results:
-                summaries = "\n".join(
-                    f"- {r['name']}: {r['output'][:300]}"
-                    for r in results
-                )
+                summaries = "\n".join(f"- {r['name']}: {r['output'][:300]}" for r in results)
                 step_prompt += (
                     f"\n\n## Previous Steps Results\n{summaries}\n\n"
                     f"This is the final step. Synthesize all previous steps "

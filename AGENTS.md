@@ -52,6 +52,15 @@ main.py
 3. `@registry.register_func(...)` デコレータでツール定義
 4. `__init__.py` を各パッケージに配置（必須）
 5. 新しいcapabilityを追加したら `memory/iris_profile.md` の「My Capabilities」セクションも更新する
+6. テンプレート化されたワークフローは `.agents/skills/capability-pattern/SKILL.md` を参照（`skill` ツールでロード可能）
+
+## ドキュメント更新
+機能変更時のドキュメント更新手順は `.agents/skills/doc-sync/SKILL.md` を参照（`skill` ツールでロード可能）
+- 設計ドキュメント (`docs/*.md`)
+- 構造記憶 (`memory/data/iris_profile.md`)
+- プロジェクトルール (`AGENTS.md`)
+- エージェントコンテキスト (`.agent/*.md`)
+- Skills (`.agents/skills/*/SKILL.md`)
 
 ## コーディング規約
 - 変更差分はユーザーに提示→承認を得てから適用
@@ -60,6 +69,16 @@ main.py
 - 新機能追加時は既存のcapabilityパターンを参考にする
 - Python 3.13+ の型ヒントを積極的に使用
 - コメントは最小限に
+
+## lint / typecheck コマンド
+```powershell
+ruff check .                          # lint
+ruff format --check .                 # format check
+ruff check --fix .                    # lint + auto-fix
+mypy .                                # type check
+mypy --install-types                  # 型スタブ初回インストール
+```
+※ ruff / mypy の設定は `pyproject.toml` に集約済み
 
 ## 自動モデル切替 動作ルール
 - `config.yaml` の `fast_model` が設定されている場合、自動モデル切替が有効になる
@@ -72,14 +91,6 @@ main.py
 - 要約は `## 会話の経緯` としてシステムプロンプトに注入。`/compact` コマンドで手動トリガー可能
 - 要約時は `fast_model` を使用（コンパクション専用LLM呼び出しを高速化）
 
-## ドキュメント更新義務
-機能追加・変更を行った場合、該当する以下のドキュメントを必ず同時に更新する：
-- `docs/*.md` — 設計ドキュメント（概念・アーキテクチャ・記憶システム等）
-- `memory/data/iris_profile.md` — Irisの構造記憶（自己認識用capability一覧）
-- `AGENTS.md` — コーディングエージェント用ルール（必要に応じて）
-- `.agent/*.md` — コーディングエージェント用コンテキスト（必要に応じて）
-
-ドキュメントの更新漏れはタスク完了とみなさない。
 
 ## git コミットルール
 - 1タスク完了ごとに必ずgitコミットを行う

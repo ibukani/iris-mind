@@ -1,21 +1,27 @@
 from __future__ import annotations
+
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from core.llm_bridge import LLMBridge
     from capabilities.registry import CapabilityRegistry
-    from core.personality import Personality
-    from core.reflexion import Reflexion
-    from core.planner import Planner
-    from core.executor import Executor
     from core.context import ContextManager
-    from memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
+    from core.executor import Executor
+    from core.llm_bridge import LLMBridge
+    from core.personality import Personality
+    from core.planner import Planner
+    from core.reflexion import Reflexion
     from memory.persona_profile import PersonaProfile
+    from memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
 
 from core.constants import (
-    CLASSIFY_PROMPT, SCENARIOS,
-    GREETING_WORDS, ENDING_WORDS, TOOL_HINTS, COMPLEX_TRIGGERS,
+    CLASSIFY_PROMPT,
+    COMPLEX_TRIGGERS,
+    ENDING_WORDS,
+    GREETING_WORDS,
+    SCENARIOS,
+    TOOL_HINTS,
 )
 from core.tool_executor import ToolExecutionEngine
 
@@ -64,8 +70,7 @@ def _quick_classify(user_input: str, messages: list[dict] | None = None) -> str 
 def _classify_input(llm: LLMBridge, user_input: str, fast_model: str) -> str:
     try:
         resp = llm.chat(
-            messages=[{"role": "user",
-                       "content": CLASSIFY_PROMPT.format(input=user_input)}],
+            messages=[{"role": "user", "content": CLASSIFY_PROMPT.format(input=user_input)}],
             model=fast_model,
             temperature=0,
             max_tokens=10,
@@ -136,7 +141,10 @@ class ConversationService:
         return category or "simple"
 
     def _resolve_model_params(
-        self, scenario: str, thinking_mode: bool, plan_mode: bool,
+        self,
+        scenario: str,
+        thinking_mode: bool,
+        plan_mode: bool,
     ) -> tuple[str, int, list[dict] | None]:
         """使用モデル・トークン上限・ツールリストを決定する（副作用なし）。"""
         has_fast = self.fast_model is not None
@@ -149,7 +157,10 @@ class ConversationService:
         return self.fast_model, min(self.max_tokens_fast, scenario_max_tokens), None
 
     def _build_system_prompt(
-        self, conversation_summary: str, rag_results: list[dict], user_input: str,
+        self,
+        conversation_summary: str,
+        rag_results: list[dict],
+        user_input: str,
     ) -> str:
         """システムプロンプトを構築（ペルソナ・記憶・RAGを統合）。"""
         pref_results = self.semantic.search("ユーザーの好み user preference", max_results=3)
@@ -168,9 +179,7 @@ class ConversationService:
             system_prompt += "\n\n## Recent Sessions\n" + "\n".join(f"- {e}" for e in recent_episodes)
 
         if rag_results:
-            system_prompt += "\n\n## Related Lessons\n" + "\n".join(
-                f"- {e['content']}" for e in rag_results
-            )
+            system_prompt += "\n\n## Related Lessons\n" + "\n".join(f"- {e['content']}" for e in rag_results)
 
         return system_prompt
 
@@ -182,18 +191,26 @@ class ConversationService:
             return []
 
     def _handle_plan(
-        self, plan_result: dict, user_input: str,
+        self,
+        plan_result: dict,
+        user_input: str,
     ) -> dict:
         """Plan-and-Execute でサブタスクを実行し、最終メッセージを返す。"""
         final_content = self.executor.execute_plan(
-            plan_result, user_input, self.personality.name,
+            plan_result,
+            user_input,
+            self.personality.name,
         )
         return {"role": "assistant", "content": final_content}
 
     def _handle_direct_response(
-        self, system_prompt: str, messages: list[dict],
-        thinking_mode: bool, tools_list: list[dict] | None,
-        max_tokens: int, on_token: Callable[[str], None] | None,
+        self,
+        system_prompt: str,
+        messages: list[dict],
+        thinking_mode: bool,
+        tools_list: list[dict] | None,
+        max_tokens: int,
+        on_token: Callable[[str], None] | None,
         active_model: str,
     ) -> dict:
         """LLM呼び出し→Tool Call実行→フォローアップまでを一貫処理して最終メッセージを返す。"""
@@ -216,8 +233,12 @@ class ConversationService:
         return msg
 
     def _execute_tool_calls(
-        self, msg: dict, system_prompt: str, messages: list[dict],
-        thinking_mode: bool, on_token: Callable[[str], None] | None,
+        self,
+        msg: dict,
+        system_prompt: str,
+        messages: list[dict],
+        thinking_mode: bool,
+        on_token: Callable[[str], None] | None,
         active_model: str,
     ) -> dict:
         """Tool Callを実行し、必要に応じてフォローアップLLM呼び出しを行う。"""
@@ -226,13 +247,11 @@ class ConversationService:
         tool_results = tool_engine.execute_all(ctx)
 
         if not tool_engine.should_follow_up(tool_results):
-            combined = "\n\n".join(
-                f"**{name}** result:\n{res}" for name, res in tool_results
-            )
-            messages.extend(ctx[len(messages):])
+            combined = "\n\n".join(f"**{name}** result:\n{res}" for name, res in tool_results)
+            messages.extend(ctx[len(messages) :])
             return {"role": "assistant", "content": combined}
 
-        messages.extend(ctx[len(messages):])
+        messages.extend(ctx[len(messages) :])
         final = self.llm.chat(
             messages=[{"role": "system", "content": system_prompt}, *messages],
             model=active_model,
@@ -274,9 +293,11 @@ class ConversationService:
 
         # Phase 2: モデル選択（set_model副作用なし、model名を直接返す）
         active_model, max_tokens, tools_list = self._resolve_model_params(
-            scenario, thinking_mode, plan_mode,
+            scenario,
+            thinking_mode,
+            plan_mode,
         )
-        use_fast = (active_model == self.fast_model)
+        use_fast = active_model == self.fast_model
 
         # Phase 3: コンテキスト圧縮判定
         conversation_summary = self.context_manager.check_and_summarize(
@@ -290,7 +311,9 @@ class ConversationService:
 
         # Phase 5: システムプロンプト構築
         system_prompt = self._build_system_prompt(
-            conversation_summary, rag_results, user_input,
+            conversation_summary,
+            rag_results,
+            user_input,
         )
 
         # Phase 6: Plan判定
@@ -298,10 +321,7 @@ class ConversationService:
         plan_result = None
         if not use_fast and (plan_mode or (thinking_mode and _detect_complex(user_input))):
             plan_result = self.planner.analyze(user_input, system_prompt[:300])
-            if not plan_mode:
-                should_plan = self.planner.is_complex(plan_result)
-            else:
-                should_plan = True
+            should_plan = self.planner.is_complex(plan_result) if not plan_mode else True
 
         # Phase 7: 思考モードでユーザー入力をラップ
         if thinking_mode:
@@ -309,8 +329,12 @@ class ConversationService:
             messages[-1]["content"] = self.personality.build_thinking_prompt(user_input)
 
         # Phase 8: 簡易グリーティング抑制
-        if not use_fast and not plan_mode and not thinking_mode and user_input.strip().lower() in (
-            "hello", "hi", "bye", "thanks", "ありがとう"):
+        if (
+            not use_fast
+            and not plan_mode
+            and not thinking_mode
+            and user_input.strip().lower() in ("hello", "hi", "bye", "thanks", "ありがとう")
+        ):
             max_tokens = _SHORT_GREET_TOKENS
 
         # Phase 9: 応答生成
@@ -319,8 +343,12 @@ class ConversationService:
             msg = self._handle_plan(plan_result, user_input)
         else:
             msg = self._handle_direct_response(
-                system_prompt, messages,
-                thinking_mode, tools_list, max_tokens, on_token,
+                system_prompt,
+                messages,
+                thinking_mode,
+                tools_list,
+                max_tokens,
+                on_token,
                 active_model,
             )
 

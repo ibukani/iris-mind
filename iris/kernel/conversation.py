@@ -42,6 +42,8 @@ class ConversationService:
         reflect_interval: int = 3,
         tool_executor: ToolExecutionEngine | None = None,
         context_manager: ContextManager | None = None,
+        persona_profile: Any | None = None,
+        agents_md_store: Any | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._memory = memory
@@ -52,6 +54,8 @@ class ConversationService:
         self._reflect_interval = reflect_interval
         self._tool_executor = tool_executor
         self._context_manager = context_manager
+        self._persona_profile = persona_profile
+        self._agents_md_store = agents_md_store
         self._context_window = config.model.context_window
         self._max_tool_iterations: int = 3
         self._messages: list[dict] = []
@@ -118,6 +122,8 @@ class ConversationService:
                     content=f"ユーザーの反応傾向: {result['user_reaction']}",
                     tags=["user_reaction"],
                 )
+            if self._persona_profile is not None:
+                self._persona_profile.update_from_reflection(result)
             logger.info(
                 "Quick reflect stored: speech_style=%s traits=%s reaction=%s",
                 bool(result.get("speech_style")),
@@ -169,7 +175,22 @@ class ConversationService:
 
     def _call_llm(self, tools: list[dict] | None = None) -> dict:
         """LLM を呼び出し応答を返す。"""
-        system_prompt = self._personality.build_system_prompt()
+        agents_md = self._agents_md_store.load() if self._agents_md_store else ""
+        speech_style = self._persona_profile.get_speech_style() if self._persona_profile else ""
+        traits = self._persona_profile.get_traits() if self._persona_profile else ""
+        prefs_list = self._memory.get_user_preferences()
+        user_prefs = "\n".join(f"- {p['content']}" for p in prefs_list) if prefs_list else ""
+        summary = (
+            self._context_manager.summary_text if self._context_manager and self._context_manager.has_summary else ""
+        )
+
+        system_prompt = self._personality.build_system_prompt(
+            agents_md_content=agents_md,
+            speech_style=speech_style,
+            personality_traits=traits,
+            user_preferences=user_prefs,
+            conversation_summary=summary,
+        )
 
         if self._context_manager is not None and self._context_manager.has_summary:
             messages = [{"role": "system", "content": system_prompt}]

@@ -28,8 +28,9 @@ model:
   temperature: 0.7
 personality:
   name: Iris
-  prompt_file: .iris/config/personality_default.md
+  thinking_mode_default: false
   mode_default: auto
+  prompt_file: .iris/config/personality_default.md
 # ===== 新規: 自律的会話設定 =====
 proactive:
   enabled: false                  # デフォルトOFF（安全第一）

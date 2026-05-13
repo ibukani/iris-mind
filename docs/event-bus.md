@@ -57,6 +57,21 @@ class EventBus:
 | `entry_type` | `str` | `"episodic"` または `"semantic"` |
 | `content` | `str` | 記憶の内容 |
 
+### AgentResponseEvent
+
+| フィールド | 型 | 説明 |
+|-----------|---|------|
+| `content` | `str` | LLM応答テキスト |
+| `model` | `str` | 応答に使用されたモデル名 |
+
+### AgentAnomalyEvent
+
+| フィールド | 型 | 説明 |
+|-----------|---|------|
+| `anomaly_type` | `str` | 異常種別（`"frequency_exceeded"`, `"confirmation_mode"`, `"high_ignore_rate"`） |
+| `severity` | `str` | 深刻度（`"warning"`, `"info"`） |
+| `detail` | `str` | 詳細説明 |
+
 ## 動作仕様
 
 - `publish()`: 該当イベントタイプの全ハンドラを**登録順**に同期的に呼び出す
@@ -74,11 +89,15 @@ TimerTick → ProactiveEngine.check_trigger()
                               ├─ MemoryManager: 記録
                               └─ Reflexion: 評価スケジューリング
 
-UserInputEvent → AgentKernel._on_user_input()
-                 → ConversationService.process_input()
+UserInputEvent → AgentKernel._on_user_input()（IDLE→PROCESSING）
+                 → ConversationService._on_user_input()
                  → AgentResponseEvent を publish
                       ├─ CliAdapter: 表示
+                      ├─ AgentKernel: PROCESSING→IDLE
                       └─ MemoryManager: 記録
+
+AgentAnomalyEvent → AgentKernel（Tier3異常検知時）
+                    → CliAdapter: 警告パネル表示
 ```
 
 ## 注意事項

@@ -69,23 +69,29 @@ class AnomalyDetector:
         s = status.get("suppression", {})
 
         if s.get("confirmation_mode"):
-            issues.append({
-                "type": "confirmation_mode",
-                "severity": "warning",
-                "detail": "User ignoring proactive messages",
-            })
+            issues.append(
+                {
+                    "type": "confirmation_mode",
+                    "severity": "warning",
+                    "detail": "User ignoring proactive messages",
+                }
+            )
         if s.get("consecutive_ignores", 0) >= 3:
-            issues.append({
-                "type": "high_ignore_rate",
-                "severity": "warning",
-                "detail": f"Ignores: {s['consecutive_ignores']}",
-            })
+            issues.append(
+                {
+                    "type": "high_ignore_rate",
+                    "severity": "warning",
+                    "detail": f"Ignores: {s['consecutive_ignores']}",
+                }
+            )
         if s.get("negative_mood_score", 0.0) >= 0.7:
-            issues.append({
-                "type": "negative_mood",
-                "severity": "info",
-                "detail": "Negative mood detected",
-            })
+            issues.append(
+                {
+                    "type": "negative_mood",
+                    "severity": "info",
+                    "detail": "Negative mood detected",
+                }
+            )
         return issues
 
 
@@ -146,15 +152,9 @@ class AgentKernel:
 
     def _subscribe_events(self) -> None:
         self._event_bus.subscribe("UserInputEvent", self._on_user_input)
-        self._event_bus.subscribe(
-            "ProactiveSpeechEvent", self._on_proactive_speech
-        )
-        self._event_bus.subscribe(
-            "AgentStateChangeEvent", self._on_state_change
-        )
-        self._event_bus.subscribe(
-            "AgentResponseEvent", self._on_agent_response
-        )
+        self._event_bus.subscribe("ProactiveSpeechEvent", self._on_proactive_speech)
+        self._event_bus.subscribe("AgentStateChangeEvent", self._on_state_change)
+        self._event_bus.subscribe("AgentResponseEvent", self._on_agent_response)
 
     # ── タイマースレッド ──────────────────────────────────
 
@@ -176,9 +176,7 @@ class AgentKernel:
                     logger.exception("TimerTick publish error")
                 time.sleep(self._config.check_interval_sec)
 
-        self._timer_thread = threading.Thread(
-            target=_loop, daemon=True, name="agent-kernel-timer"
-        )
+        self._timer_thread = threading.Thread(target=_loop, daemon=True, name="agent-kernel-timer")
         self._timer_thread.start()
 
     # ── イベントハンドラ ──────────────────────────────────
@@ -237,6 +235,8 @@ class AgentKernel:
                     detail="自発発話の頻度が高すぎます",
                 )
             )
+            if flag == "frequency_exceeded":
+                self._proactive.set_cooldown(300.0)
 
         health_issues = self._anomaly.check_suppression_health(
             self._proactive.get_status(),

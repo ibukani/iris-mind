@@ -146,8 +146,6 @@ class AgentStateManager:
 
         return time.time()
 
-    from datetime import datetime
-
     @staticmethod
     def _import_datetime() -> datetime:
         return datetime.now()

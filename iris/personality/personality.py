@@ -75,15 +75,12 @@ class Personality:
         """システムプロンプトを構築する。"""
         return self.system_prompt_template.format(
             name=self.name,
-            conversation_summary=conversation_summary
-            or "（まだありません）",
-            speech_style=speech_style
-            or "（まだ確立されていません。自然な口調で会話してください）",
+            conversation_summary=conversation_summary or "（まだありません）",
+            speech_style=speech_style or "（まだ確立されていません。自然な口調で会話してください）",
             personality_traits=personality_traits
             or "（まだ確立されていません。好奇心旺盛で親しみやすい性格を基本としてください）",
             user_preferences=user_preferences or "（まだありません）",
-            agents_md_content=agents_md_content
-            or "（構造記憶はまだありません）",
+            agents_md_content=agents_md_content or "（構造記憶はまだありません）",
         )
 
     def build_thinking_prompt(self, user_input: str) -> str:

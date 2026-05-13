@@ -78,7 +78,7 @@ class EpisodicStore:
         return [e["summary"] for e in entries[-n:]]
 
     def _merge_and_trim(self, entries: list[dict]) -> list[dict]:
-        return entries[-self.max_entries:]
+        return entries[-self.max_entries :]
 
     def _load_all(self) -> list[dict]:
         if not self.path.exists():
@@ -105,7 +105,7 @@ class SemanticStore:
         entries = self._load_all()
         if len(entries) <= self._synced_count:
             return
-        for e in entries[self._synced_count:]:
+        for e in entries[self._synced_count :]:
             self.vector.add(e)
         self._synced_count = len(entries)
 
@@ -119,7 +119,7 @@ class SemanticStore:
         entry.setdefault("type", "lesson")
         entries.append(entry)
         if len(entries) > self.max_entries:
-            entries = entries[-self.max_entries:]
+            entries = entries[-self.max_entries :]
         self.path.write_text(
             "\n".join(json.dumps(e) for e in entries),
             encoding="utf-8",

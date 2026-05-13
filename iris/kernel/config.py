@@ -86,6 +86,7 @@ class ProactiveConfig(BaseModel):
 class PersonalityConfig(BaseModel):
     name: str = "Iris"
     thinking_mode_default: bool = False
+    mode_default: str = "auto"
     prompt_file: str = ".iris/config/personality_default.md"
 
 

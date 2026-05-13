@@ -90,6 +90,10 @@ class ContextManager:
     def has_summary(self) -> bool:
         return bool(self._summary)
 
+    @property
+    def summary_text(self) -> str:
+        return self._summary
+
     def clear(self) -> None:
         self._summary = ""
 
@@ -116,10 +120,7 @@ class ContextManager:
         prompt = _COMPACT_PROMPT
         if instructions:
             prompt += f"\n\n追加指示: {instructions}"
-        truncated = [
-            {"role": m["role"], "content": str(m.get("content", ""))[:500]}
-            for m in messages
-        ]
+        truncated = [{"role": m["role"], "content": str(m.get("content", ""))[:500]} for m in messages]
         prompt += "\n\n" + json.dumps(truncated, ensure_ascii=False)
 
         resp = self.llm.chat(

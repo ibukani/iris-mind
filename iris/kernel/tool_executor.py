@@ -33,11 +33,13 @@ class ToolExecutionEngine:
             func_name = tc["function"]["name"]
             args: dict = tc["function"].get("arguments", {})
             result = self.registry.execute(func_name, **args)
-            ctx.append({
-                "role": "tool",
-                "name": func_name,
-                "content": result,
-            })
+            ctx.append(
+                {
+                    "role": "tool",
+                    "name": func_name,
+                    "content": result,
+                }
+            )
             results.append((func_name, result))
         return results
 

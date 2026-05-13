@@ -32,7 +32,9 @@ from iris.kernel.proactive import ProactiveEngine
 from iris.kernel.reflexion import Reflexion
 from iris.kernel.tool_executor import ToolExecutionEngine
 from iris.llm.llm_bridge import LLMBridge
-from iris.memory.stores import EpisodicStore, SemanticStore
+from iris.memory.persona_data import PersonaData
+from iris.memory.persona_profile import PersonaProfile
+from iris.memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
 from iris.memory.vector_store import VectorStore
 from iris.personality.personality import Personality
 
@@ -85,7 +87,17 @@ class CLIAdapter:
             memory=self._memory,
         )
 
-        # カーネル（先に起動 → UserInputEvent を先に購読させる）
+        # ペルソナデータ + 構造記憶
+        self._persona_data = PersonaData()
+        self._persona_profile = PersonaProfile(persona_data=self._persona_data)
+        self._agents_md = AgentsMdStore(
+            path=cfg.agents_md_path,
+            max_bytes=cfg.agents_md_max_bytes,
+        )
+
+        # AgentKernel.startup() が UserInputEvent を購読 → 状態を PROCESSING に遷移
+        # → ConversationService が後から購読（コンストラクタで subscribe）→ LLM 呼び出し
+        # この順序により AgentKernel が先に状態遷移してから ConversationService が処理を開始する
         self._kernel = AgentKernel(
             event_bus=self._event_bus,
             state_manager=self._state,
@@ -123,19 +135,15 @@ class CLIAdapter:
             reflexion=self._reflexion,
             tool_executor=self._tool_exec,
             context_manager=self._context_mgr,
+            persona_profile=self._persona_profile,
+            agents_md_store=self._agents_md,
         )
 
     def _init_events(self) -> None:
         """イベントハンドラを購読する。"""
-        self._event_bus.subscribe(
-            "ProactiveSpeechEvent", self._on_proactive_speech
-        )
-        self._event_bus.subscribe(
-            "AgentResponseEvent", self._on_agent_response
-        )
-        self._event_bus.subscribe(
-            "AgentAnomalyEvent", self._on_anomaly
-        )
+        self._event_bus.subscribe("ProactiveSpeechEvent", self._on_proactive_speech)
+        self._event_bus.subscribe("AgentResponseEvent", self._on_agent_response)
+        self._event_bus.subscribe("AgentAnomalyEvent", self._on_anomaly)
 
     # ── ライフサイクル ────────────────────────────────────
 
@@ -144,8 +152,7 @@ class CLIAdapter:
         console.print()
         console.print(
             Panel.fit(
-                "[bold cyan]Iris CLI[/bold cyan]\n"
-                "Type your message. [dim]Ctrl+C or 'exit' to quit.[/dim]",
+                "[bold cyan]Iris CLI[/bold cyan]\nType your message. [dim]Ctrl+C or 'exit' to quit.[/dim]",
                 border_style="cyan",
             )
         )

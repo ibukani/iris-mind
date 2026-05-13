@@ -1,6 +1,6 @@
 # Iris ドキュメント一覧
 
-## 最新ドキュメント（v0.2）
+## ドキュメント一覧
 
 | ファイル | 内容 |
 |---|---|
@@ -8,15 +8,10 @@
 | [`agent-state.md`](./agent-state.md) | AgentState 状態遷移設計書 — 6状態と遷移テーブル |
 | [`event-bus.md`](./event-bus.md) | EventBus インターフェース仕様書 — イベント種別と配信 |
 | [`proactive-engine.md`](./proactive-engine.md) | ProactiveEngine 設計仕様 — 自律発話の全アルゴリズム |
-
-## 旧ドキュメント（DEPRECATED）
-
-| ファイル | 対応先 | 備考 |
-|---|---|---|
-| [`01_concept.md`](./01_concept.md) | `architecture.md` | 概念部分は新設計書に統合済み。先頭にDEPRECATEDスタブあり |
-| [`02_architecture.md`](./02_architecture.md) | `architecture.md` | 旧アーキテクチャ図。新版で完全リプレイス済み。先頭にDEPRECATEDスタブあり |
-| [`03_memory_system.md`](./03_memory_system.md) | 現行維持 | MemoryManager v0.2 追記あり |
-| [`04_self_mod.md`](./04_self_mod.md) | 保留 | 機能未実装 |
+| [`agent-kernel.md`](./agent-kernel.md) | AgentKernel 設計仕様 — イベント統括・Tier3異常検知 |
+| [`memory-manager.md`](./memory-manager.md) | MemoryManager 設計仕様 — 記憶操作の一元管理 |
+| [`config.md`](./config.md) | Config 設定一覧 — 全フィールドとデフォルト値 |
+| [`conversation-service.md`](./conversation-service.md) | ConversationService 設計仕様 — 会話処理パイプライン |
 
 ## 設計背景
 
@@ -24,7 +19,7 @@ Iris v0.2 の設計理由については `.agents/context.md` を参照してく
 
 ### 主要設計決定
 
-1. **ヘキサゴナルアーキテクチャ** — `adapters/` と `kernel/` の分離により、UI差し替えが安全に可能
+1. **ヘキサゴナルアーキテクチャ** — `adapters/` と `iris/kernel/` の分離により、UI差し替えが安全に可能
 2. **イベント駆動** — `EventBus` でコンポーネント間を疎結合に接続
 3. **自律発話** — `ProactiveEngine` が3層ガバナンス（Tier1自動/Tier2自己判断/Tier3介入）で自発的に会話を開始
-4. **段階的移行** — 旧 `core/` をラッパーで維持しつつ、新 `iris/` 配下に機能を移行
+4. **Tool Call対応** — `CapabilityRegistry` + `ToolExecutionEngine` でLLMからのツール呼び出しを実行

@@ -4,6 +4,7 @@ MemoryManager — 記憶操作の一元管理
 EpisodicStore, SemanticStore, VectorStore を統合し、
 ProactiveEngine や AgentKernel から利用する高水準APIを提供する。
 """
+
 from __future__ import annotations
 
 import logging
@@ -40,34 +41,34 @@ class MemoryManager:
 
         # SemanticStoreのハイブリッド検索（ChromaDB + BM25）
         try:
-            vector_results = self._semantic.search(
-                query=query, max_results=max_results
-            )
+            vector_results = self._semantic.search(query=query, max_results=max_results)
             for vr in vector_results:
-                results.append({
-                    "content": vr.get("content", ""),
-                    "tags": vr.get("tags", []),
-                    "type": vr.get("type", "unknown"),
-                    "score": round(vr.get("score", 0.0), 4),
-                    "timestamp": vr.get("timestamp", ""),
-                })
+                results.append(
+                    {
+                        "content": vr.get("content", ""),
+                        "tags": vr.get("tags", []),
+                        "type": vr.get("type", "unknown"),
+                        "score": round(vr.get("score", 0.0), 4),
+                        "timestamp": vr.get("timestamp", ""),
+                    }
+                )
         except Exception as e:
             logger.warning("SemanticStore.search failed: %s", e)
 
         # VectorStore直アクセス（後方互換用）
         if self._vector_store is not None and not results:
             try:
-                vector_results = self._vector_store.search(
-                    query=query, max_results=max_results
-                )
+                vector_results = self._vector_store.search(query=query, max_results=max_results)
                 for vr in vector_results:
-                    results.append({
-                        "content": vr.get("content", ""),
-                        "tags": vr.get("tags", []),
-                        "type": vr.get("type", "unknown"),
-                        "score": round(vr.get("score", 0.0), 4),
-                        "timestamp": vr.get("timestamp", ""),
-                    })
+                    results.append(
+                        {
+                            "content": vr.get("content", ""),
+                            "tags": vr.get("tags", []),
+                            "type": vr.get("type", "unknown"),
+                            "score": round(vr.get("score", 0.0), 4),
+                            "timestamp": vr.get("timestamp", ""),
+                        }
+                    )
             except Exception as e:
                 logger.warning("VectorStore.search failed: %s", e)
 
@@ -92,10 +93,10 @@ class MemoryManager:
             kind: 種別（'user_input', 'assistant', 'proactive', 'system'）
             metadata: 追加メタデータ
         """
-        # EpisodicStore.add() は summary: str を受け取る
         summary = content
         if metadata:
-            summary = f"{content} [metadata: {metadata}]"
+            tags = " ".join(f"{k}={v}" for k, v in metadata.items())
+            summary = f"{content} [{tags}]"
         self._episodic.add(summary)
 
     def add_semantic(self, content: str, tags: list[str] | None = None) -> None:

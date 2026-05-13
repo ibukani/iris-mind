@@ -144,9 +144,7 @@ class ProactiveEngine:
         if elapsed < self._config.min_interval_sec:
             return 0.0
         max_interval = self._config.max_interval_sec
-        ratio = (elapsed - self._config.min_interval_sec) / (
-            max_interval - self._config.min_interval_sec
-        )
+        ratio = (elapsed - self._config.min_interval_sec) / (max_interval - self._config.min_interval_sec)
         return min(ratio, 1.0)
 
     def _compute_memory_score(self) -> float:
@@ -217,8 +215,7 @@ class ProactiveEngine:
                 confidence=confidence,
                 trigger_type=trigger_type,
                 reasoning=(
-                    f"Tier2: confidence={confidence:.2f} >= threshold"
-                    f" ({self._config.tier2_confidence_threshold})"
+                    f"Tier2: confidence={confidence:.2f} >= threshold ({self._config.tier2_confidence_threshold})"
                 ),
             )
 

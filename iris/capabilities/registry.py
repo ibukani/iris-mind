@@ -70,7 +70,8 @@ class CapabilityRegistry:
         parameters: dict | None = None,
         allowed_roles: set[str] | None = None,
     ) -> Callable:
-        """デコレータとして capbility を登録する。"""
+        """デコレータとして capability を登録する。"""
+
         def decorator(func: Callable) -> Callable:
             c = Capability(
                 name=name or func.__name__,
@@ -81,6 +82,7 @@ class CapabilityRegistry:
             )
             self.register(c)
             return func
+
         return decorator
 
     def get(self, name: str) -> Capability | None:
@@ -90,11 +92,7 @@ class CapabilityRegistry:
         return [c.to_openai_tool() for c in self._capabilities.values()]
 
     def list_tools_for_role(self, role: str) -> list[dict]:
-        return [
-            c.to_openai_tool()
-            for c in self._capabilities.values()
-            if role in c.allowed_roles
-        ]
+        return [c.to_openai_tool() for c in self._capabilities.values() if role in c.allowed_roles]
 
     def execute(self, name: str, **kwargs: object) -> str:
         cap = self.get(name)
@@ -133,6 +131,9 @@ class CapabilityRegistry:
                         mod.register(self)
                 except Exception as e:
                     import logging
+
                     logging.getLogger(__name__).warning(
-                        "Failed to load capability %s: %s", module_path, e,
+                        "Failed to load capability %s: %s",
+                        module_path,
+                        e,
                     )

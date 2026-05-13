@@ -33,7 +33,7 @@ Self-Modification Module (差分生成→承認→テスト→登録)
 | ファイル | 責務 | 公開API |
 |----------|------|---------|
 | `config.py` | 設定管理 | `Config.load()` → yaml → pydantic, `Config.model_names` プロパティ |
-| `llm_bridge.py` | LLM抽象化 | `chat(model=...)`, `set_model()`, `is_available()` |
+| `llm_bridge.py` | LLM抽象化 | `chat(model=...)`, `is_available()` |
 | `personality.py` | キャラ管理 | `build_system_prompt()`, `build_thinking_prompt()` |
 | `reflexion.py` | 内省ループ | `reflect()` → dict, `quick_reflect()` |
 | `context.py` | 会話Compaction管理 | `ContextManager.check_and_summarize()`, `force_summarize()`, `build_compact_messages()` |
@@ -47,11 +47,11 @@ Self-Modification Module (差分生成→承認→テスト→登録)
 ### memory/ — 記憶管理
 | ファイル | 責務 | 公開API |
 |----------|------|---------|
-| `stores.py` | 3種の記憶ストア | `AgentsMdStore.load/update`, `EpisodicStore.add/get_recent`, `SemanticStore.add/search` |
+| `stores.py` | 3種の記憶ストア + Protocolインターフェース | `AgentsMdStore.load/update`, `EpisodicStore.add/get_recent`, `SemanticStore.add/search` |
 | `vector_store.py` | ベクトルDB + BM25（スレッドセーフ） | `VectorStore.add/update/search/delete/count` |
 | `persona_profile.py` | ペルソナ管理 | `PersonaProfile.get_speech_style()`, `get_traits()`, `update_from_reflection()` |
 | `persona_data.py` | ペルソナデータ（専用JSON） | `PersonaData.add_entry()`, `get_top()`, `get_all()`, `clear()` |
-| `iris_profile.md` | 構造記憶（2KB上限） | Iris自身の自己認識ファイル（話し方・性格は含まず） |
+| `data/iris_profile.md` | 構造記憶（2KB上限） | Iris自身の自己認識ファイル（話し方・性格は含まず） |
 
 ### capabilities/ — 機能モジュール
 | モジュール | ツール | 説明 |
@@ -77,14 +77,19 @@ Self-Modification Module (差分生成→承認→テスト→登録)
 6. 直近のEpisodicStore, SemanticStoreを取得
 7. メインループ開始
 
-### 会話時
+### 会話時（ConversationService 10フェーズ）
 1. CliSession: ユーザー入力受付 → コマンド or ConversationServiceへ委譲
-2. ConversationService: 入力分類 + モデル選択 + コンテキスト要約判定
-3. システムプロンプト構築: personality + 会話要約 + 構造記憶 + 最近のepisode + 関連lesson(RAG)
-4. Plan-and-Execute or 通常応答: ToolExecutionEngineでtool_call共通処理
-5. 定期Reflection（5メッセージごとにquick_reflect）
-6. CliSession: 応答表示
-7. 終了時: Reflexion → エピソード保存 + 教訓抽出
+2. `_classify_scenario()`: 2段階分類（キーワード→LLM fallback）
+3. `_resolve_model_params()`: モデル選択（副作用なし、model名を直接chatに渡す）
+4. `check_and_summarize()`: コンテキスト圧縮判定
+5. `_retrieve_rag()`: 意味記憶から関連教訓を検索（Plan/非Plan共通、1度だけ）
+6. `_build_system_prompt()`: personality + 会話要約 + 構造記憶 + エピソード + RAGを統合
+7. Plan判定: Planner.analyze() → is_complex
+8. `_handle_plan()` or `_handle_direct_response()`: 応答生成
+9. `_execute_tool_calls()`: Tool Call実行＋フォローアップ
+10. `_run_quick_reflection()`: 定期Reflection（5メッセージごと）
+11. CliSession: 応答表示
+12. 終了時: Reflexion → エピソード保存 + 教訓抽出
 
 ## 設定（config.yaml）
 ```yaml
@@ -97,7 +102,7 @@ memory:       # paths, 各上限値, RAG設定
 1. 新機能は `capabilities/<name>/server.py` に追加
 2. テストは `sandbox_test()` または `run_python` で実施
 3. 変更はユーザー承認必須
-4. 構造記憶 `memory/iris_profile.md` は変更時に更新
+4. 構造記憶 `memory/data/iris_profile.md` は変更時に更新
 
 ## .gitignore 対象
 .venv/, __pycache__/, *.pyc, *.pyo, memory/chroma_db/, memory/*.jsonl, .DS_Store, *.log

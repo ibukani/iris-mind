@@ -2,6 +2,7 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from rich.console import Console
 from rich.panel import Panel
@@ -12,6 +13,12 @@ from core.llm_bridge import LLMBridge
 from core.reflexion import Reflexion
 from memory.persona_profile import PersonaProfile
 from memory.stores import EpisodicStore, SemanticStore
+
+if TYPE_CHECKING:
+    from capabilities.registry import CapabilityRegistry
+    from core.planner import Planner
+    from core.executor import Executor
+    from core.context import ContextManager
 
 
 console = Console(safe_box=True, legacy_windows=False)
@@ -30,14 +37,14 @@ class CommandContext:
     llm: LLMBridge
     config: Config
     config_path: str = ""
-    registry: object = field(default=None, repr=False)
+    registry: CapabilityRegistry | None = field(default=None, repr=False)
     reflexion: Reflexion | None = None
     episodic: EpisodicStore | None = None
     semantic: SemanticStore | None = None
-    planner: object = field(default=None, repr=False)
-    executor: object = field(default=None, repr=False)
+    planner: Planner | None = field(default=None, repr=False)
+    executor: Executor | None = field(default=None, repr=False)
     persona_profile: PersonaProfile | None = None
-    context_manager: object = field(default=None, repr=False)
+    context_manager: ContextManager | None = field(default=None, repr=False)
 
 
 def _run_reflexion_and_save(
@@ -176,7 +183,7 @@ def handle_command(cmd: str, ctx: CommandContext,
 
 
 def _handle_capabilities(ctx: CommandContext):
-    if not hasattr(ctx.registry, "_capabilities"):
+    if not ctx.registry:
         return
     table = Table(title="Registered Capabilities")
     table.add_column("Name", style="cyan")

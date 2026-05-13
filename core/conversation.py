@@ -1,5 +1,4 @@
 from __future__ import annotations
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
@@ -20,7 +19,6 @@ from core.constants import (
 )
 from core.tool_executor import ToolExecutionEngine
 
-_RAG_EXECUTOR = ThreadPoolExecutor(max_workers=1)
 _SHORT_GREET_TOKENS = 64
 
 
@@ -128,6 +126,139 @@ class ConversationService:
         self.compaction_threshold = compaction_threshold
         self.rag_max_results = rag_max_results
 
+    # ── 内部メソッド（責務ごとに分割） ──────────────────────
+
+    def _classify_scenario(self, user_input: str) -> str:
+        """2段階分類: キーワード → LLM fallback"""
+        category = _quick_classify(user_input)
+        if category is None and self.fast_model is not None:
+            category = _classify_input(self.llm, user_input, self.fast_model)
+        return category or "simple"
+
+    def _resolve_model_params(
+        self, scenario: str, thinking_mode: bool, plan_mode: bool,
+    ) -> tuple[str, int, list[dict] | None]:
+        """使用モデル・トークン上限・ツールリストを決定する（副作用なし）。"""
+        has_fast = self.fast_model is not None
+        use_fast, scenario_max_tokens = SCENARIOS.get(scenario, (True, 256))
+        force_smart = plan_mode or thinking_mode
+
+        if force_smart or not use_fast or not has_fast:
+            return self.smart_model, self.max_tokens, self.registry.list_tools()
+        assert self.fast_model is not None  # has_fast=True で保証
+        return self.fast_model, min(self.max_tokens_fast, scenario_max_tokens), None
+
+    def _build_system_prompt(
+        self, conversation_summary: str, rag_results: list[dict], user_input: str,
+    ) -> str:
+        """システムプロンプトを構築（ペルソナ・記憶・RAGを統合）。"""
+        pref_results = self.semantic.search("ユーザーの好み user preference", max_results=3)
+        pref_text = "\n".join(f"- {p['content'][:120]}" for p in pref_results) if pref_results else ""
+
+        system_prompt = self.personality.build_system_prompt(
+            agents_md_content=self.agents_md.load(),
+            speech_style=self.persona_profile.get_speech_style(),
+            personality_traits=self.persona_profile.get_traits(),
+            user_preferences=pref_text,
+            conversation_summary=conversation_summary,
+        )
+
+        recent_episodes = self.episodic.get_recent(3)
+        if recent_episodes:
+            system_prompt += "\n\n## Recent Sessions\n" + "\n".join(f"- {e}" for e in recent_episodes)
+
+        if rag_results:
+            system_prompt += "\n\n## Related Lessons\n" + "\n".join(
+                f"- {e['content']}" for e in rag_results
+            )
+
+        return system_prompt
+
+    def _retrieve_rag(self, user_input: str) -> list[dict]:
+        """意味記憶から関連エントリを検索して返す。"""
+        try:
+            return self.semantic.search(user_input, max_results=self.rag_max_results)
+        except Exception:
+            return []
+
+    def _handle_plan(
+        self, plan_result: dict, user_input: str,
+    ) -> dict:
+        """Plan-and-Execute でサブタスクを実行し、最終メッセージを返す。"""
+        final_content = self.executor.execute_plan(
+            plan_result, user_input, self.personality.name,
+        )
+        return {"role": "assistant", "content": final_content}
+
+    def _handle_direct_response(
+        self, system_prompt: str, messages: list[dict],
+        thinking_mode: bool, tools_list: list[dict] | None,
+        max_tokens: int, on_token: Callable[[str], None] | None,
+        active_model: str,
+    ) -> dict:
+        """LLM呼び出し→Tool Call実行→フォローアップまでを一貫処理して最終メッセージを返す。"""
+        response = self.llm.chat(
+            messages=[{"role": "system", "content": system_prompt}, *messages],
+            model=active_model,
+            enable_thinking=thinking_mode,
+            temperature=self.temperature,
+            max_tokens=max_tokens,
+            tools=tools_list,
+            on_token=on_token,
+        )
+
+        msg = response["message"]
+        messages.append(msg)
+
+        if msg.get("tool_calls"):
+            msg = self._execute_tool_calls(msg, system_prompt, messages, thinking_mode, on_token, active_model)
+
+        return msg
+
+    def _execute_tool_calls(
+        self, msg: dict, system_prompt: str, messages: list[dict],
+        thinking_mode: bool, on_token: Callable[[str], None] | None,
+        active_model: str,
+    ) -> dict:
+        """Tool Callを実行し、必要に応じてフォローアップLLM呼び出しを行う。"""
+        tool_engine = ToolExecutionEngine(self.llm, self.registry)
+        ctx = messages[:]
+        tool_results = tool_engine.execute_all(ctx)
+
+        if not tool_engine.should_follow_up(tool_results):
+            combined = "\n\n".join(
+                f"**{name}** result:\n{res}" for name, res in tool_results
+            )
+            messages.extend(ctx[len(messages):])
+            return {"role": "assistant", "content": combined}
+
+        messages.extend(ctx[len(messages):])
+        final = self.llm.chat(
+            messages=[{"role": "system", "content": system_prompt}, *messages],
+            model=active_model,
+            enable_thinking=thinking_mode,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+            on_token=on_token,
+        )
+        return final["message"]
+
+    def _run_quick_reflection(self, messages: list[dict], count: int) -> int:
+        """5メッセージごとに quick_reflect を実行。"""
+        count += 1
+        if count < 5:
+            return count
+        try:
+            slice_for_reflect = messages[-8:] if len(messages) >= 8 else messages
+            result = self.reflexion.quick_reflect(slice_for_reflect)
+            if result.get("speech_style") or result.get("expressed_traits"):
+                self.persona_profile.update_from_reflection(result)
+        except Exception:
+            pass
+        return 0
+
+    # ── 公開API ────────────────────────────────────────────
+
     def process_input(
         self,
         user_input: str,
@@ -138,125 +269,65 @@ class ConversationService:
         msg_count_since_reflect: int,
         on_token: Callable[[str], None] | None = None,
     ) -> ProcessResult:
-        has_fast = self.fast_model is not None
-        category = _quick_classify(user_input)
-        if category is None and has_fast:
-            category = _classify_input(self.llm, user_input, self.fast_model)
-        scenario = category or "simple"
-        use_fast, scenario_max_tokens = SCENARIOS.get(scenario, (True, 256))
+        # Phase 1: 入力分類
+        scenario = self._classify_scenario(user_input)
 
-        force_smart = plan_mode or thinking_mode
-        if force_smart or not use_fast or not has_fast:
-            use_fast = False
-            self.llm.set_model(self.smart_model)
-            active_model = self.smart_model
-            max_tokens = self.max_tokens
-            tools_list = self.registry.list_tools()
-        else:
-            self.llm.set_model(self.fast_model)
-            active_model = self.fast_model
-            max_tokens = min(self.max_tokens_fast, scenario_max_tokens)
-            tools_list = None
+        # Phase 2: モデル選択（set_model副作用なし、model名を直接返す）
+        active_model, max_tokens, tools_list = self._resolve_model_params(
+            scenario, thinking_mode, plan_mode,
+        )
+        use_fast = (active_model == self.fast_model)
 
-        _conversation_summary = self.context_manager.check_and_summarize(
+        # Phase 3: コンテキスト圧縮判定
+        conversation_summary = self.context_manager.check_and_summarize(
             messages,
             context_window=self.context_window,
             threshold=self.compaction_threshold,
         )
 
-        _pref_results = self.semantic.search("ユーザーの好み user preference", max_results=3)
-        _pref_text = "\n".join(f"- {p['content'][:120]}" for p in _pref_results) if _pref_results else ""
-        system_prompt = self.personality.build_system_prompt(
-            agents_md_content=self.agents_md.load(),
-            speech_style=self.persona_profile.get_speech_style(),
-            personality_traits=self.persona_profile.get_traits(),
-            user_preferences=_pref_text,
-            conversation_summary=_conversation_summary,
+        # Phase 4: RAG取得（Plan/非Plan共通、1度だけ）
+        rag_results = self._retrieve_rag(user_input) if not use_fast else []
+
+        # Phase 5: システムプロンプト構築
+        system_prompt = self._build_system_prompt(
+            conversation_summary, rag_results, user_input,
         )
 
-        recent_episodes = self.episodic.get_recent(3)
-        if recent_episodes:
-            system_prompt += "\n\n## Recent Sessions\n" + "\n".join(f"- {e}" for e in recent_episodes)
+        # Phase 6: Plan判定
+        should_plan = False
+        plan_result = None
+        if not use_fast and (plan_mode or (thinking_mode and _detect_complex(user_input))):
+            plan_result = self.planner.analyze(user_input, system_prompt[:300])
+            if not plan_mode:
+                should_plan = self.planner.is_complex(plan_result)
+            else:
+                should_plan = True
 
+        # Phase 7: 思考モードでユーザー入力をラップ
         if thinking_mode:
             messages[-1] = messages[-1].copy()
             messages[-1]["content"] = self.personality.build_thinking_prompt(user_input)
 
-        should_plan = False
-        plan_result = None
-        if not use_fast and (plan_mode or (thinking_mode and _detect_complex(user_input))):
-            rag_future = _RAG_EXECUTOR.submit(self.semantic.search, user_input, max_results=self.rag_max_results)
-            plan_result = self.planner.analyze(user_input, system_prompt[:300])
-            _rag_results = rag_future.result()
-            if _rag_results:
-                system_prompt += "\n\n## Related Lessons\n" + "\n".join(f"- {e['content']}" for e in _rag_results)
-            if not plan_mode:
-                should_plan = self.planner.is_complex(plan_result)
-
+        # Phase 8: 簡易グリーティング抑制
         if not use_fast and not plan_mode and not thinking_mode and user_input.strip().lower() in (
             "hello", "hi", "bye", "thanks", "ありがとう"):
             max_tokens = _SHORT_GREET_TOKENS
 
+        # Phase 9: 応答生成
         if should_plan:
-            subtasks = plan_result.get("subtasks", [])
-            final_content = self.executor.execute_plan(
-                plan_result, user_input, self.personality.name,
-            )
-            msg = {"role": "assistant", "content": final_content}
-            messages.append(msg)
+            assert plan_result is not None
+            msg = self._handle_plan(plan_result, user_input)
         else:
-            if not use_fast:
-                rag_future = _RAG_EXECUTOR.submit(self.semantic.search, user_input, max_results=self.rag_max_results)
-                _rag_results = rag_future.result()
-                if _rag_results:
-                    system_prompt += "\n\n## Related Lessons\n" + "\n".join(f"- {e['content']}" for e in _rag_results)
-
-            response = self.llm.chat(
-                messages=[{"role": "system", "content": system_prompt}, *messages],
-                enable_thinking=thinking_mode,
-                temperature=self.temperature,
-                max_tokens=max_tokens,
-                tools=tools_list,
-                on_token=on_token if not use_fast else None,
+            msg = self._handle_direct_response(
+                system_prompt, messages,
+                thinking_mode, tools_list, max_tokens, on_token,
+                active_model,
             )
 
-            msg = response["message"]
-            messages.append(msg)
+        messages.append(msg)
 
-            if msg.get("tool_calls"):
-                tool_engine = ToolExecutionEngine(self.llm, self.registry)
-                ctx = messages[:]
-                tool_results = tool_engine.execute_all(ctx)
-
-                if not tool_engine.should_follow_up(tool_results):
-                    combined = "\n\n".join(
-                        f"**{name}** result:\n{res}" for name, res in tool_results
-                    )
-                    msg = {"role": "assistant", "content": combined}
-                    messages.extend(ctx[len(messages):])
-                    messages.append(msg)
-                else:
-                    messages.extend(ctx[len(messages):])
-                    final = self.llm.chat(
-                        messages=[{"role": "system", "content": system_prompt}, *messages],
-                        enable_thinking=thinking_mode,
-                        temperature=self.temperature,
-                        max_tokens=self.max_tokens,
-                        on_token=on_token,
-                    )
-                    msg = final["message"]
-                    messages.append(msg)
-
-        msg_count_since_reflect += 1
-        if msg_count_since_reflect >= 5:
-            msg_count_since_reflect = 0
-            try:
-                slice_for_reflect = messages[-8:] if len(messages) >= 8 else messages
-                result = self.reflexion.quick_reflect(slice_for_reflect)
-                if result.get("speech_style") or result.get("expressed_traits"):
-                    self.persona_profile.update_from_reflection(result)
-            except Exception:
-                pass
+        # Phase 10: Quick Reflection
+        msg_count_since_reflect = self._run_quick_reflection(messages, msg_count_since_reflect)
 
         return ProcessResult(
             response_message=msg,

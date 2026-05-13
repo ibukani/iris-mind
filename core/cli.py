@@ -1,13 +1,9 @@
 from __future__ import annotations
-import subprocess
-import time
 from pathlib import Path
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
-from rich.live import Live
-from rich.spinner import Spinner
 
 from prompt_toolkit import PromptSession, HTML
 from prompt_toolkit.history import FileHistory
@@ -34,70 +30,6 @@ _COMMANDS = [
     "/help", "/think", "/plan", "/compact", "/model", "/clear", "/exit", "/quit",
     "/capabilities", "/memory", "/memory-clear", "/persona",
 ]
-
-
-def _ensure_ollama(config: Config) -> LLMBridge | None:
-    llm = LLMBridge(
-        model_name=config.model.smart_model,
-        base_url=config.model.base_url,
-        draft_model=config.model.draft_model,
-        num_draft=config.model.num_draft,
-        num_gpu=config.model.num_gpu,
-        num_ctx=config.model.num_ctx,
-    )
-    if not llm.is_available():
-        console.print("[yellow]Ollama is not running. Attempting to start it...[/yellow]")
-        try:
-            subprocess.Popen(
-                ["ollama", "serve"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                creationflags=subprocess.CREATE_NO_WINDOW,
-            )
-        except FileNotFoundError:
-            console.print(
-                "[red]Could not find 'ollama' command![/red]\n"
-                "Please install Ollama and ensure it is in your PATH:\n"
-                "  https://ollama.com/download"
-            )
-            return None
-
-        for _ in range(15):
-            time.sleep(1)
-            if llm.is_available():
-                console.print(f"[green]Connected to Ollama ({config.model.smart_model})[/green]")
-                break
-        else:
-            console.print(
-                "[red]Ollama failed to start within 15 seconds.[/red]\n"
-                f"Please start it manually:\n"
-                f"  ollama pull {config.model.smart_model}\n"
-                f"  ollama serve"
-            )
-            return None
-    else:
-        console.print(f"[green]Connected to Ollama ({config.model.smart_model})[/green]")
-
-    if config.model.draft_model:
-        try:
-            models = llm.client.list()
-            available = [m["name"] for m in models.get("models", [])]
-            if config.model.draft_model not in available:
-                console.print(
-                    f"[yellow]Draft model '{config.model.draft_model}' not found.[/yellow]\n"
-                    f"  Run: ollama pull {config.model.draft_model}\n"
-                    f"  Then set: $env:OLLAMA_DRAFT_MODEL='{config.model.draft_model}'; ollama serve"
-                )
-            else:
-                console.print(
-                    f"[green]Draft model '{config.model.draft_model}' available.[/green]\n"
-                    f"  [dim]To enable speculative decoding, restart Ollama with:\n"
-                    f"  $env:OLLAMA_DRAFT_MODEL='{config.model.draft_model}'; ollama serve[/dim]"
-                )
-        except Exception:
-            pass
-
-    return llm
 
 
 def _make_prompt(thinking: bool, plan: bool, model: str, msg_count: int) -> HTML:

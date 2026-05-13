@@ -1,8 +1,26 @@
 from __future__ import annotations
 from pathlib import Path
 import json
+from typing import Protocol
 
 from memory.vector_store import VectorStore
+
+
+class AgentsMdStoreProtocol(Protocol):
+    def load(self) -> str: ...
+    def update(self, new_content: str): ...
+
+
+class EpisodicStoreProtocol(Protocol):
+    def add(self, summary: str): ...
+    def get_recent(self, n: int = 5) -> list[str]: ...
+    def clear(self): ...
+
+
+class SemanticStoreProtocol(Protocol):
+    def add(self, entry: dict): ...
+    def search(self, query: str, max_results: int = 3) -> list[dict]: ...
+    def clear(self): ...
 
 
 class AgentsMdStore:

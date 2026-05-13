@@ -10,7 +10,7 @@ Iris は自律的に行動・進化できるAIアシスタント。Python製でO
 ## ディレクトリ構成
 - `core/` → エンジン本体（config, llm_bridge, personality, reflexion, conversation, tool_executor, planner, executor, commands, cli）
 - `capabilities/` → 機能モジュール（file_ops, code_exec, self_mod など）
-- `memory/` → 記憶管理（stores.py, vector_store.py, persona_profile.py, persona_data.py, iris_profile.md）
+- `memory/` → 記憶管理（stores.py, vector_store.py, persona_profile.py, persona_data.py, data/iris_profile.md）
 - `docs/` → 設計ドキュメント
 - `.agent/` → コーディングエージェント用コンテキスト（context.md, project.md, tasks.md）
 - `AGENTS.md` → プロジェクトルール（このファイル）
@@ -27,7 +27,7 @@ main.py
   ├── core/context.py        (会話Compaction・Prune管理)
   ├── core/cli.py            (CliSession: ContextManager使用)
   ├── core/commands.py       (コマンド処理)
-  ├── core/conversation.py    (会話オーケストレーション: 入力分類→モデル選択→応答生成)
+  ├── core/conversation.py    (会話オーケストレーション: 分類→モデル選択→コンテキスト→RAG→応答生成→ToolCall→Reflection)
   ├── core/planner.py        (タスク分解)
   ├── core/executor.py       (サブタスク逐次実行)
   ├── core/tool_executor.py  (Tool Call実行共通基盤)
@@ -41,7 +41,7 @@ main.py
 ```
 
 ## Iris の記憶体系
-- `memory/iris_profile.md`: Irisの構造記憶（自己認識用、上限2KB固定）※話し方・性格は含まず、別JSONで動的管理
+- `memory/data/iris_profile.md`: Irisの構造記憶（自己認識用、上限2KB固定）※話し方・性格は含まず、別JSONで動的管理
 - EpisodicStore: JSONLベースの作業記憶（上限30エントリ、古いものをマージ圧縮）
 - SemanticStore: JSONL永続化 + ChromaDB + BM25 ハイブリッド検索（上限100エントリ）
 - VectorStore: ONNXMiniLM_L6_V2 埋め込み、cosine類似度、統合スコア = vector*0.6 + bm25*0.4
@@ -75,7 +75,7 @@ main.py
 ## ドキュメント更新義務
 機能追加・変更を行った場合、該当する以下のドキュメントを必ず同時に更新する：
 - `docs/*.md` — 設計ドキュメント（概念・アーキテクチャ・記憶システム等）
-- `memory/iris_profile.md` — Irisの構造記憶（自己認識用capability一覧）
+- `memory/data/iris_profile.md` — Irisの構造記憶（自己認識用capability一覧）
 - `AGENTS.md` — コーディングエージェント用ルール（必要に応じて）
 - `.agent/*.md` — コーディングエージェント用コンテキスト（必要に応じて）
 

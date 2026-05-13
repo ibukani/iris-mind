@@ -10,7 +10,7 @@ from chromadb.utils import embedding_functions
 class VectorStore:
     """ChromaDB + BM25 ハイブリッド検索エンジン"""
 
-    def __init__(self, path: str = "memory/chroma_db"):
+    def __init__(self, path: str = "memory/data/chroma_db"):
         self.client = chromadb.PersistentClient(path=path)
         self.dense_ef = embedding_functions.ONNXMiniLM_L6_V2()
         self.collection = self.client.get_or_create_collection(
@@ -84,17 +84,13 @@ class VectorStore:
         with self._lock:
             if self.collection.count() == 0:
                 return []
-
             if self._bm25_dirty:
                 self._rebuild_bm25()
-
             dense_results = self.collection.query(
                 query_texts=[query],
                 n_results=max_results * 2,
             )
-
         bm25_scores = self._bm25_search(query)
-
         merged: dict[str, dict] = {}
         if dense_results["ids"]:
             for i, eid in enumerate(dense_results["ids"][0]):
@@ -107,7 +103,6 @@ class VectorStore:
                     "_vector_score": vector_score,
                     "_bm25_score": bm25_scores.get(eid, 0.0),
                 }
-
         for eid, bscore in bm25_scores.items():
             if eid in merged:
                 merged[eid]["_bm25_score"] = bscore
@@ -119,31 +114,25 @@ class VectorStore:
                     "_vector_score": 0.0,
                     "_bm25_score": bscore,
                 }
-
         scored = []
         for data in merged.values():
             hybrid = data["_vector_score"] * 0.6 + data["_bm25_score"] * 0.4
             if hybrid >= min_score:
                 scored.append((hybrid, data))
         scored.sort(key=lambda x: x[0], reverse=True)
-
         return [{"id": s["id"], "content": s["content"], "type": s["type"]} for _, s in scored[:max_results]]
 
     def _bm25_search(self, query: str) -> dict[str, float]:
         if self._bm25_dirty:
             self._rebuild_bm25()
-
         query_terms = query.lower().split()
         if not query_terms:
             return {}
-
         n = len(self._all_docs)
         if n == 0:
             return {}
-
         k1, b = 1.5, 0.75
         scores: dict[str, float] = {}
-
         for qt in query_terms:
             if qt not in self._inverted_index:
                 continue
@@ -152,7 +141,6 @@ class VectorStore:
                 dl = self._doc_lengths[eid]
                 s = idf * (tf * (k1 + 1)) / (tf + k1 * (1 - b + b * dl / self._avgdl))
                 scores[eid] = scores.get(eid, 0.0) + s
-
         return {eid: min(score / 10.0, 1.0) for eid, score in scores.items()}
 
     def _rebuild_bm25(self):
@@ -164,13 +152,11 @@ class VectorStore:
             self._avgdl = 1.0
             self._bm25_dirty = False
             return
-
         results = self.collection.get()
         self._all_docs = dict(zip(results["ids"], results["documents"], strict=False))
         self._inverted_index = {}
         self._bm25_doc_freq = {}
         total_terms = 0
-
         for eid, doc in self._all_docs.items():
             terms = doc.lower().split()
             dl = len(terms)
@@ -184,6 +170,5 @@ class VectorStore:
                 if t not in seen:
                     self._bm25_doc_freq[t] = self._bm25_doc_freq.get(t, 0) + 1
                     seen.add(t)
-
         self._avgdl = total_terms / len(self._all_docs)
         self._bm25_dirty = False

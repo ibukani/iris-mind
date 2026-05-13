@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from memory.persona_data import PersonaData
+from iris.memory.persona_data import PersonaData
 
 
 class PersonaProfile:
     """ペルソナ管理クラス。
 
     動的データ（speech_style / traits）は PersonaData（専用JSON）で管理。
-    構造記憶（iris_profile.md）とは完全に分離されており、
-    話し方・性格の動的データはシステムプロンプトに直接注入される。
+    構造記憶（iris_profile.md）とは完全に分離。
     """
 
     def __init__(self, persona_data: PersonaData):
@@ -38,7 +37,6 @@ class PersonaProfile:
     def update_from_reflection(self, reflection: dict):
         speech = reflection.get("speech_style", "").strip()
         traits = reflection.get("expressed_traits", "").strip()
-
         if speech:
             self.persona_data.add_entry("speech_style", speech)
         if traits:

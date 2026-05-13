@@ -21,7 +21,7 @@ from iris.kernel.event_bus import (
 )
 from iris.kernel.memory_manager import MemoryManager
 from iris.kernel.proactive import ProactiveEngine
-from memory.stores import EpisodicStore, SemanticStore
+from iris.memory.stores import EpisodicStore, SemanticStore
 
 passed = 0
 failed = 0

@@ -22,7 +22,7 @@ except Exception as e:
     print(f"FAIL import: {e}")
 
 try:
-    from memory.stores import EpisodicStore, SemanticStore
+    from iris.memory.stores import EpisodicStore, SemanticStore
 
     epi = EpisodicStore(path="memory/data/episodes_test.jsonl", max_entries=30)
     sem = SemanticStore(path="memory/data/semantic_test.jsonl", max_entries=100, vector_db_path="memory/data/chroma_test")
@@ -30,7 +30,7 @@ try:
     print("[OK] MemoryManager constructor (without vector_store)")
 
     try:
-        from memory.vector_store import VectorStore
+        from iris.memory.vector_store import VectorStore
         vs = VectorStore(path="memory/data/chroma_test")
         mm2 = MemoryManager(episodic=epi, semantic=sem, vector_store=vs)
         print("[OK] MemoryManager constructor (with vector_store)")

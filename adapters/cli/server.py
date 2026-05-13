@@ -32,9 +32,9 @@ from iris.kernel.proactive import ProactiveEngine
 from iris.kernel.reflexion import Reflexion
 from iris.kernel.tool_executor import ToolExecutionEngine
 from iris.llm.llm_bridge import LLMBridge
+from iris.memory.stores import EpisodicStore, SemanticStore
+from iris.memory.vector_store import VectorStore
 from iris.personality.personality import Personality
-from memory.stores import EpisodicStore, SemanticStore
-from memory.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 console = Console()

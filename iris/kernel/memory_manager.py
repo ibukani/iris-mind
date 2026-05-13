@@ -9,8 +9,8 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from memory.stores import EpisodicStore, SemanticStore
-from memory.vector_store import VectorStore
+from iris.memory.stores import EpisodicStore, SemanticStore
+from iris.memory.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 

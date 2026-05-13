@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Protocol
 
-from memory.vector_store import VectorStore
+from iris.memory.vector_store import VectorStore
 
 
 class AgentsMdStoreProtocol(Protocol):
@@ -25,7 +25,7 @@ class SemanticStoreProtocol(Protocol):
 
 
 class AgentsMdStore:
-    """構造記憶。memory/data/iris_profile.mdの読み書き。サイズ上限を超えないよう制御。"""
+    """構造記憶。memory/data/iris_profile.mdの読み書き。"""
 
     def __init__(self, path: str = "memory/data/iris_profile.md", max_bytes: int = 2048):
         self.path = Path(path)
@@ -53,7 +53,7 @@ class AgentsMdStore:
 
 
 class EpisodicStore:
-    """エピソード記憶。日次サマリーを管理。上限到達時は古いものをマージして圧縮。"""
+    """エピソード記憶。上限到達時は古いものを削除。"""
 
     def __init__(self, path: str = "memory/data/episodes.jsonl", max_entries: int = 30):
         self.path = Path(path)
@@ -78,8 +78,7 @@ class EpisodicStore:
         return [e["summary"] for e in entries[-n:]]
 
     def _merge_and_trim(self, entries: list[dict]) -> list[dict]:
-        """上限超過時、古いエントリを単純にドロップ（マージはノイズになるため）"""
-        return entries[-self.max_entries :]
+        return entries[-self.max_entries:]
 
     def _load_all(self) -> list[dict]:
         if not self.path.exists():
@@ -88,7 +87,7 @@ class EpisodicStore:
 
 
 class SemanticStore:
-    """意味記憶。JSONL永続化 + VectorStore（ChromaDB + BM25）によるハイブリッド検索。"""
+    """意味記憶。JSONL永続化 + VectorStore によるハイブリッド検索。"""
 
     def __init__(
         self,
@@ -106,7 +105,7 @@ class SemanticStore:
         entries = self._load_all()
         if len(entries) <= self._synced_count:
             return
-        for e in entries[self._synced_count :]:
+        for e in entries[self._synced_count:]:
             self.vector.add(e)
         self._synced_count = len(entries)
 
@@ -120,7 +119,7 @@ class SemanticStore:
         entry.setdefault("type", "lesson")
         entries.append(entry)
         if len(entries) > self.max_entries:
-            entries = entries[-self.max_entries :]
+            entries = entries[-self.max_entries:]
         self.path.write_text(
             "\n".join(json.dumps(e) for e in entries),
             encoding="utf-8",

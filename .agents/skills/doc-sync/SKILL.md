@@ -39,12 +39,12 @@ metadata:
 - ドキュメント更新義務の変更
 - git コミットルールの変更
 
-### 4. `.agent/*.md`
+### 4. `.agents/*.md`
 
 以下の内容が変わった場合に更新：
-- プロジェクト概要 (`.agent/project.md`)
-- セッションコンテキスト (`.agent/context.md`)
-- タスク管理 (`.agent/tasks.md`)
+- プロジェクト概要 (`.agents/project.md`)
+- セッションコンテキスト (`.agents/context.md`)
+- タスク管理 (`.agents/tasks.md`)
 
 ### 5. Skills `.opencode/skills/*/SKILL.md`
 

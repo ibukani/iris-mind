@@ -12,7 +12,7 @@ Iris は自律的に行動・進化できるAIアシスタント。Python製でO
 - `capabilities/` → 機能モジュール（file_ops, code_exec, self_mod など）
 - `memory/` → 記憶管理（stores.py, vector_store.py, persona_profile.py, persona_data.py, data/iris_profile.md）
 - `docs/` → 設計ドキュメント
-- `.agent/` → コーディングエージェント用コンテキスト（context.md, project.md, tasks.md）
+- `.agents/` → コーディングエージェント用コンテキスト（context.md, project.md, tasks.md）
 - `AGENTS.md` → プロジェクトルール（このファイル）
 - `config.yaml` → Irisの設定ファイル
 - `main.py` → エントリーポイント（CLIループ）
@@ -59,7 +59,7 @@ main.py
 - 設計ドキュメント (`docs/*.md`)
 - 構造記憶 (`memory/data/iris_profile.md`)
 - プロジェクトルール (`AGENTS.md`)
-- エージェントコンテキスト (`.agent/*.md`)
+- エージェントコンテキスト (`.agents/*.md`)
 - Skills (`.agents/skills/*/SKILL.md`)
 
 ## コーディング規約

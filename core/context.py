@@ -30,9 +30,9 @@ def estimate_messages_tokens(messages: list[dict]) -> int:
 
 
 class ContextManager:
-    def __init__(self, llm: LLMBridge, fast_model: str | None = None):
+    def __init__(self, llm: LLMBridge, compact_model: str | None = None):
         self.llm = llm
-        self.fast_model = fast_model
+        self.compact_model = compact_model
         self._summary: str = ""
 
     def check_and_summarize(
@@ -85,7 +85,7 @@ class ContextManager:
 
         resp = self.llm.chat(
             messages=[{"role": "user", "content": prompt}],
-            model=self.fast_model,
+            model=self.compact_model,
             temperature=0.3,
             max_tokens=500,
             keep_alive="0",

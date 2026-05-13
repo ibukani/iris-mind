@@ -106,7 +106,6 @@ def handle_command(
                     "[bold]/plan[/bold] - toggle plan-and-execute mode\n"
                     "/compact - compact conversation history (preserves summary)\n"
                     "/compact <instructions> - compact with custom instructions\n"
-                    "/model <name> - switch model\n"
                     "/capabilities - list registered capabilities\n"
                     "/persona - show/manage my personality\n"
                     "/persona set speech_style|traits <text> - override speech style or traits\n"
@@ -132,14 +131,6 @@ def handle_command(
         case ["/plan"]:
             plan_mode = not plan_mode
             console.print(f"[yellow]Plan mode: {'ON' if plan_mode else 'OFF'}[/yellow]")
-            return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
-
-        case ["/model", name]:
-            ctx.llm.set_model(name)
-            ctx.config.model.smart_model = name
-            if ctx.config_path:
-                ctx.config.save(ctx.config_path)
-            console.print(f"[green]Switched to model: {name}[/green]")
             return CommandResult(handled=True, thinking_mode=thinking_mode, plan_mode=plan_mode)
 
         case ["/capabilities"]:

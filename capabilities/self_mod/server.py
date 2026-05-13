@@ -9,6 +9,7 @@ def register(registry: CapabilityRegistry):
     @registry.register_func(
         name="generate_capability",
         description="新しいcapabilityコードを生成し、指定されたパスに保存します",
+        allowed_roles={"smart"},
         parameters={
             "name": {
                 "type": "string",
@@ -38,6 +39,7 @@ def register(registry: CapabilityRegistry):
     @registry.register_func(
         name="modify_file",
         description="既存ファイルを変更します（差分表示前提）",
+        allowed_roles={"smart"},
         parameters={
             "path": {
                 "type": "string",
@@ -62,6 +64,7 @@ def register(registry: CapabilityRegistry):
     @registry.register_func(
         name="sandbox_test",
         description="指定されたPythonファイルの構文チェックとテスト実行を行います",
+        allowed_roles={"smart"},
         parameters={
             "path": {
                 "type": "string",

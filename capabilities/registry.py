@@ -11,11 +11,13 @@ class Capability:
         description: str,
         parameters: dict,
         func: Callable,
+        allowed_roles: set[str] | None = None,
     ):
         self.name = name
         self.description = description
         self.parameters = parameters
         self.func = func
+        self.allowed_roles = allowed_roles or {"base", "smart"}
 
     def to_openai_tool(self) -> dict:
         required = []
@@ -55,6 +57,7 @@ class CapabilityRegistry:
         name: str | None = None,
         description: str | None = None,
         parameters: dict | None = None,
+        allowed_roles: set[str] | None = None,
     ):
         def decorator(func):
             c = Capability(
@@ -62,6 +65,7 @@ class CapabilityRegistry:
                 description=description or (func.__doc__ or "").strip(),
                 parameters=parameters or {},
                 func=func,
+                allowed_roles=allowed_roles,
             )
             self.register(c)
             return func
@@ -73,6 +77,10 @@ class CapabilityRegistry:
 
     def list_tools(self) -> list[dict]:
         return [c.to_openai_tool() for c in self._capabilities.values()]
+
+    def list_tools_for_role(self, role: str) -> list[dict]:
+        """指定されたロールに許可されているツールのみ返す。"""
+        return [c.to_openai_tool() for c in self._capabilities.values() if role in c.allowed_roles]
 
     def execute(self, name: str, **kwargs) -> str:
         cap = self.get(name)

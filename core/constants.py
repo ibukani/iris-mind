@@ -1,31 +1,27 @@
 """共通定数・設定値。"""
 
+from enum import Enum
+
+
+class Complexity(Enum):
+    LOW = "low"
+    MEDIUM = "medium"
+    HIGH = "high"
+
+
 # ── モデル関連 ──────────────────────────────────────────────
 DEFAULT_MODEL = "qwen3.5:9b"
 DEFAULT_BASE_URL = "http://localhost:11434"
-DEFAULT_MAX_TOKENS = 1024
-DEFAULT_MAX_TOKENS_FAST = 256
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_NUM_CTX = 8192
 DEFAULT_NUM_GPU = 0
 
-# ── シナリオ別トークン上限 ─────────────────────────────────
-MAX_TOKENS_BY_SCENARIO: dict[str, int] = {
-    "greeting": 64,
-    "simple": 256,
-    "qa": 1024,
-    "tool": 1024,
-    "complex": 1024,
-}
+# ── 複雑性判定閾値 ─────────────────────────────────────────
+COMPLEXITY_LOW_THRESHOLD = 2
+COMPLEXITY_HIGH_THRESHOLD = 4
 
-# ── シナリオ別設定 (use_fast, max_context_tokens) ───────────
-SCENARIOS: dict[str, tuple[bool, int]] = {
-    "greeting": (True, 256),
-    "simple": (True, 512),
-    "qa": (True, 1024),
-    "tool": (False, 1024),
-    "complex": (False, 1024),
-}
+# ── 応答トークン上限 ─────────────────────────────────────
+SHORT_GREET_TOKENS = 64
 
 # ── 分類関連 ────────────────────────────────────────────────
 GREETING_WORDS = frozenset(
@@ -117,17 +113,3 @@ COMPLEX_TRIGGERS = [
 # ── ハイブリッド検索重み ────────────────────────────────────
 VECTOR_WEIGHT = 0.6
 BM25_WEIGHT = 0.4
-
-# ── プロンプト ─────────────────────────────────────────────
-CLASSIFY_PROMPT = (
-    "Classify the following user input into exactly ONE category. "
-    "Reply with only the category word, nothing else.\n"
-    "Categories:\n"
-    "- greeting: simple hello, thanks, goodbye (no real request)\n"
-    "- simple: short factual question, simple chat (fits in 1-2 sentences)\n"
-    "- qa: requires explanation but no tool calls\n"
-    "- tool: requires file operations, code execution, or shell commands\n"
-    "- complex: multi-step task requiring planning and subtasks\n\n"
-    "Input: {input}\n"
-    "Category:"
-)

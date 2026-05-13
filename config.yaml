@@ -1,13 +1,20 @@
 model:
-  smart_model: qwen3.5:9b
-  fast_model: qwen3.5:2b
+  models:
+    - name: qwen3.5:2b
+      role: base
+      max_tokens: 512
+    - name: qwen3.5:9b
+      role: smart
+      max_tokens: 1024
+  escalation:
+    enabled: true
+    max_retries: 1
+    swap_on_escalate: true
+    keep_alive_duration: "5m"
   base_url: http://localhost:11434
-  max_tokens: 1024
-  max_tokens_fast: 512
   temperature: 0.7
-  num_draft: 0
-  num_ctx: 8192
   num_gpu: 99
+  num_ctx: 8192
   context_window: 4000
   compaction_threshold: 0.85
 

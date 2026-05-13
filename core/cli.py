@@ -31,7 +31,6 @@ _COMMANDS = [
     "/think",
     "/plan",
     "/compact",
-    "/model",
     "/clear",
     "/exit",
     "/quit",
@@ -42,13 +41,13 @@ _COMMANDS = [
 ]
 
 
-def _make_prompt(thinking: bool, plan: bool, model: str, msg_count: int) -> HTML:
+def _make_prompt(thinking: bool, plan: bool, role: str, model: str, msg_count: int) -> HTML:
     t = "[ON]" if thinking else "[OFF]"
     p = "[ON]" if plan else "[OFF]"
     return HTML(
         f"<ansicyan> Thinking:{t}</ansicyan> "
         f"<ansiyellow>Plan:{p}</ansiyellow> "
-        f"<ansibrightblack>{model} | {msg_count} msgs</ansibrightblack>\n"
+        f"<ansibrightblack>{role}[{model}] | {msg_count} msgs</ansibrightblack>\n"
         f"<ansicyan> You</ansicyan> > "
     )
 
@@ -97,7 +96,7 @@ class CliSession:
 
         self.context_manager = ContextManager(
             llm=llm,
-            fast_model=config.model.fast_model,
+            compact_model=config.model.base_model,
         )
 
         self.conversation = ConversationService(
@@ -112,11 +111,9 @@ class CliSession:
             planner=self.planner,
             executor=self.executor,
             context_manager=self.context_manager,
-            smart_model=config.model.smart_model,
-            fast_model=config.model.fast_model,
+            models=config.model.models,
+            escalation_config=config.model.escalation,
             temperature=config.model.temperature,
-            max_tokens=config.model.max_tokens,
-            max_tokens_fast=config.model.max_tokens_fast,
             context_window=config.model.context_window,
             compaction_threshold=config.model.compaction_threshold,
             rag_max_results=config.memory.rag_max_results,
@@ -141,7 +138,7 @@ class CliSession:
         console.print(
             Panel.fit(
                 f"[bold cyan]Iris[/bold cyan] - v0.1.0\n"
-                f"Model: {self.config.model.smart_model} | Thinking mode: OFF\n"
+                f"Models: {self.config.model.base_model} (base) / {self.config.model.smart_model} (smart)\n"
                 f"Type /help for commands, /think to toggle thinking mode",
                 border_style="cyan",
             )
@@ -149,7 +146,7 @@ class CliSession:
 
         thinking_mode = self.config.personality.thinking_mode_default
         plan_mode = False
-        active_model = self.config.model.fast_model or self.config.model.smart_model
+        last_role = "base"
         msg_count_since_reflect = 0
 
         session: PromptSession = PromptSession(
@@ -159,8 +156,9 @@ class CliSession:
 
         while True:
             try:
+                current_model = self.config.model.base_model if last_role == "base" else self.config.model.smart_model
                 user_input = session.prompt(
-                    lambda: _make_prompt(thinking_mode, plan_mode, active_model, len(self.messages))
+                    lambda: _make_prompt(thinking_mode, plan_mode, last_role, current_model, len(self.messages))
                 )
             except (EOFError, KeyboardInterrupt):
                 console.print("\n[yellow]Goodbye![/yellow]")
@@ -179,10 +177,6 @@ class CliSession:
 
             self.messages.append({"role": "user", "content": user_input})
 
-            has_fast = self.config.model.fast_model is not None
-            if has_fast:
-                console.print("[dim]Classifying...[/dim]")
-
             parts: list[str] = []
 
             def on_token(tok: str):
@@ -193,7 +187,7 @@ class CliSession:
                 self.messages,
                 thinking_mode,
                 plan_mode,
-                active_model,
+                last_role,
                 msg_count_since_reflect,
                 on_token=on_token if not plan_mode else None,
             )
@@ -201,8 +195,11 @@ class CliSession:
             msg = result.response_message
             thinking_mode = result.thinking_mode
             plan_mode = result.plan_mode
-            active_model = result.active_model
+            last_role = result.active_role
             msg_count_since_reflect = result.msg_count_since_reflect
+
+            if result.escalated:
+                console.print(f"[dim]Escalated to {result.active_model}[/dim]")
 
             content = msg.get("content", "")
             if not parts and content:

@@ -1,7 +1,7 @@
 # Iris プロジェクトルール（コーディングエージェント向け）
 
 ## プロジェクト概要
-Iris は自律的に行動・進化できるAIアシスタント。Python製でOllama上のQwen3.5 9Bをデフォルトモデルとする。
+Iris は自律的に行動・進化できるAIアシスタント。Python製でOllama上で動作する。baseモデル（デフォルト: qwen3.5:2b）が大部分のタスクを処理し、複雑なタスクのみsmartモデル（デフォルト: qwen3.5:9b）にエスカレーションする2層構成。
 
 ## 重要な用語の区別
 - **Iris** → このプロジェクトで製作中のAI（作る対象）
@@ -51,8 +51,9 @@ main.py
 2. `register(registry: CapabilityRegistry)` 関数をエクスポート
 3. `@registry.register_func(...)` デコレータでツール定義
 4. `__init__.py` を各パッケージに配置（必須）
-5. 新しいcapabilityを追加したら `memory/iris_profile.md` の「My Capabilities」セクションも更新する
-6. テンプレート化されたワークフローは `.agents/skills/capability-pattern/SKILL.md` を参照（`skill` ツールでロード可能）
+5. `allowed_roles` パラメータで利用可能なモデルロールを制限（デフォルトは全てのロールで利用可）
+6. 新しいcapabilityを追加したら `memory/iris_profile.md` の「My Capabilities」セクションも更新する
+7. テンプレート化されたワークフローは `.agents/skills/capability-pattern/SKILL.md` を参照（`skill` ツールでロード可能）
 
 ## ドキュメント更新
 機能変更時のドキュメント更新手順は `.agents/skills/doc-sync/SKILL.md` を参照（`skill` ツールでロード可能）

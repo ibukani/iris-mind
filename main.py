@@ -80,7 +80,7 @@ def _restart_ollama():
 
 def _stop_config_models(config: Config):
     """Configに記載されたモデルを停止する。"""
-    for name in config.model_names:
+    for name in config.model.model_names:
         with contextlib.suppress(Exception):
             subprocess.run(["ollama", "stop", name], capture_output=True, timeout=10)
 
@@ -90,7 +90,7 @@ def _ensure_config_models(config: Config) -> bool:
     _stop_config_models(config)
     time.sleep(0.5)
 
-    return all(_ensure_model_pulled(name) for name in config.model_names)
+    return all(_ensure_model_pulled(name) for name in config.model.model_names)
 
 
 def run():
@@ -110,10 +110,8 @@ def run():
     from core.llm_bridge import LLMBridge
 
     llm = LLMBridge(
-        model_name=config.model.smart_model,
+        model_name=config.model.base_model,
         base_url=config.model.base_url,
-        draft_model=config.model.draft_model,
-        num_draft=config.model.num_draft,
         num_gpu=config.model.num_gpu,
         num_ctx=config.model.num_ctx,
     )

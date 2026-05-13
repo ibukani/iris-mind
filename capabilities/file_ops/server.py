@@ -7,6 +7,7 @@ def register(registry: CapabilityRegistry):
     @registry.register_func(
         name="read_file",
         description="指定されたファイルの内容を読み込みます",
+        allowed_roles={"base", "smart"},
         parameters={
             "path": {
                 "type": "string",
@@ -24,6 +25,7 @@ def register(registry: CapabilityRegistry):
     @registry.register_func(
         name="write_file",
         description="指定されたファイルに内容を書き込みます（既存ファイルは上書き）",
+        allowed_roles={"base", "smart"},
         parameters={
             "path": {"type": "string", "description": "書き込むファイルのパス", "required": True},
             "content": {"type": "string", "description": "書き込む内容", "required": True},
@@ -38,6 +40,7 @@ def register(registry: CapabilityRegistry):
     @registry.register_func(
         name="list_files",
         description="指定されたディレクトリ内のファイル一覧を返します",
+        allowed_roles={"base", "smart"},
         parameters={
             "path": {
                 "type": "string",

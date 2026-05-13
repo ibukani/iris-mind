@@ -4,19 +4,43 @@ import yaml
 from pydantic import BaseModel
 
 
+class ModelEntry(BaseModel):
+    name: str
+    role: str = "base"
+    max_tokens: int = 512
+
+
+class EscalationConfig(BaseModel):
+    enabled: bool = True
+    max_retries: int = 1
+    swap_on_escalate: bool = True
+    keep_alive_duration: str = "5m"
+
+
 class ModelConfig(BaseModel):
-    smart_model: str = "qwen3.5:9b"
-    fast_model: str | None = None
+    models: list[ModelEntry] = [
+        ModelEntry(name="qwen3.5:2b", role="base", max_tokens=512),
+        ModelEntry(name="qwen3.5:9b", role="smart", max_tokens=1024),
+    ]
+    escalation: EscalationConfig = EscalationConfig()
     base_url: str = "http://localhost:11434"
-    max_tokens: int = 1024
-    max_tokens_fast: int = 256
     temperature: float = 0.7
-    draft_model: str | None = None
-    num_draft: int = 5
     num_gpu: int = 0
     num_ctx: int = 8192
     context_window: int = 0
     compaction_threshold: float = 0.85
+
+    @property
+    def model_names(self) -> list[str]:
+        return [m.name for m in self.models]
+
+    @property
+    def base_model(self) -> str:
+        return next((m.name for m in self.models if m.role == "base"), self.models[0].name)
+
+    @property
+    def smart_model(self) -> str:
+        return next((m.name for m in self.models if m.role == "smart"), self.models[-1].name)
 
 
 class PersonalityConfig(BaseModel):
@@ -40,15 +64,6 @@ class Config(BaseModel):
     model: ModelConfig = ModelConfig()
     personality: PersonalityConfig = PersonalityConfig()
     memory: MemoryConfig = MemoryConfig()
-
-    @property
-    def model_names(self) -> list[str]:
-        names = [self.model.smart_model]
-        if self.model.fast_model:
-            names.append(self.model.fast_model)
-        if self.model.draft_model:
-            names.append(self.model.draft_model)
-        return names
 
     @classmethod
     def load(cls, path: str = "config.yaml") -> "Config":

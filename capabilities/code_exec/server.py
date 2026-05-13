@@ -54,6 +54,7 @@ def register(registry: CapabilityRegistry):
     @registry.register_func(
         name="run_python",
         description="指定されたPythonコードを隔離サブプロセスで実行します",
+        allowed_roles={"smart"},
         parameters={
             "code": {
                 "type": "string",
@@ -88,6 +89,7 @@ def register(registry: CapabilityRegistry):
     @registry.register_func(
         name="run_shell",
         description="指定されたシェルコマンドを実行します（危険コマンドはブロックされます）",
+        allowed_roles={"smart"},
         parameters={
             "command": {
                 "type": "string",

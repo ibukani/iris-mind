@@ -11,20 +11,21 @@ class LLMBridge:
         self,
         model_name: str = "qwen3.5:9b",
         base_url: str = "http://localhost:11434",
-        draft_model: str | None = None,
-        num_draft: int = 5,
         num_gpu: int = 0,
         num_ctx: int = 8192,
     ):
         self.model_name = model_name
-        self.draft_model = draft_model
-        self.num_draft = num_draft
         self.num_gpu = num_gpu
         self.num_ctx = num_ctx
         self.client = Client(host=base_url)
 
-    def set_model(self, model_name: str):
-        self.model_name = model_name
+    def unload_model(self, model_name: str):
+        """指定モデルをVRAMから解放する。"""
+        self.client.chat(
+            model=model_name,
+            messages=[{"role": "user", "content": ""}],
+            keep_alive=0,
+        )
 
     @staticmethod
     def _process_message(msg: dict) -> dict:
@@ -50,7 +51,6 @@ class LLMBridge:
         options = {
             "temperature": temperature,
             "num_predict": max_tokens,
-            "num_draft": self.num_draft if self.draft_model else 0,
             "num_ctx": self.num_ctx,
             "num_gpu": self.num_gpu,
             "repeat_penalty": 1.1,

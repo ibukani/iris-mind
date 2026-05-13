@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from capabilities.registry import CapabilityRegistry
+from iris.capabilities.registry import CapabilityRegistry
 
 
 def register(registry: CapabilityRegistry):

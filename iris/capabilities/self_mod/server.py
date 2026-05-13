@@ -2,7 +2,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from capabilities.registry import CapabilityRegistry
+from iris.capabilities.registry import CapabilityRegistry
 
 
 def register(registry: CapabilityRegistry):
@@ -24,7 +24,7 @@ def register(registry: CapabilityRegistry):
         },
     )
     def generate_capability(name: str, code: str) -> str:
-        dest = Path("capabilities") / name / "server.py"
+        dest = Path("iris/capabilities") / name / "server.py"
         if dest.exists():
             return f"Error: already exists: {dest}"
         dest.parent.mkdir(parents=True, exist_ok=True)

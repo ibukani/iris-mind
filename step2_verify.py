@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Step 2 完了検証スクリプト"""
-import sys, os, glob
+import glob
+import os
+import sys
 
 errors = []
 
@@ -12,9 +14,6 @@ except Exception as e:
     print(f"FAIL MemoryManager: {e}")
 
 try:
-    from iris import Config, ProactiveConfig
-    from iris import EventBus, Event, TimerTick
-    from iris import AgentStateManager, AgentState
     from iris.kernel import MemoryManager as MM2
     assert MemoryManager is MM2
     print("[OK] 全import正常")

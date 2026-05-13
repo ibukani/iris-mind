@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Iris - 自律的に行動し進化できるAI"""
+"""Iris - 自律的に行動し進化できるAI (v0.2)"""
 
 import contextlib
 import os
@@ -8,7 +8,7 @@ import sys
 import time
 from pathlib import Path
 
-from core.config import Config
+from iris.kernel.config import Config
 
 os.environ.setdefault("OLLAMA_GPU_LAYERS", "99")
 
@@ -37,7 +37,7 @@ def _get_available_models() -> set[str]:
 
 
 def _ensure_model_pulled(model_name: str) -> bool:
-    """モデルが存在しない場合はユーザーに確認してpullする。pull済みまたはスキップならTrue。"""
+    """モデルが存在しない場合はユーザーに確認してpullする。"""
     model_base = model_name.split(":")[0]
     available = _get_available_models()
     if model_base in available:
@@ -89,7 +89,6 @@ def _ensure_config_models(config: Config) -> bool:
     """Configのモデルがpull済みか確認する。"""
     _stop_config_models(config)
     time.sleep(0.5)
-
     return all(_ensure_model_pulled(name) for name in config.model.model_names)
 
 
@@ -106,22 +105,9 @@ def run():
         print("必要なモデルが利用できません。プログラムを終了します。", file=sys.stderr)
         sys.exit(1)
 
-    from core.cli import CliSession
-    from core.llm_bridge import LLMBridge
+    from adapters.cli.server import main as cli_main
 
-    llm = LLMBridge(
-        model_name=config.model.base_model,
-        base_url=config.model.base_url,
-        num_gpu=config.model.num_gpu,
-        num_ctx=config.model.num_ctx,
-    )
-
-    if not llm.is_available():
-        print("Ollamaサーバーに接続できませんでした。", file=sys.stderr)
-        sys.exit(1)
-
-    session = CliSession(config, llm)
-    session.run()
+    cli_main()
 
 
 if __name__ == "__main__":

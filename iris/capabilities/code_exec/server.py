@@ -1,7 +1,7 @@
 import subprocess
 import sys
 
-from capabilities.registry import CapabilityRegistry
+from iris.capabilities.registry import CapabilityRegistry
 
 _BLOCKED_COMMANDS = [
     "rm -rf /",

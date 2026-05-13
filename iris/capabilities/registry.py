@@ -111,10 +111,10 @@ class CapabilityRegistry:
 
         Args:
             base_paths: 検索するディレクトリ一覧。
-                        デフォルトは ["capabilities", "iris/capabilities"]
+                        デフォルトは ["iris/capabilities"]
         """
         if base_paths is None:
-            base_paths = ["capabilities", "iris/capabilities"]
+            base_paths = ["iris/capabilities"]
 
         import importlib
 
@@ -122,9 +122,11 @@ class CapabilityRegistry:
             p = Path(base).resolve()
             if not p.is_dir():
                 continue
+            base_module = base.replace("/", ".").replace("\\", ".")
             for server_file in p.rglob("server.py"):
-                rel = server_file.relative_to(p.parent)
-                module_path = str(rel.with_suffix("")).replace("/", ".").replace("\\", ".")
+                rel = server_file.relative_to(p)
+                relative_module = str(rel.with_suffix("")).replace("/", ".").replace("\\", ".")
+                module_path = f"{base_module}.{relative_module}"
                 try:
                     mod = importlib.import_module(module_path)
                     if hasattr(mod, "register"):

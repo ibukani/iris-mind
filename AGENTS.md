@@ -8,9 +8,21 @@ Iris は自律的に行動・進化できるAIアシスタント。Python製でO
 - **コーディングエージェント** → プロジェクトを支援するAI（あなた = 現在の会話相手）
 
 ## ディレクトリ構成
+### v0.1（旧、段階的移行中）
 - `core/` → エンジン本体（config, llm_bridge, personality, reflexion, conversation, tool_executor, planner, executor, commands, cli）
 - `capabilities/` → 機能モジュール（file_ops, code_exec, self_mod など）
 - `memory/` → 記憶管理（stores.py, vector_store.py, persona_profile.py, persona_data.py, data/iris_profile.md）
+
+### v0.2（新、移行先）
+- `adapters/` → 外部UI層（CLI, API, GUI）— `iris/` 外部に配置し依存方向を物理的に強制
+- `iris/kernel/` → ドメイン層（EventBus, AgentState, Config, MemoryManager, ProactiveEngine）
+- `iris/llm/` → Ollama通信（実装未着手）
+- `iris/memory/` → 記憶管理（実装未着手）
+- `iris/capabilities/` → ツール実行（実装未着手）
+- `iris/commands/` → コマンド処理（実装未着手）
+- `iris/personality/` → プロンプト管理（実装未着手）
+
+### 共通
 - `docs/` → 設計ドキュメント
 - `.agents/` → コーディングエージェント用コンテキスト（context.md, project.md, tasks.md）
 - `AGENTS.md` → プロジェクトルール（このファイル）
@@ -18,27 +30,22 @@ Iris は自律的に行動・進化できるAIアシスタント。Python製でO
 - `main.py` → エントリーポイント（CLIループ）
 
 ## コンポーネント間依存関係
+
+### v0.1（現行）
 ```
 main.py
-  ├── core/config.py        (pydantic BaseModel, yaml読込)
-  ├── core/llm_bridge.py    (ollama.Client ラッパー)
-  ├── core/personality.py    (システムプロンプト構築)
-  ├── core/reflexion.py      (LLMに内省させる外側ループ)
-  ├── core/context.py        (会話Compaction・Prune管理)
-  ├── core/cli.py            (CliSession: ContextManager使用)
-  ├── core/commands.py       (コマンド処理)
-  ├── core/conversation.py    (会話オーケストレーション: 分類→モデル選択→コンテキスト→RAG→応答生成→ToolCall→Reflection)
-  ├── core/planner.py        (タスク分解)
-  ├── core/executor.py       (サブタスク逐次実行)
-  ├── core/tool_executor.py  (Tool Call実行共通基盤)
-  ├── memory/stores.py       (AgentsMdStore, EpisodicStore, SemanticStore)
-  │     └── memory/vector_store.py (ChromaDB + BM25 ハイブリッド検索、スレッドセーフ)
-  ├── memory/persona_data.py (ペルソナデータ専用JSON管理)
-  └── capabilities/registry.py (動的モジュール発見・ツール登録)
-        ├── capabilities/file_ops/server.py
-        ├── capabilities/code_exec/server.py
-        └── capabilities/self_mod/server.py
+  ├── core/*                 (エンジン本体)
+  ├── memory/*               (記憶管理)
+  └── capabilities/*         (ツール)
 ```
+
+### v0.2（移行先 ヘキサゴナルアーキテクチャ）
+```
+adapters/          ──→ iris/kernel/   ──→ iris/llm/, iris/memory/, iris/capabilities/
+(UI層)               (ドメイン層)         (インフラ層)
+```
+- `adapters/` は `iris/` に依存するが、逆方向の依存はディレクトリ構造で物理禁止
+- `iris/kernel/` は純粋なビジネスロジックに閉じ、外部サービスは kernel 外から注入
 
 ## Iris の記憶体系
 - `memory/data/iris_profile.md`: Irisの構造記憶（自己認識用、上限2KB固定）※話し方・性格は含まず、別JSONで動的管理

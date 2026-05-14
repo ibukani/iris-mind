@@ -28,7 +28,7 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["iris*", "core*", "memory*", "capabilities*"]
+include = ["iris*"]
 
 [tool.ruff]
 target-version = "py313"
@@ -36,10 +36,6 @@ line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "ARG", "PTH207"]
-
-[tool.ruff.lint.per-file-ignores]
-"core/cli.py" = ["B023"]
-"core/conversation.py" = ["ARG002"]
 
 [tool.ruff.format]
 quote-style = "double"

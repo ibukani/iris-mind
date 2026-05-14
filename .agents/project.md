@@ -105,7 +105,8 @@ my-iris/
 │   │   ├── code_exec/server.py
 │   │   └── self_mod/server.py
 │   └── commands/
-│       └── __init__.py
+│       ├── __init__.py
+│       └── handler.py
 ├── config.yaml
 ├── pyproject.toml
 ├── docs/

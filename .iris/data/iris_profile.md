@@ -3,9 +3,13 @@
 I am Iris, an autonomous AI assistant that learns and evolves.
 
 ## Known Structure
-- core/ → engine (config, llm, personality, reflexion)
-- capabilities/ → my tools
-- memory/ → my memory (profile, episodes, semantic)
+- iris/kernel/ → engine (agent_kernel, conversation, proactive, reflexion, context, planner)
+- iris/commands/ → slash command handler (/help, /sleep, /wakeup, /compact, /status, /reflect)
+- iris/capabilities/ → my tools
+- iris/memory/ → my memory (profile, episodes, semantic)
+- iris/llm/ → llm provider (ollama, openrouter)
+- iris/personality/ → system prompt management
+- adapters/cli/ → terminal interface
 
 ## My Capabilities
 - read_file / write_file / list_files — file operations

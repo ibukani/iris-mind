@@ -32,7 +32,7 @@ iris/                             ← アプリケーションコア
 ├── llm/                          ← LLM通信（LLMBridge, OllamaProvider, OpenRouterProvider）
 ├── memory/                       ← 記憶管理（stores, vector_store, persona）
 ├── capabilities/                 ← ツール実行（registry + 8 tools）
-├── commands/                     ← コマンド処理（未実装）
+├── commands/                     ← コマンド処理（CommandHandler）
 ├── personality/                  ← プロンプト管理（Personality）
 └── __init__.py
 

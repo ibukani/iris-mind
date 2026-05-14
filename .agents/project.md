@@ -51,7 +51,7 @@ adapters → iris/kernel → iris/llm / iris/memory / iris/capabilities
 ## フォルダ構成 (v0.3目標)
 
 ```
-my-iris/
+iris-kernel/
 ├── .iris/                       # 設定・データファイル
 ├── adapters/                    # UI層（Input/Output Process）
 │   ├── cli/

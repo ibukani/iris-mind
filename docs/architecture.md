@@ -133,7 +133,7 @@ IDLE / PROCESSING / PROACTIVE / REFLECTING / THINKING / SLEEPING
 ## 7. フォルダ構成（v0.3 目標）
 
 ```
-my-iris/
+iris-kernel/
 ├── .iris/                       # 設定・データファイル（不変）
 ├── adapters/
 │   ├── __init__.py

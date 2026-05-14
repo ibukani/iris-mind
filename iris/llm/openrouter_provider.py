@@ -91,7 +91,7 @@ class OpenRouterProvider:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/anomalyco/my-iris",
+            "HTTP-Referer": "https://github.com/anomalyco/iris-kernel",
             "X-Title": "Iris",
         }
 

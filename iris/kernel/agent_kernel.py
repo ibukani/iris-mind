@@ -43,11 +43,11 @@ class AnomalyDetector:
     - 異常アラートの生成とレポート
     """
 
-    def __init__(self, time_provider: Callable[[], float] | None = None) -> None:
+    def __init__(self, time_provider: Callable[[], float] | None = None, max_per_5min: int = 5) -> None:
         self._time_provider = time_provider or time.time
         self._speech_window: deque[float] = deque()
         self._alert_count: int = 0
-        self._max_per_5min: int = 5
+        self._max_per_5min = max_per_5min
 
     def record_speech(self) -> list[str]:
         """発話を記録し、異常フラグを返す。"""

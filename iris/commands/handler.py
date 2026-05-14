@@ -26,8 +26,8 @@ _COMMANDS: dict[str, str] = {
     "help": "利用可能なコマンド一覧を表示",
     "sleep": "エージェントを一時休止状態に遷移",
     "wakeup": "休止状態から復帰",
-    "compact": "会話履歴を強制要約",
-    "clear": "会話履歴をクリア",
+    "compact": "会話履歴を強制要約（履歴は保持）",
+    "clear": "会話履歴を全てクリア",
     "status": "現在の状態を表示",
     "reflect": "セッション反省を強制実行",
 }
@@ -87,14 +87,14 @@ class CommandHandler:
         return "おはようございます！"
 
     def _cmd_compact(self, _args: str = "") -> str:
-        self._conversation.clear_history()
+        self._conversation.force_compact()
         logger.info("Command: compact")
-        return "会話履歴をクリアしました。"
+        return "会話履歴を要約しました。"
 
     def _cmd_clear(self, _args: str = "") -> str:
         self._conversation.clear_history()
         logger.info("Command: clear")
-        return "履歴を消去しました。"
+        return "会話履歴を消去しました。"
 
     def _cmd_status(self, _args: str = "") -> str:
         state = self._state.current.value

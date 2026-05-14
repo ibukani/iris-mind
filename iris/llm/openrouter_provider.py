@@ -176,6 +176,8 @@ class OpenRouterProvider:
                                 if fn.get("arguments"):
                                     existing["function"]["arguments"] += fn["arguments"]
                 break
+        else:
+            raise RuntimeError("OpenRouter stream failed after max retries")
 
         full_content = "".join(content_parts)
         msg: dict = {"role": "assistant", "content": full_content}

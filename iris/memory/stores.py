@@ -98,12 +98,12 @@ class SemanticStore:
         self.path = Path(path)
         self.max_entries = max_entries
         self.vector = VectorStore(path=vector_db_path)
-        self._synced_count = self.vector.count()
-        self._sync_from_jsonl()
+        self._synced_count = 0
 
-    def _sync_from_jsonl(self):
+    def sync(self) -> None:
         entries = self._load_all()
-        if len(entries) <= self._synced_count:
+        unsynced = len(entries) - self._synced_count
+        if unsynced <= 0:
             return
         for e in entries[self._synced_count :]:
             self.vector.add(e)

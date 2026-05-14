@@ -133,6 +133,7 @@ class AgentStateManager:
             if self._import_time() - self._state_start_time <= timeout:
                 return None
 
+            previous = self._current
             self._current = State.IDLE
             self._state_start_time = None
 
@@ -141,7 +142,7 @@ class AgentStateManager:
             AgentStateChangeEvent(
                 timestamp=self._import_datetime(),
                 source="agent_kernel",
-                previous_state=State.PROCESSING.value,
+                previous_state=previous.value,
                 new_state=State.IDLE.value,
             )
         )

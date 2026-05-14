@@ -25,9 +25,11 @@ from .config import Config
 from .context import ContextManager
 from .conversation import ConversationService
 from .event_bus import EventBus
+from .llm_pipeline import LLMPipeline
 from .memory_manager import MemoryManager
-from .proactive import ProactiveEngine
+from .proactive import SELF_GOVERNANCE_PRINCIPLES, ProactiveEngine
 from .reflexion import Reflexion
+from .reflexion_manager import ReflexionManager
 from .tool_executor import ToolExecutionEngine
 
 
@@ -124,19 +126,34 @@ class KernelFactory:
         registry.discover_modules()
         tool_exec = ToolExecutionEngine(registry=registry)
 
+        # LLMパイプライン + Reflexion管理（ConversationServiceに委譲）
+        governance_str = "\n".join(f"- {p}" for p in SELF_GOVERNANCE_PRINCIPLES) if SELF_GOVERNANCE_PRINCIPLES else ""
+        llm_pipeline = LLMPipeline(
+            llm=llm,
+            model_config=config.model,
+            personality=personality,
+            agents_md_store=agents_md,
+            persona_profile=persona_profile,
+            memory=memory,
+            tool_executor=tool_exec,
+            capability_checker=capability_checker,
+            context_manager=context_mgr,
+            governance_principles=governance_str,
+        )
+        reflexion_mgr = ReflexionManager(
+            reflexion=reflexion,
+            memory=memory,
+            persona_profile=persona_profile,
+            reflect_interval=3,
+        )
+
         # 会話サービス（カーネル起動後に生成 → イベント購読順を保証）
         conversation = ConversationService(
             event_bus=event_bus,
-            memory=memory,
-            llm=llm,
-            personality=personality,
-            config=config,
-            reflexion=reflexion,
-            tool_executor=tool_exec,
+            llm_pipeline=llm_pipeline,
+            reflexion_manager=reflexion_mgr,
             context_manager=context_mgr,
-            persona_profile=persona_profile,
-            agents_md_store=agents_md,
-            capability_checker=capability_checker,
+            context_window=config.model.context_window,
         )
 
         # コマンドハンドラ

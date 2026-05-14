@@ -50,7 +50,10 @@ class ConversationService:
     # ── イベントハンドラ ──────────────────────────────────
 
     def _on_user_input(self, event: UserInputEvent) -> None:
-        """ユーザー入力イベントを処理する。（ストリーミング対応）"""
+        """ユーザー入力イベントを処理する。（ストリーミング対応）
+        コマンド（/ で始まる入力）は CommandRouter が処理するためスキップする。"""
+        if event.content.startswith("/"):
+            return
         self._messages.append({"role": "user", "content": event.content})
 
         # Thinking 開始通知

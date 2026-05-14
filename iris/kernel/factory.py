@@ -25,9 +25,11 @@ from .config import Config
 from .context import ContextManager
 from .conversation import ConversationService
 from .event_bus import EventBus
+from .ipc_input import CommandRouter
 from .llm_pipeline import LLMPipeline
 from .memory_manager import MemoryManager
 from .proactive import SELF_GOVERNANCE_PRINCIPLES, ProactiveEngine
+from .proactive_response_tracker import ProactiveResponseTracker
 from .reflexion import Reflexion
 from .reflexion_manager import ReflexionManager
 from .tool_executor import ToolExecutionEngine
@@ -162,6 +164,12 @@ class KernelFactory:
             conversation=conversation,
             proactive=proactive,
         )
+
+        # コマンドルーター（UserInputEvent から / コマンドを拾う）
+        CommandRouter(cmd_handler=cmd_handler, proactive=proactive, event_bus=event_bus)
+
+        # Proactive 応答追跡（CLIAdapter._check_proactive_response の Kernel 移植）
+        ProactiveResponseTracker(proactive=proactive, event_bus=event_bus)
 
         return KernelContext(
             event_bus=event_bus,

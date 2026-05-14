@@ -9,8 +9,11 @@ from .event import Event
 
 logger = logging.getLogger(__name__)
 
-PIPE_NAME_KERNEL = r"\\.\pipe\iris-kernel"
+PIPE_NAME_KERNEL_OUTPUT = r"\\.\pipe\iris-kernel"
+PIPE_NAME_KERNEL_INPUT = r"\\.\pipe\iris-kernel-input"
 PIPE_NAME_CONTROL = r"\\.\pipe\iris-control"
+
+PIPE_NAME_KERNEL = PIPE_NAME_KERNEL_OUTPUT  # backward compat
 
 _EventTransport = Any  # duck-typed: send(event: Event), recv() -> Event
 

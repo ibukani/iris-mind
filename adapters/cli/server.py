@@ -15,30 +15,13 @@ from datetime import datetime
 from rich.console import Console
 from rich.panel import Panel
 
-from iris.capabilities.registry import CapabilityRegistry
-from iris.commands.handler import CommandHandler
-from iris.kernel.agent_kernel import AgentKernel
-from iris.kernel.agent_state import AgentStateManager
-from iris.kernel.config import Config
-from iris.kernel.context import ContextManager
-from iris.kernel.conversation import ConversationService
 from iris.kernel.event_bus import (
     AgentAnomalyEvent,
     AgentResponseEvent,
-    EventBus,
     ProactiveSpeechEvent,
     UserInputEvent,
 )
-from iris.kernel.memory_manager import MemoryManager
-from iris.kernel.proactive import ProactiveEngine
-from iris.kernel.reflexion import Reflexion
-from iris.kernel.tool_executor import ToolExecutionEngine
-from iris.llm.llm_bridge import LLMBridge, create_provider
-from iris.memory.persona_data import PersonaData
-from iris.memory.persona_profile import PersonaProfile
-from iris.memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
-from iris.memory.vector_store import VectorStore
-from iris.personality.personality import Personality
+from iris.kernel.factory import KernelContext
 
 logger = logging.getLogger(__name__)
 console = Console()
@@ -49,141 +32,25 @@ class CLIAdapter:
     CLI アダプター — ターミナル対話インターフェース。
 
     使用方法:
-        adapter = CLIAdapter(config)
-        adapter.run()
+        ctx = KernelFactory.build(config)
+        CLIAdapter(ctx).run()
     """
 
-    def __init__(self, config: Config) -> None:
-        self._config = config
+    def __init__(self, kernel: KernelContext) -> None:
+        self._ctx = kernel
         self._proactive_pending_speech: float = 0.0
-        self._init_kernel()
         self._init_events()
-
-    def _init_kernel(self) -> None:
-        """カーネルコンポーネントを初期化する。"""
-        self._event_bus = EventBus()
-        self._state = AgentStateManager(event_bus=self._event_bus)
-
-        # 記憶ストア（旧 memory/ からインスタンス化）
-        cfg = self._config.memory
-        self._episodic = EpisodicStore(
-            path=cfg.episodic_path,
-            max_entries=cfg.episodic_max_entries,
-        )
-        self._semantic = SemanticStore(
-            path=cfg.semantic_path,
-            max_entries=cfg.semantic_max_entries,
-            vector_db_path=cfg.vector_db_path,
-        )
-        self._vector = VectorStore(path=cfg.vector_db_path)
-        self._memory = MemoryManager(
-            episodic=self._episodic,
-            semantic=self._semantic,
-            vector_store=self._vector,
-        )
-
-        # ペルソナデータ + 構造記憶
-        self._persona_data = PersonaData()
-        self._persona_profile = PersonaProfile(persona_data=self._persona_data)
-        self._agents_md = AgentsMdStore(
-            path=cfg.agents_md_path,
-            max_bytes=cfg.agents_md_max_bytes,
-        )
-
-        # LLM + 会話関連サービス（ProactiveEngine より先に生成）
-        provider = create_provider(
-            provider_type=self._config.model.provider,
-            base_url=self._config.model.base_url,
-            api_key=self._config.model.api_key,
-            default_model=self._config.model.get_model("default"),
-            num_gpu=self._config.model.num_gpu,
-            num_ctx=self._config.model.num_ctx,
-        )
-        self._llm = LLMBridge(provider=provider)
-        self._personality = Personality(name=self._config.personality.name)
-        self._reflexion = Reflexion(llm=self._llm)
-        self._context_mgr = ContextManager(
-            llm=self._llm,
-            compact_model=self._config.model.get_model("default"),
-        )
-
-        # 自発発話エンジン（LLMによる発話生成を使用）
-        self._proactive = ProactiveEngine(
-            config=self._config.proactive,
-            event_bus=self._event_bus,
-            state_manager=self._state,
-            memory=self._memory,
-            llm=self._llm,
-        )
-
-        # AgentKernel.startup() が UserInputEvent を購読 → 状態を PROCESSING に遷移
-        # → ConversationService が後から購読（コンストラクタで subscribe）→ LLM 呼び出し
-        # この順序により AgentKernel が先に状態遷移してから ConversationService が処理を開始する
-        self._kernel = AgentKernel(
-            event_bus=self._event_bus,
-            state_manager=self._state,
-            proactive=self._proactive,
-            memory=self._memory,
-            config=self._config.proactive,
-        )
-        self._proactive.set_approval_callback(self._kernel.evaluate_proactive_request)
-        self._kernel.startup()
-
-        # Capability registry + tool executor
-        self._registry = CapabilityRegistry()
-        self._registry.discover_modules()
-        self._tool_exec = ToolExecutionEngine(registry=self._registry)
-
-        # 会話サービス（カーネルの後に購読 → ハンドラ実行順を保証）
-        self._conversation = ConversationService(
-            event_bus=self._event_bus,
-            memory=self._memory,
-            llm=self._llm,
-            personality=self._personality,
-            config=self._config,
-            reflexion=self._reflexion,
-            tool_executor=self._tool_exec,
-            context_manager=self._context_mgr,
-            persona_profile=self._persona_profile,
-            agents_md_store=self._agents_md,
-        )
-
-        # コマンドハンドラ
-        self._cmd_handler = CommandHandler(
-            state=self._state,
-            conversation=self._conversation,
-            proactive=self._proactive,
-        )
 
     def _init_events(self) -> None:
         """イベントハンドラを購読する。"""
-        self._event_bus.subscribe("ProactiveSpeechEvent", self._on_proactive_speech)
-        self._event_bus.subscribe("AgentResponseEvent", self._on_agent_response)
-        self._event_bus.subscribe("AgentAnomalyEvent", self._on_anomaly)
+        self._ctx.event_bus.subscribe("ProactiveSpeechEvent", self._on_proactive_speech)
+        self._ctx.event_bus.subscribe("AgentResponseEvent", self._on_agent_response)
+        self._ctx.event_bus.subscribe("AgentAnomalyEvent", self._on_anomaly)
 
     # ── ライフサイクル ────────────────────────────────────
 
-    def _ensure_environment(self) -> bool:
-        """LLMプロバイダの環境を確認する。"""
-        cfg = self._config.model
-
-        if cfg.provider == "ollama":
-            from iris.llm.ollama_provider import OllamaProvider  # fmt: skip
-
-            ok = OllamaProvider.ensure_environment(cfg)
-        else:
-            from iris.llm.openrouter_provider import OpenRouterProvider  # fmt: skip
-
-            ok = OpenRouterProvider.ensure_environment(cfg)
-
-        if not ok:
-            console.print("[bold red]環境チェックに失敗しました。終了します。[/bold red]")
-        return ok
-
     def run(self) -> None:
         """メインループを開始する。"""
-        if not self._ensure_environment():
-            return
         console.print()
         console.print(
             Panel.fit(
@@ -212,13 +79,13 @@ class CLIAdapter:
 
                 # コマンドハンドラで処理（/ で始まる入力をインターセプト）
                 if text.startswith("/"):
-                    self._proactive.notify_user_activity()
-                    response = self._cmd_handler.handle(text)
+                    self._ctx.proactive.notify_user_activity()
+                    response = self._ctx.cmd_handler.handle(text)
                     if response:
                         console.print(f"[bold cyan][System][/bold cyan] {response}")
                     continue
 
-                self._event_bus.publish(
+                self._ctx.event_bus.publish(
                     UserInputEvent(
                         timestamp=datetime.now(),
                         source="user_input",
@@ -231,12 +98,12 @@ class CLIAdapter:
     def shutdown(self) -> None:
         """カーネルを停止し、セッション反省を実行する。"""
         try:
-            self._conversation.session_reflect()
+            self._ctx.conversation.session_reflect()
         except (KeyboardInterrupt, SystemExit):
             logger.warning("Session reflect interrupted by user")
         except Exception:
             logger.exception("Session reflect failed")
-        self._kernel.shutdown()
+        self._ctx.kernel.shutdown()
         console.print("[dim]Shutdown complete.[/dim]")
 
     # ── イベントハンドラ ──────────────────────────────────
@@ -251,9 +118,9 @@ class CLIAdapter:
             return
         lower = text.strip().lower()
         if lower in ("やめて", "静かに", "stop", "やめろ", "黙れ", "うるさい", "やめてください", "shut up"):
-            self._proactive.set_cooldown(600.0)
+            self._ctx.proactive.set_cooldown(600.0)
         else:
-            self._proactive.notify_positive_response()
+            self._ctx.proactive.notify_positive_response()
 
     def _on_proactive_speech(self, event: ProactiveSpeechEvent) -> None:
         """自発発話イベントを Rich パネルで表示する。"""
@@ -304,9 +171,12 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     )
+    from iris.kernel.config import Config
+    from iris.kernel.factory import KernelFactory
+
     config = Config.load()
-    adapter = CLIAdapter(config)
-    adapter.run()
+    ctx = KernelFactory.build(config)
+    CLIAdapter(ctx).run()
 
 
 if __name__ == "__main__":

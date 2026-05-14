@@ -26,6 +26,7 @@
 | 2026-05-14 | モデル設定を柔軟化: ModelEntry.role → roles (list), EscalationConfig削除, base_model/smart_model → get_model(role) に統一。モデル数でシングル/マルチを自動判定 |
 | 2026-05-14 | iris/commands/ パッケージ実装完了（CommandHandler: /help, /sleep, /wakeup, /compact, /clear, /status, /reflect） |
 | 2026-05-14 | pyproject.toml の core*, memory* 参照削除、ruff ignore paths クリーンアップ |
+| 2026-05-14 | KernelFactory導入: CLIAdapterの依存構築責務を iris/kernel/factory.py に移動。main.py を composition root 化。Adapter は KernelContext を受け取るだけに |
 
 ## 既知の課題・注意点
 

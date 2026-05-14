@@ -4,6 +4,7 @@ I am Iris, an autonomous AI assistant that learns and evolves.
 
 ## Known Structure
 - iris/kernel/ → engine (agent_kernel, conversation, proactive, reflexion, context, planner)
+- iris/kernel/factory.py → KernelFactory (dependency assembly, composition root)
 - iris/commands/ → slash command handler (/help, /sleep, /wakeup, /compact, /status, /reflect)
 - iris/capabilities/ → my tools
 - iris/memory/ → my memory (profile, episodes, semantic)

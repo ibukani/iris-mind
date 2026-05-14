@@ -28,7 +28,7 @@ iris/                             ← アプリケーションコア
 ├── kernel/                       ← ドメイン層（EventBus, AgentState, Config,
 │                                  MemoryManager, ProactiveEngine, AgentKernel,
 │                                  ConversationService, Reflexion, ContextManager,
-│                                  ToolExecutionEngine）
+│                                  ToolExecutionEngine, KernelFactory）
 ├── llm/                          ← LLM通信（LLMBridge, OllamaProvider, OpenRouterProvider）
 ├── memory/                       ← 記憶管理（stores, vector_store, persona）
 ├── capabilities/                 ← ツール実行（registry + 8 tools）

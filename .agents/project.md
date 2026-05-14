@@ -14,8 +14,9 @@ Capability Registryによる動的機能拡張を特徴とする。
 
 ```
 adapters/            (UI層 — CLI / API / GUI)
-    ↕  イベント駆動（EventBus）
+    ↕  KernelContext（組み立て済みコンポーネント）
 iris/kernel/         (ビジネスロジック — UI非依存)
+├── factory          (KernelFactory — 依存構築, composition root)
 ├── agent_kernel     (状態管理・異常検知・イベント統括)
 ├── event_bus        (インメモリ同期EventBus)
 ├── proactive        (自発発話エンジン)
@@ -29,6 +30,8 @@ iris/memory/         (記憶管理 — Episodic/Semantic/Persona)
 iris/capabilities/   (機能拡張 — file_ops/code_exec/self_mod)
 iris/personality/    (システムプロンプト管理)
 ```
+
+KernelContext に集約され、Adapter は KernelContext オブジェクトから必要なコンポーネントにアクセスする。
 
 ## 設計原則
 
@@ -79,6 +82,7 @@ my-iris/
 │   │   ├── context.py
 │   │   ├── conversation.py
 │   │   ├── event_bus.py
+│   │   ├── factory.py          ← KernelFactory / KernelContext
 │   │   ├── memory_manager.py
 │   │   ├── proactive.py
 │   │   ├── reflexion.py

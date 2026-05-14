@@ -58,7 +58,8 @@ class Reflexion:
             },
         ]
         resp = self.llm.chat(messages=msgs, temperature=0.3, max_tokens=400, keep_alive="0")
-        content = resp["message"].get("content", "")
+        raw = resp["message"].get("content")
+        content = raw if isinstance(raw, str) else ""
         try:
             result: dict[str, str] = json.loads(content)
             return result
@@ -111,7 +112,8 @@ class Reflexion:
             },
         ]
         resp = self.llm.chat(messages=msgs, temperature=0.3, max_tokens=200, keep_alive="0")
-        content = resp["message"].get("content", "")
+        raw = resp["message"].get("content")
+        content = raw if isinstance(raw, str) else ""
         try:
             result: dict[str, str] = json.loads(content)
             return result

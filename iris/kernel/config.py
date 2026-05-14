@@ -14,8 +14,6 @@ import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, field_validator
 
-# ── ユーティリティ ────────────────────────────────────────
-
 _ENV_REF_RE = re.compile(r"\$\{([^}]+)\}")
 
 
@@ -32,9 +30,6 @@ def _resolve_env_refs(raw: object) -> object:
     if isinstance(raw, list):
         return [_resolve_env_refs(v) for v in raw]
     return raw
-
-
-# ── モデル定義 ────────────────────────────────────────────
 
 
 class ModelEntry(BaseModel):
@@ -115,9 +110,6 @@ class ModelConfig(BaseModel):
         if m is not None:
             return m.performance_tier
         return "balanced"
-
-
-# ── 新規: ProactiveConfig ───────────────────────────────
 
 
 class ProactiveConfig(BaseModel):

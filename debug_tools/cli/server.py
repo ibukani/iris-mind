@@ -50,8 +50,6 @@ class CLIAdapter:
         self._ctx.event_bus.subscribe("AgentStreamEvent", self._on_stream_token)
         self._ctx.event_bus.subscribe("AgentAnomalyEvent", self._on_anomaly)
 
-    # ── ライフサイクル ────────────────────────────────────
-
     def run(self) -> None:
         """メインループを開始する。"""
         console.print()
@@ -77,7 +75,6 @@ class CLIAdapter:
                 if text.lower() in ("exit", "quit"):
                     break
 
-                # 自発発話への反応追跡
                 self._check_proactive_response(text)
 
                 # コマンドハンドラで処理（/ で始まる入力をインターセプト）
@@ -118,8 +115,6 @@ class CLIAdapter:
             logger.exception("Session reflect failed")
         self._ctx.kernel.shutdown()
         console.print("[dim]Shutdown complete.[/dim]")
-
-    # ── イベントハンドラ ──────────────────────────────────
 
     def _check_proactive_response(self, text: str) -> None:
         """自発発話後のユーザー入力を判定し、ProactiveEngine に通知する。"""

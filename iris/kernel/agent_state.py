@@ -19,12 +19,12 @@ from .event.event_bus import AgentStateChangeEvent, EventBus
 class State(StrEnum):
     """AgentState の状態一覧。"""
 
-    IDLE = "idle"  # 待機中 — トリガー監視
-    PROCESSING = "processing"  # ユーザー入力処理中
-    PROACTIVE = "proactive"  # 自発発話実行中
-    REFLECTING = "reflecting"  # 自己反省中
-    THINKING = "thinking"  # 思考モード (CoT) 推論中
-    SLEEPING = "sleeping"  # 一時休止中
+    IDLE = "idle"
+    PROCESSING = "processing"
+    PROACTIVE = "proactive"
+    REFLECTING = "reflecting"
+    THINKING = "thinking"
+    SLEEPING = "sleeping"
 
 
 # 許可される状態遷移テーブル
@@ -95,7 +95,7 @@ class AgentStateManager:
         """
         with self._lock:
             if new_state == self._current:
-                return True  # 同じ状態への遷離は許可
+                return True
 
             if not self._is_allowed(self._current, new_state):
                 logger.warning("Invalid state transition: %s -> %s", self._current, new_state)

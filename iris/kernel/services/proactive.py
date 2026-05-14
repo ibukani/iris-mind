@@ -143,8 +143,6 @@ class ProactiveEngine:
         if config.enabled:
             self._event_bus.subscribe("TimerTick", self._on_timer_tick)
 
-    # ── TimerTick ハンドラ ─────────────────────────────────
-
     def _on_timer_tick(self, _event: TimerTick) -> None:
         """TimerTick を受け取り、自発発話判定を実行する。"""
         if not self._config.enabled:
@@ -181,8 +179,6 @@ class ProactiveEngine:
         if s.last_proactive_time > s.last_user_activity:
             self.notify_ignore()
             self._ignore_recorded_for_proactive = True
-
-    # ── トリガースコアリング ──────────────────────────────
 
     def _score_triggers(self, now: float) -> tuple[float, dict[str, float]]:
         """全トリガーをスコアリングし、重み付き合成スコアを返す。"""
@@ -269,8 +265,6 @@ class ProactiveEngine:
             return 0.0
         return max(0.0, 1.0 - neg)
 
-    # ── 発話生成 ──────────────────────────────────────────
-
     def _generate_speech(
         self,
         scores: dict[str, float],
@@ -282,7 +276,6 @@ class ProactiveEngine:
 
         trigger_type = self._determine_trigger_type(scores)
 
-        # confirmation_mode: 質問発話
         if self._suppression.consecutive_ignores >= 2 and self._suppression.confirmation_mode:
             return ProactiveResult(
                 content=self._build_confirmation_speech(),
@@ -315,7 +308,6 @@ class ProactiveEngine:
                 or (f"Tier2: confidence={confidence:.2f} >= threshold ({self._config.tier2_confidence_threshold})"),
             )
 
-        # self-governance #4: confidence < 0.5 → 抑制
         if confidence < 0.5:
             logger.info(
                 "Confidence %.2f < 0.5, suppressed per self-governance rule",
@@ -363,8 +355,6 @@ class ProactiveEngine:
         total = sum(scores.values()) / len(scores)
         memory_weight = scores.get("memory", 0.0) * 0.5
         return min(total + memory_weight, 1.0)
-
-    # ── LLM発話生成 ───────────────────────────────────────
 
     def _build_context_hint(self, scores: dict[str, float]) -> str:
         """発話生成用のコンテキスト文字列を構築する。"""
@@ -495,8 +485,6 @@ class ProactiveEngine:
         """confirmation_mode 時の質問発話。"""
         return "すみません、今話してもよろしいですか？"
 
-    # ── 抑制チェック ──────────────────────────────────────
-
     def _suppression_check(self, now: float) -> bool:
         """すべての抑制条件をチェックする。"""
         s = self._suppression
@@ -527,8 +515,6 @@ class ProactiveEngine:
 
         return True
 
-    # ── イベント発行 ──────────────────────────────────────
-
     def _publish_speech(self, result: ProactiveResult) -> None:
         """発話イベントを発行し、抑制状態を更新する。"""
         s = self._suppression
@@ -552,8 +538,6 @@ class ProactiveEngine:
             result.trigger_type,
             result.content,
         )
-
-    # ── Public API（conversation / AgentKernel からの連携用）─
 
     def get_status(self) -> dict[str, dict[str, Any]]:
         """現在の抑制状態を返す（Tier3異常検知用）。"""

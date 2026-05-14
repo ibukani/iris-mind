@@ -117,7 +117,7 @@ class AgentKernel:
 
     イベントフロー:
         TimerTick  →（自動配信）→ ProactiveEngine._on_timer_tick
-        UserInputEvent → AgentKernel._on_user_input（将来 ConversationService へ）
+        UserInputEvent → AgentKernel._on_user_input
         ProactiveSpeechEvent → AgentKernel._on_proactive_speech（異常検知＋記憶）
     """
 
@@ -138,8 +138,6 @@ class AgentKernel:
         self._running = False
         self._timer_thread: threading.Thread | None = None
 
-    # ── ライフサイクル ────────────────────────────────────
-
     def startup(self) -> None:
         """カーネルを起動する：イベント購読 + タイマースレッド開始。"""
         if self._running:
@@ -158,15 +156,11 @@ class AgentKernel:
             self._timer_thread = None
         logger.info("AgentKernel stopped")
 
-    # ── イベント購読 ──────────────────────────────────────
-
     def _subscribe_events(self) -> None:
         self._event_bus.subscribe("UserInputEvent", self._on_user_input)
         self._event_bus.subscribe("ProactiveSpeechEvent", self._on_proactive_speech)
         self._event_bus.subscribe("AgentStateChangeEvent", self._on_state_change)
         self._event_bus.subscribe("AgentResponseEvent", self._on_agent_response)
-
-    # ── タイマースレッド ──────────────────────────────────
 
     def _start_timer(self) -> None:
         """TimerTick を定期発行するバックグラウンドスレッド。"""
@@ -188,8 +182,6 @@ class AgentKernel:
 
         self._timer_thread = threading.Thread(target=_loop, daemon=True, name="agent-kernel-timer")
         self._timer_thread.start()
-
-    # ── イベントハンドラ ──────────────────────────────────
 
     def _on_user_input(self, event: UserInputEvent) -> None:
         """ユーザー入力イベントを処理する。
@@ -263,8 +255,6 @@ class AgentKernel:
                     detail=issue["detail"],
                 )
             )
-
-    # ── Tier3 送審 API（ProactiveEngine からのコールバック）─
 
     def evaluate_proactive_request(
         self,

@@ -29,8 +29,6 @@ class MemoryManager:
         self._semantic = semantic
         self._vector_store = vector_store
 
-    # ── 検索 ──────────────────────────────────────────────
-
     def search_semantic(self, query: str, max_results: int = 3) -> list[dict[str, Any]]:
         """意味記憶から関連エントリを検索する。
 
@@ -78,8 +76,6 @@ class MemoryManager:
         """ユーザーの好み・興味を検索する。"""
         return self.search_semantic("ユーザーの好み 興味 趣味", max_results=2)
 
-    # ── 記録 ──────────────────────────────────────────────
-
     def add_episodic(
         self,
         content: str,
@@ -124,8 +120,6 @@ class MemoryManager:
             entry["tags"] = tags
         self._semantic.add(entry)
 
-    # ── 取得 ──────────────────────────────────────────────
-
     def get_recent(self, n: int = 3) -> list[dict[str, Any]]:
         """直近のエピソード記憶を取得する。
 
@@ -134,8 +128,6 @@ class MemoryManager:
         """
         summaries = self._episodic.get_recent(n)
         return [{"summary": s} for s in summaries]
-
-    # ── ユーティリティ ────────────────────────────────────
 
     @staticmethod
     def _simple_score(query: str, content: str) -> float:

@@ -45,8 +45,6 @@ class ConversationService:
         self._messages: list[dict] = []
         self._msg_count_since_reflect: int = 0
 
-    # ── 公開API ───────────────────────────────────────────
-
     def process_input(self, content: str) -> None:
         """ユーザー入力を処理する。（ストリーミング対応）
         コマンド（/ で始まる入力）は CommandRouter が処理するため、本メソッドでは扱わない。"""
@@ -101,8 +99,6 @@ class ConversationService:
         self._maybe_quick_reflect()
         self._maybe_compact()
 
-    # ── Reflexion ────────────────────────────────────────
-
     def _maybe_quick_reflect(self) -> None:
         """Nターンごとに quick_reflect を実行する。"""
         if self._reflexion_manager is None:
@@ -117,8 +113,6 @@ class ConversationService:
         if self._reflexion_manager is None:
             return
         self._reflexion_manager.run_session(self._messages)
-
-    # ── コンパクション ───────────────────────────────────
 
     def _maybe_compact(self) -> None:
         """トークン数が閾値を超えた場合、会話履歴を要約する。"""
@@ -135,8 +129,6 @@ class ConversationService:
             return
         self._context_manager.force_summarize(self._messages)
         logger.info("Conversation force compacted")
-
-    # ── 会話履歴管理 ─────────────────────────────────────
 
     def clear_history(self) -> None:
         """会話履歴をクリアする。"""

@@ -135,9 +135,6 @@ def _process_message(msg: dict) -> dict:
     return msg
 
 
-# ── 環境構築ヘルパー ────────────────────────────────────────────
-
-
 def _get_available_models() -> set[str]:
     """Ollama に既に pull 済みのモデル名のセットを返す。"""
     try:

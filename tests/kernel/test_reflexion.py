@@ -13,7 +13,7 @@ def _make_reflexion(response_json: str, compact_model: str | None = None) -> Ref
 
 def test_reflect_parses_valid_json() -> None:
     reflexion = _make_reflexion(
-        '{"summary": "test", "lesson": "learned", "preference": "likes X", "improvement": "be better", "speech_style": "friendly"}'
+        '{"summary": "test", "lesson": "learned", "preference": "likes X", "improvement": "be better", "speech_style": "friendly"}'  # noqa: E501
     )
     result = reflexion.reflect(TWO)
     assert result["summary"] == "test"

@@ -6,6 +6,7 @@ from datetime import datetime
 
 from iris.commands.handler import CommandHandler
 
+from .conversation import ConversationService
 from .event import AgentResponseEvent, UserInputEvent
 from .event_bus import EventBusProtocol
 from .ipc import PipeConnection, PipeServer
@@ -70,26 +71,34 @@ class InputBridge:
 
 
 class CommandRouter:
-    def __init__(self, cmd_handler: CommandHandler, proactive: ProactiveEngine, event_bus: EventBusProtocol) -> None:
+    def __init__(
+        self,
+        cmd_handler: CommandHandler,
+        proactive: ProactiveEngine,
+        event_bus: EventBusProtocol,
+        conversation: ConversationService,
+    ) -> None:
         self._cmd_handler = cmd_handler
         self._proactive = proactive
         self._event_bus = event_bus
+        self._conversation = conversation
         self._event_bus.subscribe("UserInputEvent", self._on_user_input)
 
     def _on_user_input(self, event: UserInputEvent) -> None:
-        if not event.content.startswith("/"):
-            return
-        self._proactive.notify_user_activity()
-        response = self._cmd_handler.handle(event.content)
-        if response:
-            self._event_bus.publish(
-                AgentResponseEvent(
-                    timestamp=datetime.now(),
-                    source="command",
-                    content=response,
-                    trace_id=event.trace_id,
+        if event.content.startswith("/"):
+            self._proactive.notify_user_activity()
+            response = self._cmd_handler.handle(event.content)
+            if response:
+                self._event_bus.publish(
+                    AgentResponseEvent(
+                        timestamp=datetime.now(),
+                        source="command",
+                        content=response,
+                        trace_id=event.trace_id,
+                    )
                 )
-            )
+        else:
+            self._conversation.process_input(event.content)
 
 
 __all__ = ["InputBridge", "CommandRouter"]

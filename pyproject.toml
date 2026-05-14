@@ -61,6 +61,18 @@ module = [
 ]
 ignore_errors = true
 
+[[tool.mypy.overrides]]
+module = "tests.*"
+disable_error_code = [
+  "arg-type",
+  "list-item",
+  "comparison-overlap",
+  "attr-defined",
+  "misc",
+  "call-overload",
+  "index",
+]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]

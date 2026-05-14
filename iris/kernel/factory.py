@@ -93,7 +93,7 @@ class KernelFactory:
             conversation=conversation,
             proactive=proactive,
         )
-        CommandRouter(cmd_handler=cmd_handler, proactive=proactive, event_bus=event_bus)
+        CommandRouter(cmd_handler=cmd_handler, proactive=proactive, event_bus=event_bus, conversation=conversation)
         ProactiveResponseTracker(proactive=proactive, event_bus=event_bus)
 
         return KernelContext(

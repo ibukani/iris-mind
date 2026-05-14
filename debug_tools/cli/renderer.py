@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import time as _time
+import time
 from typing import Any
 
 from rich.console import Console
@@ -108,7 +108,7 @@ class Renderer:
                     width=72,
                 )
             )
-            _time.sleep(0.3)
+            time.sleep(0.3)
         self._stream_text = ""
 
     @property

@@ -14,6 +14,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from iris.llm.provider import LLMProvider
@@ -40,7 +41,7 @@ SELF_GOVERNANCE_PRINCIPLES = [
     "If user emotion is negative, do not speak",
 ]
 
-TIER1_SYSTEM_PROMPT = """あなたはIrisです。ユーザーに自然に声をかけてください。
+_TIER1_DEFAULT = """あなたはIrisです。ユーザーに自然に声をかけてください。
 
 ■ ルール:
 - 短く（40文字以内）で友好的
@@ -51,7 +52,7 @@ TIER1_SYSTEM_PROMPT = """あなたはIrisです。ユーザーに自然に声を
 ■ コンテキスト:
 {context_hint}"""
 
-TIER2_SYSTEM_PROMPT = """あなたはIrisです。
+_TIER2_DEFAULT = """あなたはIrisです。
 
 ■ 判断基準:
 - ユーザーの記憶・興味・最近の会話履歴に基づいているか
@@ -68,6 +69,18 @@ TIER2_SYSTEM_PROMPT = """あなたはIrisです。
 
 ■ 以下のJSON形式のみを出力してください:
 {{"speech": "発話内容（60文字以内）", "confidence": 0.0~1.0, "reasoning": "この発話の根拠（簡潔に）"}}"""
+
+TIER1_SYSTEM_PROMPT = (
+    Path(".iris/config/tier1_prompt.md").read_text(encoding="utf-8")
+    if Path(".iris/config/tier1_prompt.md").exists()
+    else _TIER1_DEFAULT
+)
+
+TIER2_SYSTEM_PROMPT = (
+    Path(".iris/config/tier2_prompt.md").read_text(encoding="utf-8")
+    if Path(".iris/config/tier2_prompt.md").exists()
+    else _TIER2_DEFAULT
+)
 
 
 @dataclass

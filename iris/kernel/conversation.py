@@ -1,7 +1,7 @@
 """
 ConversationService — 会話処理パイプライン。
 
-UserInputEvent を購読し、LLM 応答を生成 → AgentResponseEvent を発行する。
+アダプター層から process_input() で呼び出され、LLM 応答を生成 → AgentResponseEvent を発行する。
 LLM呼び出し・ツールループ・Reflexionはそれぞれ LLMPipeline / ReflexionManager に委譲。
 """
 
@@ -11,7 +11,7 @@ import logging
 from datetime import datetime
 
 from .context import ContextManager
-from .event_bus import AgentResponseEvent, AgentStreamEvent, EventBus, UserInputEvent
+from .event_bus import AgentResponseEvent, AgentStreamEvent, EventBus
 from .llm_pipeline import LLMPipeline
 from .reflexion_manager import ReflexionManager
 
@@ -22,7 +22,7 @@ class ConversationService:
     """
     会話処理サービス。
 
-    EventBus 経由で UserInputEvent を購読し、以下のフローを実行する：
+    process_input() で呼び出され、以下のフローを実行する：
     1. LLMPipeline で LLM 呼び出し（システムプロンプト構築 + tool loop）
     2. AgentResponseEvent 発行
     3. ReflexionManager で Nターンごとの quick_reflect
@@ -45,16 +45,14 @@ class ConversationService:
         self._messages: list[dict] = []
         self._msg_count_since_reflect: int = 0
 
-        self._event_bus.subscribe("UserInputEvent", self._on_user_input)
+    # ── 公開API ───────────────────────────────────────────
 
-    # ── イベントハンドラ ──────────────────────────────────
-
-    def _on_user_input(self, event: UserInputEvent) -> None:
-        """ユーザー入力イベントを処理する。（ストリーミング対応）
-        コマンド（/ で始まる入力）は CommandRouter が処理するためスキップする。"""
-        if event.content.startswith("/"):
+    def process_input(self, content: str) -> None:
+        """ユーザー入力を処理する。（ストリーミング対応）
+        コマンド（/ で始まる入力）は CommandRouter が処理するため、本メソッドでは扱わない。"""
+        if content.startswith("/"):
             return
-        self._messages.append({"role": "user", "content": event.content})
+        self._messages.append({"role": "user", "content": content})
 
         # Thinking 開始通知
         self._event_bus.publish(

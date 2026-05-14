@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import time as _time
+import time
 
 from .event import ProactiveSpeechEvent, UserInputEvent
 from .event_bus import EventBusProtocol
@@ -28,12 +28,12 @@ class ProactiveResponseTracker:
         event_bus.subscribe("UserInputEvent", self._on_user_input)
 
     def _on_proactive(self, event: ProactiveSpeechEvent) -> None:  # noqa: ARG002
-        self._pending = _time.time()
+        self._pending = time.time()
 
     def _on_user_input(self, event: UserInputEvent) -> None:
         if not self._pending:
             return
-        elapsed = _time.time() - self._pending
+        elapsed = time.time() - self._pending
         self._pending = 0.0
         if elapsed > 60.0:
             return

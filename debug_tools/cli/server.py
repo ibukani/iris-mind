@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime
 
 from rich.console import Console
 from rich.live import Live
@@ -21,7 +20,6 @@ from iris.kernel.event_bus import (
     AgentResponseEvent,
     AgentStreamEvent,
     ProactiveSpeechEvent,
-    UserInputEvent,
 )
 from iris.kernel.factory import KernelContext
 
@@ -94,13 +92,7 @@ class CLIAdapter:
                 self._stream_text = ""
                 with Live(console=console, refresh_per_second=12, vertical_overflow="visible") as _live:
                     self._stream_live = _live
-                    self._ctx.event_bus.publish(
-                        UserInputEvent(
-                            timestamp=datetime.now(),
-                            source="user_input",
-                            content=text,
-                        )
-                    )
+                    self._ctx.conversation.process_input(text)
                     if self._stream_text:
                         _live.update(
                             Panel(
@@ -111,9 +103,7 @@ class CLIAdapter:
                                 width=72,
                             )
                         )
-                        import time as _time
-
-                        _time.sleep(0.3)
+                        time.sleep(0.3)
                 self._stream_live = None
         finally:
             self.shutdown()

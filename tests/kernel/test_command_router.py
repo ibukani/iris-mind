@@ -6,6 +6,14 @@ from typing import Any
 from iris.kernel.event import AgentResponseEvent, UserInputEvent
 
 
+class _FakeConversationService:
+    def __init__(self) -> None:
+        self.last_input: str = ""
+
+    def process_input(self, content: str) -> None:
+        self.last_input = content
+
+
 class _FakeCmdHandler:
     def __init__(self) -> None:
         self.last_command: str = ""
@@ -38,18 +46,19 @@ class _FakeEventBus:
         pass
 
 
-def _make_router() -> tuple[Any, Any, Any, Any]:
+def _make_router() -> tuple[Any, Any, Any, Any, Any]:
     from iris.kernel.ipc_input import CommandRouter
 
     cmd = _FakeCmdHandler()
     pro = _FakeProactive()
     bus = _FakeEventBus()
-    router = CommandRouter(cmd_handler=cmd, proactive=pro, event_bus=bus)  # type: ignore[arg-type]
-    return router, cmd, pro, bus
+    conv = _FakeConversationService()
+    router = CommandRouter(cmd_handler=cmd, proactive=pro, event_bus=bus, conversation=conv)
+    return router, cmd, pro, bus, conv
 
 
 def test_command_router_handles_slash_commands() -> None:
-    router, cmd, pro, bus = _make_router()
+    router, cmd, pro, bus, conv = _make_router()
 
     bus.subs["UserInputEvent"](UserInputEvent(timestamp=datetime(2026, 1, 1), source="test", content="/help"))
 
@@ -58,16 +67,18 @@ def test_command_router_handles_slash_commands() -> None:
     assert len(bus.published) == 1
     assert isinstance(bus.published[0], AgentResponseEvent)
     assert "Handled: /help" in bus.published[0].content
+    assert conv.last_input == ""  # コマンドは会話サービスに渡らない
 
 
-def test_command_router_ignores_normal_input() -> None:
-    router, cmd, pro, bus = _make_router()
+def test_command_router_forwards_normal_input() -> None:
+    router, cmd, pro, bus, conv = _make_router()
 
     bus.subs["UserInputEvent"](UserInputEvent(timestamp=datetime(2026, 1, 1), source="test", content="hello"))
 
     assert cmd.last_command == ""
     assert pro.activity_count == 0
     assert len(bus.published) == 0
+    assert conv.last_input == "hello"
 
 
 def test_command_router_empty_response_does_not_publish() -> None:
@@ -79,7 +90,8 @@ def test_command_router_empty_response_does_not_publish() -> None:
 
     bus = _FakeEventBus()
     pro = _FakeProactive()
-    CommandRouter(cmd_handler=NoopHandler(), proactive=pro, event_bus=bus)  # type: ignore[arg-type]
+    conv = _FakeConversationService()
+    CommandRouter(cmd_handler=NoopHandler(), proactive=pro, event_bus=bus, conversation=conv)
 
     bus.subs["UserInputEvent"](UserInputEvent(timestamp=datetime(2026, 1, 1), source="test", content="/sleep"))
 

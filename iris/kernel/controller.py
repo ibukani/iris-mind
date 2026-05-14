@@ -49,11 +49,11 @@ class IrisController:
 
         if self._enable_output:
             self._output_proc = subprocess.Popen(
-                [sys.executable, "-m", "adapters.cli.output_main", PIPE_NAME_KERNEL_OUTPUT],
+                [sys.executable, "-m", "debug_tools.cli.output_main", PIPE_NAME_KERNEL_OUTPUT],
             )
         if self._enable_input:
             self._input_proc = subprocess.Popen(
-                [sys.executable, "-m", "adapters.cli.input_main", PIPE_NAME_KERNEL_INPUT],
+                [sys.executable, "-m", "debug_tools.cli.input_main", PIPE_NAME_KERNEL_INPUT],
             )
 
         self._running = True
@@ -98,10 +98,10 @@ class IrisController:
             self._input_proc = self._spawn_input()
 
     def _spawn_output(self) -> subprocess.Popen | None:
-        return self._spawn_safe([sys.executable, "-m", "adapters.cli.output_main", PIPE_NAME_KERNEL_OUTPUT])
+        return self._spawn_safe([sys.executable, "-m", "debug_tools.cli.output_main", PIPE_NAME_KERNEL_OUTPUT])
 
     def _spawn_input(self) -> subprocess.Popen | None:
-        return self._spawn_safe([sys.executable, "-m", "adapters.cli.input_main", PIPE_NAME_KERNEL_INPUT])
+        return self._spawn_safe([sys.executable, "-m", "debug_tools.cli.input_main", PIPE_NAME_KERNEL_INPUT])
 
     def _spawn_safe(self, cmd: list[str]) -> subprocess.Popen | None:
         self._restart_count += 1

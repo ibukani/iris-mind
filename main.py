@@ -1,37 +1,22 @@
 #!/usr/bin/env python3
-"""Iris - 自律的に行動し進化できるAI (v0.3)"""
+"""Iris Kernel — 3-Process アーキテクチャの中核プロセス。
 
-import argparse
+起動方法:
+    python main.py
+
+Input / Output アダプターは別プロセスとして起動し、Named Pipe 経由で接続する。
+"""
+
 import os
 from pathlib import Path
 
-from adapters.cli.server import CLIAdapter
 from iris.kernel.config import Config
 from iris.kernel.controller import IrisController
-from iris.kernel.factory import KernelFactory
 
 os.environ.setdefault("OLLAMA_GPU_LAYERS", "99")
 
 
 def run() -> None:
-    parser = argparse.ArgumentParser(description="Iris AI Assistant")
-    parser.add_argument(
-        "--separate",
-        action="store_true",
-        help="Input / Kernel / Output を別プロセスとして起動する",
-    )
-    parser.add_argument(
-        "--no-input",
-        action="store_true",
-        help="Input Process を起動しない (--separate 時、デバッグ用)",
-    )
-    parser.add_argument(
-        "--no-output",
-        action="store_true",
-        help="Output Process を起動しない (--separate 時、デバッグ用)",
-    )
-    args = parser.parse_args()
-
     project_root = Path(__file__).parent
     config = Config.load(str(project_root / "config.yaml"))
 
@@ -42,15 +27,7 @@ def run() -> None:
     if not _check_environment(config):
         return
 
-    if args.separate:
-        IrisController(
-            config,
-            enable_input=not args.no_input,
-            enable_output=not args.no_output,
-        ).launch()
-    else:
-        ctx = KernelFactory.build(config)
-        CLIAdapter(ctx).run()
+    IrisController(config).launch()
 
 
 def _check_environment(config: Config) -> bool:

@@ -11,7 +11,7 @@ from iris.kernel.event import (
 
 
 def test_renderer_proactive_speech_does_not_crash() -> None:
-    from adapters.cli.renderer import Renderer
+    from debug_tools.cli.renderer import Renderer
 
     r = Renderer()
     event = ProactiveSpeechEvent(
@@ -21,7 +21,7 @@ def test_renderer_proactive_speech_does_not_crash() -> None:
 
 
 def test_renderer_stream_token_does_not_crash() -> None:
-    from adapters.cli.renderer import Renderer
+    from debug_tools.cli.renderer import Renderer
 
     r = Renderer()
     r.handle(AgentStreamEvent(timestamp=datetime(2026, 1, 1), source="assistant", delta=""))
@@ -31,7 +31,7 @@ def test_renderer_stream_token_does_not_crash() -> None:
 
 
 def test_renderer_response_does_not_crash() -> None:
-    from adapters.cli.renderer import Renderer
+    from debug_tools.cli.renderer import Renderer
 
     r = Renderer()
     event = AgentResponseEvent(timestamp=datetime(2026, 1, 1), source="assistant", content="Hello world")
@@ -39,7 +39,7 @@ def test_renderer_response_does_not_crash() -> None:
 
 
 def test_renderer_anomaly_does_not_crash() -> None:
-    from adapters.cli.renderer import Renderer
+    from debug_tools.cli.renderer import Renderer
 
     r = Renderer()
     event = AgentAnomalyEvent(
@@ -49,7 +49,7 @@ def test_renderer_anomaly_does_not_crash() -> None:
 
 
 def test_renderer_is_streaming_flag() -> None:
-    from adapters.cli.renderer import Renderer
+    from debug_tools.cli.renderer import Renderer
 
     r = Renderer()
     assert not r.is_streaming

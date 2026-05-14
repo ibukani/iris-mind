@@ -45,6 +45,7 @@ class ConversationService:
         context_manager: ContextManager | None = None,
         persona_profile: Any | None = None,
         agents_md_store: Any | None = None,
+        capability_checker: Any | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._memory = memory
@@ -58,6 +59,7 @@ class ConversationService:
         self._persona_profile = persona_profile
         self._agents_md_store = agents_md_store
         self._context_window = config.model.context_window
+        self._capability_checker = capability_checker
         self._max_tool_iterations: int = 3
         self._messages: list[dict] = []
         self._msg_count_since_reflect: int = 0
@@ -215,6 +217,8 @@ class ConversationService:
         4. 最終的なテキスト応答を返す
         """
         tools = self._get_tools()
+        if tools and self._capability_checker and not self._capability_checker.supports_tools("default"):
+            tools = None
         iteration = 0
         final_text = ""
 

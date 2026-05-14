@@ -4,9 +4,10 @@ import os
 import tempfile
 from pathlib import Path
 
+import pytest
 import yaml
 
-from iris.kernel.config import Config, ModelConfig, ProactiveConfig
+from iris.kernel.config import Config, ModelConfig, ModelEntry, ProactiveConfig
 
 
 def write_config_yaml(path: Path, data: dict) -> None:
@@ -161,3 +162,137 @@ def test_proactive_config_defaults() -> None:
     assert config.tier1_auto_approve is True
     assert config.tier2_confidence_threshold == 0.75
     assert config.trigger_weights["time"] == 0.25
+
+
+# ── Step 1: Per-model parameters ──────────────────────────────
+
+
+def test_model_entry_defaults() -> None:
+    entry = ModelEntry(name="test")
+    assert entry.max_tokens == 512
+    assert entry.temperature is None
+    assert entry.num_ctx is None
+    assert entry.context_window is None
+    assert entry.capabilities is None
+    assert entry.performance_tier == "balanced"
+
+
+def test_model_entry_valid_performance_tiers() -> None:
+    for tier in ("fast", "balanced", "capable"):
+        entry = ModelEntry(name="test", performance_tier=tier)
+        assert entry.performance_tier == tier
+
+
+def test_model_entry_invalid_performance_tier() -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        ModelEntry(name="test", performance_tier="invalid")
+
+
+def test_get_effective_temperature_per_model() -> None:
+    config = Config(
+        model=ModelConfig(
+            models=[
+                {"name": "base", "roles": ["default"], "temperature": 0.5},
+                {"name": "smart", "roles": ["smart"], "temperature": 0.9},
+            ],
+            provider="ollama",
+            base_url="http://localhost:11434",
+            temperature=0.7,
+        ),
+    )
+    assert config.model.get_effective_temperature("default") == 0.5
+    assert config.model.get_effective_temperature("smart") == 0.9
+
+
+def test_get_effective_temperature_fallback() -> None:
+    config = Config(
+        model=ModelConfig(
+            models=[{"name": "base", "roles": ["default"]}],
+            provider="ollama",
+            base_url="http://localhost:11434",
+            temperature=0.7,
+        ),
+    )
+    assert config.model.get_effective_temperature("default") == 0.7
+
+
+def test_get_effective_temperature_unknown_role() -> None:
+    config = Config(
+        model=ModelConfig(
+            models=[{"name": "base", "roles": ["default"]}],
+            provider="ollama",
+            base_url="http://localhost:11434",
+            temperature=0.7,
+        ),
+    )
+    assert config.model.get_effective_temperature("nonexistent") == 0.7
+
+
+def test_get_effective_num_ctx() -> None:
+    config = Config(
+        model=ModelConfig(
+            models=[
+                {"name": "base", "roles": ["default"], "num_ctx": 4096},
+            ],
+            provider="ollama",
+            base_url="http://localhost:11434",
+            num_ctx=8192,
+        ),
+    )
+    assert config.model.get_effective_num_ctx("default") == 4096
+    # unknown role falls back to models[0] which has num_ctx=4096
+    assert config.model.get_effective_num_ctx("unknown") == 4096
+
+
+def test_get_model_capabilities_explicit() -> None:
+    config = Config(
+        model=ModelConfig(
+            models=[
+                {"name": "base", "roles": ["default"], "capabilities": ["tools"]},
+                {"name": "smart", "roles": ["smart"], "capabilities": ["tools", "thinking"]},
+            ],
+            provider="ollama",
+            base_url="http://localhost:11434",
+        ),
+    )
+    assert config.model.get_model_capabilities("default") == ["tools"]
+    assert config.model.get_model_capabilities("smart") == ["tools", "thinking"]
+
+
+def test_get_model_capabilities_none() -> None:
+    config = Config(
+        model=ModelConfig(
+            models=[{"name": "base", "roles": ["default"]}],
+            provider="ollama",
+            base_url="http://localhost:11434",
+        ),
+    )
+    assert config.model.get_model_capabilities("default") == []
+
+
+def test_get_model_performance_tier() -> None:
+    config = Config(
+        model=ModelConfig(
+            models=[
+                {"name": "base", "roles": ["default"], "performance_tier": "capable"},
+                {"name": "fast", "roles": ["fast"], "performance_tier": "fast"},
+            ],
+            provider="ollama",
+            base_url="http://localhost:11434",
+        ),
+    )
+    assert config.model.get_model_performance_tier("default") == "capable"
+    assert config.model.get_model_performance_tier("fast") == "fast"
+
+
+def test_get_model_performance_tier_default() -> None:
+    config = Config(
+        model=ModelConfig(
+            models=[{"name": "base", "roles": ["default"]}],
+            provider="ollama",
+            base_url="http://localhost:11434",
+        ),
+    )
+    assert config.model.get_model_performance_tier("default") == "balanced"

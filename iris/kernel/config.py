@@ -41,6 +41,11 @@ class ModelEntry(BaseModel):
     name: str
     roles: list[str] = ["default"]
     max_tokens: int = 512
+    temperature: float | None = None
+    num_ctx: int | None = None
+    context_window: int | None = None
+    capabilities: list[str] | None = None
+    performance_tier: str = "balanced"
 
     @field_validator("roles", mode="before")
     @classmethod
@@ -50,6 +55,14 @@ class ModelEntry(BaseModel):
         if isinstance(v, list):
             return v
         return ["default"]
+
+    @field_validator("performance_tier")
+    @classmethod
+    def _validate_tier(cls, v: str) -> str:
+        allowed = {"fast", "balanced", "capable"}
+        if v not in allowed:
+            raise ValueError(f"performance_tier must be one of {allowed}, got '{v}'")
+        return v
 
 
 class ModelConfig(BaseModel):
@@ -70,10 +83,38 @@ class ModelConfig(BaseModel):
         return [m.name for m in self.models]
 
     def get_model(self, role: str = "default") -> str:
+        m = self._find_model(role)
+        return m.name if m else self.models[0].name
+
+    def _find_model(self, role: str) -> ModelEntry | None:
         for m in self.models:
             if role in m.roles:
-                return m.name
-        return self.models[0].name
+                return m
+        return self.models[0] if self.models else None
+
+    def get_effective_temperature(self, role: str = "default") -> float:
+        m = self._find_model(role)
+        if m is not None and m.temperature is not None:
+            return m.temperature
+        return self.temperature
+
+    def get_effective_num_ctx(self, role: str = "default") -> int:
+        m = self._find_model(role)
+        if m is not None and m.num_ctx is not None:
+            return m.num_ctx
+        return self.num_ctx
+
+    def get_model_capabilities(self, role: str = "default") -> list[str]:
+        m = self._find_model(role)
+        if m is not None and m.capabilities is not None:
+            return m.capabilities
+        return []
+
+    def get_model_performance_tier(self, role: str = "default") -> str:
+        m = self._find_model(role)
+        if m is not None:
+            return m.performance_tier
+        return "balanced"
 
 
 # ── 新規: ProactiveConfig ───────────────────────────────

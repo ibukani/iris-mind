@@ -18,6 +18,7 @@ class FakeLLMProvider:
         self.call_count = 0
         self._responses = responses or [{"message": {"content": "Hello from FakeLLM", "role": "assistant"}}]
         self._messages_log: list[list[dict]] = []
+        self._model_log: list[str | None] = []
 
     def chat(
         self,
@@ -31,6 +32,7 @@ class FakeLLMProvider:
         **kwargs: Any,
     ) -> dict:
         self._messages_log.append(messages)
+        self._model_log.append(model)
         resp = self._responses[self.call_count % len(self._responses)]
         self.call_count += 1
         return resp

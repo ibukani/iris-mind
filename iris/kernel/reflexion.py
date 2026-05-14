@@ -13,8 +13,9 @@ from typing import Any
 class Reflexion:
     """自己反省エンジン。LLM を使って会話を分析する。"""
 
-    def __init__(self, llm: Any) -> None:
+    def __init__(self, llm: Any, compact_model: str | None = None) -> None:
         self.llm = llm
+        self.compact_model = compact_model
 
     def reflect(self, conversation_history: list[dict]) -> dict[str, str]:
         """
@@ -57,7 +58,7 @@ class Reflexion:
                 ),
             },
         ]
-        resp = self.llm.chat(messages=msgs, temperature=0.3, max_tokens=400, keep_alive="0")
+        resp = self.llm.chat(messages=msgs, model=self.compact_model, temperature=0.3, max_tokens=400, keep_alive="0")
         raw = resp["message"].get("content")
         content = raw if isinstance(raw, str) else ""
         try:
@@ -111,7 +112,7 @@ class Reflexion:
                 ),
             },
         ]
-        resp = self.llm.chat(messages=msgs, temperature=0.3, max_tokens=200, keep_alive="0")
+        resp = self.llm.chat(messages=msgs, model=self.compact_model, temperature=0.3, max_tokens=200, keep_alive="0")
         raw = resp["message"].get("content")
         content = raw if isinstance(raw, str) else ""
         try:

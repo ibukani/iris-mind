@@ -16,6 +16,7 @@ def make_engine(
     state: AgentStateManager | None = None,
     memory: FakeMemoryManager | None = None,
     llm: Any = None,
+    fast_model: str | None = None,
     time_provider: Any = None,
 ) -> ProactiveEngine:
     """Build ProactiveEngine with test defaults."""
@@ -38,6 +39,7 @@ def make_engine(
         state_manager=st,
         memory=mem,
         llm=llm,
+        fast_model=fast_model,
         time_provider=time_provider,
     )
 
@@ -458,3 +460,30 @@ class TestPublicAPI:
         eb.subscribe("ProactiveSpeechEvent", collect)
         engine._on_timer_tick(TimerTick(timestamp=None, source="test", tick_count=0))
         assert len(results) >= 1
+
+    # ── Model injection ────────────────────────────────────────
+
+    def test_tier1_speech_passes_fast_model(self) -> None:
+        llm = FakeLLMProvider()
+        engine = make_engine(llm=llm, fast_model="fast-model")
+        result = engine._build_tier1_speech({"time": 0.8})
+        assert result is not None
+        assert llm._model_log[-1] == "fast-model"
+
+    def test_tier2_speech_passes_fast_model(self) -> None:
+        llm = FakeLLMProvider(
+            responses=[
+                {
+                    "message": {
+                        "content": '{"speech": "hello", "confidence": 0.9, "reasoning": "test"}',
+                        "role": "assistant",
+                    }
+                }
+            ]
+        )
+        engine = make_engine(llm=llm, fast_model="fast-model")
+        scores = {"memory": 0.8, "time": 0.3, "context": 0.2, "mood": 0.1}
+        speech, confidence, reasoning = engine._build_tier2_speech(scores)
+        assert speech == "hello"
+        assert confidence == 0.9
+        assert llm._model_log[-1] == "fast-model"

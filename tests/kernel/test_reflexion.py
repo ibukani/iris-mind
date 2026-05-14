@@ -6,9 +6,9 @@ from tests.conftest import FakeLLMProvider
 TWO = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]
 
 
-def _make_reflexion(response_json: str) -> Reflexion:
+def _make_reflexion(response_json: str, compact_model: str | None = None) -> Reflexion:
     llm = FakeLLMProvider(responses=[{"message": {"content": response_json, "role": "assistant"}}])
-    return Reflexion(llm=llm)
+    return Reflexion(llm=llm, compact_model=compact_model)
 
 
 def test_reflect_parses_valid_json() -> None:
@@ -93,3 +93,17 @@ def test_reflect_passes_messages_to_llm() -> None:
     assert len(llm._messages_log) == 1
     sent = llm._messages_log[0]
     assert any("hello" in str(m) for m in sent)
+
+
+def test_reflect_passes_compact_model() -> None:
+    llm = FakeLLMProvider(responses=[{"message": {"content": "{}", "role": "assistant"}}])
+    reflexion = Reflexion(llm=llm, compact_model="compact-model")
+    reflexion.reflect(TWO)
+    assert llm._model_log[-1] == "compact-model"
+
+
+def test_quick_reflect_passes_compact_model() -> None:
+    llm = FakeLLMProvider(responses=[{"message": {"content": "{}", "role": "assistant"}}])
+    reflexion = Reflexion(llm=llm, compact_model="compact-model")
+    reflexion.quick_reflect(TWO)
+    assert llm._model_log[-1] == "compact-model"

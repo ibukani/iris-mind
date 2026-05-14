@@ -11,6 +11,7 @@ from dataclasses import dataclass
 
 from iris.capabilities.registry import CapabilityRegistry
 from iris.commands.handler import CommandHandler
+from iris.llm.capability_checker import CapabilityChecker
 from iris.llm.llm_bridge import LLMBridge, create_provider
 from iris.memory.persona_data import PersonaData
 from iris.memory.persona_profile import PersonaProfile
@@ -90,7 +91,8 @@ class KernelFactory:
         )
         llm = LLMBridge(provider=provider)
         personality = Personality(name=config.personality.name)
-        reflexion = Reflexion(llm=llm)
+        capability_checker = CapabilityChecker(config=config.model)
+        reflexion = Reflexion(llm=llm, compact_model=config.model.get_model("compact"))
         context_mgr = ContextManager(
             llm=llm,
             compact_model=config.model.get_model("default"),
@@ -103,6 +105,7 @@ class KernelFactory:
             state_manager=state,
             memory=memory,
             llm=llm,
+            fast_model=config.model.get_model("fast"),
         )
 
         # カーネル
@@ -133,6 +136,7 @@ class KernelFactory:
             context_manager=context_mgr,
             persona_profile=persona_profile,
             agents_md_store=agents_md,
+            capability_checker=capability_checker,
         )
 
         # コマンドハンドラ

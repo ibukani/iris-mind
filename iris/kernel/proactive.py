@@ -109,6 +109,7 @@ class ProactiveEngine:
         state_manager: AgentStateManager,
         memory: MemoryManager,
         llm: Any | None = None,
+        fast_model: str | None = None,
         approval_callback: ApprovalCallback | None = None,
         time_provider: TimeProvider | None = None,
     ) -> None:
@@ -117,6 +118,7 @@ class ProactiveEngine:
         self._state = state_manager
         self._memory = memory
         self._llm = llm
+        self._fast_model = fast_model
         self._approval_callback = approval_callback
         self._time_provider = time_provider or time.time
         self._suppression = SuppressionState()
@@ -387,6 +389,7 @@ class ProactiveEngine:
                     {"role": "system", "content": TIER1_SYSTEM_PROMPT.format(context_hint=context_hint)},
                     {"role": "user", "content": "短く自然な一言を生成してください。"},
                 ],
+                model=self._fast_model,
                 max_tokens=80,
                 temperature=0.5,
             )
@@ -419,6 +422,7 @@ class ProactiveEngine:
                     {"role": "system", "content": TIER2_SYSTEM_PROMPT.format(context_hint=context_hint)},
                     {"role": "user", "content": "自発発話を生成し、信頼度を評価してください。"},
                 ],
+                model=self._fast_model,
                 max_tokens=200,
                 temperature=0.3,
             )

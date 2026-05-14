@@ -6,9 +6,20 @@
 
 | 状態 | 優先度 | タスク | 備考 |
 |------|--------|--------|------|
-| completed | high | 設計改善リファクタリング2: ConversationService分割・モデル選択副作用除去・RAG二重実行解消・記憶ストアProtocol導入・cli.pyデッドコード削除・CommandContext型改善・プロンプト統一 | ドキュメント更新含む |
-| completed | high | KernelFactory導入: CLIAdapterの依存構築責務を kernel/factory.py に移動。main.py を composition root 化 | ドキュメント更新含む |
-| completed | high | テスト実装: Protocol+Fake+プロパティベースのテストスイート（179 tests, 9秒） | time_provider注入・check_timeoutデッドロック修正含む |
+| completed | high | 設計改善リファクタリング2: ConversationService分割・モデル選択副作用除去・RAG二重実行解消・記憶ストアProtocol導入・cli.pyデッドコード削除・CommandContext型改善・プロンプト統一 | |
+| completed | high | KernelFactory導入: CLIAdapterの依存構築責務を kernel/factory.py に移動。main.py を composition root 化 | |
+| completed | high | テスト実装: Protocol+Fake+プロパティベースのテストスイート（179 tests, 9秒） | |
+| completed | high | ADR-001: 3-Process分解の設計文書化（docs/adr/001-3-process-architecture.md） | |
+| completed | high | IPCプロトコル仕様書作成（docs/ipc-spec.md） | |
+| completed | high | 移行ロードマップ作成（docs/migration-roadmap.md） | |
+| completed | high | アーキテクチャ設計書更新（docs/architecture.md） | |
+| completed | high | EventBus仕様書更新（docs/event-bus.md） | |
+| completed | medium | 運用文書更新（.agents/*.md, AGENTS.md, docs/README.md） | |
+| pending | high | Phase 0: EventBus Protocol 化 + event.py + ipc.py 実装 | |
+| pending | high | Phase 1: Output Process 分離（output_main.py, renderer.py, OutputBridge） | |
+| pending | high | Phase 2: Input Process 分離 + ProactiveResponseTracker移植 + server.py削除 | |
+| pending | medium | Phase 3: Controller プロセス導入 | |
+| pending | low | Phase 4: マルチ入力ソース対応 | |
 
 ## 凡例
 

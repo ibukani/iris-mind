@@ -33,17 +33,13 @@ Config
 | フィールド | 型 | デフォルト | 説明 |
 |-----------|-----|-----------|------|
 | name | str | — | モデル名（Ollamaタグ形式 or OpenRouterモデルスラッグ） |
-| role | str | "base" | "base" または "smart" |
+| roles | list[str] | ["default"] | このモデルが担うロール一覧 |
 | max_tokens | int | 512 | 最大出力トークン数 |
 
-**EscalationConfig**:
-
-| フィールド | 型 | デフォルト | 説明 |
-|-----------|-----|-----------|------|
-| enabled | bool | True | エスカレーション有効 |
-| max_retries | int | 1 | 最大リトライ回数 |
-| swap_on_escalate | bool | True | エスカレーション時にモデル切替 |
-| keep_alive_duration | str | "5m" | モデル維持時間 |
+- `roles` は YAML上で1要素なら文字列でも記述可能: `roles: default`
+- モデルが1つだけの場合はシングルモードとなり、全処理にそのモデルを使用
+- 複数モデルがある場合は `get_model(role)` で role に合致するモデルを選択
+- `ModelEntry.role`（旧形式）の単一文字列は自動的にリストに変換される
 
 ## ProactiveConfig
 
@@ -94,18 +90,29 @@ trigger_weights:
 ## config.yaml 例
 
 ```yaml
+# シングルモード（モデル1つ、全処理に使用）
 model:
-  provider: ollama                    # "ollama" or "openrouter"
-  base_url: http://localhost:11434    # Ollama: localhost:11434 / OpenRouter: https://openrouter.ai/api/v1
-  api_key: "${OPENROUTER_API_KEY}"    # OpenRouter利用時のみ
+  provider: openrouter
+  base_url: https://openrouter.ai/api/v1
+  api_key: "${OPENROUTER_API_KEY}"
   models:
-    - name: qwen3.5:2b
-      role: base
-      max_tokens: 512
-    - name: qwen3.5:9b
-      role: smart
+    - name: google/gemma-4-26b-a4b-it:free
+      roles: [default]
       max_tokens: 1024
   temperature: 0.7
+
+# マルチモード（モデル複数、roleで使い分け）
+# model:
+#   provider: ollama
+#   base_url: http://localhost:11434
+#   models:
+#     - name: qwen3.5:2b
+#       roles: [default]
+#       max_tokens: 512
+#     - name: qwen3.5:9b
+#       roles: [smart]
+#       max_tokens: 1024
+#   temperature: 0.7
 
 proactive:
   enabled: false

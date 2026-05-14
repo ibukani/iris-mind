@@ -200,7 +200,7 @@ class ConversationService:
 
         return self._llm.chat(
             messages=messages,
-            model=self._model_config.base_model,
+            model=self._model_config.get_model("default"),
             temperature=self._model_config.temperature,
             tools=tools,
         )

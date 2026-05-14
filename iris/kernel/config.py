@@ -12,7 +12,7 @@ from pathlib import Path
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 # ── ユーティリティ ────────────────────────────────────────
 
@@ -39,23 +39,23 @@ def _resolve_env_refs(raw: object) -> object:
 
 class ModelEntry(BaseModel):
     name: str
-    role: str = "base"
+    roles: list[str] = ["default"]
     max_tokens: int = 512
 
-
-class EscalationConfig(BaseModel):
-    enabled: bool = True
-    max_retries: int = 1
-    swap_on_escalate: bool = True
-    keep_alive_duration: str = "5m"
+    @field_validator("roles", mode="before")
+    @classmethod
+    def _coerce_roles(cls, v: object) -> list[str]:
+        if isinstance(v, str):
+            return [v]
+        if isinstance(v, list):
+            return v
+        return ["default"]
 
 
 class ModelConfig(BaseModel):
     models: list[ModelEntry] = [
-        ModelEntry(name="qwen3.5:2b", role="base", max_tokens=512),
-        ModelEntry(name="qwen3.5:9b", role="smart", max_tokens=1024),
+        ModelEntry(name="qwen3.5:9b", roles=["default"], max_tokens=1024),
     ]
-    escalation: EscalationConfig = EscalationConfig()
     provider: str = "ollama"
     base_url: str = "http://localhost:11434"
     api_key: str = ""
@@ -69,19 +69,11 @@ class ModelConfig(BaseModel):
     def model_names(self) -> list[str]:
         return [m.name for m in self.models]
 
-    @property
-    def base_model(self) -> str:
-        return next(
-            (m.name for m in self.models if m.role == "base"),
-            self.models[0].name,
-        )
-
-    @property
-    def smart_model(self) -> str:
-        return next(
-            (m.name for m in self.models if m.role == "smart"),
-            self.models[-1].name,
-        )
+    def get_model(self, role: str = "default") -> str:
+        for m in self.models:
+            if role in m.roles:
+                return m.name
+        return self.models[0].name
 
 
 # ── 新規: ProactiveConfig ───────────────────────────────

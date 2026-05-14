@@ -23,6 +23,7 @@
 | 2026-05-14 | ContextManager 移植（会話履歴 compaction） |
 | 2026-05-14 | core/ 完全削除 + capabilities/iris/memory → iris/ に完全移植 |
 | 2026-05-14 | OpenRouter対応: Provider Protocol導入、OllamaProvider/OllamaProvider抽出、OpenRouterProvider新規実装 |
+| 2026-05-14 | モデル設定を柔軟化: ModelEntry.role → roles (list), EscalationConfig削除, base_model/smart_model → get_model(role) に統一。モデル数でシングル/マルチを自動判定 |
 
 ## 既知の課題・注意点
 

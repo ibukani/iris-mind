@@ -6,10 +6,16 @@ ollama.Client をラップし、ストリーミング・thinking モード・ツ
 
 from __future__ import annotations
 
+import contextlib
 import re
+import subprocess
+import sys
+import time
 from collections.abc import Callable
 
 from ollama import Client
+
+from iris.kernel.config import ModelConfig
 
 
 class OllamaProvider:
@@ -111,6 +117,14 @@ class OllamaProvider:
         except Exception:
             return False
 
+    @classmethod
+    def ensure_environment(cls, model_config: ModelConfig) -> bool:
+        """Ollama 環境を確認・準備する（再起動 → モデル確認 → pull）。"""
+        _restart_ollama()
+        _stop_config_models(model_config.model_names)
+        time.sleep(0.5)
+        return all(_ensure_model_pulled(name) for name in model_config.model_names)
+
 
 def _process_message(msg: dict) -> dict:
     """LLM応答メッセージの後処理。"""
@@ -119,6 +133,81 @@ def _process_message(msg: dict) -> dict:
     if msg.get("content"):
         msg["content"] = msg["content"].strip()
     return msg
+
+
+# ── 環境構築ヘルパー ────────────────────────────────────────────
+
+
+def _get_available_models() -> set[str]:
+    """Ollama に既に pull 済みのモデル名のセットを返す。"""
+    try:
+        result = subprocess.run(
+            ["ollama", "list"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            lines = result.stdout.strip().splitlines()
+            models: set[str] = set()
+            for line in lines[2:]:
+                if line.strip():
+                    name = line.strip().split()[0]
+                    if ":" in name:
+                        models.add(name.split(":")[0])
+            return models
+    except Exception:
+        pass
+    return set()
+
+
+def _ensure_model_pulled(model_name: str) -> bool:
+    """モデルが存在しない場合はユーザーに確認して pull する。"""
+    model_base = model_name.split(":")[0]
+    available = _get_available_models()
+    if model_base in available:
+        return True
+
+    console_input = input(
+        f"モデル '{model_name}' が見つかりません。\n  ollama pull {model_name}\nを実行してダウンロードしますか？ [y/N] "
+    )
+    if console_input.strip().lower() in ("y", "yes"):
+        try:
+            subprocess.run(
+                ["ollama", "pull", model_name],
+                check=True,
+                timeout=600,
+            )
+            return True
+        except subprocess.CalledProcessError:
+            print(f"モデル '{model_name}' のダウンロードに失敗しました。", file=sys.stderr)
+            return False
+        except subprocess.TimeoutExpired:
+            print(f"モデル '{model_name}' のダウンロードがタイムアウトしました。", file=sys.stderr)
+            return False
+    return False
+
+
+def _restart_ollama():
+    """既存 Ollama プロセスを終了し、GPU 向け設定で再起動する。"""
+    with contextlib.suppress(Exception):
+        subprocess.run(["taskkill", "/F", "/IM", "ollama.exe"], capture_output=True, timeout=5)
+    time.sleep(2)
+
+    subprocess.Popen(
+        ["ollama", "serve"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        creationflags=subprocess.CREATE_NO_WINDOW,
+    )
+    time.sleep(5)
+
+
+def _stop_config_models(model_names: list[str]):
+    """指定されたモデルを停止する。"""
+    for name in model_names:
+        with contextlib.suppress(Exception):
+            subprocess.run(["ollama", "stop", name], capture_output=True, timeout=10)
 
 
 def _extract_answer_from_thinking(text: str) -> str:

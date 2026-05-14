@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import json
 import logging
+import sys
 import time
 from collections.abc import Callable
 from typing import Any
 
 import httpx
+
+from iris.kernel.config import ModelConfig
 
 logger = logging.getLogger(__name__)
 
@@ -188,6 +191,43 @@ class OpenRouterProvider:
         """OpenRouter にアンロード概念はない。"""
         return
 
+    @classmethod
+    def ensure_environment(cls, model_config: ModelConfig) -> bool:
+        """OpenRouter 環境を確認する（API キー検証 → モデル存在確認）。"""
+        if not model_config.api_key or model_config.api_key.startswith("${"):
+            print(
+                "APIキーが設定されていません。config.yaml の model.api_key を確認してください。",
+                file=sys.stderr,
+            )
+            return False
+
+        base_url = model_config.base_url.rstrip("/")
+        headers = {
+            "Authorization": f"Bearer {model_config.api_key}",
+            "Content-Type": "application/json",
+        }
+        try:
+            resp = httpx.get(f"{base_url}/models", headers=headers, timeout=10.0)
+            resp.raise_for_status()
+            data = resp.json()
+            remote_ids = {m["id"] for m in data.get("data", [])}
+        except Exception as e:
+            print(f"OpenRouter への接続に失敗しました: {e}", file=sys.stderr)
+            return False
+
+        ok = True
+        for m in model_config.models:
+            if m.name not in remote_ids:
+                print(
+                    f"  警告: モデル '{m.name}' が OpenRouter のモデル一覧に見つかりません。"
+                    f" モデル名を確認してください。",
+                    file=sys.stderr,
+                )
+                ok = False
+        if not ok:
+            print("一部のモデルが見つかりませんが、起動を続行します。", file=sys.stderr)
+        return True
+
 
 def _normalize_response(data: dict) -> dict:
     """OpenAI 互換レスポンスを内部形式に正規化する。"""
@@ -209,4 +249,4 @@ def _parse_retry_after(resp: httpx.Response, attempt: int = 0) -> float:
             return float(val)
         except ValueError:
             pass
-    return 2.0 ** attempt
+    return 2.0**attempt

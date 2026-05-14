@@ -47,12 +47,12 @@ class CLIAdapter:
     CLI アダプター — ターミナル対話インターフェース。
 
     使用方法:
-        adapter = CLIAdapter()
+        adapter = CLIAdapter(config)
         adapter.run()
     """
 
-    def __init__(self, config_path: str = "config.yaml") -> None:
-        self._config = Config.load(config_path)
+    def __init__(self, config: Config) -> None:
+        self._config = config
         self._init_kernel()
         self._init_events()
 
@@ -112,7 +112,7 @@ class CLIAdapter:
             provider_type=self._config.model.provider,
             base_url=self._config.model.base_url,
             api_key=self._config.model.api_key,
-            default_model=self._config.model.base_model,
+            default_model=self._config.model.get_model("default"),
             num_gpu=self._config.model.num_gpu,
             num_ctx=self._config.model.num_ctx,
         )
@@ -121,7 +121,7 @@ class CLIAdapter:
         self._reflexion = Reflexion(llm=self._llm)
         self._context_mgr = ContextManager(
             llm=self._llm,
-            compact_model=self._config.model.base_model,
+            compact_model=self._config.model.get_model("default"),
         )
 
         # Capability registry + tool executor
@@ -150,8 +150,27 @@ class CLIAdapter:
 
     # ── ライフサイクル ────────────────────────────────────
 
+    def _ensure_environment(self) -> bool:
+        """LLMプロバイダの環境を確認する。"""
+        cfg = self._config.model
+
+        if cfg.provider == "ollama":
+            from iris.llm.ollama_provider import OllamaProvider  # fmt: skip
+
+            ok = OllamaProvider.ensure_environment(cfg)
+        else:
+            from iris.llm.openrouter_provider import OpenRouterProvider  # fmt: skip
+
+            ok = OpenRouterProvider.ensure_environment(cfg)
+
+        if not ok:
+            console.print("[bold red]環境チェックに失敗しました。終了します。[/bold red]")
+        return ok
+
     def run(self) -> None:
         """メインループを開始する。"""
+        if not self._ensure_environment():
+            return
         console.print()
         console.print(
             Panel.fit(

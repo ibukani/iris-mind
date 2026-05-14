@@ -1,7 +1,7 @@
 # Iris プロジェクトルール（コーディングエージェント向け）
 
 ## プロジェクト概要
-Iris は自律的に行動・進化できるAIアシスタント。Python製でOllamaまたはOpenRouter上で動作する。baseモデル（デフォルト: qwen3.5:2b）が大部分のタスクを処理し、複雑なタスクのみsmartモデル（デフォルト: qwen3.5:9b）にエスカレーションする2層構成。
+Iris は自律的に行動・進化できるAIアシスタント。Python製でOllamaまたはOpenRouter上で動作する。モデル構成は柔軟で、1モデルのシングルモード（全処理に同一モデルを使用）と、複数モデルのマルチモード（roleベースの使い分け）を設定可能。
 
 ## 重要な用語の区別
 - **Iris** → このプロジェクトで製作中のAI（作る対象）
@@ -92,17 +92,15 @@ mypy --install-types                  # 型スタブ初回インストール
 ```
 ※ ruff / mypy の設定は `pyproject.toml` に集約済み
 
-## 自動モデル切替 動作ルール
-- `config.yaml` の `fast_model` が設定されている場合、自動モデル切替が有効になる
-- 分類は2段階: (1) キーワードフィルタ (2) 小モデルでLLM分類（不明時のみ）
-- シナリオは `greeting/simple/qa/tool/complex` の5種類
-- `tool/complex` は大モデル、それ以外は小モデルを使用
-- mode が deep/stepwise の場合は常に大モデルを使用（auto は複雑性判定に従う）
-- 小モデルにはツール定義を渡さない（ツール呼び出し不可のため）
+## モデル構成
+- 設定されたモデル数によって動作モードが自動判定される
+- **シングルモード**（`models` が1つ）: 全処理にその1モデルを使用
+- **マルチモード**（`models` が2つ以上）: `get_model(role)` で role ベースのモデル選択
+  - 未知の role が指定された場合は `models[0]` にフォールバック
 - `config.yaml` の `model.provider` で Ollama / OpenRouter を切り替え可能
 - 会話履歴は `context_window`（トークン数）を超えた場合、`compaction_threshold` に基づき自動要約（ContextManager）
 - 要約は `## 会話の経緯` としてシステムプロンプトに注入。`/compact` コマンドで手動トリガー可能
-- 要約時は `fast_model` を使用（コンパクション専用LLM呼び出しを高速化）
+- 要約時のモデルは `ModelConfig.get_model("default")` を使用（単一モデルも複数モデルも同じインターフェース）
 
 
 ## git コミットルール

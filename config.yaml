@@ -43,7 +43,8 @@ proactive:
     mood: 0.10
   speak_threshold: 0.20
 logging:
-  level: INFO
+  file_level: INFO              # ファイルログのしきい値
+  console_level: ""             # コンソールログのしきい値（""=出力なし、"INFO"/"DEBUG"等）
   dir: logs
   max_bytes: 5242880
   backup_count: 14

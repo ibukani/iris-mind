@@ -3,36 +3,21 @@ from __future__ import annotations
 from iris.kernel.core import KernelProcess
 
 
-class _FakeConfig:
-    class model:  # noqa: N801
-        provider = "ollama"
-
-    class memory:  # noqa: N801
-        pass
-
-    class proactive:  # noqa: N801
-        check_interval_sec = 60
-        min_interval = 300
-        scoring_interval = 300
-        cooldown = 300
-
-    class logging:  # noqa: N801
-        level = "WARNING"
-        file = ""
-
-    class personality:  # noqa: N801
-        name = "test"
+def test_kernel_process_shutdown_before_start_does_not_crash() -> None:
+    """start() 前に shutdown() を呼んでもクラッシュしない。"""
+    kp = KernelProcess.__new__(KernelProcess)
+    kp._config = None
+    kp._ctx = None
+    kp._output_bridge = None
+    kp._input_bridge = None
+    kp.shutdown()
 
 
-def test_kernel_process_terminate_none_does_not_crash() -> None:
-    KernelProcess._terminate_proc(None)
-
-
-def test_kernel_process_terminate_invalid_proc_does_not_crash() -> None:
-    import subprocess
-    import sys
-
-    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(10)"])
-    proc.kill()
-    proc.wait()
-    KernelProcess._terminate_proc(proc)
+def test_kernel_process_stop_bridge_unknown_side_does_not_crash() -> None:
+    """存在しない side 名で stop_bridge() を呼んでもクラッシュしない。"""
+    kp = KernelProcess.__new__(KernelProcess)
+    kp._config = None
+    kp._ctx = None
+    kp._output_bridge = None
+    kp._input_bridge = None
+    kp.stop_bridge("invalid")

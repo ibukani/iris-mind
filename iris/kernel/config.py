@@ -152,7 +152,8 @@ class MemoryConfig(BaseModel):
 
 
 class LoggingConfig(BaseModel):
-    level: str = "INFO"
+    file_level: str = "INFO"
+    console_level: str = ""
     dir: str = "logs"
     max_bytes: int = 5_242_880
     backup_count: int = 14

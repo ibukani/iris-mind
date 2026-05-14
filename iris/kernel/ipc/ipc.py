@@ -58,6 +58,9 @@ class PipeClient:
     def recv(self) -> Event:
         return _deserialize(self._conn.recv_bytes())
 
+    def poll(self, timeout: float = 0.0) -> bool:
+        return self._conn.poll(timeout)
+
     def close(self) -> None:
         self._conn.close()
 

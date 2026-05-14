@@ -1,6 +1,9 @@
 """
-Kernel ログ設定 — ファイル出力の初期化。
-コンソール出力はアダプター層（CLIなど）の責務。
+Kernel 診断ログ設定。
+
+- ファイル出力: 常に有効（file_level でレベル制御）
+- コンソール出力: console_level が設定されている場合のみ stderr へ
+  （UI 表示は Output プロセスの責務。このハンドラは Kernel 自身の診断用）
 
 使用方法:
     from iris.kernel.logging import setup_logging
@@ -11,12 +14,14 @@ from __future__ import annotations
 
 import logging
 import re
+import sys
 from datetime import datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from .config import LoggingConfig
 
+_CONSOLE_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 _FILE_FORMAT = "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s"
 _FILE_DATE = "%Y-%m-%d %H:%M:%S"
 
@@ -43,11 +48,11 @@ def _cleanup_old_sessions(log_dir: Path, keep: int) -> None:
 
 
 def setup_logging(cfg: LoggingConfig) -> None:
-    """ルートロガーを構成する（ファイル出力のみ。コンソール出力はアダプター層で管理）。"""
+    """ルートロガーを構成する。"""
     root = logging.getLogger()
-    root.setLevel(cfg.level.upper())
+    root.setLevel(cfg.file_level.upper())
 
-    # --- ファイルハンドラ ---
+    # --- ファイルハンドラ（常に有効） ---
     log_dir = Path(cfg.dir)
     log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -60,11 +65,23 @@ def setup_logging(cfg: LoggingConfig) -> None:
         backupCount=3,
         encoding="utf-8",
     )
-    file_handler.setLevel(cfg.level.upper())
+    file_handler.setLevel(cfg.file_level.upper())
     file_handler.setFormatter(logging.Formatter(_FILE_FORMAT, datefmt=_FILE_DATE))
     root.addHandler(file_handler)
+
+    # --- コンソールハンドラ（条件付き。Kernel 診断用、UI 表示とは無関係） ---
+    if cfg.console_level:
+        console_handler = logging.StreamHandler(sys.stderr)
+        console_handler.setLevel(cfg.console_level.upper())
+        console_handler.setFormatter(logging.Formatter(_CONSOLE_FORMAT))
+        root.addHandler(console_handler)
 
     # --- 既存の起動世代クリーンアップ ---
     _cleanup_old_sessions(log_dir, cfg.backup_count)
 
-    logging.info("Logging initialized: level=%s, file=%s", cfg.level, log_path)
+    logging.info(
+        "Logging initialized: file_level=%s, console_level=%s, file=%s",
+        cfg.file_level,
+        cfg.console_level or "(none)",
+        log_path,
+    )

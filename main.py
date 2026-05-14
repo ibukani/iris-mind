@@ -7,13 +7,10 @@
 Input / Output アダプターは別プロセスとして起動し、Named Pipe 経由で接続する。
 """
 
-import os
 from pathlib import Path
 
 from iris.kernel.config import Config
 from iris.kernel.core import KernelProcess
-
-os.environ.setdefault("OLLAMA_GPU_LAYERS", "99")
 
 
 def run() -> None:
@@ -33,17 +30,11 @@ def run() -> None:
 def _check_environment(config: Config) -> bool:
     from rich.console import Console
 
+    from iris.llm.llm_bridge import get_provider_class
+
     console = Console()
-    cfg = config.model
-
-    if cfg.provider == "ollama":
-        from iris.llm.ollama_provider import OllamaProvider
-
-        ok = OllamaProvider.ensure_environment(cfg)
-    else:
-        from iris.llm.openrouter_provider import OpenRouterProvider
-
-        ok = OpenRouterProvider.ensure_environment(cfg)
+    provider_cls = get_provider_class(config.model.provider)
+    ok = provider_cls.ensure_environment(config.model)
 
     if not ok:
         console.print("[bold red]環境チェックに失敗しました。終了します。[/bold red]")

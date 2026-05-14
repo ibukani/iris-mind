@@ -68,7 +68,7 @@ class ModelConfig(BaseModel):
     base_url: str = "http://localhost:11434"
     api_key: str = ""
     temperature: float = 0.7
-    num_gpu: int = 0
+    num_gpu: int = 99
     num_ctx: int = 8192
     context_window: int = 0
     compaction_threshold: float = 0.85

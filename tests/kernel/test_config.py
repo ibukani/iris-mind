@@ -145,7 +145,7 @@ def test_default_values() -> None:
         ),
     )
     assert config.model.temperature == 0.7
-    assert config.model.num_gpu == 0
+    assert config.model.num_gpu == 99
     assert config.model.num_ctx == 8192
     assert config.model.context_window == 0
     assert config.model.compaction_threshold == 0.85

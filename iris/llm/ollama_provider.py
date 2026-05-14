@@ -7,6 +7,7 @@ ollama.Client をラップし、ストリーミング・thinking モード・ツ
 from __future__ import annotations
 
 import contextlib
+import os
 import re
 import subprocess
 import sys
@@ -120,6 +121,7 @@ class OllamaProvider:
     @classmethod
     def ensure_environment(cls, model_config: ModelConfig) -> bool:
         """Ollama 環境を確認・準備する（再起動 → モデル確認 → pull）。"""
+        os.environ.setdefault("OLLAMA_GPU_LAYERS", str(model_config.num_gpu))
         _restart_ollama()
         _stop_config_models(model_config.model_names)
         time.sleep(0.5)

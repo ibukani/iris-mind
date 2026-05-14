@@ -12,7 +12,21 @@ from typing import Any
 
 from .ollama_provider import OllamaProvider
 from .openrouter_provider import OpenRouterProvider
-from .provider import LLMProvider
+from .provider import LLMProvider, ProviderFactory
+
+_PROVIDER_CLASSES: dict[str, type[ProviderFactory]] = {
+    "ollama": OllamaProvider,
+    "openrouter": OpenRouterProvider,
+}
+
+
+def get_provider_class(provider_type: str) -> type[ProviderFactory]:
+    """provider_type 文字列に対応する Provider クラスを返す。"""
+    cls = _PROVIDER_CLASSES.get(provider_type)
+    if cls is None:
+        msg = f"Unknown provider type: {provider_type!r}"
+        raise ValueError(msg)
+    return cls
 
 
 class LLMBridge:

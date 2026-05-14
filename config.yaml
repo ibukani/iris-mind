@@ -14,7 +14,7 @@ model:
   compaction_threshold: 0.85
   context_window: 4000
   models:
-    - name: google/gemma-4-26b-a4b-it:free
+    - name: deepseek/deepseek-v4-flash:free
       roles: [default]
       max_tokens: 1024
   num_ctx: 8192
@@ -27,18 +27,18 @@ personality:
   prompt_file: .iris/config/personality_default.md
 # ===== 新規: 自律的会話設定 =====
 proactive:
-  enabled: false # デフォルトOFF（安全第一）
-  check_interval_sec: 5.0 # トリガー確認間隔（秒）
-  min_interval_sec: 30.0 # 最短発話間隔（秒）
-  max_interval_sec: 300.0 # 最大発話間隔（秒）
-  tier1_auto_approve: true # Tier1（挨拶等）は自動許可
-  tier2_confidence_threshold: 0.75 # Tier2の自動承認閾値
-  tier2_cooldown_sec: 60.0 # Tier2承認待ちタイムアウト（秒）
-  max_proactive_tokens: 256 # 自発発話の最大文字数目安
-  user_cooldown_on_ignore: 300.0 # 無視された後のクールダウン（秒）
+  enabled: true
+  check_interval_sec: 5.0
+  min_interval_sec: 30.0
+  max_interval_sec: 300.0
+  tier1_auto_approve: true
+  tier2_confidence_threshold: 0.75
+  tier2_cooldown_sec: 60.0
+  max_proactive_tokens: 256
+  user_cooldown_on_ignore: 300.0
   trigger_weights:
-    time: 0.25 # 時間経過の重み
-    memory: 0.45 # 記憶想起の重み
-    context: 0.15 # 文脈変化の重み
-    mood: 0.15 # ユーザー感情の重み
-  speak_threshold: 0.60 # 発話スコア閾値
+    time: 0.40
+    memory: 0.35
+    context: 0.15
+    mood: 0.10
+  speak_threshold: 0.20

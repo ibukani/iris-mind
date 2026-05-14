@@ -1,9 +1,8 @@
 """
-CLI Adapter — ターミナル上の対話インターフェース。
+CLI Adapter — ターミナル上の対話インターフェース (単一プロセスモード用)。
 
-AgentKernel を起動し、ユーザー入力 ←→ EventBus を橋渡しする。
-自発発話（ProactiveSpeechEvent）および会話応答（AgentResponseEvent）を
-Rich パネルでリアルタイム表示する。
+注: v0.3 では --separate モード（3-Process 分解）が推奨。
+本クラスは後方互換性のための単一プロセスフォールバック。
 """
 
 from __future__ import annotations

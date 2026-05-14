@@ -126,6 +126,7 @@ class CLIAdapter:
             memory=self._memory,
             config=self._config.proactive,
         )
+        self._proactive.set_approval_callback(self._kernel.evaluate_proactive_request)
         self._kernel.startup()
 
         # Capability registry + tool executor

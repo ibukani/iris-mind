@@ -60,6 +60,14 @@ class AnomalyDetector:
             self._alert_count += 1
         return flags
 
+    def check_frequency(self) -> list[str]:
+        """現在の頻度超過を確認する（副作用なし）。"""
+        if not self._speech_window:
+            return []
+        now = time.time()
+        count = sum(1 for t in self._speech_window if now - t < 300)
+        return ["frequency_exceeded"] if count >= self._max_per_5min else []
+
     def check_suppression_health(
         self,
         status: dict[str, Any],
@@ -253,6 +261,47 @@ class AgentKernel:
                     detail=issue["detail"],
                 )
             )
+
+    # ── Tier3 送審 API（ProactiveEngine からのコールバック）─
+
+    def evaluate_proactive_request(
+        self,
+        _scores: dict[str, float],
+        confidence: float,
+        trigger_type: str,
+    ) -> bool:
+        """
+        Tier2 発話の承認判断。
+
+        以下の条件をすべて満たす場合に True（承認）を返す：
+        - 頻度制限超過なし
+        - 抑制状態の深刻な警告なし
+        - エージェントが IDLE 状態
+
+        Returns:
+            True: 発話承認, False: 発話却下
+        """
+        anomaly_flags = self._anomaly.check_frequency()
+        if "frequency_exceeded" in anomaly_flags:
+            logger.debug("AgentKernel denied: frequency exceeded")
+            return False
+
+        status = self._proactive.get_status()
+        health_issues = self._anomaly.check_suppression_health(status)
+        if any(i["severity"] == "warning" for i in health_issues):
+            logger.debug("AgentKernel denied: suppression issue (%s)", health_issues)
+            return False
+
+        if not self._state.is_idle():
+            logger.debug("AgentKernel denied: state=%s", self._state.current)
+            return False
+
+        logger.debug(
+            "AgentKernel approved proactive (confidence=%.2f, trigger=%s)",
+            confidence,
+            trigger_type,
+        )
+        return True
 
     @staticmethod
     def _on_state_change(event: AgentStateChangeEvent) -> None:

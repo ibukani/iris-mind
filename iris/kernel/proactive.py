@@ -11,6 +11,7 @@ import json as _json
 import logging
 import re
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
@@ -19,6 +20,8 @@ from .agent_state import AgentStateManager, State
 from .config import ProactiveConfig
 from .event_bus import EventBus, ProactiveSpeechEvent, TimerTick
 from .memory_manager import MemoryManager
+
+ApprovalCallback = Callable[[dict[str, float], float, str], bool]
 
 logger = logging.getLogger(__name__)
 
@@ -105,12 +108,14 @@ class ProactiveEngine:
         state_manager: AgentStateManager,
         memory: MemoryManager,
         llm: Any | None = None,
+        approval_callback: ApprovalCallback | None = None,
     ) -> None:
         self._config = config
         self._event_bus = event_bus
         self._state = state_manager
         self._memory = memory
         self._llm = llm
+        self._approval_callback = approval_callback
         self._suppression = SuppressionState()
         self._last_check_time: float = 0.0
         self._ignore_recorded_for_proactive: bool = False
@@ -212,16 +217,28 @@ class ProactiveEngine:
             logger.debug("Memory score failed: %s", e)
         return 0.0
 
+    @staticmethod
+    def _char_bigram_set(text: str) -> set[str]:
+        """文字bigram集合を返す（言語非依存の類似度計算用）。"""
+        return {text[i : i + 2] for i in range(len(text) - 1)}
+
     def _compute_context_score(self) -> float:
-        """文脈変化に基づくスコア（0〜1）。"""
+        """文脈変化に基づくスコア（0〜1）。文字bigram類似度が高い=話題停滞=高スコア。"""
         try:
             recent = self._memory.get_recent(2)
             if len(recent) < 2:
                 return 0.3
-            summaries = [item.get("summary", "") for item in recent]
+            summaries = [item.get("summary", "") for item in recent[-2:]]
             if all(len(s.strip()) < 10 for s in summaries):
                 return 0.7  # 短い応答 = 停滞
-            return 0.3
+            bigram_a = self._char_bigram_set(summaries[0])
+            bigram_b = self._char_bigram_set(summaries[1])
+            if not bigram_a and not bigram_b:
+                return 0.5
+            if not bigram_a or not bigram_b:
+                return 0.3
+            jaccard = len(bigram_a & bigram_b) / len(bigram_a | bigram_b)
+            return min(jaccard + 0.2, 1.0)
         except Exception:
             return 0.0
 
@@ -278,18 +295,41 @@ class ProactiveEngine:
                 or (f"Tier2: confidence={confidence:.2f} >= threshold ({self._config.tier2_confidence_threshold})"),
             )
 
-        logger.info(
-            "Tier2 confidence too low: %.2f < %.2f, falling back to Tier1",
-            confidence,
-            self._config.tier2_confidence_threshold,
-        )
-        fallback = self._build_tier1_speech(scores)
+        # self-governance #4: confidence < 0.5 → 抑制
+        if confidence < 0.5:
+            logger.info(
+                "Confidence %.2f < 0.5, suppressed per self-governance rule",
+                confidence,
+            )
+            return None
+
+        # 0.5 <= confidence < threshold → AgentKernel 送審
+        if self._approval_callback is not None:
+            approved = self._approval_callback(scores, confidence, trigger_type)
+            if not approved:
+                logger.info(
+                    "AgentKernel denied proactive speech (confidence=%.2f < %.2f)",
+                    confidence,
+                    self._config.tier2_confidence_threshold,
+                )
+                return None
+        else:
+            logger.info(
+                "No approval callback, publishing low-confidence speech (confidence=%.2f < %.2f)",
+                confidence,
+                self._config.tier2_confidence_threshold,
+            )
+
         return ProactiveResult(
-            content=fallback,
+            content=speech,
             tier=2,
             confidence=confidence,
             trigger_type=trigger_type,
-            reasoning=f"Tier2 confidence {confidence:.2f} below threshold, Tier1 fallback",
+            reasoning=reasoning
+            or (
+                f"Tier2: confidence={confidence:.2f} < threshold, "
+                + ("AgentKernel approved" if self._approval_callback else "published without approval callback")
+            ),
         )
 
     @staticmethod
@@ -507,6 +547,10 @@ class ProactiveEngine:
                 "is_sleeping": s.is_sleeping,
             },
         }
+
+    def set_approval_callback(self, callback: ApprovalCallback | None) -> None:
+        """AgentKernel の承認コールバックを登録する。"""
+        self._approval_callback = callback
 
     def notify_user_activity(self) -> None:
         """ユーザー入力があったことを通知する。"""

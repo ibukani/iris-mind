@@ -19,9 +19,9 @@ from typing import Any
 
 from iris.llm.provider import LLMProvider
 
-from .agent_state import AgentStateManager, State
-from .config import ProactiveConfig
-from .event_bus import EventBus, ProactiveSpeechEvent, TimerTick
+from ..agent_state import AgentStateManager, State
+from ..config import ProactiveConfig
+from ..event.event_bus import EventBus, ProactiveSpeechEvent, TimerTick
 from .memory_manager import MemoryManager
 
 ApprovalCallback = Callable[[dict[str, float], float, str], bool]

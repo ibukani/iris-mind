@@ -17,8 +17,7 @@ import logging
 from typing import Any
 
 from iris.kernel.agent_state import AgentStateManager, State
-from iris.kernel.conversation import ConversationService
-from iris.kernel.proactive import ProactiveEngine
+from iris.kernel.services import ConversationService, ProactiveEngine
 
 logger = logging.getLogger(__name__)
 

@@ -8,7 +8,7 @@ import pytest
 
 from iris.kernel.agent_state import AgentStateManager
 from iris.kernel.config import Config, ModelConfig, ProactiveConfig
-from iris.kernel.event_bus import EventBus
+from iris.kernel.event import EventBus
 
 # ── Fake LLM Provider ─────────────────────────────────────────
 

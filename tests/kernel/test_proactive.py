@@ -3,8 +3,9 @@ from __future__ import annotations
 from typing import Any
 
 from iris.kernel.agent_state import AgentStateManager, State
-from iris.kernel.event_bus import EventBus, TimerTick
-from iris.kernel.proactive import ProactiveConfig, ProactiveEngine
+from iris.kernel.config import ProactiveConfig
+from iris.kernel.event import EventBus, TimerTick
+from iris.kernel.services import ProactiveEngine
 from tests.conftest import FakeLLMProvider, FakeMemoryManager
 
 # ── Helper ────────────────────────────────────────────────────

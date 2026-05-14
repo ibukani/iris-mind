@@ -15,13 +15,13 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
 
-from iris.kernel.event_bus import (
+from iris.kernel.core import KernelContext
+from iris.kernel.event import (
     AgentAnomalyEvent,
     AgentResponseEvent,
     AgentStreamEvent,
     ProactiveSpeechEvent,
 )
-from iris.kernel.factory import KernelContext
 
 logger = logging.getLogger(__name__)
 console = Console()

@@ -9,7 +9,7 @@ from iris.memory.persona_profile import PersonaProfile
 from iris.memory.stores import AgentsMdStore
 from iris.personality.personality import Personality
 
-from .config import ModelConfig
+from ..config import ModelConfig
 from .context import ContextManager
 from .memory_manager import MemoryManager
 from .tool_executor import ToolExecutionEngine

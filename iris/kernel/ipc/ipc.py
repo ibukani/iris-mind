@@ -5,7 +5,7 @@ import logging
 import multiprocessing.connection as _connection
 from typing import Any, Protocol, runtime_checkable
 
-from .event import Event
+from ..event.event import Event
 
 logger = logging.getLogger(__name__)
 

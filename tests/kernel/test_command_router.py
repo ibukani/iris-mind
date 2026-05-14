@@ -47,7 +47,7 @@ class _FakeEventBus:
 
 
 def _make_router() -> tuple[Any, Any, Any, Any, Any]:
-    from iris.kernel.ipc_input import CommandRouter
+    from iris.kernel.ipc import CommandRouter
 
     cmd = _FakeCmdHandler()
     pro = _FakeProactive()
@@ -82,7 +82,7 @@ def test_command_router_forwards_normal_input() -> None:
 
 
 def test_command_router_empty_response_does_not_publish() -> None:
-    from iris.kernel.ipc_input import CommandRouter
+    from iris.kernel.ipc import CommandRouter
 
     class NoopHandler:
         def handle(self, text: str) -> str:  # noqa: ARG002

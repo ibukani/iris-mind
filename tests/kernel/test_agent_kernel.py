@@ -5,17 +5,17 @@ from typing import Any
 
 import pytest
 
-from iris.kernel.agent_kernel import AgentKernel, AnomalyDetector
 from iris.kernel.agent_state import AgentStateManager, State
 from iris.kernel.config import ProactiveConfig
-from iris.kernel.event_bus import (
+from iris.kernel.core import AgentKernel, AnomalyDetector
+from iris.kernel.event import (
     AgentAnomalyEvent,
     AgentResponseEvent,
     EventBus,
     ProactiveSpeechEvent,
     UserInputEvent,
 )
-from iris.kernel.proactive import ProactiveEngine
+from iris.kernel.services import ProactiveEngine
 from tests.conftest import FakeMemoryManager
 
 # ── AnomalyDetector ──────────────────────────────────────────

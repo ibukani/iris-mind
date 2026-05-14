@@ -10,8 +10,8 @@ from __future__ import annotations
 import logging
 from datetime import datetime
 
+from ..event.event_bus import AgentResponseEvent, AgentStreamEvent, EventBus
 from .context import ContextManager
-from .event_bus import AgentResponseEvent, AgentStreamEvent, EventBus
 from .llm_pipeline import LLMPipeline
 from .reflexion_manager import ReflexionManager
 

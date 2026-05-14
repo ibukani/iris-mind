@@ -16,9 +16,9 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
-from .agent_state import AgentStateManager, State
-from .config import ProactiveConfig
-from .event_bus import (
+from ..agent_state import AgentStateManager, State
+from ..config import ProactiveConfig
+from ..event.event_bus import (
     AgentAnomalyEvent,
     AgentResponseEvent,
     AgentStateChangeEvent,
@@ -27,8 +27,8 @@ from .event_bus import (
     TimerTick,
     UserInputEvent,
 )
-from .memory_manager import MemoryManager
-from .proactive import ProactiveEngine
+from ..services.memory_manager import MemoryManager
+from ..services.proactive import ProactiveEngine
 
 logger = logging.getLogger(__name__)
 

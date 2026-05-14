@@ -6,11 +6,11 @@ import subprocess
 import sys
 import time
 
-from .config import Config
+from ..config import Config
+from ..ipc.ipc import PIPE_NAME_KERNEL_INPUT, PIPE_NAME_KERNEL_OUTPUT
+from ..ipc.ipc_input import InputBridge
+from ..ipc.ipc_output import OutputBridge
 from .factory import KernelContext, KernelFactory
-from .ipc import PIPE_NAME_KERNEL_INPUT, PIPE_NAME_KERNEL_OUTPUT
-from .ipc_input import InputBridge
-from .ipc_output import OutputBridge
 
 logger = logging.getLogger(__name__)
 

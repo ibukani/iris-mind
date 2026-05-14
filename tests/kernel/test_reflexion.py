@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from iris.kernel.reflexion import Reflexion
+from iris.kernel.services import Reflexion
 from tests.conftest import FakeLLMProvider
 
 TWO = [{"role": "user", "content": "hi"}, {"role": "assistant", "content": "hello"}]

@@ -1,17 +1,19 @@
 # kernel パッケージ — ビジネスロジック（UI非依存）
 
-from iris.kernel.agent_kernel import AgentKernel
 from iris.kernel.agent_state import AgentStateManager, State
 from iris.kernel.config import Config, ProactiveConfig
-from iris.kernel.conversation import ConversationService
-from iris.kernel.event_bus import Event, EventBus
-from iris.kernel.factory import KernelContext, KernelFactory
-from iris.kernel.llm_pipeline import LLMPipeline
-from iris.kernel.memory_manager import MemoryManager
-from iris.kernel.proactive import ProactiveEngine, ProactiveResult
-from iris.kernel.reflexion import Reflexion
-from iris.kernel.reflexion_manager import ReflexionManager
-from iris.kernel.tool_executor import ToolExecutionEngine
+from iris.kernel.core import AgentKernel, KernelContext, KernelFactory
+from iris.kernel.event import Event, EventBus
+from iris.kernel.services import (
+    ConversationService,
+    LLMPipeline,
+    MemoryManager,
+    ProactiveEngine,
+    ProactiveResult,
+    Reflexion,
+    ReflexionManager,
+    ToolExecutionEngine,
+)
 
 __all__ = [
     "Config",

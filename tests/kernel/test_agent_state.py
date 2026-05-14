@@ -1,7 +1,7 @@
 import pytest
 
 from iris.kernel.agent_state import AgentStateManager, State
-from iris.kernel.event_bus import AgentStateChangeEvent, EventBus
+from iris.kernel.event import AgentStateChangeEvent, EventBus
 
 
 def make_manager() -> tuple[AgentStateManager, EventBus]:

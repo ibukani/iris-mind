@@ -11,7 +11,7 @@ import os
 from pathlib import Path
 
 from iris.kernel.config import Config
-from iris.kernel.kernel_process import KernelProcess
+from iris.kernel.core import KernelProcess
 
 os.environ.setdefault("OLLAMA_GPU_LAYERS", "99")
 

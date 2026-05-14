@@ -6,11 +6,11 @@ from datetime import datetime
 
 from iris.commands.handler import CommandHandler
 
-from .conversation import ConversationService
-from .event import AgentResponseEvent, UserInputEvent
-from .event_bus import EventBusProtocol
+from ..event.event import AgentResponseEvent, UserInputEvent
+from ..event.event_bus import EventBusProtocol
+from ..services.conversation import ConversationService
+from ..services.proactive import ProactiveEngine
 from .ipc import PipeConnection, PipeServer
-from .proactive import ProactiveEngine
 
 logger = logging.getLogger(__name__)
 

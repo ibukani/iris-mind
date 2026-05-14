@@ -28,7 +28,7 @@ class _FakeEventBus:
 
 
 def test_output_bridge_subscribes_display_events() -> None:
-    from iris.kernel.ipc_output import OutputBridge
+    from iris.kernel.ipc import OutputBridge
 
     bus = _FakeEventBus()
     bridge = OutputBridge(bus, r"\\.\pipe\iris-test-unused")  # noqa: P103  // Pipe address for testing
@@ -49,7 +49,7 @@ def test_output_bridge_subscribes_display_events() -> None:
 
 
 def test_output_bridge_send_handles_no_connection() -> None:
-    from iris.kernel.ipc_output import OutputBridge
+    from iris.kernel.ipc import OutputBridge
 
     bus = _FakeEventBus()
     bridge = OutputBridge(bus, r"\\.\pipe\iris-test-unused")  # noqa: P103

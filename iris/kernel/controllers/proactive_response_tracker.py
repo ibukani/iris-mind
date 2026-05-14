@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import time
 
-from .event import ProactiveSpeechEvent, UserInputEvent
-from .event_bus import EventBusProtocol
-from .proactive import ProactiveEngine
+from ..event.event import ProactiveSpeechEvent, UserInputEvent
+from ..event.event_bus import EventBusProtocol
+from ..services.proactive import ProactiveEngine
 
 _NEGATIVE_RESPONSES = frozenset(
     {

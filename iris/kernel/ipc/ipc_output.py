@@ -4,8 +4,8 @@ import contextlib
 import logging
 import threading
 
-from .event import Event
-from .event_bus import EventBusProtocol
+from ..event.event import Event
+from ..event.event_bus import EventBusProtocol
 from .ipc import PipeConnection, PipeServer
 
 logger = logging.getLogger(__name__)

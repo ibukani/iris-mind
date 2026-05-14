@@ -19,20 +19,20 @@ from iris.memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
 from iris.memory.vector_store import VectorStore
 from iris.personality.personality import Personality
 
+from ..agent_state import AgentStateManager
+from ..config import Config
+from ..controllers.proactive_response_tracker import ProactiveResponseTracker
+from ..event.event_bus import EventBus
+from ..ipc.ipc_input import CommandRouter
+from ..services.context import ContextManager
+from ..services.conversation import ConversationService
+from ..services.llm_pipeline import LLMPipeline
+from ..services.memory_manager import MemoryManager
+from ..services.proactive import SELF_GOVERNANCE_PRINCIPLES, ProactiveEngine
+from ..services.reflexion import Reflexion
+from ..services.reflexion_manager import ReflexionManager
+from ..services.tool_executor import ToolExecutionEngine
 from .agent_kernel import AgentKernel
-from .agent_state import AgentStateManager
-from .config import Config
-from .context import ContextManager
-from .conversation import ConversationService
-from .event_bus import EventBus
-from .ipc_input import CommandRouter
-from .llm_pipeline import LLMPipeline
-from .memory_manager import MemoryManager
-from .proactive import SELF_GOVERNANCE_PRINCIPLES, ProactiveEngine
-from .proactive_response_tracker import ProactiveResponseTracker
-from .reflexion import Reflexion
-from .reflexion_manager import ReflexionManager
-from .tool_executor import ToolExecutionEngine
 
 
 @dataclass

@@ -33,7 +33,7 @@ class _FakeEventBus:
 
 
 def _make_tracker() -> tuple[Any, Any, Any]:
-    from iris.kernel.proactive_response_tracker import ProactiveResponseTracker
+    from iris.kernel.controllers import ProactiveResponseTracker
 
     proactive = _FakeProactive()
     bus = _FakeEventBus()

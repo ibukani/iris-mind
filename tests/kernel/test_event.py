@@ -8,12 +8,13 @@ from iris.kernel.event import (
     AgentStateChangeEvent,
     AgentStreamEvent,
     Event,
+    EventBus,
+    EventBusProtocol,
     ProactiveSpeechEvent,
     TimerTick,
     UserInputEvent,
     new_trace_id,
 )
-from iris.kernel.event_bus import EventBus, EventBusProtocol
 
 
 def test_all_events_roundtrip_to_dict() -> None:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from iris.kernel.kernel_process import KernelProcess
+from iris.kernel.core import KernelProcess
 
 
 class _FakeConfig:

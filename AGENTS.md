@@ -22,6 +22,7 @@ Iris は自律的に行動・進化できるAIアシスタント。Python製でO
 
 debug_tools/                      ← 入出力分離のデバッグ用ツール群
 ├── cli/                          ← CLIアダプター（input_main, output_main, renderer, server）
+├── tcp_input/                    ← TCP Input アダプター
 └── __init__.py
 
 iris/                             ← アプリケーションコア
@@ -48,17 +49,16 @@ main.py                           ← エントリーポイント
 ## コンポーネント間依存関係（ヘキサゴナルアーキテクチャ）
 
 ```
-adapters/          ──→ iris/kernel/   ──→ iris/llm/, iris/memory/, iris/capabilities/
+debug_tools/       ──→ iris/kernel/   ──→ iris/llm/, iris/memory/, iris/capabilities/
 (UI層)               (ドメイン層)         (インフラ層)
 ```
-- `adapters/` は `iris/` に依存するが、逆方向の依存はディレクトリ構造で物理禁止
+- `debug_tools/` は `iris/` に依存するが、逆方向の依存はディレクトリ構造で物理禁止
 - `iris/kernel/` は純粋なビジネスロジックに閉じ、外部サービスは kernel 外から注入
 
-## v0.3 アーキテクチャ (目標)
+## v0.3 アーキテクチャ
 
 Input / Kernel / Output の3プロセスに分解。IPCはWindows Named Pipes（`AF_PIPE`）。
 詳細は `docs/adr/001-3-process-architecture.md` および `docs/architecture.md` を参照。
-移行計画は `docs/migration-roadmap.md` を参照。
 
 ## Iris の記憶体系
 - `.iris/data/iris_profile.md`: Irisの構造記憶（自己認識用、上限2KB固定）※話し方・性格は含まず、別JSONで動的管理

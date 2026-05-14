@@ -36,21 +36,22 @@ def get_user_preferences() -> list[dict]
 ```
 
 - 固定クエリ "ユーザーの好み 興味 趣味" で検索
-- search_semantic のラッパー、max_results=5
+- search_semantic のラッパー、max_results=2
 
 ### 記録
 
 ```python
 def add_episodic(
     content: str,
-    _kind: str = "user_input",
+    kind: str = "user_input",
     metadata: dict | None = None,
 ) -> None
 ```
 
 - エピソード記憶に追加
-- `_kind`: "user_input" | "assistant" | "proactive" | "system"（内部キーワード引数）
-- `metadata` がある場合、content に追記して保存
+- `kind`: "user_input" | "assistant" | "proactive" | "system" — 保存時に先頭に `[{kind}]` として付与
+- `metadata` がある場合、`{k}={v}` 形式で content に追記して保存
+- 保存形式: `[{kind}] {content} [{k1=v1} {k2=v2}]`
 
 ```python
 def add_semantic(
@@ -83,12 +84,11 @@ def get_recent(n: int = 3) -> list[dict]
 
 ## エラーハンドリング
 
-全メソッドは例外を送出せず、失敗時は空リストを返すかログに警告を出力する。
-これは ProactiveEngine のトリガースコアリングループが例外で中断されるのを防ぐため。
+`search_semantic` のみ try/except で例外を捕捉し、失敗時は空リストを返す。
+その他メソッドは例外をそのまま送出する（呼び出し元で適切にハンドリングする想定）。
 
 ```
 search_semantic 失敗 → 空リスト（ログ警告）
-add_episodic 失敗 → ログ警告
 ```
 
 ## その他

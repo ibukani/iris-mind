@@ -36,13 +36,23 @@ AgentKernel
 │   └── transition to IDLE
 ├── _on_proactive_speech(event)
 │   ├── MemoryManager.add_episodic()
-│   └── AnomalyDetector.record_speech() + check_suppression_health()
-└── _on_state_change(event)
-    └── logging
+│   ├── AnomalyDetector.record_speech() + publish AgentAnomalyEvent
+│   └── AnomalyDetector.check_suppression_health() + publish AgentAnomalyEvent
+├── _on_state_change(event)
+│   └── logging
+├── evaluate_proactive_request(scores, confidence, trigger_type) → bool
+│   ├── AnomalyDetector.check_frequency() — 頻度超過チェック
+│   ├── AnomalyDetector.check_suppression_health() — 抑制状態チェック
+│   └── AgentStateManager.is_idle() — 状態チェック
+│   └── 全条件を満たせば True（Tier2 発話承認）
+└── _start_timer()
+    └── TimerTick 発行 + AgentStateManager.check_timeout() 実行（ループ内）
 
 AnomalyDetector (Tier3)
 ├── record_speech() → list[str]
-│   └── 直近5分間のスライディングウィンドウで頻度超過検出
+│   └── 直近5分間のスライディングウィンドウで頻度超過検出（副作用あり）
+├── check_frequency() → list[str]
+│   └── 現在の頻度超過確認（副作用なし、evaluate_proactive_request から呼ばれる）
 └── check_suppression_health(status) → list[dict]
     ├── confirmation_mode → dict(type, severity, detail)
     ├── high_ignore_rate → dict(type, severity, detail)
@@ -54,8 +64,8 @@ AnomalyDetector (Tier3)
 ```
 [TimerTick 発行 (check_interval_sec ごと)]
     ├── → ProactiveEngine._on_timer_tick() （EventBus 経由で自動配信）
-    │      └── スコアリング → 発話 → ProactiveSpeechEvent
-    └── → AgentKernel._on_timer（check_timeout 実行）
+    │      └── スコアリング → Tier2判定 → 発話 → ProactiveSpeechEvent
+    └── → AgentKernel._start_timer ループ内で AgentStateManager.check_timeout() 実行
 
 [UserInputEvent 受信]
     └── → AgentKernel._on_user_input()
@@ -71,7 +81,8 @@ AnomalyDetector (Tier3)
 [ProactiveSpeechEvent 受信]
     └── → AgentKernel._on_proactive_speech()
            ├── 発話をエピソード記憶に記録
-           └── AnomalyDetector で異常検知 + 健全性チェック
+           ├── AnomalyDetector.record_speech() → 頻度超過時はクールダウン設定
+           └── AnomalyDetector.check_suppression_health() → 異常を AgentAnomalyEvent で通知
 ```
 
 ## Tier3 異常検知ルール

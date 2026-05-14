@@ -14,7 +14,7 @@ Capability Registryによる動的機能拡張を特徴とする。
 ## 現在のブランチ
 - `main`
 
-## アーキテクチャ (v0.3目標)
+## アーキテクチャ (v0.3)
 
 ```
 Controller Process (起動・監視)
@@ -61,6 +61,8 @@ iris-kernel/
 │   │   ├── output_main.py       # Output Process
 │   │   ├── renderer.py          # 表示ロジック
 │   │   └── server.py            # 単一プロセス互換用
+│   ├── tcp_input/
+│   │   └── main.py              # TCP Input アダプター
 ├── iris/                        # アプリケーションコア
 │   ├── kernel/                  # Kernel Process
 │   │   ├── agent_kernel.py
@@ -94,7 +96,6 @@ iris-kernel/
 │   │   └── 001-3-process-architecture.md
 │   ├── architecture.md
 │   ├── ipc-spec.md
-│   ├── migration-roadmap.md
 │   └── ... (既存設計書)
 ├── main.py
 └── config.yaml

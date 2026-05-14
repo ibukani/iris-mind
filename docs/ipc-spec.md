@@ -28,11 +28,10 @@ conn = multiprocessing.connection.Client(
 
 | Pipe 名 | 方向 | 用途 |
 |---------|------|------|
-| `\\.\pipe\iris-kernel-output` | Kernel→Output | Kernel から Output Process へのイベント配信 |
-| `\\.\pipe\iris-kernel-input` | Input→Kernel | Input Process から Kernel へのユーザー入力転送 |
-| `\\.\pipe\iris-control` | 双方向 | Controller からのライフサイクル制御（シャットダウン、ヘルスチェック） |
+| `\\.\pipe\iris-kernel` | Kernel→Output | Kernel から Output Process へのイベント配信（OutputBridge） |
+| `\\.\pipe\iris-kernel-input` | Input→Kernel | Input Process から Kernel へのユーザー入力転送（InputBridge） |
 
-Kernel は単一の Listener で全クライアント接続を受け付け、接続ごとにスレッドを割り当てる。
+Input / Output は独立した PipeServer を持つ（単一Listenerではない）。各 Bridge は接続ごとにスレッドを割り当てる。
 
 ### 2.3 シリアライズ
 
@@ -63,9 +62,9 @@ event = Event.from_dict(json.loads(raw))
 デバッグ用に、送受信されたイベントを JSONL 形式で記録する。
 
 ```jsonl
-{"type": "UserInputEvent", "trace_id": "abc-123", "data": {"content": "hello", ...}}
-{"type": "AgentStreamEvent", "trace_id": "abc-123", "data": {"delta": "Hello", ...}}
-{"type": "AgentResponseEvent", "trace_id": "abc-123", "data": {"content": "...", ...}}
+{"type": "UserInputEvent", "timestamp": "...", "source": "cli", "trace_id": "abc-123", "content": "hello", "metadata": null}
+{"type": "AgentStreamEvent", "timestamp": "...", "source": "system", "trace_id": "abc-123", "delta": "Hello", "done": false}
+{"type": "AgentResponseEvent", "timestamp": "...", "source": "system", "trace_id": "abc-123", "content": "...", "model": ""}
 ```
 
 `ReplayableTransport` クラスがこの形式で記録する。再生用クラス（`ReplayTransport`）は未実装。
@@ -76,16 +75,18 @@ event = Event.from_dict(json.loads(raw))
 
 ```
 Kernel Process:
-  1. Listener 開始 (port 発表は stdout or 固定パイプ名)
-  2. イベント購読開始
-  3. クライアント接続待受 (非ブロッキング poll)
+  1. AgentKernel.startup() — イベント購読 + タイマースレッド開始
+  2. OutputBridge.start() — PipeServer(iris-kernel) 起動 + 受付スレッド開始
+  3. InputBridge.start() — PipeServer(iris-kernel-input) 起動 + 受付スレッド開始
+  4. 子プロセス起動: output_main → iris-kernel に接続
+  5. 子プロセス起動: input_main → iris-kernel-input に接続
 
 Input Process:
-  1. Kernel の Listener に接続
-  2. UserInputEvent の送信を開始
+  1. Kernel の input Pipe に接続
+  2. UserInputEvent の送信を開始 (input() ループ)
 
 Output Process:
-  1. Kernel の Listener に接続
+  1. Kernel の output Pipe に接続
   2. 受信ループ開始 (イベント受信 → 表示)
 ```
 
@@ -97,8 +98,8 @@ Output Process:
 
 ### 3.3 生存確認
 
-Controller から定期的に `HeartbeatRequest` イベントを送信。
-各プロセスは `HeartbeatResponse` で応答する。タイムアウト時は再起動。
+KernelProcess が定期的（5秒間隔）に Input/Output プロセスのプロセス生存確認（`poll()`）を行い、
+応答がない場合は子プロセスを再起動する。専用の制御イベントは使用しない。
 
 ## 4. イベント形式
 
@@ -107,9 +108,9 @@ Controller から定期的に `HeartbeatRequest` イベントを送信。
 ```python
 @dataclass
 class Event:
-    timestamp: datetime  # イベント生成時刻
-    source: str          # 発生源 ("user_input" | "proactive" | "system" | "timer" | "input:*" | "output:*")
-    trace_id: str        # UUID4 — 全プロセス横断追跡ID
+    timestamp: datetime | None  # イベント生成時刻
+    source: str                 # 発生源
+    trace_id: str               # UUID4先頭12文字 — 全プロセス横断追跡ID（空文字列時は publish 時に自動生成）
 ```
 
 ### 4.2 Kernel → Output イベント
@@ -120,22 +121,13 @@ class Event:
 | `AgentResponseEvent` | `content: str`, `model: str` | 最終応答 |
 | `ProactiveSpeechEvent` | `content: str`, `trigger_type: str`, `confidence: float` | 自発発話 |
 | `AgentAnomalyEvent` | `anomaly_type: str`, `severity: str`, `detail: str` | 異常検知 |
-| `AgentStateChangeEvent` | `previous_state: str`, `new_state: str` | 状態遷移通知 |
+| `AgentStateChangeEvent` | `previous_state: str \| None`, `new_state: str \| None` | 状態遷移通知（Kernel 内部のみ） |
 
 ### 4.3 Input → Kernel イベント
 
 | イベント | フィールド | 説明 |
 |----------|-----------|------|
 | `UserInputEvent` | `content: str`, `metadata: dict \| None` | ユーザー入力 |
-
-### 4.4 制御イベント (Controller ↔ 全プロセス)
-
-| イベント | フィールド | 説明 |
-|----------|-----------|------|
-| `HeartbeatRequest` | (なし) | 生存確認 |
-| `HeartbeatResponse` | `pid: int`, `status: str` | 生存応答 |
-| `ShutdownRequest` | `reason: str`, `graceful: bool` | シャットダウン指示 |
-| `ShutdownAck` | `pid: int` | シャットダウン応答 |
 
 ## 5. エラーハンドリング
 
@@ -145,6 +137,8 @@ class Event:
 | 接続断 (予期せず) | 該当スレッド終了 + ログ | 再接続試行 (指数バックオフ) |
 | シリアライズエラー | ログ出力 + 接続断 | ログ出力 + 再接続 |
 | 受信タイムアウト | — | 再接続試行 |
+
+- KernelProcess が `subprocess.Popen` で Input/Output プロセスを起動・監視する。専用の制御 Pipe 経由のイベントは実装されていない。
 
 ## 6. 将来の拡張
 

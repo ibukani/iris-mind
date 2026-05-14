@@ -65,9 +65,12 @@ SPEAK_THRESHOLD = 0.60
 
 #### 時間スコア (`time_score`)
 ```
-ratio = (now - last_speech) / max_interval_sec
+last = max(last_proactive_time, last_user_activity)
+elapsed = now - last
+elapsed < min_interval_sec → 0.0
+ratio = (elapsed - min_interval_sec) / (max_interval_sec - min_interval_sec)
 time_score = min(ratio, 1.0)
-# min_interval_sec 以下は 0 にクランプ
+# last == 0（初回）→ 0.4
 ```
 
 #### 記憶スコア (`memory_score`)
@@ -79,12 +82,12 @@ memory_score = max(result["score"] for result in results)
 
 #### 文脈スコア (`context_score`)
 ```
-# 前回セッションの要約と現在のトピックの類似度
-current_topic = LLM.extract_topic(last_3_messages)
-previous_topic = context_manager.last_summary_topic
-context_score = cosine_similarity(current_topic, previous_topic)
-# 類似度が高い（停滞）→ 高いスコア（話題変えたくなる）
-# 類似度が低い（変化中）→ 中程度のスコア
+# 直近2件のエピソード記憶の文字bigram類似度（Jaccard係数）
+# LLM呼び出し不要、言語非依存
+similarity = char_bigram_jaccard(summary[-2], summary[-1])
+context_score = min(similarity + 0.2, 1.0)
+# 類似度高（話題停滞）→ 高スコア
+# 短い応答のみ → 0.7（停滞とみなす）
 ```
 
 ## Tier 分類ルール
@@ -144,7 +147,7 @@ class ProactiveResult:
     content: str           # 生成された発話テキスト
     tier: int              # 1 (自動) or 2 (自己判断)
     confidence: float      # Tier2の場合のみ有効 (0.0~1.0)
-    trigger_type: str      # "temporal" | "memory" | "context_shift"
+    trigger_type: str      # "temporal" | "memory" | "context" | "mood"
     reasoning: str         # LLM生成時の根拠メモ
     risk_flags: list[str]  # 検出されたリスクフラグ
 ```
@@ -159,6 +162,7 @@ class ProactiveResult:
 - 短く（40文字以内）で友好的
 - ユーザーのことを推測せず、確実にわかることだけ
 - 質問形式より気遣い・報告形式を優先
+- 発話内容のみ出力し、余計な説明や引用符は一切不要
 - {context_hint} に基づいて発話内容を決定
 ```
 
@@ -175,12 +179,52 @@ class ProactiveResult:
 - 相手の邪魔をしない
 - 押し付けがましくない
 - 「〜かもしれない」「よかったら」の柔らかい表現
-- 信頼度スコア: {confidence}
-
 ■ 生成してください:
-- 発話内容（60文字以内）
-- この発話の根拠
+- 以下のJSON形式のみを出力:
+  {"speech": "発話内容（60文字以内）", "confidence": 0.0~1.0, "reasoning": "この発話の根拠"}
 ```
+
+## 公開API
+
+```python
+def get_status() -> dict
+```
+- 現在の抑制状態を返す（`consecutive_ignores`, `confirmation_mode`, `cooldown_until` 等）
+
+```python
+def set_approval_callback(callback: ApprovalCallback | None) -> None
+```
+- AgentKernel の承認コールバックを登録する（Tier2 信頼度不足時の送審用）
+
+```python
+def notify_user_activity() -> None
+```
+- ユーザー入力があったことを通知し、無視カウンターをリセット
+
+```python
+def notify_ignore() -> None
+```
+- 自発発話が無視されたことを通知し、`consecutive_ignores` を増加。2回以上で confirmation_mode に移行
+
+```python
+def notify_positive_response() -> None
+```
+- 自発発話に好意的な応答があったことを通知し、無視カウンターと confirmation_mode をリセット
+
+```python
+def set_cooldown(duration_sec: float = 600.0) -> None
+```
+- 外部からのクールダウン設定（AgentKernel の頻度超過検出後などに使用）
+
+```python
+def set_mood(negative_score: float) -> None
+```
+- ユーザー感情スコアを設定（0〜1、高いほどネガティブ）
+
+```python
+def reset() -> None
+```
+- すべての抑制状態をリセット
 
 ## 自己規律原則（システムプロンプト内蔵）
 

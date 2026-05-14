@@ -2,7 +2,7 @@
 
 ## 概要
 
-Iris v0.2 の設定は Pydantic BaseModel で構成される。`config.yaml` から読み込み、型バリデーションを自動実行する。
+Iris v0.3 の設定は Pydantic BaseModel で構成される。`config.yaml` から読み込み、型バリデーションを自動実行する。
 
 ## Config ツリー
 
@@ -11,14 +11,15 @@ Config
 ├── model: ModelConfig          — LLMモデル関連
 ├── personality: PersonalityConfig — 人格・プロンプト
 ├── memory: MemoryConfig        — 記憶管理
-└── proactive: ProactiveConfig  — 自発発話
+├── proactive: ProactiveConfig  — 自発発話
+└── logging: LoggingConfig      — ログ出力
 ```
 
 ## ModelConfig
 
 | フィールド | 型 | デフォルト | 説明 |
 |-----------|-----|-----------|------|
-| models | list[ModelEntry] | qwen3.5:2b (base), qwen3.5:9b (smart) | 使用モデル一覧 |
+| models | list[ModelEntry] | qwen3.5:9b (default) | 使用モデル一覧 |
 | provider | str | "ollama" | プロバイダ種別（"ollama" or "openrouter"） |
 | base_url | str | "http://localhost:11434" | API URL（Ollama or OpenRouter） |
 | api_key | str | "" | OpenRouter APIキー（${VAR_NAME}形式対応） |
@@ -35,11 +36,27 @@ Config
 | name | str | — | モデル名（Ollamaタグ形式 or OpenRouterモデルスラッグ） |
 | roles | list[str] | ["default"] | このモデルが担うロール一覧 |
 | max_tokens | int | 512 | 最大出力トークン数 |
+| temperature | float \| None | None | モデル個別の温度設定（上書き用） |
+| num_ctx | int \| None | None | モデル個別のコンテキスト長（上書き用） |
+| context_window | int \| None | None | モデル個別の会話ウィンドウ（上書き用） |
+| capabilities | list[str] \| None | None | モデルの機能ラベル（例: ["vision", "tools"]） |
+| performance_tier | str | "balanced" | 性能区分（"fast" / "balanced" / "capable"） |
 
 - `roles` は YAML上で1要素なら文字列でも記述可能: `roles: default`
 - モデルが1つだけの場合はシングルモードとなり、全処理にそのモデルを使用
 - 複数モデルがある場合は `get_model(role)` で role に合致するモデルを選択
 - `ModelEntry.role`（旧形式）の単一文字列は自動的にリストに変換される
+
+**ModelConfig ヘルパーメソッド**:
+
+| メソッド | 戻り値 | 説明 |
+|---------|--------|------|
+| `model_names` | list[str] | 全モデル名一覧（property） |
+| `get_model(role)` | str | 指定 role に合致するモデル名。未合致時は models[0] にフォールバック |
+| `get_effective_temperature(role)` | float | role 別実効温度。モデル個別設定がなければ ModelConfig.temperature |
+| `get_effective_num_ctx(role)` | int | role 別実効コンテキスト長。モデル個別設定がなければ ModelConfig.num_ctx |
+| `get_model_capabilities(role)` | list[str] | role 別の機能ラベル一覧 |
+| `get_model_performance_tier(role)` | str | role 別の性能区分 |
 
 ## ProactiveConfig
 

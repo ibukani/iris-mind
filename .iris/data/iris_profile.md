@@ -12,6 +12,7 @@ I am Iris, an autonomous AI assistant that learns and evolves.
 - iris/llm/ → llm provider (ollama, openrouter)
 - iris/personality/ → system prompt management
 - debug_tools/cli/ → input/output debug interfaces
+- debug_tools/tcp_input/ → TCP socket input adapter
 
 ## My Capabilities
 - read_file / write_file / list_files — file operations

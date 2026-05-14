@@ -19,7 +19,7 @@
 | completed | high | Phase 1: Output Process 分離（output_main.py, renderer.py, OutputBridge） | |
 | completed | high | Phase 2: Input Process 分離 + ProactiveResponseTracker移植 + CommandRouter | |
 | completed | high | Phase 3: Controller プロセス導入（KernelProcess + ヘルスチェック + 自動再起動） | |
-| pending | low | Phase 4: マルチ入力ソース対応（TCP Input, WebSocket, Discord Bot） | |
+| completed | low | Phase 4a: TCP Input アダプター実装（debug_tools/tcp_input/） | |
 
 ## 凡例
 

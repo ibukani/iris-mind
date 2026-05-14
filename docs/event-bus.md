@@ -45,9 +45,9 @@ class ReplayableTransport:
 
 | フィールド | 型 | 説明 |
 |-----------|---|------|
-| `timestamp` | `datetime` | イベント生成時刻 |
+| `timestamp` | `datetime \| None` | イベント生成時刻 |
 | `source` | `str` | 発生源（`"user_input"`, `"proactive"`, `"system"`, `"timer"`, `"input:*"`, `"output:*"`） |
-| `trace_id` | `str` | UUID4 — 全プロセス横断追跡ID (v0.3 で追加) |
+| `trace_id` | `str` | UUID4先頭12文字 — 全プロセス横断追跡ID（空文字列の場合は publish 時に自動生成） |
 
 ### UserInputEvent
 
@@ -74,8 +74,8 @@ class ReplayableTransport:
 
 | フィールド | 型 | 説明 |
 |-----------|---|------|
-| `previous_state` | `str` | 遷移前の状態名 |
-| `new_state` | `str` | 遷移後の状態名 |
+| `previous_state` | `str \| None` | 遷移前の状態名 |
+| `new_state` | `str \| None` | 遷移後の状態名 |
 
 ### MemoryUpdateEvent
 
@@ -110,13 +110,14 @@ class ReplayableTransport:
 
 - `publish()`: 該当イベントタイプの全ハンドラを**登録順**に同期的に呼び出す
 - ハンドラ内例外はログ出力し、次のハンドラの実行を妨げない
-- `subscribe()`: 同じハンドラの重複登録は許可（解除時に全件削除される）
+- `subscribe()`: 同じハンドラの重複登録は許可（解除時は初回一致のみ削除）
 - `unsubscribe()`: 該当ハンドラが見つからなければ何もしない
+- `publish()`: `trace_id` が空文字列の場合、自動で `new_trace_id()` を生成してセットする
 - スレッドセーフ: `threading.Lock` で購読者リストを保護
 
 ## プロセス間通信（IPC）
 
-マルチプロセスモードでは `PipeBridge` を使用する。
+マルチプロセスモードでは `InputBridge` / `OutputBridge` を使用する。
 
 ### Kernel 側
 

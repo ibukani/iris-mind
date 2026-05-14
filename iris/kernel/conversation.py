@@ -181,10 +181,6 @@ class ConversationService:
         traits = self._persona_profile.get_traits() if self._persona_profile else ""
         prefs_list = self._memory.get_user_preferences()
         user_prefs = "\n".join(f"- {p['content']}" for p in prefs_list) if prefs_list else ""
-        summary = (
-            self._context_manager.summary_text if self._context_manager and self._context_manager.has_summary else ""
-        )
-
         governance = "\n".join(f"- {p}" for p in SELF_GOVERNANCE_PRINCIPLES) if SELF_GOVERNANCE_PRINCIPLES else ""
 
         system_prompt = self._personality.build_system_prompt(
@@ -192,13 +188,14 @@ class ConversationService:
             speech_style=speech_style,
             personality_traits=traits,
             user_preferences=user_prefs,
-            conversation_summary=summary,
+            conversation_summary="",
             governance_principles=governance,
         )
 
-        if self._context_manager is not None and self._context_manager.has_summary:
+        ctx_mgr = self._context_manager
+        if ctx_mgr is not None and ctx_mgr.has_summary:
             messages = [{"role": "system", "content": system_prompt}]
-            messages += self._context_manager.build_compact_messages(self._messages)
+            messages += ctx_mgr.build_compact_messages(self._messages)
         else:
             messages = [{"role": "system", "content": system_prompt}, *self._messages]
 
@@ -230,6 +227,9 @@ class ConversationService:
             if msg.get("tool_calls") and self._tool_executor is not None:
                 self._messages.append(msg)
                 self._tool_executor.execute_all(self._messages)
+                for m in self._messages[-len(msg["tool_calls"]):]:
+                    if m["role"] == "tool" and len(m.get("content", "")) > 200:
+                        m["content"] = m["content"][:200] + "..."
                 continue
 
             final_text = msg.get("content", "")

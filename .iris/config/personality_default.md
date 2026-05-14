@@ -27,3 +27,6 @@
 
 ## 構造記憶
 {agents_md_content}
+
+## 自己規律原則
+{governance_principles}

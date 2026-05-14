@@ -9,12 +9,14 @@ Rich パネルでリアルタイム表示する。
 from __future__ import annotations
 
 import logging
+import time
 from datetime import datetime
 
 from rich.console import Console
 from rich.panel import Panel
 
 from iris.capabilities.registry import CapabilityRegistry
+from iris.commands.handler import CommandHandler
 from iris.kernel.agent_kernel import AgentKernel
 from iris.kernel.agent_state import AgentStateManager
 from iris.kernel.config import Config
@@ -53,6 +55,7 @@ class CLIAdapter:
 
     def __init__(self, config: Config) -> None:
         self._config = config
+        self._proactive_pending_speech: float = 0.0
         self._init_kernel()
         self._init_events()
 
@@ -79,14 +82,6 @@ class CLIAdapter:
             vector_store=self._vector,
         )
 
-        # 自発発話エンジン
-        self._proactive = ProactiveEngine(
-            config=self._config.proactive,
-            event_bus=self._event_bus,
-            state_manager=self._state,
-            memory=self._memory,
-        )
-
         # ペルソナデータ + 構造記憶
         self._persona_data = PersonaData()
         self._persona_profile = PersonaProfile(persona_data=self._persona_data)
@@ -95,19 +90,7 @@ class CLIAdapter:
             max_bytes=cfg.agents_md_max_bytes,
         )
 
-        # AgentKernel.startup() が UserInputEvent を購読 → 状態を PROCESSING に遷移
-        # → ConversationService が後から購読（コンストラクタで subscribe）→ LLM 呼び出し
-        # この順序により AgentKernel が先に状態遷移してから ConversationService が処理を開始する
-        self._kernel = AgentKernel(
-            event_bus=self._event_bus,
-            state_manager=self._state,
-            proactive=self._proactive,
-            memory=self._memory,
-            config=self._config.proactive,
-        )
-        self._kernel.startup()
-
-        # 会話サービス（カーネルの後に購読 → ハンドラ実行順を保証）
+        # LLM + 会話関連サービス（ProactiveEngine より先に生成）
         provider = create_provider(
             provider_type=self._config.model.provider,
             base_url=self._config.model.base_url,
@@ -124,11 +107,33 @@ class CLIAdapter:
             compact_model=self._config.model.get_model("default"),
         )
 
+        # 自発発話エンジン（LLMによる発話生成を使用）
+        self._proactive = ProactiveEngine(
+            config=self._config.proactive,
+            event_bus=self._event_bus,
+            state_manager=self._state,
+            memory=self._memory,
+            llm=self._llm,
+        )
+
+        # AgentKernel.startup() が UserInputEvent を購読 → 状態を PROCESSING に遷移
+        # → ConversationService が後から購読（コンストラクタで subscribe）→ LLM 呼び出し
+        # この順序により AgentKernel が先に状態遷移してから ConversationService が処理を開始する
+        self._kernel = AgentKernel(
+            event_bus=self._event_bus,
+            state_manager=self._state,
+            proactive=self._proactive,
+            memory=self._memory,
+            config=self._config.proactive,
+        )
+        self._kernel.startup()
+
         # Capability registry + tool executor
         self._registry = CapabilityRegistry()
         self._registry.discover_modules()
         self._tool_exec = ToolExecutionEngine(registry=self._registry)
 
+        # 会話サービス（カーネルの後に購読 → ハンドラ実行順を保証）
         self._conversation = ConversationService(
             event_bus=self._event_bus,
             memory=self._memory,
@@ -140,6 +145,13 @@ class CLIAdapter:
             context_manager=self._context_mgr,
             persona_profile=self._persona_profile,
             agents_md_store=self._agents_md,
+        )
+
+        # コマンドハンドラ
+        self._cmd_handler = CommandHandler(
+            state=self._state,
+            conversation=self._conversation,
+            proactive=self._proactive,
         )
 
     def _init_events(self) -> None:
@@ -194,6 +206,17 @@ class CLIAdapter:
                 if text.lower() in ("exit", "quit"):
                     break
 
+                # 自発発話への反応追跡
+                self._check_proactive_response(text)
+
+                # コマンドハンドラで処理（/ で始まる入力をインターセプト）
+                if text.startswith("/"):
+                    self._proactive.notify_user_activity()
+                    response = self._cmd_handler.handle(text)
+                    if response:
+                        console.print(f"[bold cyan][System][/bold cyan] {response}")
+                    continue
+
                 self._event_bus.publish(
                     UserInputEvent(
                         timestamp=datetime.now(),
@@ -217,8 +240,23 @@ class CLIAdapter:
 
     # ── イベントハンドラ ──────────────────────────────────
 
+    def _check_proactive_response(self, text: str) -> None:
+        """自発発話後のユーザー入力を判定し、ProactiveEngine に通知する。"""
+        if not self._proactive_pending_speech:
+            return
+        elapsed = time.time() - self._proactive_pending_speech
+        self._proactive_pending_speech = 0.0
+        if elapsed > 60.0:
+            return
+        lower = text.strip().lower()
+        if lower in ("やめて", "静かに", "stop", "やめろ", "黙れ", "うるさい", "やめてください", "shut up"):
+            self._proactive.set_cooldown(600.0)
+        else:
+            self._proactive.notify_positive_response()
+
     def _on_proactive_speech(self, event: ProactiveSpeechEvent) -> None:
         """自発発話イベントを Rich パネルで表示する。"""
+        self._proactive_pending_speech = time.time()
         tier_label = "auto" if event.confidence >= 1.0 else "self-judge"
         console.print(
             Panel(

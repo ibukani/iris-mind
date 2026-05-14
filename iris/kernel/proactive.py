@@ -2,18 +2,22 @@
 ProactiveEngine — 自律的会話（自発発話）の核心エンジン
 
 ユーザーの入力なしに、記憶・文脈・時間的トリガーに基づいて会話を開始する。
-3層ガバナンス: Tier1（ルール自動許可）→ Tier2（LLM自己判断）→ AgentKernel（異常検知、将来対応）
+3層ガバナンス: Tier1（ルール自動許可）→ Tier2（LLM自己判断）→ AgentKernel（異常検知）
 """
 
 from __future__ import annotations
 
+import json as _json
 import logging
+import re
 import time
 from dataclasses import dataclass, field
+from datetime import datetime
+from typing import Any
 
 from .agent_state import AgentStateManager, State
 from .config import ProactiveConfig
-from .event_bus import EventBus, ProactiveSpeechEvent, TimerTick
+from .event_bus import AgentAnomalyEvent, EventBus, ProactiveSpeechEvent, TimerTick
 from .memory_manager import MemoryManager
 
 logger = logging.getLogger(__name__)
@@ -29,6 +33,35 @@ SELF_GOVERNANCE_PRINCIPLES = [
     "If confidence score is below 0.5, do not speak and report to AgentKernel",
     "If user emotion is negative, do not speak",
 ]
+
+TIER1_SYSTEM_PROMPT = """あなたはIrisです。ユーザーに自然に声をかけてください。
+
+■ ルール:
+- 短く（40文字以内）で友好的
+- ユーザーのことを推測せず、確実にわかることだけ
+- 質問形式より気遣い・報告形式を優先
+- 発話内容のみ出力し、余計な説明や引用符は一切不要
+
+■ コンテキスト:
+{context_hint}"""
+
+TIER2_SYSTEM_PROMPT = """あなたはIrisです。
+
+■ 判断基準:
+- ユーザーの記憶・興味・最近の会話履歴に基づいているか
+- 相手が困っている・暇そうなタイミングか
+- 以前に同様の誘発で好意的な反応があったか
+
+■ ルール:
+- 相手の邪魔をしない
+- 押し付けがましくない
+- 「〜かもしれない」「よかったら」の柔らかい表現
+
+■ コンテキスト:
+{context_hint}
+
+■ 以下のJSON形式のみを出力してください:
+{{"speech": "発話内容（60文字以内）", "confidence": 0.0~1.0, "reasoning": "この発話の根拠（簡潔に）"}}"""
 
 
 @dataclass
@@ -71,13 +104,16 @@ class ProactiveEngine:
         event_bus: EventBus,
         state_manager: AgentStateManager,
         memory: MemoryManager,
+        llm: Any | None = None,
     ) -> None:
         self._config = config
         self._event_bus = event_bus
         self._state = state_manager
         self._memory = memory
+        self._llm = llm
         self._suppression = SuppressionState()
         self._last_check_time: float = 0.0
+        self._ignore_recorded_for_proactive: bool = False
 
         if config.enabled:
             self._event_bus.subscribe("TimerTick", self._on_timer_tick)
@@ -96,6 +132,8 @@ class ProactiveEngine:
             return
         self._last_check_time = now
 
+        self._check_ignore(now)
+
         total, scores = self._score_triggers(now)
         if total < self._config.speak_threshold:
             return
@@ -107,6 +145,17 @@ class ProactiveEngine:
                 self._publish_speech(result)
         finally:
             self._state.transition(State.IDLE)
+
+    def _check_ignore(self, _now: float) -> None:
+        """前回の自発発話が無視されたかを判定し記録する。"""
+        s = self._suppression
+        if s.last_proactive_time == 0:
+            return
+        if self._ignore_recorded_for_proactive:
+            return
+        if s.last_proactive_time > s.last_user_activity:
+            self.notify_ignore()
+            self._ignore_recorded_for_proactive = True
 
     # ── トリガースコアリング ──────────────────────────────
 
@@ -196,33 +245,53 @@ class ProactiveEngine:
 
         trigger_type = self._determine_trigger_type(scores)
 
+        # confirmation_mode: 質問発話
+        if self._suppression.consecutive_ignores >= 2 and self._suppression.confirmation_mode:
+            return ProactiveResult(
+                content=self._build_confirmation_speech(),
+                tier=1,
+                confidence=0.9,
+                trigger_type=trigger_type,
+                reasoning="Confirmation mode: asking permission before speaking",
+            )
+
         # Tier1: 時間ベーストリガーはルールベースで自動許可
         if self._config.tier1_auto_approve and trigger_type in TIER1_TRIGGERS:
+            speech = self._build_tier1_speech(scores)
             return ProactiveResult(
-                content=self._build_tier1_speech(),
+                content=speech,
                 tier=1,
                 confidence=1.0,
                 trigger_type=trigger_type,
                 reasoning="Tier1: temporal trigger, auto-approved by rule",
             )
 
-        # Tier2: LLM自己判断（現在はスコアベースの推定）
-        confidence = self._estimate_confidence(scores)
+        # Tier2: LLM自己判断
+        speech, confidence, reasoning = self._build_tier2_speech(scores)
         if confidence >= self._config.tier2_confidence_threshold:
             return ProactiveResult(
-                content=self._build_tier2_speech(scores),
+                content=speech,
                 tier=2,
                 confidence=confidence,
                 trigger_type=trigger_type,
-                reasoning=(
-                    f"Tier2: confidence={confidence:.2f} >= threshold ({self._config.tier2_confidence_threshold})"
-                ),
+                reasoning=reasoning
+                or (f"Tier2: confidence={confidence:.2f} >= threshold ({self._config.tier2_confidence_threshold})"),
             )
 
-        logger.debug(
-            "Tier2 confidence too low: %.2f < %.2f",
+        logger.info(
+            "Tier2 confidence too low: %.2f < %.2f, trigger=%s",
             confidence,
             self._config.tier2_confidence_threshold,
+            trigger_type,
+        )
+        self._event_bus.publish(
+            AgentAnomalyEvent(
+                timestamp=datetime.now(),
+                source="system",
+                anomaly_type="low_confidence_proactive",
+                severity="info",
+                detail=f"Proactive speech confidence {confidence:.2f} below threshold",
+            )
         )
         return None
 
@@ -233,10 +302,119 @@ class ProactiveEngine:
 
     @staticmethod
     def _estimate_confidence(scores: dict[str, float]) -> float:
-        """スコアから信頼度を推定する（LLM自己評価の簡易代替）。"""
+        """スコアから信頼度を推定する（LLM未接続時のフォールバック）。"""
         total = sum(scores.values()) / len(scores)
         memory_weight = scores.get("memory", 0.0) * 0.5
         return min(total + memory_weight, 1.0)
+
+    # ── LLM発話生成 ───────────────────────────────────────
+
+    def _build_context_hint(self, scores: dict[str, float]) -> str:
+        """発話生成用のコンテキスト文字列を構築する。"""
+        now = time.localtime()
+        hour = now.tm_hour
+        if hour < 12:
+            time_str = "午前"
+        elif hour < 17:
+            time_str = "午後"
+        else:
+            time_str = "夕方以降"
+
+        trigger = self._determine_trigger_type(scores)
+        parts = [f"時間帯: {time_str}", f"トリガー: {trigger}"]
+
+        if self._memory:
+            try:
+                recent = self._memory.get_recent(2)
+                if recent:
+                    topics = " | ".join(str(item.get("summary", ""))[:80] for item in recent if item.get("summary"))
+                    if topics:
+                        parts.append(f"最近の話題: {topics}")
+            except Exception:
+                pass
+
+        return " / ".join(parts)
+
+    def _build_tier1_speech(self, scores: dict[str, float]) -> str:
+        """Tier1 発話をLLMで生成する。LLM未接続時は固定テンプレート。"""
+        if self._llm is None:
+            return "お疲れさまです！何かお手伝いしましょうか？"
+
+        context_hint = self._build_context_hint(scores)
+        try:
+            resp = self._llm.chat(
+                messages=[
+                    {"role": "system", "content": TIER1_SYSTEM_PROMPT.format(context_hint=context_hint)},
+                    {"role": "user", "content": "短く自然な一言を生成してください。"},
+                ],
+                max_tokens=80,
+                temperature=0.5,
+            )
+            text = (resp.get("message", {}) or {}).get("content", "").strip().strip('"')
+            if text and len(text) < 120:
+                return text
+        except Exception as e:
+            logger.debug("Tier1 LLM speech failed: %s", e)
+        return "お疲れさまです！何かお手伝いしましょうか？"
+
+    def _build_tier2_speech(
+        self,
+        scores: dict[str, float],
+    ) -> tuple[str, float, str]:
+        """Tier2 発話をLLMで生成し、(発話, 信頼度, 根拠) を返す。"""
+        if self._llm is None:
+            trigger = self._determine_trigger_type(scores)
+            templates = {
+                "memory": "そういえば、以前の話が気になっています。続きを話しませんか？",
+                "context": "別の話題はいかがですか？",
+                "mood": "何か気になることでもありますか？",
+            }
+            conf = self._estimate_confidence(scores)
+            return (templates.get(trigger, "何かお手伝いできることはありますか？"), conf, "fallback template")
+
+        context_hint = self._build_context_hint(scores)
+        try:
+            resp = self._llm.chat(
+                messages=[
+                    {"role": "system", "content": TIER2_SYSTEM_PROMPT.format(context_hint=context_hint)},
+                    {"role": "user", "content": "自発発話を生成し、信頼度を評価してください。"},
+                ],
+                max_tokens=200,
+                temperature=0.3,
+            )
+            text = (resp.get("message", {}) or {}).get("content", "").strip()
+            parsed = self._try_parse_json(text)
+            if parsed and "speech" in parsed:
+                speech = str(parsed["speech"])[:120]
+                confidence = max(0.0, min(1.0, float(parsed.get("confidence", 0.5))))
+                reasoning = str(parsed.get("reasoning", ""))
+                return (speech, confidence, reasoning)
+        except Exception as e:
+            logger.debug("Tier2 LLM speech failed: %s", e)
+
+        conf = self._estimate_confidence(scores)
+        return ("何かお手伝いできることはありますか？", conf, "fallback after LLM failure")
+
+    @staticmethod
+    def _try_parse_json(text: str) -> dict | None:
+        """LLM出力からJSONをパースする。直接パース失敗後、中括弧ブロックを探す。"""
+        text = text.strip()
+        try:
+            return _json.loads(text)
+        except _json.JSONDecodeError:
+            pass
+        m = re.search(r"\{[^{}]*\}", text, re.DOTALL)
+        if m:
+            try:
+                return _json.loads(m.group())
+            except _json.JSONDecodeError:
+                pass
+        return None
+
+    @staticmethod
+    def _build_confirmation_speech() -> str:
+        """confirmation_mode 時の質問発話。"""
+        return "すみません、今話してもよろしいですか？"
 
     # ── 抑制チェック ──────────────────────────────────────
 
@@ -270,33 +448,14 @@ class ProactiveEngine:
 
         return True
 
-    # ── 発話テンプレート ──────────────────────────────────
-
-    @staticmethod
-    def _build_tier1_speech() -> str:
-        """Tier1 自動発話のテンプレート。"""
-        return "お疲れさまです！何かお手伝いしましょうか？"
-
-    @staticmethod
-    def _build_tier2_speech(scores: dict[str, float]) -> str:
-        """Tier2 発話のテンプレート。"""
-        trigger = max(scores, key=lambda k: scores[k])
-        templates = {
-            "memory": "そういえば、以前の話が気になっています。続きを話しませんか？",
-            "context": "別の話題はいかがですか？",
-            "mood": "何か気になることでもありますか？",
-        }
-        return templates.get(trigger, "何かお手伝いできることはありますか？")
-
     # ── イベント発行 ──────────────────────────────────────
 
     def _publish_speech(self, result: ProactiveResult) -> None:
         """発話イベントを発行し、抑制状態を更新する。"""
-        from datetime import datetime
-
         s = self._suppression
         s.last_proactive_time = time.time()
         s.proactive_timestamps.append(time.time())
+        self._ignore_recorded_for_proactive = False
 
         self._event_bus.publish(
             ProactiveSpeechEvent(
@@ -317,7 +476,7 @@ class ProactiveEngine:
 
     # ── Public API（conversation / AgentKernel からの連携用）─
 
-    def get_status(self) -> dict[str, object]:
+    def get_status(self) -> dict[str, dict[str, Any]]:
         """現在の抑制状態を返す（Tier3異常検知用）。"""
         s = self._suppression
         return {
@@ -335,6 +494,7 @@ class ProactiveEngine:
     def notify_user_activity(self) -> None:
         """ユーザー入力があったことを通知する。"""
         self._suppression.last_user_activity = time.time()
+        self._ignore_recorded_for_proactive = False
 
     def notify_ignore(self) -> None:
         """自発発話が無視されたことを通知する。"""
@@ -364,4 +524,5 @@ class ProactiveEngine:
     def reset(self) -> None:
         """すべての抑制状態をリセットする。"""
         self._suppression = SuppressionState()
+        self._ignore_recorded_for_proactive = False
         logger.info("Suppression state reset")

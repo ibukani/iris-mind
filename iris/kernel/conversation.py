@@ -15,6 +15,7 @@ from .config import Config
 from .context import ContextManager
 from .event_bus import AgentResponseEvent, EventBus, UserInputEvent
 from .memory_manager import MemoryManager
+from .proactive import SELF_GOVERNANCE_PRINCIPLES
 from .tool_executor import ToolExecutionEngine
 
 logger = logging.getLogger(__name__)
@@ -184,12 +185,15 @@ class ConversationService:
             self._context_manager.summary_text if self._context_manager and self._context_manager.has_summary else ""
         )
 
+        governance = "\n".join(f"- {p}" for p in SELF_GOVERNANCE_PRINCIPLES) if SELF_GOVERNANCE_PRINCIPLES else ""
+
         system_prompt = self._personality.build_system_prompt(
             agents_md_content=agents_md,
             speech_style=speech_style,
             personality_traits=traits,
             user_preferences=user_prefs,
             conversation_summary=summary,
+            governance_principles=governance,
         )
 
         if self._context_manager is not None and self._context_manager.has_summary:

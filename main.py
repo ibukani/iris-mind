@@ -2,21 +2,13 @@
 """Iris - 自律的に行動し進化できるAI (v0.3)"""
 
 import argparse
-import contextlib
 import os
-import subprocess
-import sys
-import time
-from datetime import datetime
 from pathlib import Path
 
 from adapters.cli.server import CLIAdapter
 from iris.kernel.config import Config
-from iris.kernel.event import UserInputEvent
-from iris.kernel.factory import KernelContext, KernelFactory
-from iris.kernel.ipc import PIPE_NAME_KERNEL_OUTPUT
-from iris.kernel.ipc_input import InputBridge
-from iris.kernel.ipc_output import OutputBridge
+from iris.kernel.controller import IrisController
+from iris.kernel.factory import KernelFactory
 
 os.environ.setdefault("OLLAMA_GPU_LAYERS", "99")
 
@@ -33,6 +25,16 @@ def run() -> None:
         action="store_true",
         help="Input / Kernel / Output を別プロセスとして起動する (3-Process)",
     )
+    parser.add_argument(
+        "--no-input",
+        action="store_true",
+        help="Input Process を起動しない (デバッグ用)",
+    )
+    parser.add_argument(
+        "--no-output",
+        action="store_true",
+        help="Output Process を起動しない (デバッグ用)",
+    )
     args = parser.parse_args()
 
     project_root = Path(__file__).parent
@@ -45,19 +47,27 @@ def run() -> None:
     if not _check_environment(config):
         return
 
-    ctx = KernelFactory.build(config)
-
     if args.separate:
-        _run_3process(ctx)
+        IrisController(config).launch()
     elif args.output_separate:
+        ctx = KernelFactory.build(config)
         _run_output_separated(ctx)
     else:
+        ctx = KernelFactory.build(config)
         CLIAdapter(ctx).run()
 
 
-def _run_output_separated(ctx: KernelContext) -> None:
-    """Output Process のみ分離したモード (Phase 1)。"""
+def _run_output_separated(ctx):  # noqa: ANN001, ANN201
+    import subprocess
+    import sys
+    import time
+    from datetime import datetime
+
     from rich.console import Console
+
+    from iris.kernel.event import UserInputEvent
+    from iris.kernel.ipc import PIPE_NAME_KERNEL_OUTPUT
+    from iris.kernel.ipc_output import OutputBridge
 
     console = Console()
     output_bridge = OutputBridge(ctx.event_bus, PIPE_NAME_KERNEL_OUTPUT)
@@ -103,45 +113,12 @@ def _run_output_separated(ctx: KernelContext) -> None:
         output_process.terminate()
         output_process.wait(timeout=3)
         output_bridge.stop()
+        import contextlib
+
         with contextlib.suppress(Exception):
             ctx.conversation.session_reflect()
         ctx.kernel.shutdown()
         console.print("[dim]Shutdown complete.[/dim]")
-
-
-def _run_3process(ctx: KernelContext) -> None:
-    """Input / Kernel / Output を完全分離したモード (Phase 2)。"""
-    from iris.kernel.ipc import PIPE_NAME_KERNEL_INPUT
-
-    output_bridge = OutputBridge(ctx.event_bus, PIPE_NAME_KERNEL_OUTPUT)
-    output_bridge.start()
-
-    input_bridge = InputBridge(ctx.event_bus, PIPE_NAME_KERNEL_INPUT)
-    input_bridge.start()
-    time.sleep(0.3)
-
-    output_process = subprocess.Popen(
-        [sys.executable, "-m", "adapters.cli.output_main", PIPE_NAME_KERNEL_OUTPUT],
-    )
-    input_process = subprocess.Popen(
-        [sys.executable, "-m", "adapters.cli.input_main", PIPE_NAME_KERNEL_INPUT],
-    )
-
-    try:
-        output_process.wait()
-        input_process.wait()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        output_process.terminate()
-        input_process.terminate()
-        output_process.wait(timeout=3)
-        input_process.wait(timeout=3)
-        output_bridge.stop()
-        input_bridge.stop()
-        with contextlib.suppress(Exception):
-            ctx.conversation.session_reflect()
-        ctx.kernel.shutdown()
 
 
 def _check_environment(config: Config) -> bool:

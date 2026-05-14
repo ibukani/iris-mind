@@ -1,5 +1,6 @@
 """
-Kernel ログ設定 — コンソール + ファイル出力の初期化。
+Kernel ログ設定 — ファイル出力の初期化。
+コンソール出力はアダプター層（CLIなど）の責務。
 
 使用方法:
     from iris.kernel.logging import setup_logging
@@ -16,8 +17,6 @@ from pathlib import Path
 
 from .config import LoggingConfig
 
-_CONSOLE_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-_CONSOLE_DATE = "%H:%M:%S"
 _FILE_FORMAT = "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s"
 _FILE_DATE = "%Y-%m-%d %H:%M:%S"
 
@@ -44,15 +43,9 @@ def _cleanup_old_sessions(log_dir: Path, keep: int) -> None:
 
 
 def setup_logging(cfg: LoggingConfig) -> None:
-    """ルートロガーを構成する（コンソール + ファイル）。"""
+    """ルートロガーを構成する（ファイル出力のみ。コンソール出力はアダプター層で管理）。"""
     root = logging.getLogger()
     root.setLevel(cfg.level.upper())
-
-    # --- コンソールハンドラ ---
-    console = logging.StreamHandler()
-    console.setLevel(cfg.level.upper())
-    console.setFormatter(logging.Formatter(_CONSOLE_FORMAT, datefmt=_CONSOLE_DATE))
-    root.addHandler(console)
 
     # --- ファイルハンドラ ---
     log_dir = Path(cfg.dir)
@@ -74,4 +67,4 @@ def setup_logging(cfg: LoggingConfig) -> None:
     # --- 既存の起動世代クリーンアップ ---
     _cleanup_old_sessions(log_dir, cfg.backup_count)
 
-    logging.info("Logging initialized: console=%s, file=%s", cfg.level, log_path)
+    logging.info("Logging initialized: level=%s, file=%s", cfg.level, log_path)

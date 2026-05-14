@@ -55,6 +55,14 @@ class MemoryUpdateEvent(Event):
 
 
 @dataclass
+class AgentStreamEvent(Event):
+    """LLM 応答のストリーミングトークンイベント。"""
+
+    delta: str
+    done: bool = False
+
+
+@dataclass
 class AgentResponseEvent(Event):
     """会話応答イベント。ConversationService が LLM 応答を発行する。"""
 

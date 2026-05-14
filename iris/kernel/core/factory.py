@@ -58,7 +58,7 @@ class KernelFactory:
         event_bus = EventBus()
         state = AgentStateManager(event_bus=event_bus)
 
-        memory, agents_md, _, persona_profile = KernelFactory._build_memory(config)
+        memory, agents_md, persona_profile = KernelFactory._build_memory(config)
         llm, personality, capability_checker, reflexion, context_mgr = KernelFactory._build_llm(config)
         proactive, kernel = KernelFactory._build_proactive_and_kernel(
             config,
@@ -107,7 +107,7 @@ class KernelFactory:
     @staticmethod
     def _build_memory(
         config: Config,
-    ) -> tuple[MemoryManager, AgentsMdStore, PersonaData, PersonaProfile]:
+    ) -> tuple[MemoryManager, AgentsMdStore, PersonaProfile]:
         """記憶関連コンポーネントを組み立てる。"""
         cfg = config.memory
         episodic = EpisodicStore(
@@ -127,7 +127,7 @@ class KernelFactory:
             path=cfg.agents_md_path,
             max_bytes=cfg.agents_md_max_bytes,
         )
-        return memory, agents_md, persona_data, persona_profile
+        return memory, agents_md, persona_profile
 
     @staticmethod
     def _build_llm(

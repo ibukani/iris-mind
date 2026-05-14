@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-from typing import Any
 
 from rich.console import Console
 from rich.live import Live
@@ -17,21 +16,23 @@ from iris.kernel.event import (
 
 console = Console()
 
+_HANDLERS: dict[str, str] = {
+    "ProactiveSpeechEvent": "on_proactive_speech",
+    "AgentStreamEvent": "on_stream_token",
+    "AgentResponseEvent": "on_agent_response",
+    "AgentAnomalyEvent": "on_anomaly",
+}
+
 
 class Renderer:
     def __init__(self) -> None:
         self._stream_live: Live | None = None
         self._stream_text: str = ""
 
-    def handle(self, event: Any) -> None:
-        if isinstance(event, ProactiveSpeechEvent):
-            self.on_proactive_speech(event)
-        elif isinstance(event, AgentStreamEvent):
-            self.on_stream_token(event)
-        elif isinstance(event, AgentResponseEvent):
-            self.on_agent_response(event)
-        elif isinstance(event, AgentAnomalyEvent):
-            self.on_anomaly(event)
+    def handle(self, event: object) -> None:
+        handler_name = _HANDLERS.get(type(event).__name__)
+        if handler_name is not None:
+            getattr(self, handler_name)(event)
 
     def on_proactive_speech(self, event: ProactiveSpeechEvent) -> None:
         tier_label = "auto" if event.confidence >= 1.0 else "self-judge"

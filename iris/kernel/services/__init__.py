@@ -1,4 +1,4 @@
-from iris.kernel.services.context import ContextManager
+from iris.kernel.services.context import ContextManager, estimate_messages_tokens, estimate_tokens
 from iris.kernel.services.conversation import ConversationService
 from iris.kernel.services.llm_pipeline import LLMPipeline
 from iris.kernel.services.memory_manager import MemoryManager
@@ -17,4 +17,6 @@ __all__ = [
     "Reflexion",
     "ReflexionManager",
     "ToolExecutionEngine",
+    "estimate_messages_tokens",
+    "estimate_tokens",
 ]

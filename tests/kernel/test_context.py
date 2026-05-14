@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from iris.kernel.services import ContextManager
-from iris.kernel.services.context import estimate_messages_tokens, estimate_tokens
+from iris.kernel.services import ContextManager, estimate_messages_tokens, estimate_tokens
 from tests.conftest import FakeLLMProvider
 
 

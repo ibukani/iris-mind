@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from iris.kernel.controller import IrisController
+from iris.kernel.kernel_process import KernelProcess
 
 
 class _FakeConfig:
@@ -24,15 +24,15 @@ class _FakeConfig:
         name = "test"
 
 
-def test_controller_terminate_none_does_not_crash() -> None:
-    IrisController._terminate_proc(None)
+def test_kernel_process_terminate_none_does_not_crash() -> None:
+    KernelProcess._terminate_proc(None)
 
 
-def test_controller_terminate_invalid_proc_does_not_crash() -> None:
+def test_kernel_process_terminate_invalid_proc_does_not_crash() -> None:
     import subprocess
     import sys
 
     proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(10)"])
     proc.kill()
     proc.wait()
-    IrisController._terminate_proc(proc)
+    KernelProcess._terminate_proc(proc)

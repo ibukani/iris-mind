@@ -29,7 +29,7 @@ iris/                             ← アプリケーションコア
 │                                  MemoryManager, ProactiveEngine, AgentKernel,
 │                                  ConversationService, Reflexion, ReflexionManager,
 │                                  ContextManager, LLMPipeline, ToolExecutionEngine,
-│                                  IrisController, KernelFactory, CommandRouter,
+│                                  KernelProcess, KernelFactory, CommandRouter,
 │                                  InputBridge, OutputBridge, ProactiveResponseTracker）
 ├── llm/                          ← LLM通信（LLMBridge, OllamaProvider, OpenRouterProvider）
 ├── memory/                       ← 記憶管理（stores, vector_store, persona）

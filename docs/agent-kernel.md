@@ -3,7 +3,7 @@
 ## 概要
 
 AgentKernel は Iris カーネルの状態管理・イベント統括・Tier3 異常検知を担当する。
-エントリポイントは IrisController が担い、AgentKernel はその一部として動作する。
+エントリポイントは KernelProcess が担い、AgentKernel はその一部として動作する。
 
 ## 責務
 

@@ -18,7 +18,7 @@
 | completed | high | Phase 0: EventBus Protocol 化 + event.py + ipc.py 実装 | |
 | completed | high | Phase 1: Output Process 分離（output_main.py, renderer.py, OutputBridge） | |
 | completed | high | Phase 2: Input Process 分離 + ProactiveResponseTracker移植 + CommandRouter | |
-| completed | high | Phase 3: Controller プロセス導入（IrisController + ヘルスチェック + 自動再起動） | |
+| completed | high | Phase 3: Controller プロセス導入（KernelProcess + ヘルスチェック + 自動再起動） | |
 | pending | low | Phase 4: マルチ入力ソース対応（TCP Input, WebSocket, Discord Bot） | |
 
 ## 凡例

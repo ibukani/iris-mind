@@ -18,7 +18,7 @@ _HEALTH_INTERVAL = 5.0
 _MAX_RESTARTS = 10
 
 
-class IrisController:
+class KernelProcess:
     def __init__(self, config: Config, enable_input: bool = True, enable_output: bool = True) -> None:
         self._config = config
         self._enable_input = enable_input
@@ -33,7 +33,7 @@ class IrisController:
         self._running = False
 
     def launch(self) -> None:
-        logger.info("IrisController: launching Iris")
+        logger.info("KernelProcess: launching Iris")
 
         self._ctx = KernelFactory.build(self._config)
 
@@ -57,20 +57,20 @@ class IrisController:
             )
 
         self._running = True
-        logger.info("IrisController: all processes launched")
+        logger.info("KernelProcess: all processes launched")
 
         try:
             while self._running:
                 time.sleep(_HEALTH_INTERVAL)
                 self._check_health()
         except KeyboardInterrupt:
-            logger.info("IrisController: KeyboardInterrupt received")
+            logger.info("KernelProcess: KeyboardInterrupt received")
         finally:
             self.shutdown()
 
     def shutdown(self) -> None:
         self._running = False
-        logger.info("IrisController: shutting down")
+        logger.info("KernelProcess: shutting down")
 
         self._terminate_proc(self._output_proc)
         self._terminate_proc(self._input_proc)
@@ -86,7 +86,7 @@ class IrisController:
                 ctx.conversation.session_reflect()
             ctx.kernel.shutdown()
 
-        logger.info("IrisController: shutdown complete")
+        logger.info("KernelProcess: shutdown complete")
 
     def _check_health(self) -> None:
         if self._output_proc is not None and self._output_proc.poll() is not None:
@@ -128,4 +128,4 @@ class IrisController:
                 proc.wait(timeout=2)
 
 
-__all__ = ["IrisController"]
+__all__ = ["KernelProcess"]

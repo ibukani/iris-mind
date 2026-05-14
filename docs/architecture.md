@@ -50,7 +50,7 @@ Kernel Process
 │   ├── ReplayableTransport   — デバッグ用記録・再生
 │   ├── InputBridge           — Input Process 接続受付
 │   └── OutputBridge          — Output Process 接続受付
-├── IrisController            — プロセス起動・監視・ライフサイクル管理
+├── KernelProcess             — プロセス起動・監視・ライフサイクル管理
 ├── AgentKernel               — 状態管理・異常検知・イベント統括
 ├── ConversationService       — 会話オーケストレーション
 │   ├── LLMPipeline           — LLM呼び出し＋ツールループ

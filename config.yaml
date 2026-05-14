@@ -8,13 +8,13 @@ memory:
   semantic_path: .iris/data/semantic.jsonl
   vector_db_path: .iris/data/chroma_db
 model:
-  provider: openrouter # "ollama" or "openrouter"
-  base_url: https://openrouter.ai/api/v1 # Ollama: http://localhost:11434, OpenRouter: https://openrouter.ai/api/v1
+  provider: ollama # "ollama" or "openrouter"
+  base_url: http://localhost:11434 # Ollama: http://localhost:11434, OpenRouter: https://openrouter.ai/api/v1
   api_key: ${OPENROUTER_API_KEY} # .env または環境変数で設定
   compaction_threshold: 0.85
   context_window: 8192
   models:
-    - name: deepseek/deepseek-v4-flash:free
+    - name: qwen3.5:9b
       roles: [default]
       max_tokens: 1024
   num_ctx: 8192

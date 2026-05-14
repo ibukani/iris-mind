@@ -18,6 +18,14 @@ PIPE_NAME_KERNEL = PIPE_NAME_KERNEL_OUTPUT  # backward compat
 _EventTransport = Any  # duck-typed: send(event: Event), recv() -> Event
 
 
+def _serialize(event: Event) -> bytes:
+    return _json.dumps(event.to_dict(), ensure_ascii=False).encode("utf-8")
+
+
+def _deserialize(data: bytes) -> Event:
+    return Event.from_dict(_json.loads(data.decode("utf-8")))
+
+
 class PipeServer:
     def __init__(self, address: str = PIPE_NAME_KERNEL) -> None:
         self._listener = _connection.Listener(address, family="AF_PIPE")
@@ -41,11 +49,10 @@ class PipeClient:
         logger.info("PipeClient connected to %s", address)
 
     def send(self, event: Event) -> None:
-        self._conn.send(event.to_dict())
+        self._conn.send_bytes(_serialize(event))
 
     def recv(self) -> Event:
-        data: dict[str, Any] = self._conn.recv()
-        return Event.from_dict(data)
+        return _deserialize(self._conn.recv_bytes())
 
     def close(self) -> None:
         self._conn.close()
@@ -56,11 +63,10 @@ class PipeConnection:
         self._conn = raw
 
     def send(self, event: Event) -> None:
-        self._conn.send(event.to_dict())
+        self._conn.send_bytes(_serialize(event))
 
     def recv(self) -> Event:
-        data: dict[str, Any] = self._conn.recv()
-        return Event.from_dict(data)
+        return _deserialize(self._conn.recv_bytes())
 
     def close(self) -> None:
         self._conn.close()

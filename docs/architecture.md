@@ -2,143 +2,182 @@
 
 ## 1. 全体像
 
-Iris v0.2 は**ヘキサゴナルアーキテクチャ**（Ports & Adapters）と**イベント駆動型設計**を採用した自律型AIアシスタントです。
+Iris v0.3 は**3プロセス分解アーキテクチャ**を採用する。
+Input / Kernel / Output の3プロセスが Windows Named Pipes 経由で通信する。
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                     Adapters                          │
-│  ┌──────────┐  ┌──────────────┐  ┌─────────────────┐ │
-│  │ CLI      │  │ API Server   │  │ GUI Client      │ │
-│  │ adapter  │  │ (FastAPI)    │  │ (将来)          │ │
-│  └────┬─────┘  └──────┬───────┘  └────────┬────────┘ │
-├───────┴────────────────┴───────────────────┴──────────┤
-│               KernelFactory (依存構築)                  │
-│               (composition root)                       │
-├───────────────────────────────────────────────────────┤
-│                  EventBus (インメモリ同期)              │
-├───────────────────────────────────────────────────────┤
-│                   Kernel (ドメイン層)                   │
-│  ┌─────────────────────────────────────────────────┐  │
-│  │  AgentKernel — 状態管理・異常検知・イベント統括  │  │
-│  │  ProactiveEngine — 自発発話＋自律ガバナンス     │  │
-│  │  ConversationService — 会話オーケストレーション │  │
-│  │  Planner — タスク分解                          │  │
-│  │  Executor — サブタスク逐次実行                  │  │
-│  │  Reflexion — 自己反省                          │  │
-│  └─────────────────────────────────────────────────┘  │
-│                                                        │
-│  Ports: (抽象インターフェース)                          │
-│  - EventBus: publish/subscribe                         │
-│  - AgentStateManager: transition/check                 │
-│  - MemoryManager: search/add/get_recent                │
-│  - Personality: build_system_prompt                    │
-│  - ContextManager: check_and_summarize                 │
-│  - Reflexion: reflect/quick_reflect                    │
-│  - ToolExecutionEngine: execute_all                    │
-├───────────────────────────────────────────────────────┤
-│                 Infrastructure (外部サービス)           │
-│  ┌──────────────┐ ┌───────────┐ ┌─────────────────────┐  │
-│  │ Ollama /     │ │ ChromaDB  │ │ JSONL File Store    │  │
-│  │ OpenRouter   │ │           │ │                     │  │
-│  └──────────────┘ └───────────┘ └─────────────────────┘  │
-└───────────────────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│                    Controller Process                      │
+│          (起動・監視・シャットダウン)                       │
+├───────────────────────────────────────────────────────────┤
+│                                                           │
+│  ┌─────────────────┐   Named Pipe    ┌─────────────────┐  │
+│  │  Input Process  │◄──────────────►│  Kernel Process  │  │
+│  │  (CLI, API,     │   \\.\pipe\      │  (EventBus,      │  │
+│  │   Discord...)   │   iris-kernel   │   AgentKernel,   │  │
+│  └─────────────────┘                 │   Conversation,  │  │
+│                                      │   Proactive,     │  │
+│  ┌─────────────────┐                 │   Memory, LLM,   │  │
+│  │  Output Process │◄──────────────►│   Tools)          │  │
+│  │  (CLI, GUI,     │   \\.\pipe\      └─────────────────┘  │
+│  │   Speech...)    │   iris-kernel                       │
+│  └─────────────────┘                                      │
+└───────────────────────────────────────────────────────────┘
 ```
 
-## 2. レイヤードアーキテクチャ
+各プロセスは独立して起動・停止・置換可能。
+Kernel が中心的な状態を持ち、Input / Output は stateless に保つ。
 
-| 層 | 責務 | 依存方向 |
-|---|---|---|
-| **adapters/** | ユーザーとの入出力（CLI, API, GUI）。組み立て済みの KernelContext を受け取り、I/O のみを行う | → iris.kernel |
-| **iris/kernel/factory.py** | 全カーネルコンポーネントの依存構築（composition root）。KernelFactory.build(config) → KernelContext | → iris/kernel, iris/llm, iris/memory, iris/capabilities |
-| **iris/kernel/** | ビジネスロジック全体 | → iris.llm, iris.memory, iris.capabilities |
-| **iris/personality/** | システムプロンプト・人格シミュレーション | → iris.memory |
-| **iris/memory/** | 記憶の永続化・検索・要約 | → 外部DB |
-| **iris/llm/** | LLM Provider通信（Ollama/OpenRouter） | → 各LLM API |
-| **iris/capabilities/** | ツールの実行・動的発見 | → 外部ツール |
-| **iris/commands/** | CLIコマンドの解釈・実行（`/help`, `/sleep`, `/compact` 等） | → iris.kernel |
+## 2. レイヤードアーキテクチャ（v0.2 からの継承）
 
-- **main.py** が composition root として KernelFactory を呼び出し、Adapter に KernelContext を注入する（Adapter はコンストラクタで組み立て済みの KernelContext を受け取るだけ）
+### 依存方向
 
-**依存方向は常に下向きのみ。** 上位層が下位層を直接参照しない。
+```
+adapters/ ──→ iris/kernel/ ──→ iris/llm/, iris/memory/, iris/capabilities/
+```
+
+- v0.2 のヘキサゴナルアーキテクチャを継承
+- v0.3 では `adapters/` がさらに Input / Output の2プロセスに分離される
+- `iris/kernel/` はドメイン層として変化しない
+
+### コンポーネントマップ（Kernel Process 内部）
+
+```
+Kernel Process
+├── EventBus (Protocol)       — イベントルーティング
+│   ├── EventBus (in-memory)  — 単一プロセスモード
+│   ├── PipeServer            — マルチプロセスモード (IPC)
+│   └── ReplayableTransport   — デバッグ用記録・再生
+├── AgentKernel               — 状態管理・異常検知・イベント統括
+├── ConversationService       — 会話オーケストレーション
+│   ├── LLMPipeline           — LLM呼び出し＋ツールループ
+│   └── ReflexionManager      — 自己反省
+├── ProactiveEngine           — 自発発話＋3層ガバナンス
+├── ProactiveResponseTracker  — 自発発話へのユーザー反応評価 (新規)
+├── MemoryManager             — 記憶操作の一元管理
+├── ToolExecutionEngine       — Tool Call実行
+└── CommandHandler            — スラッシュコマンド処理
+```
 
 ## 3. イベント駆動設計
 
-### EventBus
-- **型**: 同期インメモリ（将来はRedis/NATS対応可能）
-- **パターン**: publish/subscribe
-- **イベント種別**: `UserInputEvent`, `ProactiveSpeechEvent`, `TimerTick`, `AgentStateChangeEvent`, `MemoryUpdateEvent`, `AgentResponseEvent`, `AgentAnomalyEvent`
+### EventBus Protocol
+
+```python
+class EventBusProtocol(Protocol):
+    def publish(self, event: Event) -> None: ...
+    def subscribe(self, event_type: str, handler: Callable) -> None: ...
+    def unsubscribe(self, event_type: str, handler: Callable) -> None: ...
+```
+
+### イベント種別
+
+| イベント | 説明 | 送信元 → 送信先 |
+|----------|------|----------------|
+| `UserInputEvent` | ユーザー入力 | Input → Kernel |
+| `ProactiveSpeechEvent` | 自発発話 | Kernel → Output |
+| `TimerTick` | 定期タイマー | Kernel (内部) |
+| `AgentStateChangeEvent` | 状態遷移 | Kernel (内部) |
+| `AgentStreamEvent` | LLMストリーミングトークン | Kernel → Output |
+| `AgentResponseEvent` | LLM最終応答 | Kernel → Output |
+| `AgentAnomalyEvent` | 異常検知 | Kernel → Output |
 
 ### イベントフロー例
 
 ```
-[TimerTick (5秒ごと)]
-    → AgentKernel._on_timer()
-    → ProactiveEngine.check_trigger()
-    → [発話必要] → ProactiveSpeechEvent → 各アダプターに配信
-
 [ユーザー入力]
-    → UserInputEvent
-    → AgentKernel._on_user_input()
-    → ConversationService.process_input()
-    → AgentResponseEvent → 各アダプターに配信
-
-[スラッシュコマンド]
-    → CLIAdapter.run() 内でインターセプト
-    → CommandHandler.handle() で処理
-    → 直接コンソールに応答表示（EventBus は経由しない）
+Input Process:
+  input(">>> ") → PipeClient.send(UserInputEvent)
+    ────────── Pipe ──────────
+Kernel Process:
+  PipeServer.recv() → EventBus.publish(UserInputEvent)
+    → ProactiveResponseTracker._on_user_input()  # 応答評価
+    → AgentKernel._on_user_input()               # 状態遷移 + 記憶
+    → ConversationService._on_user_input()        # LLM処理
+      → EventBus.publish(AgentStreamEvent)        # 逐次
+      → EventBus.publish(AgentResponseEvent)      # 最終
+    → ProactiveEngine.notify_user_activity()      # 抑制更新
+    ────────── Pipe ──────────
+Output Process:
+  PipeClient.recv() → Renderer.on_stream_token()
+    → Rich Live 更新
 ```
 
-## 4. ガバナンスモデル（自律発話）
+## 4. 3層ガバナンス（v0.2 から継承）
 
-### 3層アーキテクチャ
+| Tier | 方式 | 例 |
+|------|------|-----|
+| Tier 1 | ルールベース自動許可 | 挨拶・定型確認 |
+| Tier 2 | LLM自己判断 | 話題提案・気遣い |
+| Tier 3 | AgentKernel介入 | 異常検知・過剰発話抑制 |
 
-```
-┌─────────────────────────────────┐
-│ Tier 1: ルールベース自動許可     │ → 即時発行
-│ 挨拶・定型確認・短い気遣い        │
-├─────────────────────────────────┤
-│ Tier 2: LLM自己判断              │ → 信頼度閾値で自動承認 or 保留
-│ 話題提案・関連する記憶の共有       │
-├─────────────────────────────────┤
-│ Tier 3: AgentKernel介入          │ → 人間確認 or 自動抑制
-│ 異常検知・過剰発話・悪循環防止    │
-└─────────────────────────────────┘
-```
+詳細は `docs/proactive-engine.md` を参照。
 
-## 5. 状態遷移
+## 5. 状態遷移（v0.2 から継承）
 
 `AgentStateManager` が管理する6状態：
-
-- **IDLE** → PROCESSING: ユーザー入力受信
-- **IDLE** → PROACTIVE: TimerTick + トリガースコア > 閾値
-- **IDLE** → SLEEPING: /sleep コマンド or スケジュール
-- **IDLE** → THINKING: thinking_mode + 自動推論
-- **PROCESSING** → IDLE: 応答完了
-- **PROCESSING** → REFLECTING: Quick Reflection条件達成
-- **PROACTIVE** → IDLE: 発話完了
-- **REFLECTING** → IDLE: 反省完了
-- **THINKING** → IDLE: 推論完了
-- **SLEEPING** → IDLE: cooldown終了 or /wakeup
+IDLE / PROCESSING / PROACTIVE / REFLECTING / THINKING / SLEEPING
 
 詳細は `docs/agent-state.md` を参照。
 
-## 6. 記憶システム
+## 6. 記憶システム（v0.2 から継承）
 
-### 3種の記憶
+| 記憶種別 | 技術 | 上限 |
+|----------|------|------|
+| EpisodicStore | JSONL | 30エントリ |
+| SemanticStore | ChromaDB + BM25 | 100エントリ |
+| PersonaProfile | JSON | 動的 |
 
-| 記憶種別 | 技術 | 上限 | 用途 |
-|---|---|---|---|
-| EpisodicStore | JSONL | 30エントリ | セッション記録、直近のやり取り |
-| SemanticStore | ChromaDB + BM25 | 100エントリ | 教訓・ユーザーの好み・長期記憶 |
-| PersonaProfile | JSON | 動的 | ペルソナ特性・話し方の動的変化 |
+詳細は `docs/memory-manager.md` を参照。
 
-### 記憶更新フロー
+## 7. フォルダ構成（v0.3 目標）
+
 ```
-ユーザー反応 → EpisodicStore 即時記録
-             ↓ (5回ごと)
-         Reflexion.quick_reflect()
-             ↓
-         SemanticStore 更新（教訓・好み）
-             ↓ (セッション終了時)
-         Reflexion.reflect() → EpisodicStore + SemanticStore
+my-iris/
+├── .iris/                       # 設定・データファイル（不変）
+├── adapters/
+│   ├── __init__.py
+│   ├── cli/
+│   │   ├── __init__.py
+│   │   ├── input_main.py        # Input Process (新規)
+│   │   ├── output_main.py       # Output Process (新規)
+│   │   └── renderer.py          # 表示ロジック (新規)
+│   ├── api/                     # 将来: WebSocket/HTTP Input
+│   └── gui/                     # 将来: GUI Output
+├── iris/
+│   ├── kernel/
+│   │   ├── __init__.py
+│   │   ├── agent_kernel.py
+│   │   ├── agent_state.py
+│   │   ├── config.py
+│   │   ├── context.py
+│   │   ├── controller.py        # 新規: プロセス管理
+│   │   ├── conversation.py
+│   │   ├── event.py             # 新規: イベントクラス群
+│   │   ├── event_bus.py         # EventBusProtocol + EventBus
+│   │   ├── factory.py
+│   │   ├── ipc.py               # 新規: PipeServer / PipeClient
+│   │   ├── ipc_output.py        # 新規: OutputBridge
+│   │   ├── ipc_input.py         # 新規: InputBridge
+│   │   ├── memory_manager.py
+│   │   ├── proactive.py
+│   │   ├── proactive_response_tracker.py  # 新規
+│   │   ├── reflexion.py
+│   │   ├── reflexion_manager.py
+│   │   └── tool_executor.py
+│   ├── llm/
+│   ├── memory/
+│   ├── capabilities/
+│   ├── commands/
+│   └── personality/
+├── docs/
+│   ├── README.md
+│   ├── adr/
+│   │   └── 001-3-process-architecture.md  # 新規
+│   ├── architecture.md           # 本書
+│   ├── ipc-spec.md               # 新規
+│   ├── migration-roadmap.md      # 新規
+│   └── ... (既存の各設計書)
+├── main.py
+└── config.yaml
 ```

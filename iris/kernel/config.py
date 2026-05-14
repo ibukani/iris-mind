@@ -1,5 +1,5 @@
 """
-Iris v0.2 設定
+Iris v0.3 設定
 
 Pydantic モデルで config.yaml をバリデーションする。
 """

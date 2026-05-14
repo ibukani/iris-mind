@@ -53,15 +53,16 @@ class OpenRouterProvider:
 
             retry_after = _parse_retry_after(resp, attempt)
             logger.warning(
-                "OpenRouter 429 (attempt %d/%d): waiting %.1fs",
+                "OpenRouter 429 (attempt %d/%d): waiting %.1fs, error=%s",
                 attempt + 1,
                 self._max_retries,
                 retry_after,
+                _extract_error_text(resp),
             )
             time.sleep(retry_after)
 
-        resp.raise_for_status()
-        return resp  # unreachable
+        error_msg = _extract_error_text(resp)
+        raise RuntimeError(f"OpenRouter API エラー (429 リトライ超過 {self._max_retries}回): {error_msg}")
 
     def chat(
         self,
@@ -101,12 +102,9 @@ class OpenRouterProvider:
             data = resp.json()
             return _normalize_response(data)
         except httpx.HTTPStatusError as e:
-            if e.response.status_code == 429:
-                raise RuntimeError(
-                    "OpenRouterのAPI制限（429）に達しました。しばらく待ってから再試行するか、"
-                    "OpenRouterのアカウントにチャージしてください。"
-                ) from e
-            raise RuntimeError(f"OpenRouter API エラー ({e.response.status_code})") from e
+            code = e.response.status_code
+            msg = _extract_error_text(e.response)
+            raise RuntimeError(f"OpenRouter API エラー ({code}): {msg}") from e
 
     def _stream_chat(
         self,
@@ -127,15 +125,19 @@ class OpenRouterProvider:
                 if stream.status_code == 429:
                     retry_after = _parse_retry_after(stream, attempt)
                     logger.warning(
-                        "OpenRouter 429 stream (attempt %d/%d): waiting %.1fs",
+                        "OpenRouter 429 stream (attempt %d/%d): waiting %.1fs, error=%s",
                         attempt + 1,
                         self._max_retries,
                         retry_after,
+                        _extract_error_text(stream),
                     )
                     time.sleep(retry_after)
                     continue
 
-                stream.raise_for_status()
+                if stream.status_code != 200:
+                    error_msg = _extract_error_text(stream)
+                    raise RuntimeError(f"OpenRouter API エラー ({stream.status_code}): {error_msg}")
+
                 for line in stream.iter_lines():
                     if not line or not line.startswith("data: "):
                         continue
@@ -229,6 +231,19 @@ class OpenRouterProvider:
         if not ok:
             print("一部のモデルが見つかりませんが、起動を続行します。", file=sys.stderr)
         return True
+
+
+def _extract_error_text(resp: httpx.Response) -> str:
+    """OpenRouter のエラーレスポンスボディからメッセージを抽出する。"""
+    try:
+        body = resp.json()
+        error = body.get("error", {})
+        if isinstance(error, dict):
+            return error.get("message", str(body))
+        return str(error)
+    except Exception:
+        text = resp.text
+        return text[:500] if text else f"HTTP {resp.status_code}"
 
 
 def _normalize_response(data: dict) -> dict:

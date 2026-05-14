@@ -1,8 +1,5 @@
 """
-Iris v0.2 — メインパッケージ（新規実装分のみ）
-
-移行期間中は旧 core/ / memory/ / capabilities/ がそのまま機能する。
-iris/ 配下は段階的に実装を移す。
+Iris v0.3 — 3-Process アーキテクチャ (Input / Kernel / Output)
 """
 
 from iris.kernel.agent_state import AgentStateManager

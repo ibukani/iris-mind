@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
-"""Iris - 自律的に行動し進化できるAI (v0.2)"""
+"""Iris Kernel — 3-Process アーキテクチャの中核プロセス。
+
+起動方法:
+    python main.py
+
+Input / Output アダプターは別プロセスとして起動し、Named Pipe 経由で接続する。
+"""
 
 import os
 from pathlib import Path
 
-from adapters.cli.server import CLIAdapter
 from iris.kernel.config import Config
-from iris.kernel.factory import KernelFactory
+from iris.kernel.controller import IrisController
 
 os.environ.setdefault("OLLAMA_GPU_LAYERS", "99")
 
 
 def run() -> None:
-    """アプリケーションのエントリーポイント。"""
     project_root = Path(__file__).parent
     config = Config.load(str(project_root / "config.yaml"))
 
@@ -23,12 +27,10 @@ def run() -> None:
     if not _check_environment(config):
         return
 
-    ctx = KernelFactory.build(config)
-    CLIAdapter(ctx).run()
+    IrisController(config).launch()
 
 
 def _check_environment(config: Config) -> bool:
-    """LLMプロバイダの環境を確認する。"""
     from rich.console import Console
 
     console = Console()

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import Any
 
 from .config import ModelConfig
@@ -59,7 +60,12 @@ class LLMPipeline:
             return None
         return self._tool_executor.registry.list_tools() or None
 
-    def call(self, messages: list[dict], tools: list[dict] | None = None) -> dict:
+    def call(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+        on_token: Callable[[str], None] | None = None,
+    ) -> dict:
         """システムプロンプトを構築しLLMを呼び出す。"""
         system_prompt = self._build_system_prompt()
 
@@ -75,9 +81,14 @@ class LLMPipeline:
             model=self._model_config.get_model("default"),
             temperature=self._model_config.temperature,
             tools=tools,
+            on_token=on_token,
         )
 
-    def iterate_with_tools(self, messages: list[dict]) -> str:
+    def iterate_with_tools(
+        self,
+        messages: list[dict],
+        on_token: Callable[[str], None] | None = None,
+    ) -> str:
         """Tool Call 対応の LLM 呼び出しループ。最終的なテキスト応答を返す。"""
         tools = self._get_tools()
         if tools and self._capability_checker and not self._capability_checker.supports_tools("default"):
@@ -88,7 +99,7 @@ class LLMPipeline:
 
         while iteration < self._max_tool_iterations:
             iteration += 1
-            resp = self.call(messages, tools=tools)
+            resp = self.call(messages, tools=tools, on_token=on_token)
             msg = resp.get("message", {})
 
             if msg.get("tool_calls") and self._tool_executor is not None:

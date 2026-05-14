@@ -11,7 +11,7 @@ import logging
 from datetime import datetime
 
 from .context import ContextManager
-from .event_bus import AgentResponseEvent, EventBus, UserInputEvent
+from .event_bus import AgentResponseEvent, AgentStreamEvent, EventBus, UserInputEvent
 from .llm_pipeline import LLMPipeline
 from .reflexion_manager import ReflexionManager
 
@@ -50,17 +50,47 @@ class ConversationService:
     # ── イベントハンドラ ──────────────────────────────────
 
     def _on_user_input(self, event: UserInputEvent) -> None:
-        """ユーザー入力イベントを処理する。"""
+        """ユーザー入力イベントを処理する。（ストリーミング対応）
+        コマンド（/ で始まる入力）は CommandRouter が処理するためスキップする。"""
+        if event.content.startswith("/"):
+            return
         self._messages.append({"role": "user", "content": event.content})
 
+        # Thinking 開始通知
+        self._event_bus.publish(
+            AgentStreamEvent(
+                timestamp=datetime.now(),
+                source="assistant",
+                delta="",
+            )
+        )
+
         try:
-            response_text = self._llm_pipeline.iterate_with_tools(self._messages)
+            response_text = self._llm_pipeline.iterate_with_tools(
+                self._messages,
+                on_token=lambda delta: self._event_bus.publish(
+                    AgentStreamEvent(
+                        timestamp=datetime.now(),
+                        source="assistant",
+                        delta=delta,
+                    )
+                ),
+            )
         except Exception as e:
             response_text = f"[Error: {e}]"
             logger.exception("LLM call failed")
 
         self._messages.append({"role": "assistant", "content": response_text})
 
+        # ストリーム完了通知
+        self._event_bus.publish(
+            AgentStreamEvent(
+                timestamp=datetime.now(),
+                source="assistant",
+                delta="",
+                done=True,
+            )
+        )
         self._event_bus.publish(
             AgentResponseEvent(
                 timestamp=datetime.now(),
@@ -80,7 +110,8 @@ class ConversationService:
         if self._reflexion_manager is None:
             return
         self._msg_count_since_reflect = self._reflexion_manager.maybe_run(
-            self._messages, self._msg_count_since_reflect,
+            self._messages,
+            self._msg_count_since_reflect,
         )
 
     def session_reflect(self) -> None:

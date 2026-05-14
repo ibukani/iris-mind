@@ -37,6 +37,7 @@ iris/                             ← アプリケーションコア
 └── __init__.py
 
 docs/                             ← 設計ドキュメント
+├── adr/                          ← Architecture Decision Records（新規）
 .agents/                          ← コーディングエージェント用コンテキスト
 config.yaml                       ← Irisの設定ファイル
 main.py                           ← エントリーポイント
@@ -50,6 +51,12 @@ adapters/          ──→ iris/kernel/   ──→ iris/llm/, iris/memory/, i
 ```
 - `adapters/` は `iris/` に依存するが、逆方向の依存はディレクトリ構造で物理禁止
 - `iris/kernel/` は純粋なビジネスロジックに閉じ、外部サービスは kernel 外から注入
+
+## v0.3 アーキテクチャ (目標)
+
+Input / Kernel / Output の3プロセスに分解。IPCはWindows Named Pipes（`AF_PIPE`）。
+詳細は `docs/adr/001-3-process-architecture.md` および `docs/architecture.md` を参照。
+移行計画は `docs/migration-roadmap.md` を参照。
 
 ## Iris の記憶体系
 - `.iris/data/iris_profile.md`: Irisの構造記憶（自己認識用、上限2KB固定）※話し方・性格は含まず、別JSONで動的管理
@@ -69,6 +76,7 @@ adapters/          ──→ iris/kernel/   ──→ iris/llm/, iris/memory/, i
 ## ドキュメント更新
 機能変更時のドキュメント更新手順は `.agents/skills/doc-sync/SKILL.md` を参照（`skill` ツールでロード可能）
 - 設計ドキュメント (`docs/*.md`)
+- Architecture Decision Records (`docs/adr/*.md`)
 - 構造記憶 (`.iris/data/iris_profile.md`)
 - プロジェクトルール (`AGENTS.md`)
 - エージェントコンテキスト (`.agents/*.md`)

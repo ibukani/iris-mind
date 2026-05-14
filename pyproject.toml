@@ -9,6 +9,8 @@ description = "Autonomous AI assistant that learns and evolves"
 requires-python = ">=3.13"
 dependencies = [
     "ollama>=0.6",
+    "httpx>=0.28",
+    "python-dotenv>=1.1",
     "pydantic>=2",
     "pyyaml>=6",
     "rich>=13",
@@ -54,6 +56,7 @@ check_untyped_defs = true
 [[tool.mypy.overrides]]
 module = [
   "iris.llm.llm_bridge",
+  "iris.llm.ollama_provider",
   "iris.memory.vector_store",
 ]
 ignore_errors = true

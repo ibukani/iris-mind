@@ -6,10 +6,33 @@ Pydantic モデルで config.yaml をバリデーションする。
 
 from __future__ import annotations
 
+import os
+import re
 from pathlib import Path
 
 import yaml
+from dotenv import load_dotenv
 from pydantic import BaseModel
+
+# ── ユーティリティ ────────────────────────────────────────
+
+_ENV_REF_RE = re.compile(r"\$\{([^}]+)\}")
+
+
+def _resolve_env_refs(raw: object) -> object:
+    """設定値中の ${VAR_NAME} を環境変数で置換する（文字列のみ対象）。"""
+    if isinstance(raw, str):
+
+        def _replace(m: re.Match[str]) -> str:
+            return os.environ.get(m.group(1), m.group(0))
+
+        return _ENV_REF_RE.sub(_replace, raw)
+    if isinstance(raw, dict):
+        return {k: _resolve_env_refs(v) for k, v in raw.items()}
+    if isinstance(raw, list):
+        return [_resolve_env_refs(v) for v in raw]
+    return raw
+
 
 # ── モデル定義 ────────────────────────────────────────────
 
@@ -33,7 +56,9 @@ class ModelConfig(BaseModel):
         ModelEntry(name="qwen3.5:9b", role="smart", max_tokens=1024),
     ]
     escalation: EscalationConfig = EscalationConfig()
+    provider: str = "ollama"
     base_url: str = "http://localhost:11434"
+    api_key: str = ""
     temperature: float = 0.7
     num_gpu: int = 0
     num_ctx: int = 8192
@@ -109,9 +134,11 @@ class Config(BaseModel):
 
     @classmethod
     def load(cls, path: str = "config.yaml") -> Config:
+        load_dotenv()
         p = Path(path)
         if p.exists():
             raw = yaml.safe_load(p.read_text(encoding="utf-8"))
+            raw = _resolve_env_refs(raw)
             return cls.model_validate(raw)
         return cls()
 

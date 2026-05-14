@@ -16,3 +16,6 @@ build/
 chroma_test/
 *tmp_chroma/
 tmp_chroma_test/
+
+# Environment variables (API keys etc.)
+.env

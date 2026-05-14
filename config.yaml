@@ -8,7 +8,9 @@ memory:
   semantic_path: .iris/data/semantic.jsonl
   vector_db_path: .iris/data/chroma_db
 model:
-  base_url: http://localhost:11434
+  provider: openrouter # "ollama" or "openrouter"
+  base_url: https://openrouter.ai/api/v1 # Ollama: http://localhost:11434, OpenRouter: https://openrouter.ai/api/v1
+  api_key: ${OPENROUTER_API_KEY} # .env または環境変数で設定
   compaction_threshold: 0.85
   context_window: 4000
   escalation:
@@ -17,12 +19,12 @@ model:
     max_retries: 1
     swap_on_escalate: true
   models:
-  - max_tokens: 512
-    name: qwen3.5:2b
-    role: base
-  - max_tokens: 1024
-    name: qwen3.5:9b
-    role: smart
+    - max_tokens: 512
+      name: google/gemma-4-26b-a4b-it:free
+      role: base
+    - max_tokens: 1024
+      name: google/gemma-4-26b-a4b-it:free
+      role: smart
   num_ctx: 8192
   num_gpu: 99
   temperature: 0.7
@@ -33,18 +35,18 @@ personality:
   prompt_file: .iris/config/personality_default.md
 # ===== 新規: 自律的会話設定 =====
 proactive:
-  enabled: false                  # デフォルトOFF（安全第一）
-  check_interval_sec: 5.0         # トリガー確認間隔（秒）
-  min_interval_sec: 30.0          # 最短発話間隔（秒）
-  max_interval_sec: 300.0         # 最大発話間隔（秒）
-  tier1_auto_approve: true        # Tier1（挨拶等）は自動許可
+  enabled: false # デフォルトOFF（安全第一）
+  check_interval_sec: 5.0 # トリガー確認間隔（秒）
+  min_interval_sec: 30.0 # 最短発話間隔（秒）
+  max_interval_sec: 300.0 # 最大発話間隔（秒）
+  tier1_auto_approve: true # Tier1（挨拶等）は自動許可
   tier2_confidence_threshold: 0.75 # Tier2の自動承認閾値
-  tier2_cooldown_sec: 60.0        # Tier2承認待ちタイムアウト（秒）
-  max_proactive_tokens: 256       # 自発発話の最大文字数目安
-  user_cooldown_on_ignore: 300.0  # 無視された後のクールダウン（秒）
+  tier2_cooldown_sec: 60.0 # Tier2承認待ちタイムアウト（秒）
+  max_proactive_tokens: 256 # 自発発話の最大文字数目安
+  user_cooldown_on_ignore: 300.0 # 無視された後のクールダウン（秒）
   trigger_weights:
-    time: 0.25                    # 時間経過の重み
-    memory: 0.45                  # 記憶想起の重み
-    context: 0.15                 # 文脈変化の重み
-    mood: 0.15                    # ユーザー感情の重み
-  speak_threshold: 0.60           # 発話スコア閾値
+    time: 0.25 # 時間経過の重み
+    memory: 0.45 # 記憶想起の重み
+    context: 0.15 # 文脈変化の重み
+    mood: 0.15 # ユーザー感情の重み
+  speak_threshold: 0.60 # 発話スコア閾値

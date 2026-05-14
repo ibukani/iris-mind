@@ -19,9 +19,11 @@ Config
 | フィールド | 型 | デフォルト | 説明 |
 |-----------|-----|-----------|------|
 | models | list[ModelEntry] | qwen3.5:2b (base), qwen3.5:9b (smart) | 使用モデル一覧 |
-| base_url | str | "http://localhost:11434" | Ollama API URL |
+| provider | str | "ollama" | プロバイダ種別（"ollama" or "openrouter"） |
+| base_url | str | "http://localhost:11434" | API URL（Ollama or OpenRouter） |
+| api_key | str | "" | OpenRouter APIキー（${VAR_NAME}形式対応） |
 | temperature | float | 0.7 | LLM生成温度 |
-| num_gpu | int | 0 | GPUレイヤー数（0=CPU） |
+| num_gpu | int | 0 | GPUレイヤー数（0=CPU、Ollamaのみ） |
 | num_ctx | int | 8192 | コンテキスト長 |
 | context_window | int | 0 | 会話ウィンドウサイズ（0=無制限） |
 | compaction_threshold | float | 0.85 | 要約発動閾値（比率） |
@@ -30,7 +32,7 @@ Config
 
 | フィールド | 型 | デフォルト | 説明 |
 |-----------|-----|-----------|------|
-| name | str | — | モデル名（Ollamaタグ形式） |
+| name | str | — | モデル名（Ollamaタグ形式 or OpenRouterモデルスラッグ） |
 | role | str | "base" | "base" または "smart" |
 | max_tokens | int | 512 | 最大出力トークン数 |
 
@@ -93,6 +95,9 @@ trigger_weights:
 
 ```yaml
 model:
+  provider: ollama                    # "ollama" or "openrouter"
+  base_url: http://localhost:11434    # Ollama: localhost:11434 / OpenRouter: https://openrouter.ai/api/v1
+  api_key: "${OPENROUTER_API_KEY}"    # OpenRouter利用時のみ
   models:
     - name: qwen3.5:2b
       role: base
@@ -100,7 +105,6 @@ model:
     - name: qwen3.5:9b
       role: smart
       max_tokens: 1024
-  base_url: http://localhost:11434
   temperature: 0.7
 
 proactive:

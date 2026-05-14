@@ -31,7 +31,7 @@ from iris.kernel.memory_manager import MemoryManager
 from iris.kernel.proactive import ProactiveEngine
 from iris.kernel.reflexion import Reflexion
 from iris.kernel.tool_executor import ToolExecutionEngine
-from iris.llm.llm_bridge import LLMBridge
+from iris.llm.llm_bridge import LLMBridge, create_provider
 from iris.memory.persona_data import PersonaData
 from iris.memory.persona_profile import PersonaProfile
 from iris.memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
@@ -108,12 +108,15 @@ class CLIAdapter:
         self._kernel.startup()
 
         # 会話サービス（カーネルの後に購読 → ハンドラ実行順を保証）
-        self._llm = LLMBridge(
-            model_name=self._config.model.base_model,
+        provider = create_provider(
+            provider_type=self._config.model.provider,
             base_url=self._config.model.base_url,
+            api_key=self._config.model.api_key,
+            default_model=self._config.model.base_model,
             num_gpu=self._config.model.num_gpu,
             num_ctx=self._config.model.num_ctx,
         )
+        self._llm = LLMBridge(provider=provider)
         self._personality = Personality(name=self._config.personality.name)
         self._reflexion = Reflexion(llm=self._llm)
         self._context_mgr = ContextManager(
@@ -184,7 +187,12 @@ class CLIAdapter:
 
     def shutdown(self) -> None:
         """カーネルを停止し、セッション反省を実行する。"""
-        self._conversation.session_reflect()
+        try:
+            self._conversation.session_reflect()
+        except (KeyboardInterrupt, SystemExit):
+            logger.warning("Session reflect interrupted by user")
+        except Exception:
+            logger.exception("Session reflect failed")
         self._kernel.shutdown()
         console.print("[dim]Shutdown complete.[/dim]")
 

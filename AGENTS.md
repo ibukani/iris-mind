@@ -1,7 +1,7 @@
 # Iris プロジェクトルール（コーディングエージェント向け）
 
 ## プロジェクト概要
-Iris は自律的に行動・進化できるAIアシスタント。Python製でOllama上で動作する。baseモデル（デフォルト: qwen3.5:2b）が大部分のタスクを処理し、複雑なタスクのみsmartモデル（デフォルト: qwen3.5:9b）にエスカレーションする2層構成。
+Iris は自律的に行動・進化できるAIアシスタント。Python製でOllamaまたはOpenRouter上で動作する。baseモデル（デフォルト: qwen3.5:2b）が大部分のタスクを処理し、複雑なタスクのみsmartモデル（デフォルト: qwen3.5:9b）にエスカレーションする2層構成。
 
 ## 重要な用語の区別
 - **Iris** → このプロジェクトで製作中のAI（作る対象）
@@ -29,7 +29,7 @@ iris/                             ← アプリケーションコア
 │                                  MemoryManager, ProactiveEngine, AgentKernel,
 │                                  ConversationService, Reflexion, ContextManager,
 │                                  ToolExecutionEngine）
-├── llm/                          ← Ollama通信（LLMBridge）
+├── llm/                          ← LLM通信（LLMBridge, OllamaProvider, OpenRouterProvider）
 ├── memory/                       ← 記憶管理（stores, vector_store, persona）
 ├── capabilities/                 ← ツール実行（registry + 8 tools）
 ├── commands/                     ← コマンド処理（未実装）
@@ -99,6 +99,7 @@ mypy --install-types                  # 型スタブ初回インストール
 - `tool/complex` は大モデル、それ以外は小モデルを使用
 - mode が deep/stepwise の場合は常に大モデルを使用（auto は複雑性判定に従う）
 - 小モデルにはツール定義を渡さない（ツール呼び出し不可のため）
+- `config.yaml` の `model.provider` で Ollama / OpenRouter を切り替え可能
 - 会話履歴は `context_window`（トークン数）を超えた場合、`compaction_threshold` に基づき自動要約（ContextManager）
 - 要約は `## 会話の経緯` としてシステムプロンプトに注入。`/compact` コマンドで手動トリガー可能
 - 要約時は `fast_model` を使用（コンパクション専用LLM呼び出しを高速化）
@@ -111,7 +112,7 @@ mypy --install-types                  # 型スタブ初回インストール
 - コード変更とドキュメント更新は同一コミットに含める（不整合防止）
 
 ## 技術スタック
-- Python 3.13+, ollama, pydantic, pyyaml, rich, prompt_toolkit
+- Python 3.13+, ollama, httpx, pydantic, pyyaml, rich, prompt_toolkit
 - ChromaDB + ONNX（ベクトル検索）
 - OS: Windows 11, GPU: RTX 4070 SUPER (12GB VRAM)
-- 使用モデル: Qwen3.5:9b（デフォルト）、Ollama経由
+- 使用モデル: Qwen3.5:9b（デフォルト、Ollama/OpenRouter経由）

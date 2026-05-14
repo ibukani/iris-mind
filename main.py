@@ -8,6 +8,8 @@ import sys
 import time
 from pathlib import Path
 
+import httpx
+
 from iris.kernel.config import Config
 
 os.environ.setdefault("OLLAMA_GPU_LAYERS", "99")
@@ -92,6 +94,36 @@ def _ensure_config_models(config: Config) -> bool:
     return all(_ensure_model_pulled(name) for name in config.model.model_names)
 
 
+def _ensure_openrouter_models(config: Config) -> bool:
+    """OpenRouter に接続し、設定されたモデルが利用可能か確認する。"""
+    base_url = config.model.base_url.rstrip("/")
+    headers = {
+        "Authorization": f"Bearer {config.model.api_key}",
+        "Content-Type": "application/json",
+    }
+    try:
+        resp = httpx.get(f"{base_url}/models", headers=headers, timeout=10.0)
+        resp.raise_for_status()
+        data = resp.json()
+        remote_ids = {m["id"] for m in data.get("data", [])}
+    except Exception as e:
+        print(f"OpenRouter への接続に失敗しました: {e}", file=sys.stderr)
+        return False
+
+    ok = True
+    for m in config.model.models:
+        if m.name not in remote_ids:
+            print(
+                f"  警告: モデル '{m.name}' が OpenRouter のモデル一覧に見つかりません。"
+                f" モデル名を確認してください。",
+                file=sys.stderr,
+            )
+            ok = False
+    if not ok:
+        print("一部のモデルが見つかりませんが、起動を続行します。", file=sys.stderr)
+    return True
+
+
 def run():
     """アプリケーションのエントリーポイント。"""
     project_root = Path(__file__).parent
@@ -99,11 +131,19 @@ def run():
 
     config = Config.load(str(config_path))
 
-    _restart_ollama()
-
-    if not _ensure_config_models(config):
-        print("必要なモデルが利用できません。プログラムを終了します。", file=sys.stderr)
-        sys.exit(1)
+    if config.model.provider == "ollama":
+        _restart_ollama()
+        if not _ensure_config_models(config):
+            print("必要なモデルが利用できません。プログラムを終了します。", file=sys.stderr)
+            sys.exit(1)
+    else:
+        if not config.model.api_key or config.model.api_key.startswith("${"):
+            print(
+                "APIキーが設定されていません。config.yaml の model.api_key を確認してください。",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        _ensure_openrouter_models(config)
 
     from adapters.cli.server import main as cli_main
 

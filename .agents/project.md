@@ -3,7 +3,7 @@
 ## コンセプト
 自律的に行動・進化できるAIアシスタント「Iris」の開発。
 Neuro-samaにインスパイアされた、知的で親しみやすいキャラクター。
-ローカルLLM（Ollama + Qwen3.5）上で動作し、Reflexionループによる自己改善と
+ローカルLLM（Ollama + Qwen3.5）またはOpenRouter上で動作し、Reflexionループによる自己改善と
 Capability Registryによる動的機能拡張を特徴とする。
 
 ## バージョン目標
@@ -24,7 +24,7 @@ iris/kernel/         (ビジネスロジック — UI非依存)
 ├── context          (会話履歴compaction)
 └── tool_executor    (Tool Call実行)
     ↕
-iris/llm/            (外部サービス通信 — Ollama)
+iris/llm/            (外部サービス通信 — Ollama / OpenRouter)
 iris/memory/         (記憶管理 — Episodic/Semantic/Persona)
 iris/capabilities/   (機能拡張 — file_ops/code_exec/self_mod)
 iris/personality/    (システムプロンプト管理)
@@ -94,7 +94,10 @@ my-iris/
 │   │   └── persona_profile.py
 │   ├── llm/
 │   │   ├── __init__.py
-│   │   └── llm_bridge.py
+│   │   ├── llm_bridge.py
+│   │   ├── provider.py
+│   │   ├── ollama_provider.py
+│   │   └── openrouter_provider.py
 │   ├── capabilities/
 │   │   ├── __init__.py
 │   │   ├── registry.py

@@ -22,10 +22,12 @@
 | 2026-05-14 | Reflexion 組み込み（会話Nターンごとに自動学習） |
 | 2026-05-14 | ContextManager 移植（会話履歴 compaction） |
 | 2026-05-14 | core/ 完全削除 + capabilities/iris/memory → iris/ に完全移植 |
+| 2026-05-14 | OpenRouter対応: Provider Protocol導入、OllamaProvider/OllamaProvider抽出、OpenRouterProvider新規実装 |
 
 ## 既知の課題・注意点
 
-- Ollama が動作していないと Iris は起動しない（`main.py:_ensure_config_models`）
+- Ollama が動作していないと Iris は起動しない（`main.py:_ensure_config_models`、OpenRouter利用時はスキップ）
 - ChromaDB の ONNX 埋め込みは初回実行時にモデルを自動DLする（~80MB）
 - `.iris/data/iris_profile.md` は上限2KBの構造記憶のみ（話し方・性格は `persona_data.json` で動的管理）
 - Windows環境を前提としている（パス区切り文字、シェル実行等）
+- OpenRouter利用時は `config.yaml` の `model.api_key` にAPIキーを設定する（`${ENV_VAR}`形式で環境変数参照可能）

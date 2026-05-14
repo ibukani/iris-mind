@@ -227,7 +227,7 @@ class ConversationService:
             if msg.get("tool_calls") and self._tool_executor is not None:
                 self._messages.append(msg)
                 self._tool_executor.execute_all(self._messages)
-                for m in self._messages[-len(msg["tool_calls"]):]:
+                for m in self._messages[-len(msg["tool_calls"]) :]:
                     if m["role"] == "tool" and len(m.get("content", "")) > 200:
                         m["content"] = m["content"][:200] + "..."
                 continue

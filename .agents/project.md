@@ -12,7 +12,7 @@ Capability Registryによる動的機能拡張を特徴とする。
 - v0.3.0: 3-Process分解（Input / Kernel / Output）+ マルチ入力対応（**進行中**）
 
 ## 現在のブランチ
-- `feature/3-process-architecture`
+- `main`
 
 ## アーキテクチャ (v0.3目標)
 
@@ -33,7 +33,8 @@ Kernel が中心的な状態を持ち、Input / Output は stateless。
 
 ### 依存方向 (v0.2から継続)
 ```
-adapters → iris/kernel → iris/llm / iris/memory / iris/capabilities
+debug_tools/ → iris/kernel → iris/llm / iris/memory / iris/capabilities
+(UI層)         (ドメイン層)     (インフラ層)
 ```
 
 ### ガバナンスモデル（自律発話, v0.2から継続）
@@ -48,7 +49,7 @@ adapters → iris/kernel → iris/llm / iris/memory / iris/capabilities
 - Architecture Decision Records を `docs/adr/` に保存
 - 決定内容は `.agents/context.md` にも追跡
 
-## フォルダ構成 (v0.3目標)
+## フォルダ構成 (v0.3現在)
 
 ```
 iris-kernel/
@@ -66,7 +67,7 @@ iris-kernel/
 │   │   ├── agent_state.py
 │   │   ├── config.py
 │   │   ├── context.py
-│   │   ├── controller.py        # IrisController
+│   │   ├── kernel_process.py    # KernelProcess
 │   │   ├── conversation.py
 │   │   ├── event.py             # イベントクラス群
 │   │   ├── event_bus.py         # EventBusProtocol + EventBus

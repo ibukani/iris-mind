@@ -5,8 +5,8 @@
 ## プロジェクト状態
 
 - 最新の安定動作バージョン: v0.2.0（移行完了）
-- 開発フェーズ: v0.3.0 設計・文書化
-- 現在のブランチ: `feature/3-process-architecture`
+- 開発フェーズ: v0.3.0 Phase 0-3 実装完了、Phase 4 未着手
+- 現在のブランチ: `main`
 
 ## 重要な決定事項
 
@@ -42,11 +42,11 @@
 - シリアライズは JSON（`ipc.py:_serialize()` / `_deserialize()`）
 
 ### 移行 Phase
-1. Phase 0: EventBus Protocol 化 + イベントシリアライズ（trace_id 追加）
-2. Phase 1: Output Process 分離（最も独立しやすい）
-3. Phase 2: Input Process 分離 + Proactive応答追跡のKernel移動
-4. Phase 3: Controller プロセス導入（ライフサイクル管理）
-5. Phase 4: マルチ入力ソース対応
+1. Phase 0: EventBus Protocol 化 + イベントシリアライズ（trace_id 追加）✅ 完了
+2. Phase 1: Output Process 分離（最も独立しやすい）✅ 完了
+3. Phase 2: Input Process 分離 + Proactive応答追跡のKernel移動 ✅ 完了
+4. Phase 3: Controller プロセス導入（ライフサイクル管理）✅ 完了
+5. Phase 4: マルチ入力ソース対応 ⏳ 未着手
 
 ### Proactive 応答追跡
 - `CLIAdapter._check_proactive_response()` を `ProactiveResponseTracker` として Kernel 内に再実装

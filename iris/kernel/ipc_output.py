@@ -22,7 +22,7 @@ class OutputBridge:
     def __init__(self, event_bus: EventBusProtocol, pipe_address: str) -> None:
         self._event_bus = event_bus
         self._pipe_address = pipe_address
-        self._output_conn: PipeConnection | None = None
+        self._conns: list[PipeConnection] = []
         self._lock = threading.Lock()
         self._server: PipeServer | None = None
         self._running = False
@@ -38,7 +38,10 @@ class OutputBridge:
     def stop(self) -> None:
         self._running = False
         with self._lock:
-            self._output_conn = None
+            for c in self._conns:
+                with contextlib.suppress(Exception):
+                    c.close()
+            self._conns.clear()
         self._unsubscribe()
         if self._server is not None:
             self._server.close()
@@ -58,30 +61,33 @@ class OutputBridge:
         while self._running:
             try:
                 conn = server.accept()
-                logger.info("OutputBridge: Output Process connected")
+                logger.info("OutputBridge: new output connection")
                 with self._lock:
-                    old = self._output_conn
-                    if old is not None:
-                        with contextlib.suppress(Exception):
-                            old.close()
-                    self._output_conn = conn
+                    self._conns.append(conn)
             except Exception:
                 if self._running:
                     logger.exception("OutputBridge accept failed")
                 break
 
     def _send(self, event: Event) -> None:
-        conn: PipeConnection | None
         with self._lock:
-            conn = self._output_conn
-        if conn is None:
+            conns = list(self._conns)
+        if not conns:
             return
-        try:
-            conn.send(event)
-        except (BrokenPipeError, ConnectionError, EOFError):
-            logger.warning("OutputBridge: connection lost")
+        dead: list[PipeConnection] = []
+        for conn in conns:
+            try:
+                conn.send(event)
+            except (BrokenPipeError, ConnectionError, EOFError):
+                dead.append(conn)
+        if dead:
             with self._lock:
-                self._output_conn = None
+                for c in dead:
+                    with contextlib.suppress(Exception):
+                        c.close()
+                    if c in self._conns:
+                        self._conns.remove(c)
+            logger.warning("OutputBridge: lost %d connection(s)", len(dead))
 
 
 __all__ = ["OutputBridge"]

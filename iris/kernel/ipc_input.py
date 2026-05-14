@@ -20,6 +20,8 @@ class InputBridge:
         self._pipe_address = pipe_address
         self._server: PipeServer | None = None
         self._running = False
+        self._lock = threading.Lock()
+        self._conn_count = 0
 
     def start(self) -> None:
         self._server = PipeServer(self._pipe_address)
@@ -32,7 +34,7 @@ class InputBridge:
         self._running = False
         if self._server is not None:
             self._server.close()
-        logger.info("InputBridge stopped")
+        logger.info("InputBridge stopped (%d connections handled)", self._conn_count)
 
     def _accept_loop(self) -> None:
         server = self._server
@@ -40,21 +42,29 @@ class InputBridge:
         while self._running:
             try:
                 conn = server.accept()
-                logger.info("InputBridge: Input Process connected")
-                self._handle_input(conn)
+                with self._lock:
+                    self._conn_count += 1
+                conn_id = self._conn_count
+                logger.info("InputBridge: Input connection #%d accepted", conn_id)
+                t = threading.Thread(
+                    target=self._handle_input,
+                    args=(conn, conn_id),
+                    daemon=True,
+                    name=f"input-{conn_id}",
+                )
+                t.start()
             except Exception:
                 if self._running:
                     logger.exception("InputBridge accept failed")
                 break
 
-    def _handle_input(self, conn: Any) -> None:
-        while self._running:
-            try:
+    def _handle_input(self, conn: Any, conn_id: int) -> None:
+        try:
+            while self._running:
                 event = conn.recv()
                 self._event_bus.publish(event)
-            except (EOFError, ConnectionError, BrokenPipeError):
-                logger.warning("InputBridge: Input Process disconnected")
-                break
+        except (EOFError, ConnectionError, BrokenPipeError):
+            logger.info("InputBridge: connection #%d disconnected", conn_id)
 
 
 class CommandRouter:

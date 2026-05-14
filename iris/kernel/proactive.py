@@ -17,13 +17,13 @@ from typing import Any
 
 from .agent_state import AgentStateManager, State
 from .config import ProactiveConfig
-from .event_bus import AgentAnomalyEvent, EventBus, ProactiveSpeechEvent, TimerTick
+from .event_bus import EventBus, ProactiveSpeechEvent, TimerTick
 from .memory_manager import MemoryManager
 
 logger = logging.getLogger(__name__)
 
 # Tier1 自動許可トリガー種別（時間経過ベースのシンプルな発話のみ自動許可）
-TIER1_TRIGGERS: set[str] = {"time"}
+TIER1_TRIGGERS: set[str] = {"time", "mood"}
 
 # 自己規律原則（システムプロンプトに組み込む用）
 SELF_GOVERNANCE_PRINCIPLES = [
@@ -279,21 +279,18 @@ class ProactiveEngine:
             )
 
         logger.info(
-            "Tier2 confidence too low: %.2f < %.2f, trigger=%s",
+            "Tier2 confidence too low: %.2f < %.2f, falling back to Tier1",
             confidence,
             self._config.tier2_confidence_threshold,
-            trigger_type,
         )
-        self._event_bus.publish(
-            AgentAnomalyEvent(
-                timestamp=datetime.now(),
-                source="system",
-                anomaly_type="low_confidence_proactive",
-                severity="info",
-                detail=f"Proactive speech confidence {confidence:.2f} below threshold",
-            )
+        fallback = self._build_tier1_speech(scores)
+        return ProactiveResult(
+            content=fallback,
+            tier=2,
+            confidence=confidence,
+            trigger_type=trigger_type,
+            reasoning=f"Tier2 confidence {confidence:.2f} below threshold, Tier1 fallback",
         )
-        return None
 
     @staticmethod
     def _determine_trigger_type(scores: dict[str, float]) -> str:
@@ -397,18 +394,38 @@ class ProactiveEngine:
 
     @staticmethod
     def _try_parse_json(text: str) -> dict | None:
-        """LLM出力からJSONをパースする。直接パース失敗後、中括弧ブロックを探す。"""
+        """LLM出力からJSONをパースする。マークダウン → 直接 → 中括弧ブロック の順で試行。"""
         text = text.strip()
+
+        # Markdown code block から抽出
+        m = re.search(r"```(?:json)?\s*\n?(.*?)\n?```", text, re.DOTALL)
+        if m:
+            try:
+                return _json.loads(m.group(1).strip())
+            except _json.JSONDecodeError:
+                pass
+
+        # 直接パース
         try:
             return _json.loads(text)
         except _json.JSONDecodeError:
             pass
-        m = re.search(r"\{[^{}]*\}", text, re.DOTALL)
-        if m:
-            try:
-                return _json.loads(m.group())
-            except _json.JSONDecodeError:
-                pass
+
+        # 中括弧ブロックを探索（ネスト非対応簡易版は諦めて、括弧カウント方式に）
+        start = text.find("{")
+        if start == -1:
+            return None
+        depth = 0
+        for end in range(start, len(text)):
+            if text[end] == "{":
+                depth += 1
+            elif text[end] == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        return _json.loads(text[start : end + 1])
+                    except _json.JSONDecodeError:
+                        return None
         return None
 
     @staticmethod

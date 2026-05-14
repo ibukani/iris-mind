@@ -58,7 +58,57 @@ class KernelFactory:
         event_bus = EventBus()
         state = AgentStateManager(event_bus=event_bus)
 
-        # 記憶ストア
+        memory, agents_md, _, persona_profile = KernelFactory._build_memory(config)
+        llm, personality, capability_checker, reflexion, context_mgr = KernelFactory._build_llm(config)
+        proactive, kernel = KernelFactory._build_proactive_and_kernel(
+            config,
+            event_bus,
+            state,
+            memory,
+            llm,
+        )
+        registry, tool_exec = KernelFactory._build_capabilities()
+        llm_pipeline, reflexion_mgr = KernelFactory._build_pipeline(
+            config,
+            llm,
+            personality,
+            agents_md,
+            persona_profile,
+            memory,
+            tool_exec,
+            capability_checker,
+            context_mgr,
+            reflexion,
+        )
+
+        conversation = ConversationService(
+            event_bus=event_bus,
+            llm_pipeline=llm_pipeline,
+            reflexion_manager=reflexion_mgr,
+            context_manager=context_mgr,
+            context_window=config.model.context_window,
+        )
+        cmd_handler = CommandHandler(
+            state=state,
+            conversation=conversation,
+            proactive=proactive,
+        )
+        CommandRouter(cmd_handler=cmd_handler, proactive=proactive, event_bus=event_bus)
+        ProactiveResponseTracker(proactive=proactive, event_bus=event_bus)
+
+        return KernelContext(
+            event_bus=event_bus,
+            kernel=kernel,
+            conversation=conversation,
+            proactive=proactive,
+            cmd_handler=cmd_handler,
+        )
+
+    @staticmethod
+    def _build_memory(
+        config: Config,
+    ) -> tuple[MemoryManager, AgentsMdStore, PersonaData, PersonaProfile]:
+        """記憶関連コンポーネントを組み立てる。"""
         cfg = config.memory
         episodic = EpisodicStore(
             path=cfg.episodic_path,
@@ -70,21 +120,20 @@ class KernelFactory:
             vector_db_path=cfg.vector_db_path,
         )
         vector = VectorStore(path=cfg.vector_db_path)
-        memory = MemoryManager(
-            episodic=episodic,
-            semantic=semantic,
-            vector_store=vector,
-        )
-
-        # ペルソナデータ + 構造記憶
+        memory = MemoryManager(episodic=episodic, semantic=semantic, vector_store=vector)
         persona_data = PersonaData()
         persona_profile = PersonaProfile(persona_data=persona_data)
         agents_md = AgentsMdStore(
             path=cfg.agents_md_path,
             max_bytes=cfg.agents_md_max_bytes,
         )
+        return memory, agents_md, persona_data, persona_profile
 
-        # LLM + 会話関連サービス
+    @staticmethod
+    def _build_llm(
+        config: Config,
+    ) -> tuple[LLMBridge, Personality, CapabilityChecker, Reflexion, ContextManager]:
+        """LLM 関連コンポーネントを組み立てる。"""
         provider = create_provider(
             provider_type=config.model.provider,
             base_url=config.model.base_url,
@@ -101,8 +150,17 @@ class KernelFactory:
             llm=llm,
             compact_model=config.model.get_model("default"),
         )
+        return llm, personality, capability_checker, reflexion, context_mgr
 
-        # 自発発話エンジン
+    @staticmethod
+    def _build_proactive_and_kernel(
+        config: Config,
+        event_bus: EventBus,
+        state: AgentStateManager,
+        memory: MemoryManager,
+        llm: LLMBridge,
+    ) -> tuple[ProactiveEngine, AgentKernel]:
+        """自発発話エンジンとカーネルを組み立てる。"""
         proactive = ProactiveEngine(
             config=config.proactive,
             event_bus=event_bus,
@@ -111,8 +169,6 @@ class KernelFactory:
             llm=llm,
             fast_model=config.model.get_model("fast"),
         )
-
-        # カーネル
         kernel = AgentKernel(
             event_bus=event_bus,
             state_manager=state,
@@ -122,13 +178,30 @@ class KernelFactory:
         )
         proactive.set_approval_callback(kernel.evaluate_proactive_request)
         kernel.startup()
+        return proactive, kernel
 
-        # Capability registry + tool executor
+    @staticmethod
+    def _build_capabilities() -> tuple[CapabilityRegistry, ToolExecutionEngine]:
+        """Capability レジストリとツール実行エンジンを組み立てる。"""
         registry = CapabilityRegistry()
         registry.discover_modules()
         tool_exec = ToolExecutionEngine(registry=registry)
+        return registry, tool_exec
 
-        # LLMパイプライン + Reflexion管理（ConversationServiceに委譲）
+    @staticmethod
+    def _build_pipeline(
+        config: Config,
+        llm: LLMBridge,
+        personality: Personality,
+        agents_md: AgentsMdStore,
+        persona_profile: PersonaProfile,
+        memory: MemoryManager,
+        tool_exec: ToolExecutionEngine,
+        capability_checker: CapabilityChecker,
+        context_mgr: ContextManager,
+        reflexion: Reflexion,
+    ) -> tuple[LLMPipeline, ReflexionManager]:
+        """LLM パイプラインと Reflexion マネージャを組み立てる。"""
         governance_str = "\n".join(f"- {p}" for p in SELF_GOVERNANCE_PRINCIPLES) if SELF_GOVERNANCE_PRINCIPLES else ""
         llm_pipeline = LLMPipeline(
             llm=llm,
@@ -148,33 +221,4 @@ class KernelFactory:
             persona_profile=persona_profile,
             reflect_interval=3,
         )
-
-        # 会話サービス（カーネル起動後に生成 → イベント購読順を保証）
-        conversation = ConversationService(
-            event_bus=event_bus,
-            llm_pipeline=llm_pipeline,
-            reflexion_manager=reflexion_mgr,
-            context_manager=context_mgr,
-            context_window=config.model.context_window,
-        )
-
-        # コマンドハンドラ
-        cmd_handler = CommandHandler(
-            state=state,
-            conversation=conversation,
-            proactive=proactive,
-        )
-
-        # コマンドルーター（UserInputEvent から / コマンドを拾う）
-        CommandRouter(cmd_handler=cmd_handler, proactive=proactive, event_bus=event_bus)
-
-        # Proactive 応答追跡（CLIAdapter._check_proactive_response の Kernel 移植）
-        ProactiveResponseTracker(proactive=proactive, event_bus=event_bus)
-
-        return KernelContext(
-            event_bus=event_bus,
-            kernel=kernel,
-            conversation=conversation,
-            proactive=proactive,
-            cmd_handler=cmd_handler,
-        )
+        return llm_pipeline, reflexion_mgr

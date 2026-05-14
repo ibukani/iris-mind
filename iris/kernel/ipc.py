@@ -3,7 +3,7 @@ from __future__ import annotations
 import json as _json
 import logging
 import multiprocessing.connection as _connection
-from typing import Any
+from typing import Any, Protocol, runtime_checkable
 
 from .event import Event
 
@@ -15,7 +15,11 @@ PIPE_NAME_CONTROL = r"\\.\pipe\iris-control"
 
 PIPE_NAME_KERNEL = PIPE_NAME_KERNEL_OUTPUT  # backward compat
 
-_EventTransport = Any  # duck-typed: send(event: Event), recv() -> Event
+
+@runtime_checkable
+class _EventTransport(Protocol):
+    def send(self, event: Event) -> None: ...
+    def recv(self) -> Event: ...
 
 
 def _serialize(event: Event) -> bytes:

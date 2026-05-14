@@ -208,7 +208,7 @@ class AgentKernel:
 
         self._memory.add_episodic(
             content=event.content,
-            _kind="user_input",
+            kind="user_input",
             metadata=event.metadata,
         )
 
@@ -216,7 +216,7 @@ class AgentKernel:
         """応答イベント受信時に PROCESSING → IDLE に遷移する。"""
         self._memory.add_episodic(
             content=event.content,
-            _kind="assistant",
+            kind="assistant",
             metadata={"model": event.model} if event.model else None,
         )
         if self._state.is_processing():
@@ -226,7 +226,7 @@ class AgentKernel:
         """自発発話イベントを処理する：記憶記録 + 異常検知。"""
         self._memory.add_episodic(
             content=event.content,
-            _kind="proactive",
+            kind="proactive",
             metadata={
                 "trigger": event.trigger_type,
                 "confidence": event.confidence,

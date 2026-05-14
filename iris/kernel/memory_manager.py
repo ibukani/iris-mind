@@ -83,13 +83,15 @@ class MemoryManager:
     def add_episodic(
         self,
         content: str,
-        _kind: str = "user_input",
+        kind: str = "user_input",
         metadata: dict[str, Any] | None = None,
     ) -> None:
         summary = content
         if metadata:
             tags = " ".join(f"{k}={v}" for k, v in metadata.items())
             summary = f"{content} [{tags}]"
+        if kind:
+            summary = f"[{kind}] {summary}"
         self._episodic.add(summary)
 
     def add_semantic(self, content: str, tags: list[str] | None = None) -> None:

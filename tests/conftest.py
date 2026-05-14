@@ -141,7 +141,7 @@ class FakeMemoryManager:
     def get_user_preferences(self) -> list[dict]:
         return self._preferences
 
-    def add_episodic(self, content: str, _kind: str = "user_input", metadata: dict | None = None) -> None:
+    def add_episodic(self, content: str, kind: str = "user_input", metadata: dict | None = None) -> None:  # noqa: ARG002
         self.episodic.add(content)
 
     def add_semantic(self, content: str, tags: list[str] | None = None) -> None:

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import time as _time
-from typing import Any
 
 from .event import ProactiveSpeechEvent, UserInputEvent
 from .event_bus import EventBusProtocol
+from .proactive import ProactiveEngine
 
 _NEGATIVE_RESPONSES = frozenset(
     {
@@ -21,7 +21,7 @@ _NEGATIVE_RESPONSES = frozenset(
 
 
 class ProactiveResponseTracker:
-    def __init__(self, proactive: Any, event_bus: EventBusProtocol) -> None:
+    def __init__(self, proactive: ProactiveEngine, event_bus: EventBusProtocol) -> None:
         self._proactive = proactive
         self._pending: float = 0.0
         event_bus.subscribe("ProactiveSpeechEvent", self._on_proactive)

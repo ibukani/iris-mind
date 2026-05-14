@@ -44,7 +44,7 @@ def _make_router() -> tuple[Any, Any, Any, Any]:
     cmd = _FakeCmdHandler()
     pro = _FakeProactive()
     bus = _FakeEventBus()
-    router = CommandRouter(cmd_handler=cmd, proactive=pro, event_bus=bus)
+    router = CommandRouter(cmd_handler=cmd, proactive=pro, event_bus=bus)  # type: ignore[arg-type]
     return router, cmd, pro, bus
 
 
@@ -79,7 +79,7 @@ def test_command_router_empty_response_does_not_publish() -> None:
 
     bus = _FakeEventBus()
     pro = _FakeProactive()
-    CommandRouter(cmd_handler=NoopHandler(), proactive=pro, event_bus=bus)
+    CommandRouter(cmd_handler=NoopHandler(), proactive=pro, event_bus=bus)  # type: ignore[arg-type]
 
     bus.subs["UserInputEvent"](UserInputEvent(timestamp=datetime(2026, 1, 1), source="test", content="/sleep"))
 

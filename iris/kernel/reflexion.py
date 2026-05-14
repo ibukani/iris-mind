@@ -7,13 +7,14 @@ Reflexion — 自己反省エンジン。
 from __future__ import annotations
 
 import json
-from typing import Any
+
+from iris.llm.provider import LLMProvider
 
 
 class Reflexion:
     """自己反省エンジン。LLM を使って会話を分析する。"""
 
-    def __init__(self, llm: Any, compact_model: str | None = None) -> None:
+    def __init__(self, llm: LLMProvider, compact_model: str | None = None) -> None:
         self.llm = llm
         self.compact_model = compact_model
 

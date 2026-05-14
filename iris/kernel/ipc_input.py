@@ -3,11 +3,13 @@ from __future__ import annotations
 import logging
 import threading
 from datetime import datetime
-from typing import Any
+
+from iris.commands.handler import CommandHandler
 
 from .event import AgentResponseEvent, UserInputEvent
 from .event_bus import EventBusProtocol
-from .ipc import PipeServer
+from .ipc import PipeConnection, PipeServer
+from .proactive import ProactiveEngine
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +60,7 @@ class InputBridge:
                     logger.exception("InputBridge accept failed")
                 break
 
-    def _handle_input(self, conn: Any, conn_id: int) -> None:
+    def _handle_input(self, conn: PipeConnection, conn_id: int) -> None:
         try:
             while self._running:
                 event = conn.recv()
@@ -68,7 +70,7 @@ class InputBridge:
 
 
 class CommandRouter:
-    def __init__(self, cmd_handler: Any, proactive: Any, event_bus: EventBusProtocol) -> None:
+    def __init__(self, cmd_handler: CommandHandler, proactive: ProactiveEngine, event_bus: EventBusProtocol) -> None:
         self._cmd_handler = cmd_handler
         self._proactive = proactive
         self._event_bus = event_bus

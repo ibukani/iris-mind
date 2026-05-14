@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
+
+from iris.memory.persona_profile import PersonaProfile
+
+from .memory_manager import MemoryManager
+from .reflexion import Reflexion
 
 logger = logging.getLogger(__name__)
 
@@ -11,9 +15,9 @@ class ReflexionManager:
 
     def __init__(
         self,
-        reflexion: Any | None = None,
-        memory: Any | None = None,
-        persona_profile: Any | None = None,
+        reflexion: Reflexion | None = None,
+        memory: MemoryManager | None = None,
+        persona_profile: PersonaProfile | None = None,
         reflect_interval: int = 3,
     ) -> None:
         self._reflexion = reflexion
@@ -77,7 +81,7 @@ class ReflexionManager:
             if result.get("summary") and self._memory:
                 self._memory.add_episodic(
                     content=f"[session summary] {result['summary']}",
-                    _kind="system",
+                    kind="system",
                 )
             if self._memory:
                 for key, entry_type in [

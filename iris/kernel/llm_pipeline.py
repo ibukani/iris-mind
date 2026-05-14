@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import Any
+
+from iris.llm.capability_checker import CapabilityChecker
+from iris.llm.llm_bridge import LLMBridge
+from iris.memory.persona_profile import PersonaProfile
+from iris.memory.stores import AgentsMdStore
+from iris.personality.personality import Personality
 
 from .config import ModelConfig
 from .context import ContextManager
+from .memory_manager import MemoryManager
 from .tool_executor import ToolExecutionEngine
 
 logger = logging.getLogger(__name__)
@@ -16,14 +22,14 @@ class LLMPipeline:
 
     def __init__(
         self,
-        llm: Any,
+        llm: LLMBridge,
         model_config: ModelConfig,
-        personality: Any,
-        agents_md_store: Any | None = None,
-        persona_profile: Any | None = None,
-        memory: Any | None = None,
+        personality: Personality,
+        agents_md_store: AgentsMdStore | None = None,
+        persona_profile: PersonaProfile | None = None,
+        memory: MemoryManager | None = None,
         tool_executor: ToolExecutionEngine | None = None,
-        capability_checker: Any | None = None,
+        capability_checker: CapabilityChecker | None = None,
         context_manager: ContextManager | None = None,
         governance_principles: str = "",
     ) -> None:

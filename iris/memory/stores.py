@@ -67,7 +67,7 @@ class EpisodicStore:
         entries = self._load_all()
         entries.append({"summary": summary})
         if len(entries) > self.max_entries:
-            entries = self._merge_and_trim(entries)
+            entries = entries[-self.max_entries :]
         self.path.write_text(
             "\n".join(json.dumps(e) for e in entries),
             encoding="utf-8",
@@ -76,9 +76,6 @@ class EpisodicStore:
     def get_recent(self, n: int = 5) -> list[str]:
         entries = self._load_all()
         return [e["summary"] for e in entries[-n:]]
-
-    def _merge_and_trim(self, entries: list[dict]) -> list[dict]:
-        return entries[-self.max_entries :]
 
     def _load_all(self) -> list[dict]:
         if not self.path.exists():

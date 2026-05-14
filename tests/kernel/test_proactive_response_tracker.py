@@ -37,7 +37,7 @@ def _make_tracker() -> tuple[Any, Any, Any]:
 
     proactive = _FakeProactive()
     bus = _FakeEventBus()
-    tracker = ProactiveResponseTracker(proactive=proactive, event_bus=bus)
+    tracker = ProactiveResponseTracker(proactive=proactive, event_bus=bus)  # type: ignore[arg-type]
     return tracker, proactive, bus
 
 

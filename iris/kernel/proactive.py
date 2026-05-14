@@ -16,6 +16,8 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
+from iris.llm.provider import LLMProvider
+
 from .agent_state import AgentStateManager, State
 from .config import ProactiveConfig
 from .event_bus import EventBus, ProactiveSpeechEvent, TimerTick
@@ -108,7 +110,7 @@ class ProactiveEngine:
         event_bus: EventBus,
         state_manager: AgentStateManager,
         memory: MemoryManager,
-        llm: Any | None = None,
+        llm: LLMProvider | None = None,
         fast_model: str | None = None,
         approval_callback: ApprovalCallback | None = None,
         time_provider: TimeProvider | None = None,

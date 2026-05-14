@@ -265,7 +265,8 @@ def main() -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%H:%M:%S",
     )
-    adapter = CLIAdapter()
+    config = Config.load()
+    adapter = CLIAdapter(config)
     adapter.run()
 
 

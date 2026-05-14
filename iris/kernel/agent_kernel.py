@@ -12,6 +12,7 @@ import logging
 import threading
 import time
 from collections import deque
+from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
@@ -42,14 +43,15 @@ class AnomalyDetector:
     - 異常アラートの生成とレポート
     """
 
-    def __init__(self) -> None:
+    def __init__(self, time_provider: Callable[[], float] | None = None) -> None:
+        self._time_provider = time_provider or time.time
         self._speech_window: deque[float] = deque()
         self._alert_count: int = 0
         self._max_per_5min: int = 5
 
     def record_speech(self) -> list[str]:
         """発話を記録し、異常フラグを返す。"""
-        now = time.time()
+        now = self._time_provider()
         self._speech_window.append(now)
         while self._speech_window and now - self._speech_window[0] > 300:
             self._speech_window.popleft()
@@ -64,7 +66,7 @@ class AnomalyDetector:
         """現在の頻度超過を確認する（副作用なし）。"""
         if not self._speech_window:
             return []
-        now = time.time()
+        now = self._time_provider()
         count = sum(1 for t in self._speech_window if now - t < 300)
         return ["frequency_exceeded"] if count >= self._max_per_5min else []
 

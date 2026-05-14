@@ -89,8 +89,12 @@ ruff format --check .                 # format check
 ruff check --fix .                    # lint + auto-fix
 mypy .                                # type check
 mypy --install-types                  # 型スタブ初回インストール
+pytest tests/                         # 全テスト実行（179 tests, ~9秒）
+pytest tests/kernel/ -q              # kernelテストのみ
+pytest tests/memory/ -q              # memoryテストのみ
 ```
-※ ruff / mypy の設定は `pyproject.toml` に集約済み
+※ ruff / mypy / pytest の設定は `pyproject.toml` に集約済み
+※ テストはFake実装ベースでLLM実通信なし。ChromaDB/ONNXは初回DLあり
 
 ## モデル構成
 - 設定されたモデル数によって動作モードが自動判定される

@@ -42,3 +42,8 @@ proactive:
     context: 0.15
     mood: 0.10
   speak_threshold: 0.20
+logging:
+  level: INFO
+  dir: logs
+  max_bytes: 5242880
+  backup_count: 14

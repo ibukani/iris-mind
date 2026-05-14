@@ -118,11 +118,19 @@ class MemoryConfig(BaseModel):
     agents_md_max_bytes: int = 2048
 
 
+class LoggingConfig(BaseModel):
+    level: str = "INFO"
+    dir: str = "logs"
+    max_bytes: int = 5_242_880
+    backup_count: int = 14
+
+
 class Config(BaseModel):
     model: ModelConfig = ModelConfig()
     personality: PersonalityConfig = PersonalityConfig()
     memory: MemoryConfig = MemoryConfig()
     proactive: ProactiveConfig = ProactiveConfig()
+    logging: LoggingConfig = LoggingConfig()
 
     @classmethod
     def load(cls, path: str = "config.yaml") -> Config:

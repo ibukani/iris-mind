@@ -22,6 +22,7 @@ from .event_bus import EventBus, ProactiveSpeechEvent, TimerTick
 from .memory_manager import MemoryManager
 
 ApprovalCallback = Callable[[dict[str, float], float, str], bool]
+TimeProvider = Callable[[], float]
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +110,7 @@ class ProactiveEngine:
         memory: MemoryManager,
         llm: Any | None = None,
         approval_callback: ApprovalCallback | None = None,
+        time_provider: TimeProvider | None = None,
     ) -> None:
         self._config = config
         self._event_bus = event_bus
@@ -116,6 +118,7 @@ class ProactiveEngine:
         self._memory = memory
         self._llm = llm
         self._approval_callback = approval_callback
+        self._time_provider = time_provider or time.time
         self._suppression = SuppressionState()
         self._last_check_time: float = 0.0
         self._ignore_recorded_for_proactive: bool = False
@@ -132,7 +135,7 @@ class ProactiveEngine:
         if not self._state.is_idle():
             return
 
-        now = time.time()
+        now = self._time_provider()
         if now - self._last_check_time < self._config.check_interval_sec:
             return
         self._last_check_time = now
@@ -510,8 +513,8 @@ class ProactiveEngine:
     def _publish_speech(self, result: ProactiveResult) -> None:
         """発話イベントを発行し、抑制状態を更新する。"""
         s = self._suppression
-        s.last_proactive_time = time.time()
-        s.proactive_timestamps.append(time.time())
+        s.last_proactive_time = self._time_provider()
+        s.proactive_timestamps.append(self._time_provider())
         self._ignore_recorded_for_proactive = False
 
         self._event_bus.publish(
@@ -554,7 +557,7 @@ class ProactiveEngine:
 
     def notify_user_activity(self) -> None:
         """ユーザー入力があったことを通知する。"""
-        self._suppression.last_user_activity = time.time()
+        self._suppression.last_user_activity = self._time_provider()
         self._ignore_recorded_for_proactive = False
 
     def notify_ignore(self) -> None:
@@ -575,7 +578,7 @@ class ProactiveEngine:
 
     def set_cooldown(self, duration_sec: float = 600.0) -> None:
         """ユーザーから停止要請があった場合のクールダウン。"""
-        self._suppression.cooldown_until = time.time() + duration_sec
+        self._suppression.cooldown_until = self._time_provider() + duration_sec
         logger.info("Proactive cooldown set for %.0f seconds", duration_sec)
 
     def set_mood(self, negative_score: float) -> None:

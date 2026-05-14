@@ -16,6 +16,10 @@ def run() -> None:
     project_root = Path(__file__).parent
     config = Config.load(str(project_root / "config.yaml"))
 
+    from iris.kernel.logging import setup_logging
+
+    setup_logging(config.logging)
+
     if not _check_environment(config):
         return
 

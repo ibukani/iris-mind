@@ -17,5 +17,8 @@ chroma_test/
 *tmp_chroma/
 tmp_chroma_test/
 
+# Log files
+logs/
+
 # Environment variables (API keys etc.)
 .env

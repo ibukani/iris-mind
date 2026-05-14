@@ -1,2 +1,1 @@
-def test_placeholder():
-    assert True
+# Placeholder — tests are organized in subdirectories

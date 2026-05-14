@@ -163,21 +163,3 @@ class CLIAdapter:
                 width=60,
             )
         )
-
-
-def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-        datefmt="%H:%M:%S",
-    )
-    from iris.kernel.config import Config
-    from iris.kernel.factory import KernelFactory
-
-    config = Config.load()
-    ctx = KernelFactory.build(config)
-    CLIAdapter(ctx).run()
-
-
-if __name__ == "__main__":
-    main()

@@ -130,10 +130,22 @@ class AgentStateManager:
             if timeout is None:
                 return None
 
-            if self._import_time() - self._state_start_time > timeout:
-                self.transition(State.IDLE)
-                return State.IDLE
-            return None
+            if self._import_time() - self._state_start_time <= timeout:
+                return None
+
+            self._current = State.IDLE
+            self._state_start_time = None
+
+        # Lock released before event publish to avoid deadlock
+        self.event_bus.publish(
+            AgentStateChangeEvent(
+                timestamp=self._import_datetime(),
+                source="agent_kernel",
+                previous_state=State.PROCESSING.value,
+                new_state=State.IDLE.value,
+            )
+        )
+        return State.IDLE
 
     # --- internal ---
 

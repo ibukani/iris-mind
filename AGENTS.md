@@ -1,49 +1,78 @@
 # Iris プロジェクトルール（コーディングエージェント向け）
 
 ## プロジェクト概要
-Iris は自律的に行動・進化できるAIアシスタント。Python製でOllama上のQwen3.5 9Bをデフォルトモデルとする。
+Iris は自律的に行動・進化できるAIアシスタント。Python製でOllama上で動作する。baseモデル（デフォルト: qwen3.5:2b）が大部分のタスクを処理し、複雑なタスクのみsmartモデル（デフォルト: qwen3.5:9b）にエスカレーションする2層構成。
 
 ## 重要な用語の区別
 - **Iris** → このプロジェクトで製作中のAI（作る対象）
 - **コーディングエージェント** → プロジェクトを支援するAI（あなた = 現在の会話相手）
 
 ## ディレクトリ構成
-- `core/` → エンジン本体（config, llm_bridge, personality, reflexion）
-- `capabilities/` → 機能モジュール（file_ops, code_exec, self_mod など）
-- `memory/` → 記憶管理（stores.py, vector_store.py, iris_profile.md）
-- `docs/` → 設計ドキュメント
-- `.agent/` → コーディングエージェント用コンテキスト（context.md, project.md, tasks.md）
-- `AGENTS.md` → プロジェクトルール（このファイル）
-- `config.yaml` → Irisの設定ファイル
-- `main.py` → エントリーポイント（CLIループ）
 
-## コンポーネント間依存関係
 ```
-main.py
-  ├── core/config.py       (pydantic BaseModel, yaml読込)
-  ├── core/llm_bridge.py   (ollama.Client ラッパー)
-  ├── core/personality.py   (システムプロンプト構築)
-  ├── core/reflexion.py     (LLMに内省させる外側ループ)
-  ├── memory/stores.py      (AgentsMdStore, EpisodicStore, SemanticStore)
-  │     └── memory/vector_store.py (ChromaDB + BM25 ハイブリッド検索)
-  └── capabilities/registry.py (動的モジュール発見・ツール登録)
-        ├── capabilities/file_ops/server.py
-        ├── capabilities/code_exec/server.py
-        └── capabilities/self_mod/server.py
+.iris/
+├── config/
+│   └── personality_default.md   ← 静的テンプレート（git追跡）
+└── data/
+    ├── iris_profile.md           ← Irisの構造記憶（自己認識用、上限2KB固定）
+    ├── episodes.jsonl            ← エピソード記憶
+    ├── semantic.jsonl            ← 意味記憶
+    ├── persona_data.json         ← 話し方・性格（動的管理）
+    └── chroma_db/                ← ChromaDBベクトルストア
+
+adapters/                         ← 外部UI層（CLI, API, GUI）
+├── cli/                          ← CLIアダプター（実際の対話インターフェース）
+└── __init__.py
+
+iris/                             ← アプリケーションコア
+├── kernel/                       ← ドメイン層（EventBus, AgentState, Config,
+│                                  MemoryManager, ProactiveEngine, AgentKernel,
+│                                  ConversationService, Reflexion, ContextManager,
+│                                  ToolExecutionEngine）
+├── llm/                          ← Ollama通信（LLMBridge）
+├── memory/                       ← 記憶管理（stores, vector_store, persona）
+├── capabilities/                 ← ツール実行（registry + 8 tools）
+├── commands/                     ← コマンド処理（未実装）
+├── personality/                  ← プロンプト管理（Personality）
+└── __init__.py
+
+docs/                             ← 設計ドキュメント
+.agents/                          ← コーディングエージェント用コンテキスト
+config.yaml                       ← Irisの設定ファイル
+main.py                           ← エントリーポイント
 ```
+
+## コンポーネント間依存関係（ヘキサゴナルアーキテクチャ）
+
+```
+adapters/          ──→ iris/kernel/   ──→ iris/llm/, iris/memory/, iris/capabilities/
+(UI層)               (ドメイン層)         (インフラ層)
+```
+- `adapters/` は `iris/` に依存するが、逆方向の依存はディレクトリ構造で物理禁止
+- `iris/kernel/` は純粋なビジネスロジックに閉じ、外部サービスは kernel 外から注入
 
 ## Iris の記憶体系
-- `memory/iris_profile.md`: Irisの構造記憶（自己認識用、上限2KB固定）
+- `.iris/data/iris_profile.md`: Irisの構造記憶（自己認識用、上限2KB固定）※話し方・性格は含まず、別JSONで動的管理
 - EpisodicStore: JSONLベースの作業記憶（上限30エントリ、古いものをマージ圧縮）
 - SemanticStore: JSONL永続化 + ChromaDB + BM25 ハイブリッド検索（上限100エントリ）
 - VectorStore: ONNXMiniLM_L6_V2 埋め込み、cosine類似度、統合スコア = vector*0.6 + bm25*0.4
 
 ## capability の追加ルール
-1. `capabilities/<name>/server.py` に配置
+1. `iris/capabilities/<name>/server.py` に配置
 2. `register(registry: CapabilityRegistry)` 関数をエクスポート
 3. `@registry.register_func(...)` デコレータでツール定義
 4. `__init__.py` を各パッケージに配置（必須）
-5. 新しいcapabilityを追加したら `memory/iris_profile.md` の「My Capabilities」セクションも更新する
+5. `allowed_roles` パラメータで利用可能なモデルロールを制限（デフォルトは全てのロールで利用可）
+6. 新しいcapabilityを追加したら `.iris/data/iris_profile.md` の「My Capabilities」セクションも更新する
+7. テンプレート化されたワークフローは `.agents/skills/capability-pattern/SKILL.md` を参照（`skill` ツールでロード可能）
+
+## ドキュメント更新
+機能変更時のドキュメント更新手順は `.agents/skills/doc-sync/SKILL.md` を参照（`skill` ツールでロード可能）
+- 設計ドキュメント (`docs/*.md`)
+- 構造記憶 (`.iris/data/iris_profile.md`)
+- プロジェクトルール (`AGENTS.md`)
+- エージェントコンテキスト (`.agents/*.md`)
+- Skills (`.agents/skills/*/SKILL.md`)
 
 ## コーディング規約
 - 変更差分はユーザーに提示→承認を得てから適用
@@ -53,23 +82,27 @@ main.py
 - Python 3.13+ の型ヒントを積極的に使用
 - コメントは最小限に
 
+## lint / typecheck コマンド
+```powershell
+ruff check .                          # lint
+ruff format --check .                 # format check
+ruff check --fix .                    # lint + auto-fix
+mypy .                                # type check
+mypy --install-types                  # 型スタブ初回インストール
+```
+※ ruff / mypy の設定は `pyproject.toml` に集約済み
+
 ## 自動モデル切替 動作ルール
 - `config.yaml` の `fast_model` が設定されている場合、自動モデル切替が有効になる
 - 分類は2段階: (1) キーワードフィルタ (2) 小モデルでLLM分類（不明時のみ）
 - シナリオは `greeting/simple/qa/tool/complex` の5種類
 - `tool/complex` は大モデル、それ以外は小モデルを使用
-- plan_mode / thinking_mode がONの場合は常に大モデルを使用
+- mode が deep/stepwise の場合は常に大モデルを使用（auto は複雑性判定に従う）
 - 小モデルにはツール定義を渡さない（ツール呼び出し不可のため）
-- 会話履歴は `context_window`（トークン数）を超えた場合、古いものから順に削除
+- 会話履歴は `context_window`（トークン数）を超えた場合、`compaction_threshold` に基づき自動要約（ContextManager）
+- 要約は `## 会話の経緯` としてシステムプロンプトに注入。`/compact` コマンドで手動トリガー可能
+- 要約時は `fast_model` を使用（コンパクション専用LLM呼び出しを高速化）
 
-## ドキュメント更新義務
-機能追加・変更を行った場合、該当する以下のドキュメントを必ず同時に更新する：
-- `docs/*.md` — 設計ドキュメント（概念・アーキテクチャ・記憶システム等）
-- `memory/iris_profile.md` — Irisの構造記憶（自己認識用capability一覧）
-- `AGENTS.md` — コーディングエージェント用ルール（必要に応じて）
-- `.agent/*.md` — コーディングエージェント用コンテキスト（必要に応じて）
-
-ドキュメントの更新漏れはタスク完了とみなさない。
 
 ## git コミットルール
 - 1タスク完了ごとに必ずgitコミットを行う

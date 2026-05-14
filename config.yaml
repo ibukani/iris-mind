@@ -1,23 +1,50 @@
+memory:
+  agents_md_max_bytes: 2048
+  agents_md_path: .iris/data/iris_profile.md
+  episodic_max_entries: 30
+  episodic_path: .iris/data/episodes.jsonl
+  rag_max_results: 3
+  semantic_max_entries: 100
+  semantic_path: .iris/data/semantic.jsonl
+  vector_db_path: .iris/data/chroma_db
 model:
-  smart_model: qwen3.5:9b
-  fast_model: qwen3.5:2b
   base_url: http://localhost:11434
-  max_tokens: 1024
-  max_tokens_fast: 512
-  temperature: 0.7
-  num_draft: 0
+  compaction_threshold: 0.85
+  context_window: 4000
+  escalation:
+    enabled: true
+    keep_alive_duration: 5m
+    max_retries: 1
+    swap_on_escalate: true
+  models:
+  - max_tokens: 512
+    name: qwen3.5:2b
+    role: base
+  - max_tokens: 1024
+    name: qwen3.5:9b
+    role: smart
   num_ctx: 8192
   num_gpu: 99
-  context_window: 4000
-
+  temperature: 0.7
 personality:
   name: Iris
   thinking_mode_default: false
-  prompt_file: memory/config/personality_default.md
-
-memory:
-  episodic_path: memory/data/episodes.jsonl
-  semantic_path: memory/data/semantic.jsonl
-  vector_db_path: memory/data/chroma_db
-  agents_md_path: memory/data/iris_profile.md
-  agents_md_max_bytes: 2048
+  mode_default: auto
+  prompt_file: .iris/config/personality_default.md
+# ===== 新規: 自律的会話設定 =====
+proactive:
+  enabled: false                  # デフォルトOFF（安全第一）
+  check_interval_sec: 5.0         # トリガー確認間隔（秒）
+  min_interval_sec: 30.0          # 最短発話間隔（秒）
+  max_interval_sec: 300.0         # 最大発話間隔（秒）
+  tier1_auto_approve: true        # Tier1（挨拶等）は自動許可
+  tier2_confidence_threshold: 0.75 # Tier2の自動承認閾値
+  tier2_cooldown_sec: 60.0        # Tier2承認待ちタイムアウト（秒）
+  max_proactive_tokens: 256       # 自発発話の最大文字数目安
+  user_cooldown_on_ignore: 300.0  # 無視された後のクールダウン（秒）
+  trigger_weights:
+    time: 0.25                    # 時間経過の重み
+    memory: 0.45                  # 記憶想起の重み
+    context: 0.15                 # 文脈変化の重み
+    mood: 0.15                    # ユーザー感情の重み
+  speak_threshold: 0.60           # 発話スコア閾値

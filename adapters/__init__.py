@@ -1,0 +1,1 @@
+# adapters パッケージ — UI層

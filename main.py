@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
-"""Iris - 自律的に行動し進化できるAI"""
+"""Iris - 自律的に行動し進化できるAI (v0.2)"""
 
+import contextlib
 import os
 import subprocess
 import sys
 import time
+from pathlib import Path
+
+from iris.kernel.config import Config
 
 os.environ.setdefault("OLLAMA_GPU_LAYERS", "99")
 
@@ -13,35 +17,41 @@ def _get_available_models() -> set[str]:
     """Ollamaに既にpull済みのモデル名のセットを返す。"""
     try:
         result = subprocess.run(
-            ["ollama", "list", "--format", "json"],
-            capture_output=True, text=True, timeout=10,
+            ["ollama", "list"],
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
         if result.returncode == 0 and result.stdout.strip():
-            import json
-            models = json.loads(result.stdout)
-            return {m["model"].split(":")[0] for m in models if "model" in m}
+            lines = result.stdout.strip().splitlines()
+            models: set[str] = set()
+            for line in lines[2:]:
+                if line.strip():
+                    name = line.strip().split()[0]
+                    if ":" in name:
+                        models.add(name.split(":")[0])
+            return models
     except Exception:
         pass
     return set()
 
 
 def _ensure_model_pulled(model_name: str) -> bool:
-    """モデルが存在しない場合はユーザーに確認してpullする。pull済みまたはスキップならTrue。"""
+    """モデルが存在しない場合はユーザーに確認してpullする。"""
     model_base = model_name.split(":")[0]
     available = _get_available_models()
     if model_base in available:
         return True
 
     console_input = input(
-        f"モデル '{model_name}' が見つかりません。\n"
-        f"  ollama pull {model_name}\n"
-        f"を実行してダウンロードしますか？ [y/N] "
+        f"モデル '{model_name}' が見つかりません。\n  ollama pull {model_name}\nを実行してダウンロードしますか？ [y/N] "
     )
     if console_input.strip().lower() in ("y", "yes"):
         try:
             subprocess.run(
                 ["ollama", "pull", model_name],
-                check=True, timeout=600,
+                check=True,
+                timeout=600,
             )
             return True
         except subprocess.CalledProcessError:
@@ -53,18 +63,12 @@ def _ensure_model_pulled(model_name: str) -> bool:
     return False
 
 
-def _cleanup_ollama_models():
-    """GPU向け環境変数が反映された状態でOllamaサーバーを再起動し、
-    config.yamlに記載のモデルがpull済みか確認する。"""
-    # 既存Ollamaプロセスを強制終了
-    try:
-        subprocess.run(["taskkill", "/F", "/IM", "ollama.exe"],
-                       capture_output=True, timeout=5)
-    except Exception:
-        pass
+def _restart_ollama():
+    """既存Ollamaプロセスを終了し、GPU向け設定で再起動する。"""
+    with contextlib.suppress(Exception):
+        subprocess.run(["taskkill", "/F", "/IM", "ollama.exe"], capture_output=True, timeout=5)
     time.sleep(2)
 
-    # 環境変数 OLLAMA_GPU_LAYERS=99 を反映して起動
     subprocess.Popen(
         ["ollama", "serve"],
         stdout=subprocess.DEVNULL,
@@ -73,48 +77,38 @@ def _cleanup_ollama_models():
     )
     time.sleep(5)
 
-    # config.yamlに記載のモデルを解放
-    try:
-        import yaml
-        from pathlib import Path
-        p = Path(__file__).parent / "config.yaml"
-        raw = yaml.safe_load(p.read_text(encoding="utf-8")) if p.exists() else {}
-        model_section = raw.get("model", {})
-        for key in ("smart_model", "fast_model", "draft_model"):
-            m = model_section.get(key)
-            if m:
-                subprocess.run(["ollama", "stop", m],
-                               capture_output=True, timeout=10)
-    except Exception:
-        pass
+
+def _stop_config_models(config: Config):
+    """Configに記載されたモデルを停止する。"""
+    for name in config.model.model_names:
+        with contextlib.suppress(Exception):
+            subprocess.run(["ollama", "stop", name], capture_output=True, timeout=10)
+
+
+def _ensure_config_models(config: Config) -> bool:
+    """Configのモデルがpull済みか確認する。"""
+    _stop_config_models(config)
     time.sleep(0.5)
+    return all(_ensure_model_pulled(name) for name in config.model.model_names)
 
 
-_cleanup_ollama_models()
+def run():
+    """アプリケーションのエントリーポイント。"""
+    project_root = Path(__file__).parent
+    config_path = project_root / "config.yaml"
 
-# config.yamlに記載のモデルがpull済みか確認・ダウンロード
-_config_available = True
-try:
-    import yaml
-    from pathlib import Path
-    p = Path(__file__).parent / "config.yaml"
-    raw = yaml.safe_load(p.read_text(encoding="utf-8")) if p.exists() else {}
-    model_section = raw.get("model", {})
-    for key in ("smart_model", "fast_model", "draft_model"):
-        m = model_section.get(key)
-        if m and not _ensure_model_pulled(m):
-            _config_available = False
-except Exception:
-    pass
+    config = Config.load(str(config_path))
 
-if not _config_available:
-    print("必要なモデルが利用できません。プログラムを終了します。", file=sys.stderr)
-    sys.exit(1)
+    _restart_ollama()
 
+    if not _ensure_config_models(config):
+        print("必要なモデルが利用できません。プログラムを終了します。", file=sys.stderr)
+        sys.exit(1)
 
-_cleanup_ollama_models()
+    from adapters.cli.server import main as cli_main
 
-from core.cli import run_cli
+    cli_main()
+
 
 if __name__ == "__main__":
-    run_cli()
+    run()

@@ -27,7 +27,7 @@ personality:
   prompt_file: .iris/config/personality_default.md
 # ===== 新規: 自律的会話設定 =====
 proactive:
-  enabled: true
+  enabled: false
   check_interval_sec: 5.0
   min_interval_sec: 30.0
   max_interval_sec: 300.0

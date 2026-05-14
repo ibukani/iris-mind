@@ -57,6 +57,20 @@ class UserInputEvent(Event):
 
 
 @dataclass
+class CommandRequestEvent(Event):
+    command_name: str
+    args: str
+    raw: str
+
+
+@dataclass
+class CommandResponseEvent(Event):
+    command_name: str
+    content: str
+    success: bool = True
+
+
+@dataclass
 class ProactiveSpeechEvent(Event):
     content: str
     trigger_type: str
@@ -106,6 +120,8 @@ def new_trace_id() -> str:
 __all__ = [
     "Event",
     "UserInputEvent",
+    "CommandRequestEvent",
+    "CommandResponseEvent",
     "ProactiveSpeechEvent",
     "TimerTick",
     "AgentStateChangeEvent",

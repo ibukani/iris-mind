@@ -47,7 +47,7 @@ class ConversationService:
 
     def process_input(self, content: str) -> None:
         """ユーザー入力を処理する。（ストリーミング対応）
-        コマンド（/ で始まる入力）は CommandRouter が処理するため、本メソッドでは扱わない。"""
+        コマンド（/ で始まる入力）は InputBridge が横取りするため、本メソッドでは扱わない。"""
         if content.startswith("/"):
             return
         self._messages.append({"role": "user", "content": content})

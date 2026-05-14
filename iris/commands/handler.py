@@ -45,15 +45,8 @@ class CommandHandler:
         self._conversation = conversation
         self._proactive = proactive
 
-    def handle(self, text: str) -> str | None:
-        """テキストがコマンドなら処理し、応答文字列を返す。非コマンドなら None を返す。"""
-        if not text.startswith("/"):
-            return None
-
-        parts = text[1:].strip().split(maxsplit=1)
-        cmd = parts[0].lower()
-        args = parts[1] if len(parts) > 1 else ""
-
+    def handle(self, command_name: str, args: str) -> str:
+        """コマンドを実行し、応答文字列を返す。"""
         handler = {
             "help": self._cmd_help,
             "sleep": self._cmd_sleep,
@@ -62,10 +55,10 @@ class CommandHandler:
             "clear": self._cmd_clear,
             "status": self._cmd_status,
             "reflect": self._cmd_reflect,
-        }.get(cmd)
+        }.get(command_name)
 
         if handler is None:
-            return f"不明なコマンド: /{cmd}\n{self._cmd_help()}"
+            return f"不明なコマンド: /{command_name}\n{self._cmd_help()}"
 
         return handler(args)
 

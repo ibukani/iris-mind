@@ -104,7 +104,7 @@ def _terminate(proc: subprocess.Popen | None, name: str, timeout: float = _SHUTD
 
 
 def _shutdown(
-    kernel: KernelProcessProxy,
+    kernel: KernelProcessProtocol,
     input_proc: subprocess.Popen | None,
     output_proc: subprocess.Popen | None,
 ) -> None:
@@ -128,28 +128,6 @@ def _shutdown(
     logger.info("Supervisor: all processes terminated")
 
 
-class KernelProcessProxy:
-    """Supervisor から KernelProcess への null-safe なラッパー。"""
-
-    def __init__(self) -> None:
-        self._kernel: KernelProcessProtocol | None = None
-
-    def bind(self, kernel: KernelProcessProtocol) -> None:
-        self._kernel = kernel
-
-    def start(self) -> None:
-        assert self._kernel is not None
-        self._kernel.start()
-
-    def shutdown(self) -> None:
-        if self._kernel is not None:
-            self._kernel.shutdown()
-
-    def stop_bridge(self, side: str) -> None:
-        if self._kernel is not None:
-            self._kernel.stop_bridge(side)
-
-
 def run() -> None:
     args = _parse_args()
     project_root = Path(__file__).parent
@@ -168,8 +146,7 @@ def run() -> None:
     # Kernel プロセス起動（同一プロセス内）
     from iris.kernel.core import KernelProcess
 
-    kernel = KernelProcessProxy()
-    kernel.bind(KernelProcess(config))
+    kernel: KernelProcessProtocol = KernelProcess(config)
     kernel.start()
 
     # Input / Output 子プロセス起動

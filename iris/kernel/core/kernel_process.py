@@ -43,7 +43,7 @@ class KernelProcess:
         self._output_bridge = OutputBridge(self._ctx.event_bus, PIPE_NAME_KERNEL_OUTPUT)
         self._output_bridge.start()
 
-        self._input_bridge = InputBridge(self._ctx.event_bus, PIPE_NAME_KERNEL_INPUT)
+        self._input_bridge = InputBridge(self._ctx.event_bus, self._ctx.cmd_handler, PIPE_NAME_KERNEL_INPUT)
         self._input_bridge.start()
 
         logger.info("KernelProcess: started")

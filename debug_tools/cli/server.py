@@ -80,7 +80,10 @@ class CLIAdapter:
                 # コマンドハンドラで処理（/ で始まる入力をインターセプト）
                 if text.startswith("/"):
                     self._ctx.proactive.notify_user_activity()
-                    response = self._ctx.cmd_handler.handle(text)
+                    parts = text[1:].strip().split(maxsplit=1)
+                    cmd = parts[0].lower()
+                    args = parts[1] if len(parts) > 1 else ""
+                    response = self._ctx.cmd_handler.handle(cmd, args)
                     if response:
                         console.print(f"[bold cyan][System][/bold cyan] {response}")
                     continue

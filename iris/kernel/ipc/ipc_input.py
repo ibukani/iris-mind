@@ -6,10 +6,8 @@ from datetime import datetime
 
 from iris.commands.handler import CommandHandler
 
-from ..event.event import AgentResponseEvent, UserInputEvent
+from ..event.event import CommandRequestEvent, CommandResponseEvent, Event
 from ..event.event_bus import EventBusProtocol
-from ..services.conversation import ConversationService
-from ..services.proactive import ProactiveEngine
 from .ipc import PipeConnection, PipeServer
 
 logger = logging.getLogger(__name__)
@@ -18,8 +16,14 @@ PIPE_NAME_INPUT = r"\\.\pipe\iris-kernel-input"
 
 
 class InputBridge:
-    def __init__(self, event_bus: EventBusProtocol, pipe_address: str = PIPE_NAME_INPUT) -> None:
+    def __init__(
+        self,
+        event_bus: EventBusProtocol,
+        cmd_handler: CommandHandler,
+        pipe_address: str = PIPE_NAME_INPUT,
+    ) -> None:
         self._event_bus = event_bus
+        self._cmd_handler = cmd_handler
         self._pipe_address = pipe_address
         self._server: PipeServer | None = None
         self._running = False
@@ -50,7 +54,7 @@ class InputBridge:
                 conn_id = self._conn_count
                 logger.info("InputBridge: Input connection #%d accepted", conn_id)
                 t = threading.Thread(
-                    target=self._handle_input,
+                    target=self._serve_connection,
                     args=(conn, conn_id),
                     daemon=True,
                     name=f"input-{conn_id}",
@@ -61,44 +65,31 @@ class InputBridge:
                     logger.exception("InputBridge accept failed")
                 break
 
-    def _handle_input(self, conn: PipeConnection, conn_id: int) -> None:
+    def _serve_connection(self, conn: PipeConnection, conn_id: int) -> None:
         try:
             while self._running:
-                event = conn.recv()
-                self._event_bus.publish(event)
+                self._route_event(conn, conn.recv())
         except (EOFError, ConnectionError, BrokenPipeError):
             logger.info("InputBridge: connection #%d disconnected", conn_id)
 
+    def _route_event(self, conn: PipeConnection, event: Event) -> None:
+        match event:
+            case CommandRequestEvent():
+                self._exec_command(conn, event)
+            case _:
+                self._event_bus.publish(event)
 
-class CommandRouter:
-    def __init__(
-        self,
-        cmd_handler: CommandHandler,
-        proactive: ProactiveEngine,
-        event_bus: EventBusProtocol,
-        conversation: ConversationService,
-    ) -> None:
-        self._cmd_handler = cmd_handler
-        self._proactive = proactive
-        self._event_bus = event_bus
-        self._conversation = conversation
-        self._event_bus.subscribe("UserInputEvent", self._on_user_input)
-
-    def _on_user_input(self, event: UserInputEvent) -> None:
-        if event.content.startswith("/"):
-            self._proactive.notify_user_activity()
-            response = self._cmd_handler.handle(event.content)
-            if response:
-                self._event_bus.publish(
-                    AgentResponseEvent(
-                        timestamp=datetime.now(),
-                        source="command",
-                        content=response,
-                        trace_id=event.trace_id,
-                    )
-                )
-        else:
-            self._conversation.process_input(event.content)
+    def _exec_command(self, conn: PipeConnection, event: CommandRequestEvent) -> None:
+        response = self._cmd_handler.handle(event.command_name, event.args)
+        conn.send(
+            CommandResponseEvent(
+                timestamp=datetime.now(),
+                source="command",
+                command_name=event.command_name,
+                content=response,
+                trace_id=event.trace_id,
+            ),
+        )
 
 
-__all__ = ["InputBridge", "CommandRouter"]
+__all__ = ["InputBridge"]

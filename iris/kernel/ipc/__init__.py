@@ -8,7 +8,7 @@ from iris.kernel.ipc.ipc import (
     PipeServer,
     ReplayableTransport,
 )
-from iris.kernel.ipc.ipc_input import CommandRouter, InputBridge
+from iris.kernel.ipc.ipc_input import InputBridge
 from iris.kernel.ipc.ipc_output import OutputBridge
 
 __all__ = [
@@ -21,6 +21,5 @@ __all__ = [
     "PIPE_NAME_KERNEL_OUTPUT",
     "PIPE_NAME_CONTROL",
     "InputBridge",
-    "CommandRouter",
     "OutputBridge",
 ]

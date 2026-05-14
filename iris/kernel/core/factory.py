@@ -23,7 +23,6 @@ from ..agent_state import AgentStateManager
 from ..config import Config
 from ..controllers.proactive_response_tracker import ProactiveResponseTracker
 from ..event.event_bus import EventBus
-from ..ipc.ipc_input import CommandRouter
 from ..services.context import ContextManager
 from ..services.conversation import ConversationService
 from ..services.llm_pipeline import LLMPipeline
@@ -93,7 +92,6 @@ class KernelFactory:
             conversation=conversation,
             proactive=proactive,
         )
-        CommandRouter(cmd_handler=cmd_handler, proactive=proactive, event_bus=event_bus, conversation=conversation)
         ProactiveResponseTracker(proactive=proactive, event_bus=event_bus)
 
         return KernelContext(

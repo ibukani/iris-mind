@@ -42,7 +42,7 @@ def main() -> None:
 
 
 def _input_loop(client: PipeClient, is_running: Callable[[], bool]) -> None:
-    from iris.kernel.event import UserInputEvent
+    from iris.kernel.event import CommandRequestEvent, UserInputEvent
 
     q: queue.Queue[str | None] = queue.Queue()
 
@@ -72,13 +72,34 @@ def _input_loop(client: PipeClient, is_running: Callable[[], bool]) -> None:
             continue
         if text.lower() in ("exit", "quit"):
             break
-        client.send(
-            UserInputEvent(
-                timestamp=datetime.now(),
-                source="user_input",
-                content=text,
+        if text.startswith("/"):
+            parts = text[1:].strip().split(maxsplit=1)
+            cmd = parts[0].lower()
+            args = parts[1] if len(parts) > 1 else ""
+            client.send(
+                CommandRequestEvent(
+                    timestamp=datetime.now(),
+                    source="user_input",
+                    command_name=cmd,
+                    args=args,
+                    raw=text,
+                ),
             )
-        )
+            try:
+                response = client.recv()
+                if hasattr(response, "content"):
+                    print(response.content)
+            except (EOFError, ConnectionError, BrokenPipeError):
+                logger.info("Input Process: connection lost during command response")
+                break
+        else:
+            client.send(
+                UserInputEvent(
+                    timestamp=datetime.now(),
+                    source="user_input",
+                    content=text,
+                ),
+            )
 
 
 if __name__ == "__main__":

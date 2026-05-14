@@ -46,17 +46,22 @@ adapters/ ──→ iris/kernel/ ──→ iris/llm/, iris/memory/, iris/capabil
 Kernel Process
 ├── EventBus (Protocol)       — イベントルーティング
 │   ├── EventBus (in-memory)  — 単一プロセスモード
-│   ├── PipeServer            — マルチプロセスモード (IPC)
-│   └── ReplayableTransport   — デバッグ用記録・再生
+│   ├── PipeServer            — Named Pipe 待受
+│   ├── ReplayableTransport   — デバッグ用記録・再生
+│   ├── InputBridge           — Input Process 接続受付
+│   └── OutputBridge          — Output Process 接続受付
+├── IrisController            — プロセス起動・監視・ライフサイクル管理
 ├── AgentKernel               — 状態管理・異常検知・イベント統括
 ├── ConversationService       — 会話オーケストレーション
 │   ├── LLMPipeline           — LLM呼び出し＋ツールループ
-│   └── ReflexionManager      — 自己反省
+│   └── ReflexionManager      — 自己反省スケジューリング
 ├── ProactiveEngine           — 自発発話＋3層ガバナンス
-├── ProactiveResponseTracker  — 自発発話へのユーザー反応評価 (新規)
+├── ProactiveResponseTracker  — 自発発話へのユーザー反応評価
 ├── MemoryManager             — 記憶操作の一元管理
 ├── ToolExecutionEngine       — Tool Call実行
-└── CommandHandler            — スラッシュコマンド処理
+├── CommandHandler            — スラッシュコマンド処理
+├── CommandRouter             — UserInputEvent からのコマンド抽出
+└── ContextManager            — 会話履歴 compaction
 ```
 
 ## 3. イベント駆動設計
@@ -78,6 +83,7 @@ class EventBusProtocol(Protocol):
 | `ProactiveSpeechEvent` | 自発発話 | Kernel → Output |
 | `TimerTick` | 定期タイマー | Kernel (内部) |
 | `AgentStateChangeEvent` | 状態遷移 | Kernel (内部) |
+| `MemoryUpdateEvent` | 記憶更新 | Kernel (内部) |
 | `AgentStreamEvent` | LLMストリーミングトークン | Kernel → Output |
 | `AgentResponseEvent` | LLM最終応答 | Kernel → Output |
 | `AgentAnomalyEvent` | 異常検知 | Kernel → Output |
@@ -135,13 +141,14 @@ IDLE / PROCESSING / PROACTIVE / REFLECTING / THINKING / SLEEPING
 ```
 iris-kernel/
 ├── .iris/                       # 設定・データファイル（不変）
-├── adapters/
+├── debug_tools/
 │   ├── __init__.py
 │   ├── cli/
 │   │   ├── __init__.py
-│   │   ├── input_main.py        # Input Process (新規)
-│   │   ├── output_main.py       # Output Process (新規)
-│   │   └── renderer.py          # 表示ロジック (新規)
+│   │   ├── input_main.py        # Input Process
+│   │   ├── output_main.py       # Output Process
+│   │   ├── renderer.py          # 表示ロジック
+│   │   └── server.py            # 単一プロセス互換用
 │   ├── api/                     # 将来: WebSocket/HTTP Input
 │   └── gui/                     # 将来: GUI Output
 ├── iris/
@@ -151,19 +158,21 @@ iris-kernel/
 │   │   ├── agent_state.py
 │   │   ├── config.py
 │   │   ├── context.py
-│   │   ├── controller.py        # 新規: プロセス管理
+│   │   ├── controller.py        # プロセス管理
 │   │   ├── conversation.py
-│   │   ├── event.py             # 新規: イベントクラス群
+│   │   ├── event.py             # イベントクラス群
 │   │   ├── event_bus.py         # EventBusProtocol + EventBus
 │   │   ├── factory.py
-│   │   ├── ipc.py               # 新規: PipeServer / PipeClient
-│   │   ├── ipc_output.py        # 新規: OutputBridge
-│   │   ├── ipc_input.py         # 新規: InputBridge
+│   │   ├── ipc.py               # PipeServer / PipeClient
+│   │   ├── ipc_output.py        # OutputBridge
+│   │   ├── ipc_input.py         # InputBridge
 │   │   ├── memory_manager.py
 │   │   ├── proactive.py
-│   │   ├── proactive_response_tracker.py  # 新規
+│   │   ├── proactive_response_tracker.py  # Proactive 応答追跡
 │   │   ├── reflexion.py
 │   │   ├── reflexion_manager.py
+│   │   ├── llm_pipeline.py
+│   │   ├── logging.py
 │   │   └── tool_executor.py
 │   ├── llm/
 │   ├── memory/
@@ -175,8 +184,8 @@ iris-kernel/
 │   ├── adr/
 │   │   └── 001-3-process-architecture.md  # 新規
 │   ├── architecture.md           # 本書
-│   ├── ipc-spec.md               # 新規
-│   ├── migration-roadmap.md      # 新規
+│   ├── ipc-spec.md               # IPC プロトコル仕様
+│   ├── migration-roadmap.md      # 移行ロードマップ
 │   └── ... (既存の各設計書)
 ├── main.py
 └── config.yaml

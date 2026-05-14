@@ -20,15 +20,17 @@ Iris は自律的に行動・進化できるAIアシスタント。Python製でO
     ├── persona_data.json         ← 話し方・性格（動的管理）
     └── chroma_db/                ← ChromaDBベクトルストア
 
-adapters/                         ← 外部UI層（CLI, API, GUI）
-├── cli/                          ← CLIアダプター（実際の対話インターフェース）
+debug_tools/                      ← 入出力分離のデバッグ用ツール群
+├── cli/                          ← CLIアダプター（input_main, output_main, renderer, server）
 └── __init__.py
 
 iris/                             ← アプリケーションコア
 ├── kernel/                       ← ドメイン層（EventBus, AgentState, Config,
 │                                  MemoryManager, ProactiveEngine, AgentKernel,
-│                                  ConversationService, Reflexion, ContextManager,
-│                                  ToolExecutionEngine, KernelFactory）
+│                                  ConversationService, Reflexion, ReflexionManager,
+│                                  ContextManager, LLMPipeline, ToolExecutionEngine,
+│                                  IrisController, KernelFactory, CommandRouter,
+│                                  InputBridge, OutputBridge, ProactiveResponseTracker）
 ├── llm/                          ← LLM通信（LLMBridge, OllamaProvider, OpenRouterProvider）
 ├── memory/                       ← 記憶管理（stores, vector_store, persona）
 ├── capabilities/                 ← ツール実行（registry + 8 tools）
@@ -37,7 +39,7 @@ iris/                             ← アプリケーションコア
 └── __init__.py
 
 docs/                             ← 設計ドキュメント
-├── adr/                          ← Architecture Decision Records（新規）
+├── adr/                          ← Architecture Decision Records
 .agents/                          ← コーディングエージェント用コンテキスト
 config.yaml                       ← Irisの設定ファイル
 main.py                           ← エントリーポイント
@@ -111,7 +113,7 @@ pytest tests/memory/ -q              # memoryテストのみ
   - 未知の role が指定された場合は `models[0]` にフォールバック
 - `config.yaml` の `model.provider` で Ollama / OpenRouter を切り替え可能
 - 会話履歴は `context_window`（トークン数）を超えた場合、`compaction_threshold` に基づき自動要約（ContextManager）
-- 要約は `## 会話の経緯` としてシステムプロンプトに注入。`/compact` コマンドで手動トリガー可能
+- 要約は `## Session Summary` としてシステムプロンプトに注入。`/compact` コマンドで手動トリガー可能
 - 要約時のモデルは `ModelConfig.get_model("default")` を使用（単一モデルも複数モデルも同じインターフェース）
 
 

@@ -53,41 +53,47 @@ adapters → iris/kernel → iris/llm / iris/memory / iris/capabilities
 ```
 iris-kernel/
 ├── .iris/                       # 設定・データファイル
-├── adapters/                    # UI層（Input/Output Process）
-│   ├── cli/
-│   │   ├── input_main.py        # Input Process (新規)
-│   │   ├── output_main.py       # Output Process (新規)
-│   │   └── renderer.py          # 表示ロジック (新規)
+├── debug_tools/                 # 入出力分離のデバッグ用ツール群
 │   ├── __init__.py
+│   ├── cli/
+│   │   ├── input_main.py        # Input Process
+│   │   ├── output_main.py       # Output Process
+│   │   ├── renderer.py          # 表示ロジック
+│   │   └── server.py            # 単一プロセス互換用
 ├── iris/                        # アプリケーションコア
 │   ├── kernel/                  # Kernel Process
 │   │   ├── agent_kernel.py
 │   │   ├── agent_state.py
 │   │   ├── config.py
 │   │   ├── context.py
-│   │   ├── controller.py        # 新規
+│   │   ├── controller.py        # IrisController
 │   │   ├── conversation.py
-│   │   ├── event.py             # 新規
+│   │   ├── event.py             # イベントクラス群
 │   │   ├── event_bus.py         # EventBusProtocol + EventBus
-│   │   ├── factory.py
-│   │   ├── ipc.py               # 新規: PipeServer / PipeClient
-│   │   ├── ipc_output.py        # 新規: OutputBridge
-│   │   ├── ipc_input.py         # 新規: InputBridge
+│   │   ├── factory.py           # KernelFactory
+│   │   ├── ipc.py               # PipeServer / PipeClient / ReplayableTransport
+│   │   ├── ipc_output.py        # OutputBridge
+│   │   ├── ipc_input.py         # InputBridge / CommandRouter
+│   │   ├── llm_pipeline.py      # LLMPipeline
+│   │   ├── logging.py           # ログ設定
 │   │   ├── memory_manager.py
 │   │   ├── proactive.py
-│   │   ├── proactive_response_tracker.py  # 新規
-│   │   └── ... (既存ファイル継続)
+│   │   ├── proactive_response_tracker.py  # Proactive 応答追跡
+│   │   ├── reflexion.py
+│   │   ├── reflexion_manager.py
+│   │   ├── tool_executor.py
+│   │   └── context.py           # ContextManager
 │   ├── llm/
 │   ├── memory/
 │   ├── capabilities/
 │   ├── commands/
 │   └── personality/
 ├── docs/
-│   ├── adr/                     # 新規
+│   ├── adr/
 │   │   └── 001-3-process-architecture.md
 │   ├── architecture.md
-│   ├── ipc-spec.md              # 新規
-│   ├── migration-roadmap.md     # 新規
+│   ├── ipc-spec.md
+│   ├── migration-roadmap.md
 │   └── ... (既存設計書)
 ├── main.py
 └── config.yaml

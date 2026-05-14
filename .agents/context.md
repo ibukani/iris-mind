@@ -39,7 +39,7 @@
 ### IPC
 - Windows Named Pipes（`multiprocessing.connection` の `AF_PIPE`）
 - 将来 TCP 移行時は `family="AF_INET"` に変更するだけ
-- シリアライズは pickle（標準動作）
+- シリアライズは JSON（`ipc.py:_serialize()` / `_deserialize()`）
 
 ### 移行 Phase
 1. Phase 0: EventBus Protocol 化 + イベントシリアライズ（trace_id 追加）
@@ -59,7 +59,7 @@
 
 ## 既知の課題・注意点
 
-- Ollama が動作していないと Iris は起動しない（`main.py:_ensure_config_models`、OpenRouter利用時はスキップ）
+- Ollama が動作していないと Iris は起動しない（`main.py:_check_environment()`、OpenRouter利用時はスキップ）
 - ChromaDB の ONNX 埋め込みは初回実行時にモデルを自動DLする（~80MB）
 - `.iris/data/iris_profile.md` は上限2KBの構造記憶のみ（話し方・性格は `persona_data.json` で動的管理）
 - Windows環境を前提としている（パス区切り文字、シェル実行等）

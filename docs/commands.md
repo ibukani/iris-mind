@@ -3,7 +3,7 @@
 ## 概要
 
 `iris/commands/` パッケージはスラッシュコマンド（`/command`）の解釈と実行を担当する。
-CLIアダプターの入力ループでインターセプトされ、通常の会話処理（EventBus経由）をバイパスして即座に応答する。
+`CommandRouter`（`ipc_input.py`）が UserInputEvent を購読し、`/` で始まる入力をインターセプトする。通常の会話処理（LLM呼び出し）をバイパスして即座に応答する。
 
 ## コンポーネント
 
@@ -23,15 +23,15 @@ response = handler.handle("/sleep")  # → "おやすみなさい。..."
 | `/help` | なし | 利用可能なコマンド一覧を表示 |
 | `/sleep` | なし | AgentState を SLEEPING に遷移（自発発話・入力応答を中断） |
 | `/wakeup` | なし | SLEEPING → IDLE に復帰 |
-| `/compact` | なし | 会話履歴をクリア（ContextManager が次回再構築） |
-| `/clear` | なし | `/compact` と同義。会話履歴を消去 |
+| `/compact` | なし | 会話履歴を強制要約（ContextManager が compaction） |
+| `/clear` | なし | 会話履歴を全て消去（`clear_history()`） |
 | `/status` | なし | 現在の状態・抑制情報を表示 |
 | `/reflect` | なし | セッション反省（Reflexion.reflect）を強制実行 |
 
 ## 依存関係
 
 ```
-adapters/cli/server.py → iris/commands/handler → iris/kernel/{agent_state, conversation, proactive}
+CommandRouter (ipc_input.py) → CommandHandler → iris/kernel/{agent_state, conversation, proactive}
 ```
 
 - `iris/commands/` は `iris/kernel/` にのみ依存する

@@ -15,11 +15,11 @@
 | completed | high | アーキテクチャ設計書更新（docs/architecture.md） | |
 | completed | high | EventBus仕様書更新（docs/event-bus.md） | |
 | completed | medium | 運用文書更新（.agents/*.md, AGENTS.md, docs/README.md） | |
-| pending | high | Phase 0: EventBus Protocol 化 + event.py + ipc.py 実装 | |
-| pending | high | Phase 1: Output Process 分離（output_main.py, renderer.py, OutputBridge） | |
-| pending | high | Phase 2: Input Process 分離 + ProactiveResponseTracker移植 + server.py削除 | |
-| pending | medium | Phase 3: Controller プロセス導入 | |
-| pending | low | Phase 4: マルチ入力ソース対応 | |
+| completed | high | Phase 0: EventBus Protocol 化 + event.py + ipc.py 実装 | |
+| completed | high | Phase 1: Output Process 分離（output_main.py, renderer.py, OutputBridge） | |
+| completed | high | Phase 2: Input Process 分離 + ProactiveResponseTracker移植 + CommandRouter | |
+| completed | high | Phase 3: Controller プロセス導入（IrisController + ヘルスチェック + 自動再起動） | |
+| pending | low | Phase 4: マルチ入力ソース対応（TCP Input, WebSocket, Discord Bot） | |
 
 ## 凡例
 

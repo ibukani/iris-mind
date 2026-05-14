@@ -2,8 +2,8 @@
 
 ## 概要
 
-AgentKernel は Iris カーネルのエントリポイント。EventBus によるイベント駆動を前提に、
-ライフサイクル管理、イベントルーティング、Tier3 異常検知を担当する。
+AgentKernel は Iris カーネルの状態管理・イベント統括・Tier3 異常検知を担当する。
+エントリポイントは IrisController が担い、AgentKernel はその一部として動作する。
 
 ## 責務
 
@@ -21,13 +21,17 @@ AgentKernel
 │   ├── subscribe(UserInputEvent)      → _on_user_input()
 │   ├── subscribe(ProactiveSpeechEvent) → _on_proactive_speech()
 │   ├── subscribe(AgentStateChangeEvent) → _on_state_change()
+│   ├── subscribe(AgentResponseEvent)   → _on_agent_response()
 │   └── timer thread → publish TimerTick
 ├── shutdown()
 │   └── stop timer thread
 ├── _on_user_input(event)
-│   ├── state check (IDLE or PROCESSING)
+│   ├── state check (IDLE only)
 │   ├── transition to PROCESSING
 │   ├── ProactiveEngine.notify_user_activity()
+│   ├── MemoryManager.add_episodic()
+│   └── (IDLE 遷移は _on_agent_response が担当)
+├── _on_agent_response(event)
 │   ├── MemoryManager.add_episodic()
 │   └── transition to IDLE
 ├── _on_proactive_speech(event)
@@ -37,12 +41,12 @@ AgentKernel
     └── logging
 
 AnomalyDetector (Tier3)
-├── record_speech() → list[flag]
+├── record_speech() → list[str]
 │   └── 直近5分間のスライディングウィンドウで頻度超過検出
-└── check_suppression_health(status) → list[issue]
-    ├── confirmation_mode → warning
-    ├── high_ignore_rate → warning
-    └── negative_mood → info
+└── check_suppression_health(status) → list[dict]
+    ├── confirmation_mode → dict(type, severity, detail)
+    ├── high_ignore_rate → dict(type, severity, detail)
+    └── negative_mood → dict(type, severity, detail)
 ```
 
 ## イベントフロー
@@ -55,10 +59,14 @@ AnomalyDetector (Tier3)
 
 [UserInputEvent 受信]
     └── → AgentKernel._on_user_input()
-           ├── 状態遷移（IDLE → PROCESSING → IDLE）
+           ├── 状態遷移（IDLE → PROCESSING）
            ├── ProactiveEngine にユーザー活動を通知
            └── 入力をエピソード記憶に記録
-           （会話応答は将来 ConversationService が担当）
+    → ConversationService._on_user_input()
+           └── LLM 応答 → AgentResponseEvent
+    → AgentKernel._on_agent_response()
+           ├── 応答をエピソード記憶に記録
+           └── 状態遷移（PROCESSING → IDLE）
 
 [ProactiveSpeechEvent 受信]
     └── → AgentKernel._on_proactive_speech()
@@ -70,7 +78,7 @@ AnomalyDetector (Tier3)
 
 | ルール | 条件 | 深刻度 | アクション |
 |--------|------|--------|-----------|
-| 頻度超過 | 直近5分に5回以上の自発発話 | warning | ログ警告 |
+| 頻度超過 | 直近5分に5回以上の自発発話 | warning | ログ警告 + 300秒クールダウン |
 | 無視蓄積 | consecutive_ignores >= 3 | warning | ログ警告 |
 | confirmation_mode | confirmation_mode == True | warning | ログ警告 |
 | ネガティブ感情 | negative_mood_score >= 0.7 | info | 情報ログ |

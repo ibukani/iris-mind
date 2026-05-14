@@ -72,7 +72,17 @@ trigger_weights:
 |-----------|-----|-----------|------|
 | name | str | "Iris" | AIの名前 |
 | thinking_mode_default | bool | False | デフォルト思考モード |
-| prompt_file | str | "memory/personality_default.md" | システムプロンプトファイル |
+| mode_default | str | "auto" | 動作モード（auto/manual） |
+| prompt_file | str | ".iris/config/personality_default.md" | システムプロンプトファイル |
+
+## LoggingConfig
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| level | str | "INFO" | ログレベル |
+| dir | str | "logs" | ログ出力ディレクトリ |
+| max_bytes | int | 5242880 | ログファイル最大サイズ |
+| backup_count | int | 14 | 保持する起動世代数 |
 
 ## MemoryConfig
 

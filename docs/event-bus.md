@@ -29,12 +29,12 @@ class EventBus:
     def unsubscribe(self, event_type: str, handler: Callable) -> None: ...
 ```
 
-### ReplayableEventBus（デバッグ用デコレータ）
+### ReplayableTransport（デバッグ用ラッパー）
 
 ```python
-class ReplayableEventBus:
-    """実 EventBus の前面に置き、全イベントを JSONL に記録するデコレータ。
-    記録されたイベント列は後で再生可能。"""
+class ReplayableTransport:
+    """PipeServer/PipeClient の前面に置き、送受信イベントを JSONL に記録する。
+    記録されたイベント列は後で再生可能（ReplayTransport は未実装）。"""
 ```
 
 動作は同期インメモリ。スレッドセーフ（`threading.Lock` で保護）。
@@ -77,6 +77,13 @@ class ReplayableEventBus:
 | `previous_state` | `str` | 遷移前の状態名 |
 | `new_state` | `str` | 遷移後の状態名 |
 
+### MemoryUpdateEvent
+
+| フィールド | 型 | 説明 |
+|-----------|---|------|
+| `entry_type` | `str` | 記憶種別 |
+| `content` | `str` | 記憶内容 |
+
 ### AgentStreamEvent
 
 | フィールド | 型 | 説明 |
@@ -116,20 +123,18 @@ class ReplayableEventBus:
 ```python
 class OutputBridge:
     """EventBus のイベントを購読し、Named Pipe を通じて Output Process に中継する。"""
-    def __init__(self, event_bus: EventBusProtocol, pipe_client: PipeClient):
-        event_bus.subscribe("AgentStreamEvent", self._on_stream_token)
-        event_bus.subscribe("AgentResponseEvent", self._on_response)
-        event_bus.subscribe("ProactiveSpeechEvent", self._on_proactive)
-        event_bus.subscribe("AgentAnomalyEvent", self._on_anomaly)
+    def __init__(self, event_bus: EventBusProtocol, pipe_address: str):
+        self._subscribe()
+    def start(self):
+        """PipeServer を起動し、accept ループを開始する。"""
+    def stop(self):
+        """全コネクションを切断し、サブスクリプションを解除する。"""
 ```
 
 ### Output Process 側
 
-```python
-class PipeClient:
-    """Named Pipe からイベントを受信し、対応するハンドラに配送する。"""
-    def recv_loop(self): ...
-```
+`PipeClient.recv()` でイベントを受信し、`renderer.py` で表示する。
+ループは `output_main.py` で管理される。
 
 ## 配信例
 
@@ -151,5 +156,5 @@ Input Process → Pipe → Kernel Process → Pipe → Output Process
 - イベントクラスは全て `Event` を基底クラスとし、`dataclass` で定義すること
 - `source` フィールドはイベントの発生源デバッグ用。省略不可
 - `trace_id` は Input Process で生成し、Kernel → Output まで伝搬すること
-- IPC 使用時は pickle でシリアライズされるため、イベントクラスは pickle 可能であること
-- デバッグ用の `ReplayableEventBus` は JSONL に記録するため、`to_dict()` / `from_dict()` を持つこと
+- IPC 使用時は JSON でシリアライズされる（`ipc.py:_serialize()` / `_deserialize()`）
+- デバッグ用の `ReplayableTransport` は `to_dict()` の出力を JSONL に記録する

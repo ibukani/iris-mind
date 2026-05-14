@@ -43,13 +43,13 @@ def get_user_preferences() -> list[dict]
 ```python
 def add_episodic(
     content: str,
-    kind: str = "user_input",
+    _kind: str = "user_input",
     metadata: dict | None = None,
 ) -> None
 ```
 
 - エピソード記憶に追加
-- `kind`: "user_input" | "assistant" | "proactive" | "system"
+- `_kind`: "user_input" | "assistant" | "proactive" | "system"（内部キーワード引数）
 - `metadata` がある場合、content に追記して保存
 
 ```python

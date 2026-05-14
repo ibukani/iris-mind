@@ -28,7 +28,8 @@ conn = multiprocessing.connection.Client(
 
 | Pipe 名 | 方向 | 用途 |
 |---------|------|------|
-| `\\.\pipe\iris-kernel` | 双方向 | Kernel との全通信。Input/Output 両方の接続を受け付ける |
+| `\\.\pipe\iris-kernel-output` | Kernel→Output | Kernel から Output Process へのイベント配信 |
+| `\\.\pipe\iris-kernel-input` | Input→Kernel | Input Process から Kernel へのユーザー入力転送 |
 | `\\.\pipe\iris-control` | 双方向 | Controller からのライフサイクル制御（シャットダウン、ヘルスチェック） |
 
 Kernel は単一の Listener で全クライアント接続を受け付け、接続ごとにスレッドを割り当てる。
@@ -50,16 +51,11 @@ event = Event.from_dict(json.loads(raw))
 **ワイヤー形式** (他言語から読み書きする場合):
 
 ```
-[4バイト: データ長(Little Endian)] [UTF-8 JSON]
-```
-
-例:
-```
 { "type": "UserInputEvent", "content": "hello", "source": "cli", "timestamp": "...", "trace_id": "abc" }
 ```
 
 **制約**:
-- `send_bytes()` / `recv_bytes()` は multiprocessing.connection が提供する内部バッファリングを使用
+- `send_bytes()` / `recv_bytes()` がフレーミングを内部処理
 - 最大メッセージサイズはデフォルトで 32MB（要調整時は別途指定）
 
 ### 2.4 Replay ファイル形式
@@ -72,7 +68,7 @@ event = Event.from_dict(json.loads(raw))
 {"type": "AgentResponseEvent", "trace_id": "abc-123", "data": {"content": "...", ...}}
 ```
 
-`ReplayableTransport` クラスがこの形式で記録し、`ReplayTransport` クラスが再生する。
+`ReplayableTransport` クラスがこの形式で記録する。再生用クラス（`ReplayTransport`）は未実装。
 
 ## 3. 接続ライフサイクル
 

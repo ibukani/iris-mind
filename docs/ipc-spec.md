@@ -35,20 +35,32 @@ Kernel は単一の Listener で全クライアント接続を受け付け、接
 
 ### 2.3 シリアライズ
 
-`multiprocessing.connection` の標準動作に従い、Python オブジェクトを直接 send/recv する。
-内部では pickle プロトコルが使用される。
+JSON Lines 形式を使用する。`send_bytes()` / `recv_bytes()` でフレーミングする。
 
 ```python
 # 送信
-conn.send(event)
+data = json.dumps(event.to_dict(), ensure_ascii=False)
+conn.send_bytes(data.encode("utf-8"))
 
 # 受信
-event = conn.recv()
+raw = conn.recv_bytes().decode("utf-8")
+event = Event.from_dict(json.loads(raw))
+```
+
+**ワイヤー形式** (他言語から読み書きする場合):
+
+```
+[4バイト: データ長(Little Endian)] [UTF-8 JSON]
+```
+
+例:
+```
+{ "type": "UserInputEvent", "content": "hello", "source": "cli", "timestamp": "...", "trace_id": "abc" }
 ```
 
 **制約**:
-- 送受信されるオブジェクトは全て `Event` のサブクラスインスタンス
-- `multiprocessing.connection` は 32MB のデフォルト制限を持つ（要調整時は別途指定）
+- `send_bytes()` / `recv_bytes()` は multiprocessing.connection が提供する内部バッファリングを使用
+- 最大メッセージサイズはデフォルトで 32MB（要調整時は別途指定）
 
 ### 2.4 Replay ファイル形式
 

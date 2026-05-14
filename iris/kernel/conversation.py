@@ -188,7 +188,6 @@ class ConversationService:
             speech_style=speech_style,
             personality_traits=traits,
             user_preferences=user_prefs,
-            conversation_summary="",
             governance_principles=governance,
         )
 

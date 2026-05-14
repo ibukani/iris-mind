@@ -76,7 +76,7 @@ class MemoryManager:
 
     def get_user_preferences(self) -> list[dict[str, Any]]:
         """ユーザーの好み・興味を検索する。"""
-        return self.search_semantic("ユーザーの好み 興味 趣味", max_results=5)
+        return self.search_semantic("ユーザーの好み 興味 趣味", max_results=2)
 
     # ── 記録 ──────────────────────────────────────────────
 

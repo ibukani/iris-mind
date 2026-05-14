@@ -345,7 +345,6 @@ class FakePersonality:
         speech_style: str = "",
         personality_traits: str = "",
         user_preferences: str = "",
-        conversation_summary: str = "",
         governance_principles: str = "",
     ) -> str:
         parts = [
@@ -353,7 +352,6 @@ class FakePersonality:
             f"## Personality\n{personality_traits}" if personality_traits else "",
             f"## Speech Style\n{speech_style}" if speech_style else "",
             f"## User Preferences\n{user_preferences}" if user_preferences else "",
-            f"## Session Summary\n{conversation_summary}" if conversation_summary else "",
             f"## Governance\n{governance_principles}" if governance_principles else "",
         ]
         self._system_prompt = "\n\n".join(p for p in parts if p) or "Default system prompt"

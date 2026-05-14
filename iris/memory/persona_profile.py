@@ -14,13 +14,13 @@ class PersonaProfile:
         self.persona_data = persona_data
 
     def get_speech_style(self) -> str:
-        entries = self.persona_data.get_top("speech_style", 2)
+        entries = self.persona_data.get_top("speech_style", 1)
         if not entries:
             return ""
         return "\n".join(f"- {e['text']}" for e in entries)
 
     def get_traits(self) -> str:
-        entries = self.persona_data.get_top("personality_traits", 2)
+        entries = self.persona_data.get_top("personality_traits", 1)
         if not entries:
             return ""
         return "\n".join(f"- {e['text']}" for e in entries)

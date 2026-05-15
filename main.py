@@ -7,32 +7,6 @@
     python main.py --input                  # Kernel + Input
     python main.py --output                 # Kernel + Output
     python main.py --verbose                # Kernel 診断ログを stderr に出力
-
-シャットダウン手順:
-
-  Ctrl+C (SIGINT) / SIGTERM (Unix のみ)
-    │
-    └→ Supervisor (main.py)
-          │
-          ├─ 1. stop_bridge("input") → Input PipeServer をクローズ
-          │      Input 子プロセス: PipeClient の送信失敗 → break → 終了
-          │      _terminate(): 念のため terminate() + wait(5s)
-          │
-          ├─ 2. Kernel.shutdown():
-          │      ├─ OutputBridge.stop()   → PipeServer クローズ
-          │      ├─ InputBridge.stop()    → PipeServer クローズ
-          │      ├─ session_reflect()
-          │      └─ agent_kernel.shutdown()
-          │
-          ├─ 3. stop_bridge("output") → Output PipeServer をクローズ
-          │      0.5s 待機（Output が最後の応答を表示し切る猶予）
-          │      Output 子プロセス: PipeClient.recv() 失敗 → break → 終了
-          │      _terminate(): 念のため terminate() + wait(5s)
-          │
-          └─ 4. 完了ログ
-
-  子プロセスの主要終了経路は Pipe 切断検知。
-  terminate() / kill() はタイムアウト時の保険であり、正常系では不要。
 """
 
 from __future__ import annotations
@@ -75,7 +49,6 @@ def _check_environment(config: Config) -> bool:
     console = Console()
     provider_cls = get_provider_class(config.model.provider)
     ok = provider_cls.ensure_environment(config.model)
-
     if not ok:
         console.print("[bold red]環境チェックに失敗しました。終了します。[/bold red]")
     return ok
@@ -108,20 +81,14 @@ def _shutdown(
     input_proc: subprocess.Popen | None,
     output_proc: subprocess.Popen | None,
 ) -> None:
-    """シャットダウン順序: Input → Kernel → Output"""
     logger.info("Supervisor: shutting down all processes")
 
-    # 1. Input を止める（ユーザー入力を遮断）
     if input_proc is not None:
-        kernel.stop_bridge("input")
         _terminate(input_proc, "Input Process")
 
-    # 2. Kernel を止める
     kernel.shutdown()
 
-    # 3. Output を止める（最後: Kernel の残した応答を出力し切る）
     if output_proc is not None:
-        kernel.stop_bridge("output")
         time.sleep(0.5)
         _terminate(output_proc, "Output Process")
 
@@ -143,29 +110,20 @@ def run() -> None:
     input_proc: subprocess.Popen | None = None
     output_proc: subprocess.Popen | None = None
 
-    # Kernel プロセス起動（同一プロセス内）
     from iris.kernel.core import KernelProcess
 
     kernel: KernelProcessProtocol = KernelProcess(config)
     kernel.start()
 
-    # Input / Output 子プロセス起動
     if args.input:
-        from iris.kernel.ipc import PIPE_NAME_KERNEL_INPUT
+        from iris.kernel.io.models import PIPE_NAME_INPUT
 
-        input_proc = _spawn(
-            ["-m", "debug_tools.cli.input_main", PIPE_NAME_KERNEL_INPUT],
-            "Input Process",
-        )
+        input_proc = _spawn(["-m", "debug_tools.cli.input_main", PIPE_NAME_INPUT], "Input Process")
     if args.output:
-        from iris.kernel.ipc import PIPE_NAME_KERNEL_OUTPUT
+        from iris.kernel.io.models import PIPE_NAME_OUTPUT
 
-        output_proc = _spawn(
-            ["-m", "debug_tools.cli.output_main", PIPE_NAME_KERNEL_OUTPUT],
-            "Output Process",
-        )
+        output_proc = _spawn(["-m", "debug_tools.cli.output_main", PIPE_NAME_OUTPUT], "Output Process")
 
-    # シグナルハンドラ設定
     shutdown_requested = False
 
     def _on_signal(sig: int, _frame: object) -> None:
@@ -180,9 +138,7 @@ def run() -> None:
     signal.signal(signal.SIGINT, _on_signal)
     if sys.platform != "win32":
         signal.signal(signal.SIGTERM, _on_signal)
-    # Windows: SIGTERM は TerminateProcess 相当のためハンドラ不可。Ctrl+C (SIGINT) のみ
 
-    # メインスレッド生存維持
     logger.info("Supervisor: running")
     try:
         while not shutdown_requested:

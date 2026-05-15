@@ -30,8 +30,7 @@ iris/                             ← アプリケーションコア
 │                                  MemoryManager, ProactiveEngine, AgentKernel,
 │                                  ConversationService, Reflexion, ReflexionManager,
 │                                  ContextManager, LLMPipeline, ToolExecutionEngine,
-│                                  KernelProcess, KernelFactory, CommandRouter,
-│                                  InputBridge, OutputBridge, ProactiveResponseTracker）
+│                                  KernelProcess, KernelFactory, CommandRouter）
 ├── llm/                          ← LLM通信（LLMBridge, OllamaProvider, OpenRouterProvider）
 ├── memory/                       ← 記憶管理（stores, vector_store, persona）
 ├── capabilities/                 ← ツール実行（registry + 8 tools）
@@ -99,7 +98,7 @@ ruff format --check .                 # format check
 ruff check --fix .                    # lint + auto-fix
 mypy .                                # type check
 mypy --install-types                  # 型スタブ初回インストール
-pytest tests/                         # 全テスト実行（179 tests, ~9秒）
+pytest tests/                         # 全テスト実行（220 tests, ~9秒）
 pytest tests/kernel/ -q              # kernelテストのみ
 pytest tests/memory/ -q              # memoryテストのみ
 ```

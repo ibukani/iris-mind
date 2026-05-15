@@ -4,21 +4,18 @@ import logging
 from multiprocessing.connection import Client
 from typing import Any
 
-from iris.kernel.io.models import OutputMessage
+from iris.kernel.io.models import PIPE_NAME_OUTPUT, OutputMessage
 
 logger = logging.getLogger(__name__)
 
-PIPE_NAME_OUTPUT = r"\\.\pipe\iris-kernel-output"
-
 
 class OutputManager:
-    def __init__(self, pipe_address: str = PIPE_NAME_OUTPUT) -> None:
-        self._pipe_address = pipe_address
+    def __init__(self) -> None:
         self._client: Any = None
 
-    def start(self) -> None:
-        self._client = Client(self._pipe_address, family="AF_PIPE")
-        logger.info("OutputManager connected to %s", self._pipe_address)
+    def start(self, pipe_address: str = PIPE_NAME_OUTPUT) -> None:
+        self._client = Client(pipe_address, family="AF_PIPE")
+        logger.info("OutputManager connected to %s", pipe_address)
 
     def stop(self) -> None:
         if self._client is not None:

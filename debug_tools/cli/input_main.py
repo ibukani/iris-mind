@@ -4,11 +4,10 @@ import logging
 import sys
 from multiprocessing.connection import Client
 
+from iris.kernel.io.models import PIPE_NAME_INPUT as PIPE_NAME_KERNEL_INPUT
 from iris.kernel.io.models import InputMessage
 
 logger = logging.getLogger(__name__)
-
-PIPE_NAME_KERNEL_INPUT = r"\\.\pipe\iris-kernel-input"
 
 
 def main() -> None:

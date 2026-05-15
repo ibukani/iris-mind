@@ -2,7 +2,7 @@
 TCP Input Adapter — TCP ソケット経由で Iris に入力を送信する。
 
 使用方法:
-    python -m adapters.tcp_input.main [<port>] [<pipe_address>]
+    python -m debug_tools.tcp_input.main [<port>] [<pipe_address>]
 
 外部から telnet や curl で接続:
     echo "hello" | nc localhost 9876
@@ -16,9 +16,11 @@ import socket
 import sys
 import threading
 import time
-from datetime import datetime
+from multiprocessing.connection import Client
+from typing import Any
 
-from iris.kernel.ipc import PIPE_NAME_KERNEL_INPUT, PipeClient
+from iris.kernel.io.models import PIPE_NAME_INPUT as PIPE_NAME_KERNEL_INPUT
+from iris.kernel.io.models import InputMessage
 
 logger = logging.getLogger(__name__)
 
@@ -55,11 +57,11 @@ def main() -> None:
         client.close()
 
 
-def _connect_to_kernel(pipe_address: str, retries: int = 5, delay: float = 2.0) -> PipeClient:
+def _connect_to_kernel(pipe_address: str, retries: int = 5, delay: float = 2.0) -> Any:
     last_error: Exception | None = None
     for attempt in range(retries):
         try:
-            return PipeClient(pipe_address)
+            return Client(pipe_address, family="AF_PIPE")
         except (ConnectionError, FileNotFoundError, OSError) as e:
             last_error = e
             if attempt < retries - 1:
@@ -69,9 +71,7 @@ def _connect_to_kernel(pipe_address: str, retries: int = 5, delay: float = 2.0) 
     raise last_error if last_error else ConnectionError(f"Could not connect to {pipe_address}")
 
 
-def _handle_tcp_conn(conn: socket.socket, addr: tuple[str, int], client: PipeClient) -> None:
-    from iris.kernel.event import UserInputEvent
-
+def _handle_tcp_conn(conn: socket.socket, addr: tuple[str, int], client: Any) -> None:
     try:
         with conn:
             conn.sendall(b"Iris TCP Input Adapter\n")
@@ -85,13 +85,16 @@ def _handle_tcp_conn(conn: socket.socket, addr: tuple[str, int], client: PipeCli
                     line, buffer = buffer.split(b"\n", 1)
                     text = line.decode("utf-8", errors="replace").strip()
                     if text:
-                        client.send(
-                            UserInputEvent(
-                                timestamp=datetime.now(),
-                                source=f"tcp:{addr[0]}:{addr[1]}",
-                                content=text,
-                            )
+                        msg = InputMessage(
+                            source=f"tcp:{addr[0]}:{addr[1]}",
+                            content=text,
+                            msg_type="command" if text.startswith("/") else "text",
                         )
+                        try:
+                            client.send_bytes(msg.model_dump_json().encode("utf-8"))
+                        except (BrokenPipeError, ConnectionError, EOFError):
+                            logger.debug("Kernel pipe closed, dropping TCP input")
+                            return
                         logger.debug("TCP input from %s: %s", addr[0], text)
     except (ConnectionError, OSError):
         logger.debug("TCP connection from %s closed", addr[0])

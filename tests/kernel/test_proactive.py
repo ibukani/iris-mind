@@ -6,7 +6,7 @@ from iris.kernel.agent_state import AgentStateManager, State
 from iris.kernel.config import ProactiveConfig
 from iris.kernel.event import EventBus, TimerTick
 from iris.kernel.services import ProactiveEngine
-from tests.conftest import FakeLLMProvider, FakeMemoryManager
+from tests.conftest import FakeLLMProvider, FakeMemoryManager, FakeOutputManager
 
 # ── Helper ────────────────────────────────────────────────────
 
@@ -19,6 +19,7 @@ def make_engine(
     llm: Any = None,
     fast_model: str | None = None,
     time_provider: Any = None,
+    output_manager: FakeOutputManager | None = None,
 ) -> ProactiveEngine:
     """Build ProactiveEngine with test defaults."""
     eb = event_bus or EventBus()
@@ -37,6 +38,7 @@ def make_engine(
     return ProactiveEngine(
         config=cfg,
         event_bus=eb,
+        output_manager=output_manager or FakeOutputManager(),
         state_manager=st,
         memory=mem,
         llm=llm,
@@ -452,15 +454,10 @@ class TestPublicAPI:
         gen = step_time()
         eb = EventBus()
         st = AgentStateManager(event_bus=eb)
-        engine = make_engine(config=config, event_bus=eb, state=st, time_provider=lambda: next(gen))
-        results: list[str] = []
-
-        def collect(event: Any) -> None:
-            results.append(event.content)
-
-        eb.subscribe("ProactiveSpeechEvent", collect)
+        out = FakeOutputManager()
+        engine = make_engine(config=config, event_bus=eb, state=st, time_provider=lambda: next(gen), output_manager=out)
         engine._on_timer_tick(TimerTick(timestamp=None, source="test", tick_count=0))
-        assert len(results) >= 1
+        assert len(out.sent) >= 1
 
     # ── Model injection ────────────────────────────────────────
 

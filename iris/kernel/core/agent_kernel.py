@@ -54,15 +54,21 @@ class AnomalyDetector:
         issues: list[dict[str, Any]] = []
         s = status.get("suppression", {})
         if s.get("confirmation_mode"):
-            issues.append({
-                "type": "confirmation_mode", "severity": "warning",
-                "detail": "User ignoring proactive messages",
-            })
+            issues.append(
+                {
+                    "type": "confirmation_mode",
+                    "severity": "warning",
+                    "detail": "User ignoring proactive messages",
+                }
+            )
         if s.get("consecutive_ignores", 0) >= 3:
-            issues.append({
-                "type": "high_ignore_rate", "severity": "warning",
-                "detail": f"Ignores: {s['consecutive_ignores']}",
-            })
+            issues.append(
+                {
+                    "type": "high_ignore_rate",
+                    "severity": "warning",
+                    "detail": f"Ignores: {s['consecutive_ignores']}",
+                }
+            )
         if s.get("negative_mood_score", 0.0) >= 0.7:
             issues.append({"type": "negative_mood", "severity": "info", "detail": "Negative mood detected"})
         return issues
@@ -111,9 +117,7 @@ class AgentKernel:
         def _loop() -> None:
             while self._running:
                 try:
-                    self._event_bus.publish(
-                        TimerTick(timestamp=datetime.now(), source="system", tick_count=0)
-                    )
+                    self._event_bus.publish(TimerTick(timestamp=datetime.now(), source="system", tick_count=0))
                     self._state.check_timeout()
                 except Exception:
                     logger.exception("TimerTick publish error")

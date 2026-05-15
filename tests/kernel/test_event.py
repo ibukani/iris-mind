@@ -2,35 +2,40 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import pytest
+
 from iris.kernel.event import (
     AgentAnomalyEvent,
-    AgentResponseEvent,
     AgentStateChangeEvent,
-    AgentStreamEvent,
     Event,
-    EventBus,
-    EventBusProtocol,
-    ProactiveSpeechEvent,
+    MemoryUpdateEvent,
     TimerTick,
-    UserInputEvent,
     new_trace_id,
 )
 
 
-def test_all_events_roundtrip_to_dict() -> None:
+def test_event_roundtrip_to_dict_and_back() -> None:
     events: list[Event] = [
-        UserInputEvent(timestamp=datetime(2026, 1, 1), source="test", content="hello"),
-        ProactiveSpeechEvent(
-            timestamp=datetime(2026, 1, 1), source="test", content="hi", trigger_type="time", confidence=0.8
-        ),
-        TimerTick(timestamp=datetime(2026, 1, 1), source="test", tick_count=5),
+        TimerTick(timestamp=datetime(2026, 1, 1), source="kernel", tick_count=3),
+        TimerTick(timestamp=None, source="kernel", tick_count=0),
         AgentStateChangeEvent(
-            timestamp=datetime(2026, 1, 1), source="test", previous_state="idle", new_state="processing"
+            timestamp=datetime(2026, 1, 1),
+            source="kernel",
+            previous_state="idle",
+            new_state="processing",
         ),
-        AgentStreamEvent(timestamp=datetime(2026, 1, 1), source="test", delta="hello ", trace_id="abc"),
-        AgentResponseEvent(timestamp=datetime(2026, 1, 1), source="test", content="hello world"),
+        MemoryUpdateEvent(
+            timestamp=datetime(2026, 1, 1),
+            source="memory",
+            entry_type="episodic",
+            content="user said hello",
+        ),
         AgentAnomalyEvent(
-            timestamp=datetime(2026, 1, 1), source="test", anomaly_type="freq", severity="warning", detail="too many"
+            timestamp=datetime(2026, 1, 1),
+            source="kernel",
+            anomaly_type="frequency",
+            severity="warning",
+            detail="too many retries",
         ),
     ]
     for original in events:
@@ -40,62 +45,45 @@ def test_all_events_roundtrip_to_dict() -> None:
         assert restored == original, f"content mismatch for {type(original).__name__}"
 
 
-def test_to_dict_includes_type_and_trace_id() -> None:
-    event = UserInputEvent(timestamp=None, source="cli", content="hello", trace_id="my-trace")
+def test_to_dict_includes_type_and_all_fields() -> None:
+    event = AgentAnomalyEvent(
+        timestamp=None, source="test", anomaly_type="latency", severity="critical", detail="timeout"
+    )
     data = event.to_dict()
-    assert data["type"] == "UserInputEvent"
-    assert data["trace_id"] == "my-trace"
-    assert data["content"] == "hello"
+    assert data["type"] == "AgentAnomalyEvent"
+    assert data["source"] == "test"
+    assert data["anomaly_type"] == "latency"
+    assert data["severity"] == "critical"
+    assert data["detail"] == "timeout"
 
 
-def test_trace_id_auto_assigned_by_eventbus() -> None:
-    bus = EventBus()
-    received: list[str] = []
-
-    def collector(event: Event) -> None:
-        received.append(event.trace_id)
-
-    bus.subscribe("UserInputEvent", collector)
-    bus.publish(UserInputEvent(timestamp=None, source="test", content="a"))
-    bus.publish(UserInputEvent(timestamp=None, source="test", content="b"))
-
-    assert len(received) == 2
-    assert all(tid != "" for tid in received)
-    assert received[0] != received[1], "each publish gets a unique trace_id"
+def test_from_dict_resolves_correct_type() -> None:
+    data = {
+        "type": "AgentStateChangeEvent",
+        "timestamp": None,
+        "source": "kernel",
+        "previous_state": "idle",
+        "new_state": "processing",
+    }
+    restored = Event.from_dict(data)
+    assert isinstance(restored, AgentStateChangeEvent)
+    assert restored.previous_state == "idle"
+    assert restored.new_state == "processing"
 
 
-def test_trace_id_preserved_when_set() -> None:
-    bus = EventBus()
-    received: list[Event] = []
-
-    bus.subscribe("UserInputEvent", received.append)
-    bus.publish(UserInputEvent(timestamp=None, source="test", content="x", trace_id="custom-id"))
-
-    assert received[0].trace_id == "custom-id"
-
-
-def test_eventbus_is_protocol() -> None:
-    bus = EventBus()
-    assert isinstance(bus, EventBusProtocol)
-
-
-def test_new_trace_id_is_unique() -> None:
+def test_new_trace_id_generates_non_empty_strings() -> None:
     ids = {new_trace_id() for _ in range(100)}
     assert len(ids) == 100
-    assert all(isinstance(tid, str) for tid in ids)
+    assert all(isinstance(tid, str) and len(tid) > 0 for tid in ids)
 
 
-def test_unknown_type_raises() -> None:
-    import pytest
-
+def test_unknown_event_type_raises_value_error() -> None:
     with pytest.raises(ValueError, match="Unknown event type"):
         Event.from_dict({"type": "NonExistentEvent", "timestamp": None, "source": "test"})
 
 
-def test_from_dict_with_missing_optional_field() -> None:
-    from iris.kernel.event import UserInputEvent as UIEvent
-
-    data = {"type": "UserInputEvent", "timestamp": None, "source": "test", "content": "hi"}
+def test_trace_id_roundtrips_through_from_dict() -> None:
+    event = TimerTick(timestamp=None, source="test", tick_count=1, trace_id="custom-trace")
+    data = event.to_dict()
     restored = Event.from_dict(data)
-    assert isinstance(restored, UIEvent)
-    assert restored.metadata is None
+    assert restored.trace_id == "custom-trace"

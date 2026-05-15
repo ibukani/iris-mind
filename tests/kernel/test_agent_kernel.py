@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Any
 
 import pytest
@@ -8,15 +7,10 @@ import pytest
 from iris.kernel.agent_state import AgentStateManager, State
 from iris.kernel.config import ProactiveConfig
 from iris.kernel.core import AgentKernel, AnomalyDetector
-from iris.kernel.event import (
-    AgentAnomalyEvent,
-    AgentResponseEvent,
-    EventBus,
-    ProactiveSpeechEvent,
-    UserInputEvent,
-)
-from iris.kernel.services import ProactiveEngine
-from tests.conftest import FakeMemoryManager
+from iris.kernel.event import AgentAnomalyEvent, EventBus
+from iris.kernel.io.models import InputMessage
+from iris.kernel.services import ProactiveEngine, ProactiveResult
+from tests.conftest import FakeMemoryManager, FakeOutputManager
 
 # ── AnomalyDetector ──────────────────────────────────────────
 
@@ -105,9 +99,10 @@ def kernel_setup() -> tuple[AgentKernel, EventBus, AgentStateManager, FakeMemory
     eb = EventBus()
     st = AgentStateManager(event_bus=eb, timeout_seconds=99999)
     mem = FakeMemoryManager()
+    out = FakeOutputManager()
     cfg = ProactiveConfig(enabled=False)
-    engine = ProactiveEngine(config=cfg, event_bus=eb, state_manager=st, memory=mem)
-    kernel = AgentKernel(event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg)
+    engine = ProactiveEngine(config=cfg, event_bus=eb, output_manager=out, state_manager=st, memory=mem)
+    kernel = AgentKernel(event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg, output_manager=out)
     engine.set_approval_callback(kernel.evaluate_proactive_request)
     return kernel, eb, st, mem
 
@@ -120,9 +115,12 @@ class TestAgentKernel:
         eb = EventBus()
         st = AgentStateManager(event_bus=eb)
         mem = FakeMemoryManager()
+        out = FakeOutputManager()
         cfg = ProactiveConfig(enabled=False)
-        engine = ProactiveEngine(config=cfg, event_bus=eb, state_manager=st, memory=mem)
-        kernel = AgentKernel(event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg)
+        engine = ProactiveEngine(config=cfg, event_bus=eb, output_manager=out, state_manager=st, memory=mem)
+        kernel = AgentKernel(
+            event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg, output_manager=out
+        )
         kernel.startup()
         assert kernel._running is True
         kernel.shutdown()
@@ -131,38 +129,41 @@ class TestAgentKernel:
         eb = EventBus()
         st = AgentStateManager(event_bus=eb)
         mem = FakeMemoryManager()
+        out = FakeOutputManager()
         cfg = ProactiveConfig(enabled=False)
-        engine = ProactiveEngine(config=cfg, event_bus=eb, state_manager=st, memory=mem)
-        kernel = AgentKernel(event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg)
+        engine = ProactiveEngine(config=cfg, event_bus=eb, output_manager=out, state_manager=st, memory=mem)
+        kernel = AgentKernel(
+            event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg, output_manager=out
+        )
         kernel.startup()
         kernel.shutdown()
         assert kernel._running is False
 
     def test_on_user_input_transitions_to_processing(self, kernel_setup) -> None:
         kernel, eb, st, mem = kernel_setup
-        kernel._on_user_input(UserInputEvent(timestamp=datetime.now(), source="test", content="hello"))
+        kernel.on_input(InputMessage(source="test", content="hello"))
         assert st.is_processing() is True
 
     def test_on_user_input_records_episodic(self, kernel_setup) -> None:
         kernel, eb, st, mem = kernel_setup
-        kernel._on_user_input(UserInputEvent(timestamp=datetime.now(), source="test", content="hello"))
+        kernel.on_input(InputMessage(source="test", content="hello"))
         assert mem.episodic.count == 1
 
     def test_on_user_input_ignored_when_not_idle(self, kernel_setup) -> None:
         kernel, eb, st, mem = kernel_setup
         st.transition(State.PROCESSING)
-        kernel._on_user_input(UserInputEvent(timestamp=datetime.now(), source="test", content="hello"))
+        kernel.on_input(InputMessage(source="test", content="hello"))
         assert mem.episodic.count == 0
 
-    def test_on_agent_response_transitions_to_idle(self, kernel_setup) -> None:
+    def test_on_response_complete_transitions_to_idle(self, kernel_setup) -> None:
         kernel, eb, st, mem = kernel_setup
         st.transition(State.PROCESSING)
-        kernel._on_agent_response(AgentResponseEvent(timestamp=datetime.now(), source="test", content="response"))
+        kernel.on_response_complete(content="response")
         assert st.is_idle() is True
 
-    def test_on_agent_response_records_episodic(self, kernel_setup) -> None:
+    def test_on_response_complete_records_episodic(self, kernel_setup) -> None:
         kernel, eb, st, mem = kernel_setup
-        kernel._on_agent_response(AgentResponseEvent(timestamp=datetime.now(), source="test", content="response"))
+        kernel.on_response_complete(content="response")
         assert mem.episodic.count == 1
 
     def test_evaluate_proactive_request_approved(self, kernel_setup) -> None:
@@ -178,10 +179,8 @@ class TestAgentKernel:
 
     def test_on_proactive_speech_records_episodic(self, kernel_setup) -> None:
         kernel, eb, st, mem = kernel_setup
-        kernel._on_proactive_speech(
-            ProactiveSpeechEvent(
-                timestamp=datetime.now(), source="test", content="hello", trigger_type="time", confidence=0.5
-            )
+        kernel.on_proactive_speech(
+            ProactiveResult(content="hello", tier=1, confidence=0.5, trigger_type="time", reasoning="test")
         )
         assert mem.episodic.count == 1
 
@@ -189,9 +188,12 @@ class TestAgentKernel:
         eb = EventBus()
         st = AgentStateManager(event_bus=eb)
         mem = FakeMemoryManager()
+        out = FakeOutputManager()
         cfg = ProactiveConfig(enabled=False)
-        engine = ProactiveEngine(config=cfg, event_bus=eb, state_manager=st, memory=mem)
-        kernel = AgentKernel(event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg)
+        engine = ProactiveEngine(config=cfg, event_bus=eb, output_manager=out, state_manager=st, memory=mem)
+        kernel = AgentKernel(
+            event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg, output_manager=out
+        )
         anomalies: list[AgentAnomalyEvent] = []
 
         def collect(event: AgentAnomalyEvent) -> None:
@@ -199,9 +201,9 @@ class TestAgentKernel:
 
         eb.subscribe("AgentAnomalyEvent", collect)
         for _ in range(6):
-            kernel._on_proactive_speech(
-                ProactiveSpeechEvent(
-                    timestamp=datetime.now(), source="test", content="x", trigger_type="time", confidence=0.5
-                )
+            kernel.on_proactive_speech(
+                ProactiveResult(content="x", tier=1, confidence=0.5, trigger_type="time", reasoning="test")
             )
         assert any(a.anomaly_type == "frequency_exceeded" for a in anomalies)
+        # Anomaly should also send error to OutputManager
+        assert any(m.msg_type == "error" for m in out.sent)

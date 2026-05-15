@@ -1,13 +1,12 @@
 from iris.kernel.io.input_manager import InputManager
-from iris.kernel.io.models import InputMessage, OutputMessage
+from iris.kernel.io.models import PIPE_NAME_INPUT, PIPE_NAME_OUTPUT, InputMessage, OutputMessage
 from iris.kernel.io.output_manager import OutputManager
-from iris.kernel.io.protocols import InputDriver, OutputDriver
 
 __all__ = [
     "InputMessage",
     "OutputMessage",
-    "InputDriver",
-    "OutputDriver",
+    "PIPE_NAME_INPUT",
+    "PIPE_NAME_OUTPUT",
     "InputManager",
     "OutputManager",
 ]

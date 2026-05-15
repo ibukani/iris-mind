@@ -74,14 +74,18 @@ iris-kernel/
 │   │   ├── event.py             # イベントクラス群
 │   │   ├── event_bus.py         # EventBusProtocol + EventBus
 │   │   ├── factory.py           # KernelFactory
-│   │   ├── ipc.py               # PipeServer / PipeClient / ReplayableTransport
-│   │   ├── ipc_output.py        # OutputBridge
-│   │   ├── ipc_input.py         # InputBridge / CommandRouter
+│   │   ├── io/
+│   │   │   ├── models.py
+│   │   │   ├── protocols.py
+│   │   │   ├── input_manager.py
+│   │   │   └── output_manager.py
+│   │   ├── ipc/
+│   │   │   ├── __init__.py
+│   │   │   └── transport.py
 │   │   ├── llm_pipeline.py      # LLMPipeline
 │   │   ├── logging.py           # ログ設定
 │   │   ├── memory_manager.py
 │   │   ├── proactive.py
-│   │   ├── proactive_response_tracker.py  # Proactive 応答追跡
 │   │   ├── reflexion.py
 │   │   ├── reflexion_manager.py
 │   │   ├── tool_executor.py
@@ -89,6 +93,7 @@ iris-kernel/
 │   ├── llm/
 │   ├── memory/
 │   ├── capabilities/
+│   │   └── io/                  # I/O drivers
 │   ├── commands/
 │   └── personality/
 ├── docs/

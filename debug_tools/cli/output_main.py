@@ -5,13 +5,12 @@ import logging
 import sys
 from multiprocessing.connection import Client
 
+from iris.kernel.io.models import PIPE_NAME_OUTPUT as PIPE_NAME_KERNEL_OUTPUT
 from iris.kernel.io.models import OutputMessage
 
 from .renderer import Renderer
 
 logger = logging.getLogger(__name__)
-
-PIPE_NAME_KERNEL_OUTPUT = r"\\.\pipe\iris-kernel-output"
 
 
 def main() -> None:

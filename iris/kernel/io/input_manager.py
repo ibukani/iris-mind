@@ -7,11 +7,9 @@ from collections.abc import Callable
 from multiprocessing.connection import Connection, Listener
 from typing import Any
 
-from iris.kernel.io.models import InputMessage
+from iris.kernel.io.models import PIPE_NAME_INPUT, InputMessage
 
 logger = logging.getLogger(__name__)
-
-PIPE_NAME_INPUT = r"\\.\pipe\iris-kernel-input"
 
 
 class InputManager:

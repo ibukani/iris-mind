@@ -46,21 +46,21 @@ debug_tools/ ──→ iris/kernel/ ──→ iris/llm/, iris/memory/, iris/capa
 Kernel Process
 ├── EventBus (Protocol)       — イベントルーティング
 │   ├── EventBus (in-memory)  — 単一プロセスモード
-│   ├── PipeServer            — Named Pipe 待受
-│   ├── ReplayableTransport   — デバッグ用記録・再生
-│   ├── InputBridge           — Input Process 接続受付
-│   └── OutputBridge          — Output Process 接続受付
+│   └── ReplayableTransport   — デバッグ用記録・再生（transport.py）
+├── I/O Manager
+│   ├── InputManager          — Named Pipe 待受（multiprocessing.connection.Listener）
+│   ├── OutputManager         — Output Process への送信
+│   ├── InputDriver (Protocol)— 入力アダプター（CLI, TCP, file）
+│   └── OutputDriver (Protocol)— 出力アダプター（CLI）
 ├── KernelProcess             — プロセス起動・監視・ライフサイクル管理
 ├── AgentKernel               — 状態管理・異常検知・イベント統括
 ├── ConversationService       — 会話オーケストレーション
 │   ├── LLMPipeline           — LLM呼び出し＋ツールループ
 │   └── ReflexionManager      — 自己反省スケジューリング
-├── ProactiveEngine           — 自発発話＋3層ガバナンス
-├── ProactiveResponseTracker  — 自発発話へのユーザー反応評価
+├── ProactiveEngine           — 自発発話＋3層ガバナンス（応答評価含む）
 ├── MemoryManager             — 記憶操作の一元管理
 ├── ToolExecutionEngine       — Tool Call実行
 ├── CommandHandler            — スラッシュコマンド処理
-├── CommandRouter             — UserInputEvent からのコマンド抽出
 └── ContextManager            — 会話履歴 compaction
 ```
 
@@ -77,36 +77,71 @@ class EventBusProtocol(Protocol):
 
 ### イベント種別
 
+内部イベント（EventBus 経由）:
+
 | イベント | 説明 | 送信元 → 送信先 |
 |----------|------|----------------|
-| `UserInputEvent` | ユーザー入力 | Input → Kernel |
-| `ProactiveSpeechEvent` | 自発発話 | Kernel → Output |
 | `TimerTick` | 定期タイマー | Kernel (内部) |
 | `AgentStateChangeEvent` | 状態遷移 | Kernel (内部) |
 | `MemoryUpdateEvent` | 記憶更新 | Kernel (内部) |
-| `AgentStreamEvent` | LLMストリーミングトークン | Kernel → Output |
-| `AgentResponseEvent` | LLM最終応答 | Kernel → Output |
 | `AgentAnomalyEvent` | 異常検知 | Kernel → Output |
+
+### I/O Message モデル
+
+プロセス間通信は Event ではなく Pydantic モデル（`InputMessage` / `OutputMessage`）を使用する。
+EventBus は Kernel 内部のイベントルーティングに限定され、プロセス間は Pipe 経由の JSON メッセージでやり取りする。
+
+```python
+# iris/kernel/io/models.py
+class InputMessage(BaseModel):
+    id: str           # uuid4 hex (12桁)
+    source: str       # "cli", "tcp", ...
+    msg_type: str     # "text", "command", ...
+    content: str      # メッセージ本文
+    content_type: str # "text/plain" (default)
+    metadata: dict    # 拡張用
+
+class OutputMessage(BaseModel):
+    id: str
+    correlation_id: str | None  # 対応する入力のID
+    msg_type: str     # "response", "stream", "proactive", "anomaly", ...
+    content: str      # メッセージ本文
+    content_type: str # "text/plain", "text/markdown", ...
+    destinations: list[str] | None  # 出力先フィルタ
+    metadata: dict
+```
+
+**データフロー:**
+
+```
+InputDriver  → InputMessage (JSON) → Pipe → InputManager._serve()
+                                                   ↓
+                                            AgentKernel.on_input()
+                                                   ↓
+                                        ConversationService.process_input()
+                                                   ↓
+                                          OutputManager.send(OutputMessage(...))
+                                                   ↓
+                                              Pipe → OutputDriver.write(message)
+```
 
 ### イベントフロー例
 
 ```
 [ユーザー入力]
 Input Process:
-  input(">>> ") → PipeClient.send(UserInputEvent)
-    ────────── Pipe ──────────
+  input(">>> ") → InputManager.send(InputMessage(source="cli", content="..."))
+    ────────── Pipe (\\.\pipe\iris-kernel-input) ──────────
 Kernel Process:
-  InputBridge: conn.recv() → EventBus.publish(UserInputEvent)
-    → ProactiveResponseTracker._on_user_input()  # 応答評価
-    → AgentKernel._on_user_input()               # 状態遷移 + 記憶
-    → ConversationService._on_user_input()        # LLM処理
-      → EventBus.publish(AgentStreamEvent)        # 逐次
-      → EventBus.publish(AgentResponseEvent)      # 最終
-    → ProactiveEngine.notify_user_activity()      # 抑制更新
-    ────────── Pipe ──────────
+  InputManager._serve(): conn.recv_bytes() → json.loads → InputMessage
+    → AgentKernel.on_input(msg)                     # 状態遷移 + 記憶
+    → ConversationService.process_input(msg)         # LLM処理
+      → OutputManager.send(OutputMessage(msg_type="stream", content="..."))  # 逐次
+      → OutputManager.send(OutputMessage(msg_type="response", content="...")) # 最終
+    → ProactiveEngine.notify_user_activity()         # 抑制更新
+    ────────── Pipe (\\.\pipe\iris-kernel-output) ──────────
 Output Process:
-  PipeClient.recv() → Renderer.on_stream_token()
-    → Rich Live 更新
+  Renderer.handle(message): msg_type で分岐 → Rich Live 更新
 ```
 
 ## 4. 3層ガバナンス（v0.2 から継承）
@@ -162,12 +197,17 @@ iris-kernel/
 │   │   ├── event.py             # イベントクラス群
 │   │   ├── event_bus.py         # EventBusProtocol + EventBus
 │   │   ├── factory.py
-│   │   ├── ipc.py               # PipeServer / PipeClient
-│   │   ├── ipc_output.py        # OutputBridge
-│   │   ├── ipc_input.py         # InputBridge
+│   │   ├── io/                  # I/O Manager（Input/Output管理）
+│   │   │   ├── __init__.py
+│   │   │   ├── models.py        # InputMessage / OutputMessage
+│   │   │   ├── protocols.py     # InputDriver / OutputDriver Protocol
+│   │   │   ├── input_manager.py # Named Pipe 待受
+│   │   │   └── output_manager.py# Output Pipe 送信
+│   │   ├── ipc/                 # IPC トランスポート
+│   │   │   ├── __init__.py
+│   │   │   └── transport.py     # ReplayableTransport（デバッグ用）
 │   │   ├── memory_manager.py
-│   │   ├── proactive.py
-│   │   ├── proactive_response_tracker.py  # Proactive 応答追跡
+│   │   ├── proactive.py         # ProactiveEngine（応答評価含む）
 │   │   ├── reflexion.py
 │   │   ├── reflexion_manager.py
 │   │   ├── llm_pipeline.py
@@ -176,12 +216,17 @@ iris-kernel/
 │   ├── llm/
 │   ├── memory/
 │   ├── capabilities/
+│   │   └── io/                  # I/O Driver 実装
+│   │       ├── __init__.py
+│   │       ├── cli/driver.py
+│   │       ├── tcp/driver.py
+│   │       └── file/driver.py
 │   ├── commands/
 │   └── personality/
 ├── docs/
 │   ├── README.md
 │   ├── adr/
-│   │   └── 001-3-process-architecture.md  # 新規
+│   │   └── 001-3-process-architecture.md
 │   ├── architecture.md           # 本書
 │   ├── ipc-spec.md               # IPC プロトコル仕様
 │   └── ... (既存の各設計書)

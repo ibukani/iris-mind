@@ -1,61 +1,62 @@
 from __future__ import annotations
 
-from datetime import datetime
-
-from iris.kernel.event import (
-    AgentAnomalyEvent,
-    AgentResponseEvent,
-    AgentStreamEvent,
-    ProactiveSpeechEvent,
-)
+from iris.kernel.io.models import OutputMessage
 
 
-def test_renderer_proactive_speech_does_not_crash() -> None:
+def test_renderer_stream_chunks_and_is_streaming() -> None:
     from debug_tools.cli.renderer import Renderer
 
     r = Renderer()
-    event = ProactiveSpeechEvent(
-        timestamp=datetime(2026, 1, 1), source="proactive", content="hello", trigger_type="time", confidence=0.9
-    )
-    r.handle(event)
+    assert not r.is_streaming
 
+    r.handle(OutputMessage(msg_type="stream", content="", metadata={"done": False}))
+    assert r.is_streaming
 
-def test_renderer_stream_token_does_not_crash() -> None:
-    from debug_tools.cli.renderer import Renderer
+    r.handle(OutputMessage(msg_type="stream", content="Hello ", metadata={"done": False}))
+    assert r.is_streaming
 
-    r = Renderer()
-    r.handle(AgentStreamEvent(timestamp=datetime(2026, 1, 1), source="assistant", delta=""))
-    r.handle(AgentStreamEvent(timestamp=datetime(2026, 1, 1), source="assistant", delta="Hello "))
-    r.handle(AgentStreamEvent(timestamp=datetime(2026, 1, 1), source="assistant", delta="world"))
-    r.handle(AgentStreamEvent(timestamp=datetime(2026, 1, 1), source="assistant", delta="", done=True))
+    r.handle(OutputMessage(msg_type="stream", content="world", metadata={"done": False}))
+    assert r.is_streaming
+
+    r.handle(OutputMessage(msg_type="stream", content="", metadata={"done": True}))
+    assert not r.is_streaming
 
 
 def test_renderer_response_does_not_crash() -> None:
     from debug_tools.cli.renderer import Renderer
 
     r = Renderer()
-    event = AgentResponseEvent(timestamp=datetime(2026, 1, 1), source="assistant", content="Hello world")
-    r.handle(event)
+    msg = OutputMessage(msg_type="response", content="Hello world")
+    r.handle(msg)
 
 
-def test_renderer_anomaly_does_not_crash() -> None:
+def test_renderer_proactive_does_not_crash() -> None:
     from debug_tools.cli.renderer import Renderer
 
     r = Renderer()
-    event = AgentAnomalyEvent(
-        timestamp=datetime(2026, 1, 1), source="system", anomaly_type="test", severity="info", detail="test anomaly"
-    )
-    r.handle(event)
+    msg = OutputMessage(msg_type="proactive", content="Hey, how are you?")
+    r.handle(msg)
 
 
-def test_renderer_is_streaming_flag() -> None:
+def test_renderer_command_does_not_crash() -> None:
     from debug_tools.cli.renderer import Renderer
 
     r = Renderer()
-    assert not r.is_streaming
+    msg = OutputMessage(msg_type="command", content="/help")
+    r.handle(msg)
 
-    r.handle(AgentStreamEvent(timestamp=datetime(2026, 1, 1), source="assistant", delta=""))
-    assert r.is_streaming
 
-    r.handle(AgentStreamEvent(timestamp=datetime(2026, 1, 1), source="assistant", delta="", done=True))
-    assert not r.is_streaming
+def test_renderer_error_warning_severity() -> None:
+    from debug_tools.cli.renderer import Renderer
+
+    r = Renderer()
+    msg = OutputMessage(msg_type="error", content="Something went wrong", metadata={"severity": "warning"})
+    r.handle(msg)
+
+
+def test_renderer_error_info_severity() -> None:
+    from debug_tools.cli.renderer import Renderer
+
+    r = Renderer()
+    msg = OutputMessage(msg_type="error", content="FYI: rate limited", metadata={"severity": "info"})
+    r.handle(msg)

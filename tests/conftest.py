@@ -9,6 +9,7 @@ import pytest
 from iris.kernel.agent_state import AgentStateManager
 from iris.kernel.config import Config, ModelConfig, ProactiveConfig
 from iris.kernel.event import EventBus
+from iris.kernel.io.models import OutputMessage
 
 # ── Fake LLM Provider ─────────────────────────────────────────
 
@@ -207,6 +208,21 @@ class FakePersonaProfile:
 # ── Fake AgentsMdStore ────────────────────────────────────────
 
 
+class FakeOutputManager:
+    def __init__(self) -> None:
+        self.sent: list[OutputMessage] = []
+        self.started = False
+
+    def start(self, pipe_address: str = "") -> None:
+        self.started = True
+
+    def stop(self) -> None:
+        self.started = False
+
+    def send(self, message: OutputMessage) -> None:
+        self.sent.append(message)
+
+
 class FakeAgentsMdStore:
     def __init__(self, content: str = "") -> None:
         self._content = content
@@ -256,6 +272,7 @@ class FakeContextManager:
 class FakeCapabilityRegistry:
     def __init__(self) -> None:
         self._tools: list[dict] = []
+        self._side_effects: set[str] = set()
 
     def list_tools(self) -> list[dict]:
         return self._tools
@@ -277,25 +294,35 @@ class FakeCapabilityRegistry:
     def execute(self, name: str, **kwargs: Any) -> str:
         return f"Executed {name} with {kwargs}"
 
+    def register_decorated(self, fn: Any) -> None:
+        pass
+
+    def is_side_effect(self, name: str) -> bool:
+        return name in self._side_effects
+
 
 class FakeToolExecutionEngine:
     def __init__(self) -> None:
         self.registry = FakeCapabilityRegistry()
-        self._executed_results: list[tuple[str, str]] = []
+        self._executed_results: list[tuple[str, str, bool]] = []
 
-    def execute_all(self, ctx: list[dict]) -> list[tuple[str, str]]:
-        results: list[tuple[str, str]] = []
+    def execute_all(self, ctx: list[dict]) -> list[tuple[str, str, bool]]:
+        results: list[tuple[str, str, bool]] = []
         for msg in ctx:
             if msg.get("role") == "assistant" and msg.get("tool_calls"):
                 for tc in msg["tool_calls"]:
-                    result = (tc["function"]["name"], "ok")
-                    results.append(result)
-                    self._executed_results.append(result)
-                    ctx.append({"role": "tool", "content": "Result: ok", "tool_call_id": tc.get("id", "")})
+                    name = tc["function"]["name"]
+                    is_side = self.registry.is_side_effect(name)
+                    triple = (name, "ok", is_side)
+                    results.append(triple)
+                    self._executed_results.append(triple)
+                    if not is_side:
+                        ctx.append({"role": "tool", "content": "Result: ok", "tool_call_id": tc.get("id", "")})
         return results
 
-    def should_follow_up(self, tool_results: list[tuple[str, str]]) -> bool:
-        return False
+    @staticmethod
+    def all_side_effects(results: list[tuple[str, str, bool]]) -> bool:
+        return bool(results) and all(r[2] for r in results)
 
 
 # ── Fake Reflexion ────────────────────────────────────────────

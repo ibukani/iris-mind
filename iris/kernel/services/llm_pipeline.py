@@ -18,8 +18,6 @@ logger = logging.getLogger(__name__)
 
 
 class LLMPipeline:
-    """LLM呼び出し・システムプロンプト構築・ツールループを担当。"""
-
     def __init__(
         self,
         llm: LLMBridge,
@@ -72,7 +70,6 @@ class LLMPipeline:
         tools: list[dict] | None = None,
         on_token: Callable[[str], None] | None = None,
     ) -> dict:
-        """システムプロンプトを構築しLLMを呼び出す。"""
         system_prompt = self._build_system_prompt()
 
         ctx_mgr = self._context_manager
@@ -95,7 +92,6 @@ class LLMPipeline:
         messages: list[dict],
         on_token: Callable[[str], None] | None = None,
     ) -> str:
-        """Tool Call 対応の LLM 呼び出しループ。最終的なテキスト応答を返す。"""
         tools = self._get_tools()
         if tools and self._capability_checker and not self._capability_checker.supports_tools("default"):
             tools = None
@@ -110,7 +106,11 @@ class LLMPipeline:
 
             if msg.get("tool_calls") and self._tool_executor is not None:
                 messages.append(msg)
-                self._tool_executor.execute_all(messages)
+                results = self._tool_executor.execute_all(messages)
+
+                if self._tool_executor.all_side_effects(results):
+                    break
+
                 for m in messages[-len(msg["tool_calls"]) :]:
                     if m["role"] == "tool" and len(m.get("content", "")) > 200:
                         m["content"] = m["content"][:200] + "..."

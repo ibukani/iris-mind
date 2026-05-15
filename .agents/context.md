@@ -5,7 +5,7 @@
 ## プロジェクト状態
 
 - 最新の安定動作バージョン: v0.2.0（移行完了）
-- 開発フェーズ: v0.3.0 Phase 0-3 + TCP Input 実装完了
+- 開発フェーズ: v0.3.0 Phase 10-11 完了（I/O 分離リファクタリング終了）
 - 現在のブランチ: `main`
 
 ## 重要な決定事項
@@ -19,6 +19,7 @@
 | 2026-05-14 | モデル設定を柔軟化: `get_model(role)` 統一、モデル数でシングル/マルチ自動判定 |
 | 2026-05-14 | KernelFactory導入: main.py を composition root 化。Adapter は KernelContext のみ受け取る |
 | 2026-05-14 | v0.3: 3-Process分解（Input/Kernel/Output）。IPCはWindows Named Pipes（AF_PIPE） |
+| 2026-05-15 | I/O 分離リファクタリング: EventBus は内部イベントのみに制限。Input/Output は InputMessage/OutputMessage (Pydantic) で通信。InputBridge/OutputBridge 削除、InputManager/OutputManager で置換。ProactiveResponseTracker を ProactiveEngine に統合。ipc.py→transport.py リネーム。 |
 
 ## 既知の課題・注意点
 

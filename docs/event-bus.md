@@ -3,7 +3,7 @@
 ## 概要
 
 EventBus はコンポーネント間の疎結合通信を実現する publish/subscribe バス。
-v0.3 では Protocol として抽象化され、in-memory / IPC / Replayable の3実装を持つ。
+v0.3 では Protocol として抽象化され、in-memory / Replayable の2実装を持つ。IPC 関連は削除され、EventBus は Kernel 内部のイベントのみを扱う。
 
 ## インターフェース
 
@@ -33,7 +33,7 @@ class EventBus:
 
 ```python
 class ReplayableTransport:
-    """PipeServer/PipeClient の前面に置き、送受信イベントを JSONL に記録する。
+    """EventBus の前面に置き、送受信イベントを JSONL に記録する。
     記録されたイベント列は後で再生可能（ReplayTransport は未実装）。"""
 ```
 
@@ -46,23 +46,8 @@ class ReplayableTransport:
 | フィールド | 型 | 説明 |
 |-----------|---|------|
 | `timestamp` | `datetime \| None` | イベント生成時刻 |
-| `source` | `str` | 発生源（`"user_input"`, `"proactive"`, `"system"`, `"timer"`, `"input:*"`, `"output:*"`） |
+| `source` | `str` | 発生源（`"system"`, `"timer"`, `"proactive"`, `"kernel"`） |
 | `trace_id` | `str` | UUID4先頭12文字 — 全プロセス横断追跡ID（空文字列の場合は publish 時に自動生成） |
-
-### UserInputEvent
-
-| フィールド | 型 | 説明 |
-|-----------|---|------|
-| `content` | `str` | ユーザー入力テキスト |
-| `metadata` | `dict \| None` | 追加メタデータ（チャネル、セッションID等） |
-
-### ProactiveSpeechEvent
-
-| フィールド | 型 | 説明 |
-|-----------|---|------|
-| `content` | `str` | 発話テキスト |
-| `trigger_type` | `str` | トリガー種別（`"temporal"`, `"memory"`, `"context_shift"`） |
-| `confidence` | `float` | 信頼度スコア（0.0〜1.0） |
 
 ### TimerTick
 
@@ -84,20 +69,6 @@ class ReplayableTransport:
 | `entry_type` | `str` | 記憶種別 |
 | `content` | `str` | 記憶内容 |
 
-### AgentStreamEvent
-
-| フィールド | 型 | 説明 |
-|-----------|---|------|
-| `delta` | `str` | LLM ストリーミングトークン |
-| `done` | `bool` | ストリーム完了フラグ |
-
-### AgentResponseEvent
-
-| フィールド | 型 | 説明 |
-|-----------|---|------|
-| `content` | `str` | LLM応答テキスト |
-| `model` | `str` | 応答に使用されたモデル名 |
-
 ### AgentAnomalyEvent
 
 | フィールド | 型 | 説明 |
@@ -115,47 +86,24 @@ class ReplayableTransport:
 - `publish()`: `trace_id` が空文字列の場合、自動で `new_trace_id()` を生成してセットする
 - スレッドセーフ: `threading.Lock` で購読者リストを保護
 
-## プロセス間通信（IPC）
-
-マルチプロセスモードでは `InputBridge` / `OutputBridge` を使用する。
-
-### Kernel 側
-
-```python
-class OutputBridge:
-    """EventBus のイベントを購読し、Named Pipe を通じて Output Process に中継する。"""
-    def __init__(self, event_bus: EventBusProtocol, pipe_address: str):
-        self._subscribe()
-    def start(self):
-        """PipeServer を起動し、accept ループを開始する。"""
-    def stop(self):
-        """全コネクションを切断し、サブスクリプションを解除する。"""
-```
-
-### Output Process 側
-
-`PipeClient.recv()` でイベントを受信し、`renderer.py` で表示する。
-ループは `output_main.py` で管理される。
-
 ## 配信例
 
 ```
-[単一プロセスモード]
-UserInputEvent → AgentKernel._on_user_input()
-                 → ConversationService._on_user_input()
-                   → AgentResponseEvent を publish
-                     ├─ AgentKernel: PROCESSING→IDLE
-                     ├─ CLIAdapter: 表示
-                     └─ MemoryManager: 記録
+[内部イベントフロー例]
+TimerTick → ProactiveEngine._on_timer_tick()
+            → 必要に応じて会話を開始
 
-[マルチプロセスモード]
-Input Process → Pipe → Kernel Process → Pipe → Output Process
+AgentStateChangeEvent → AgentKernel: 状態遷移を検知
+                      └─ MemoryManager: 状態変化を記録
+
+MemoryUpdateEvent → MemoryManager: 記憶の永続化トリガー
+
+AgentAnomalyEvent → AgentKernel: 異常検知時のアクション
 ```
 
 ## 注意事項
 
 - イベントクラスは全て `Event` を基底クラスとし、`dataclass` で定義すること
 - `source` フィールドはイベントの発生源デバッグ用。省略不可
-- `trace_id` は Input Process で生成し、Kernel → Output まで伝搬すること
-- IPC 使用時は JSON でシリアライズされる（`ipc.py:_serialize()` / `_deserialize()`）
+- `trace_id` は EventBus が空文字列の場合に自動生成する
 - デバッグ用の `ReplayableTransport` は `to_dict()` の出力を JSONL に記録する

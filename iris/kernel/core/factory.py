@@ -1,10 +1,3 @@
-"""
-KernelFactory — Iris カーネルコンポーネントの組み立て。
-
-Adapter は KernelFactory.build(config) で組み立て済みの KernelContext を
-受け取り、内部の依存関係構築を意識せずに動作できる。
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -21,8 +14,8 @@ from iris.personality.personality import Personality
 
 from ..agent_state import AgentStateManager
 from ..config import Config
-from ..controllers.proactive_response_tracker import ProactiveResponseTracker
 from ..event.event_bus import EventBus
+from ..io.output_manager import OutputManager
 from ..services.context import ContextManager
 from ..services.conversation import ConversationService
 from ..services.llm_pipeline import LLMPipeline
@@ -36,26 +29,20 @@ from .agent_kernel import AgentKernel
 
 @dataclass
 class KernelContext:
-    """組み立て済みカーネルコンポーネントのコンテナ。
-
-    Adapter はこのオブジェクトを受け取り、必要なコンポーネントにアクセスする。
-    """
-
     event_bus: EventBus
     kernel: AgentKernel
     conversation: ConversationService
     proactive: ProactiveEngine
     cmd_handler: CommandHandler
+    output: OutputManager
 
 
 class KernelFactory:
-    """カーネルコンポーネントの組み立てを担当するファクトリ。"""
-
     @staticmethod
     def build(config: Config) -> KernelContext:
-        """設定に基づき全コンポーネントを組み立てる。"""
         event_bus = EventBus()
         state = AgentStateManager(event_bus=event_bus)
+        output = OutputManager()
 
         memory, agents_md, persona_profile = KernelFactory._build_memory(config)
         llm, personality, capability_checker, reflexion, context_mgr = KernelFactory._build_llm(config)
@@ -65,6 +52,7 @@ class KernelFactory:
             state,
             memory,
             llm,
+            output,
         )
         registry, tool_exec = KernelFactory._build_capabilities()
         llm_pipeline, reflexion_mgr = KernelFactory._build_pipeline(
@@ -81,7 +69,7 @@ class KernelFactory:
         )
 
         conversation = ConversationService(
-            event_bus=event_bus,
+            output_manager=output,
             llm_pipeline=llm_pipeline,
             reflexion_manager=reflexion_mgr,
             context_manager=context_mgr,
@@ -92,7 +80,6 @@ class KernelFactory:
             conversation=conversation,
             proactive=proactive,
         )
-        ProactiveResponseTracker(proactive=proactive, event_bus=event_bus)
 
         return KernelContext(
             event_bus=event_bus,
@@ -100,18 +87,13 @@ class KernelFactory:
             conversation=conversation,
             proactive=proactive,
             cmd_handler=cmd_handler,
+            output=output,
         )
 
     @staticmethod
-    def _build_memory(
-        config: Config,
-    ) -> tuple[MemoryManager, AgentsMdStore, PersonaProfile]:
-        """記憶関連コンポーネントを組み立てる。"""
+    def _build_memory(config: Config) -> tuple[MemoryManager, AgentsMdStore, PersonaProfile]:
         cfg = config.memory
-        episodic = EpisodicStore(
-            path=cfg.episodic_path,
-            max_entries=cfg.episodic_max_entries,
-        )
+        episodic = EpisodicStore(path=cfg.episodic_path, max_entries=cfg.episodic_max_entries)
         semantic = SemanticStore(
             path=cfg.semantic_path,
             max_entries=cfg.semantic_max_entries,
@@ -121,17 +103,11 @@ class KernelFactory:
         memory = MemoryManager(episodic=episodic, semantic=semantic, vector_store=vector)
         persona_data = PersonaData()
         persona_profile = PersonaProfile(persona_data=persona_data)
-        agents_md = AgentsMdStore(
-            path=cfg.agents_md_path,
-            max_bytes=cfg.agents_md_max_bytes,
-        )
+        agents_md = AgentsMdStore(path=cfg.agents_md_path, max_bytes=cfg.agents_md_max_bytes)
         return memory, agents_md, persona_profile
 
     @staticmethod
-    def _build_llm(
-        config: Config,
-    ) -> tuple[LLMBridge, Personality, CapabilityChecker, Reflexion, ContextManager]:
-        """LLM 関連コンポーネントを組み立てる。"""
+    def _build_llm(config: Config) -> tuple[LLMBridge, Personality, CapabilityChecker, Reflexion, ContextManager]:
         provider = create_provider(
             provider_type=config.model.provider,
             base_url=config.model.base_url,
@@ -144,10 +120,7 @@ class KernelFactory:
         personality = Personality(name=config.personality.name)
         capability_checker = CapabilityChecker(config=config.model)
         reflexion = Reflexion(llm=llm, compact_model=config.model.get_model("compact"))
-        context_mgr = ContextManager(
-            llm=llm,
-            compact_model=config.model.get_model("default"),
-        )
+        context_mgr = ContextManager(llm=llm, compact_model=config.model.get_model("default"))
         return llm, personality, capability_checker, reflexion, context_mgr
 
     @staticmethod
@@ -157,11 +130,12 @@ class KernelFactory:
         state: AgentStateManager,
         memory: MemoryManager,
         llm: LLMBridge,
+        output: OutputManager,
     ) -> tuple[ProactiveEngine, AgentKernel]:
-        """自発発話エンジンとカーネルを組み立てる。"""
         proactive = ProactiveEngine(
             config=config.proactive,
             event_bus=event_bus,
+            output_manager=output,
             state_manager=state,
             memory=memory,
             llm=llm,
@@ -173,6 +147,7 @@ class KernelFactory:
             proactive=proactive,
             memory=memory,
             config=config.proactive,
+            output_manager=output,
         )
         proactive.set_approval_callback(kernel.evaluate_proactive_request)
         kernel.startup()
@@ -180,9 +155,13 @@ class KernelFactory:
 
     @staticmethod
     def _build_capabilities() -> tuple[CapabilityRegistry, ToolExecutionEngine]:
-        """Capability レジストリとツール実行エンジンを組み立てる。"""
         registry = CapabilityRegistry()
         registry.discover_modules()
+
+        from iris.tools.builtins.output import output_to
+
+        registry.register_decorated(output_to)
+
         tool_exec = ToolExecutionEngine(registry=registry)
         return registry, tool_exec
 
@@ -199,7 +178,6 @@ class KernelFactory:
         context_mgr: ContextManager,
         reflexion: Reflexion,
     ) -> tuple[LLMPipeline, ReflexionManager]:
-        """LLM パイプラインと Reflexion マネージャを組み立てる。"""
         governance_str = "\n".join(f"- {p}" for p in SELF_GOVERNANCE_PRINCIPLES) if SELF_GOVERNANCE_PRINCIPLES else ""
         llm_pipeline = LLMPipeline(
             llm=llm,

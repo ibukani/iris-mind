@@ -23,10 +23,18 @@ TimeProvider = Callable[[], float]
 
 logger = logging.getLogger(__name__)
 
-_NEGATIVE_RESPONSES = frozenset({
-    "やめて", "静かに", "stop", "やめろ", "黙れ", "うるさい",
-    "やめてください", "shut up",
-})
+_NEGATIVE_RESPONSES = frozenset(
+    {
+        "やめて",
+        "静かに",
+        "stop",
+        "やめろ",
+        "黙れ",
+        "うるさい",
+        "やめてください",
+        "shut up",
+    }
+)
 
 TIER1_TRIGGERS: set[str] = {"time", "mood"}
 
@@ -205,7 +213,7 @@ class ProactiveEngine:
 
     @staticmethod
     def _char_bigram_set(text: str) -> set[str]:
-        return {text[i: i + 2] for i in range(len(text) - 1)}
+        return {text[i : i + 2] for i in range(len(text) - 1)}
 
     def _compute_context_score(self) -> float:
         try:
@@ -260,10 +268,8 @@ class ProactiveEngine:
                 tier=2,
                 confidence=confidence,
                 trigger_type=trigger_type,
-                reasoning=reasoning or (
-                    f"Tier2: confidence={confidence:.2f} >= "
-                    f"threshold ({self._config.tier2_confidence_threshold})"
-                ),
+                reasoning=reasoning
+                or (f"Tier2: confidence={confidence:.2f} >= threshold ({self._config.tier2_confidence_threshold})"),
             )
         if confidence < 0.5:
             logger.info("Confidence %.2f < 0.5, suppressed per self-governance rule", confidence)
@@ -273,20 +279,23 @@ class ProactiveEngine:
             if not approved:
                 logger.info(
                     "AgentKernel denied proactive speech (confidence=%.2f < %.2f)",
-                    confidence, self._config.tier2_confidence_threshold,
+                    confidence,
+                    self._config.tier2_confidence_threshold,
                 )
                 return None
         else:
             logger.info(
                 "No approval callback, publishing low-confidence speech (confidence=%.2f < %.2f)",
-                confidence, self._config.tier2_confidence_threshold,
+                confidence,
+                self._config.tier2_confidence_threshold,
             )
         return ProactiveResult(
             content=speech,
             tier=2,
             confidence=confidence,
             trigger_type=trigger_type,
-            reasoning=reasoning or (
+            reasoning=reasoning
+            or (
                 f"Tier2: confidence={confidence:.2f} < threshold, "
                 + ("AgentKernel approved" if self._approval_callback else "published without approval callback")
             ),
@@ -402,7 +411,7 @@ class ProactiveEngine:
                 depth -= 1
                 if depth == 0:
                     try:
-                        return _json.loads(text[start: end + 1])
+                        return _json.loads(text[start : end + 1])
                     except _json.JSONDecodeError:
                         return None
         return None
@@ -445,9 +454,7 @@ class ProactiveEngine:
         s.proactive_timestamps.append(now)
         self._ignore_recorded_for_proactive = False
 
-        self._output.send(
-            OutputMessage(msg_type="proactive", content=result.content)
-        )
+        self._output.send(OutputMessage(msg_type="proactive", content=result.content))
         logger.info(
             "Proactive speech [T%s] confidence=%.2f trigger=%s: %s",
             result.tier,

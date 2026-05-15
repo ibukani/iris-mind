@@ -2,13 +2,11 @@ from __future__ import annotations
 
 from iris.kernel.event import (
     AgentAnomalyEvent,
-    AgentResponseEvent,
     AgentStateChangeEvent,
     Event,
     EventBus,
-    ProactiveSpeechEvent,
+    MemoryUpdateEvent,
     TimerTick,
-    UserInputEvent,
 )
 
 
@@ -19,8 +17,8 @@ def test_publish_calls_handler() -> None:
     def handler(event: Event) -> None:
         received.append(event)
 
-    bus.subscribe("UserInputEvent", handler)
-    event = UserInputEvent(timestamp=None, source="test", content="hello")
+    bus.subscribe("TimerTick", handler)
+    event = TimerTick(timestamp=None, source="test", tick_count=0)
     bus.publish(event)
 
     assert len(received) == 1
@@ -45,15 +43,15 @@ def test_unsubscribe() -> None:
     def handler(_: Event) -> None:
         results.append(1)
 
-    bus.subscribe("AgentResponseEvent", handler)
-    bus.unsubscribe("AgentResponseEvent", handler)
-    bus.publish(AgentResponseEvent(timestamp=None, source="test", content="hi"))
+    bus.subscribe("AgentAnomalyEvent", handler)
+    bus.unsubscribe("AgentAnomalyEvent", handler)
+    bus.publish(AgentAnomalyEvent(timestamp=None, source="test", anomaly_type="test", severity="info", detail=""))
     assert results == []
 
 
 def test_no_handler_for_event_type() -> None:
     bus = EventBus()
-    bus.publish(UserInputEvent(timestamp=None, source="test", content="hi"))
+    bus.publish(MemoryUpdateEvent(timestamp=None, source="test", entry_type="episodic", content="hi"))
     assert True
 
 
@@ -71,8 +69,6 @@ def test_handler_error_does_not_affect_others() -> None:
     bus.subscribe("TimerTick", good_handler)
 
     bus.publish(TimerTick(timestamp=None, source="test", tick_count=0))
-
-    # Even though failing_handler raised, good_handler was still called
     assert results == [1]
 
 
@@ -83,8 +79,8 @@ def test_subscribe_registers_handler() -> None:
     def handler(_: Event) -> None:
         results.append("called")
 
-    bus.subscribe("TimerTick", handler)
-    bus.publish(TimerTick(timestamp=None, source="test", tick_count=0))
+    bus.subscribe("AgentStateChangeEvent", handler)
+    bus.publish(AgentStateChangeEvent(timestamp=None, source="test", previous_state="idle", new_state="processing"))
     assert results == ["called"]
 
 
@@ -92,17 +88,17 @@ def test_multiple_event_types() -> None:
     bus = EventBus()
     received: list[str] = []
 
-    bus.subscribe("UserInputEvent", lambda _: received.append("user"))
     bus.subscribe("TimerTick", lambda _: received.append("tick"))
+    bus.subscribe("MemoryUpdateEvent", lambda _: received.append("memory"))
 
-    bus.publish(UserInputEvent(timestamp=None, source="test", content="a"))
     bus.publish(TimerTick(timestamp=None, source="test", tick_count=0))
-    assert received == ["user", "tick"]
+    bus.publish(MemoryUpdateEvent(timestamp=None, source="test", entry_type="semantic", content="data"))
+    assert received == ["tick", "memory"]
 
 
 def test_publish_with_no_subscribers() -> None:
     bus = EventBus()
-    bus.publish(AgentStateChangeEvent(timestamp=None, source="test", previous_state=None, new_state=None))
+    bus.publish(AgentAnomalyEvent(timestamp=None, source="test", anomaly_type="test", severity="info", detail=""))
     assert True
 
 
@@ -114,27 +110,21 @@ def test_all_event_types_can_be_published() -> None:
         received.append(type(event).__name__)
 
     for name in [
-        "UserInputEvent",
-        "ProactiveSpeechEvent",
         "TimerTick",
         "AgentStateChangeEvent",
-        "AgentResponseEvent",
+        "MemoryUpdateEvent",
         "AgentAnomalyEvent",
     ]:
         bus.subscribe(name, collect)
 
-    bus.publish(UserInputEvent(timestamp=None, source="t", content=""))
-    bus.publish(ProactiveSpeechEvent(timestamp=None, source="t", content="", trigger_type="time", confidence=0.5))
     bus.publish(TimerTick(timestamp=None, source="t", tick_count=0))
     bus.publish(AgentStateChangeEvent(timestamp=None, source="t", previous_state=None, new_state=None))
-    bus.publish(AgentResponseEvent(timestamp=None, source="t", content=""))
+    bus.publish(MemoryUpdateEvent(timestamp=None, source="t", entry_type="episodic", content="c"))
     bus.publish(AgentAnomalyEvent(timestamp=None, source="t", anomaly_type="test", severity="info", detail=""))
 
     assert received == [
-        "UserInputEvent",
-        "ProactiveSpeechEvent",
         "TimerTick",
         "AgentStateChangeEvent",
-        "AgentResponseEvent",
+        "MemoryUpdateEvent",
         "AgentAnomalyEvent",
     ]

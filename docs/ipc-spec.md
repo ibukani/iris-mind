@@ -1,172 +1,391 @@
-# IPC プロトコル仕様 v2.0
+# Iris Kernel 通信プロトコル仕様 v3.0
 
 ## 1. 概要
 
-Iris Kernel は Named Pipe 経由で外部プロセスから制御可能な公開インターフェースを持つ。
-Kernel は両方の Pipe で Listener（サーバー）として動作する。
+Iris Kernel は Named Pipe 経由で外部プロセスと通信する。このドキュメントは**言語非依存**のプロトコル仕様を定義する。任意のプログラミング言語から実装可能。
+
+### 設計原則
+
+- **言語非依存**: JSON + UTF-8 エンコーディング。特定言語のライブラリに依存しない
+- **セッションベース**: 認証 → セッション確立 → 通信 の明確な段階
+- **3-Pipe分離**: 制御・入力・出力を物理的に分離し、セキュリティと拡張性を確保
 
 ## 2. 通信方式
 
-### 2.1 Windows Named Pipes
+### 2.1 トランスポート
 
-`multiprocessing.connection` モジュールの `AF_PIPE` ファミリを使用する。
+**Windows Named Pipes** (`multiprocessing.connection` の `AF_PIPE` ファミリ)
 
-### 2.2 Pipe アドレス体系
+- Pipe アドレス: `\\.\pipe\iris-kernel-<name>`
+- 双方向通信可能
+- 同一マシン内プロセス間通信専用
+
+**将来の拡張**: TCP/IP (`AF_INET`) への移行も設計上可能
+
+### 2.2 Pipe 構成
 
 | Pipe 名 | 方向 | 用途 |
 |---------|------|------|
-| `\\.\pipe\iris-kernel-input` | 外部→Kernel | 外部 Client から Kernel (Listener/InputManager) へのコマンド・テキスト入力 |
-| `\\.\pipe\iris-kernel-output` | Kernel→外部 | Kernel (Listener/OutputManager) から外部 Client への出力送信 |
-
-各 Pipe は独立した Listener を持つ。各 Manager は接続ごとにスレッドを割り当てる。
+| `\\.\pipe\iris-kernel-control` | 双方向 | 認証ハンドシェイク、セッション管理 |
+| `\\.\pipe\iris-kernel-input` | 外部→Kernel | ユーザー入力、コマンド |
+| `\\.\pipe\iris-kernel-output` | Kernel→外部 | 応答、自律発話、ストリーム |
 
 ### 2.3 シリアライズ
 
-JSON Lines 形式を使用する。`send_bytes()` / `recv_bytes()` でフレーミングする。
+- **形式**: JSON (UTF-8 エンコーディング)
+- **フレーミング**: `send_bytes()` / `recv_bytes()` によるメッセージ境界保証
+- **最大サイズ**: デフォルト 32MB
 
-```python
-# 送信
-data = msg.model_dump_json()
-conn.send_bytes(data.encode("utf-8"))
-
-# 受信
-raw = conn.recv_bytes().decode("utf-8")
-msg = InputMessage.model_validate_json(raw)
-```
-
-**ワイヤー形式** (他言語から読み書きする場合):
-
-```
-{"msg_type": "text", "source": "cli", "content": "hello", "id": "abc123"}
-```
-
-**制約**:
-- `send_bytes()` / `recv_bytes()` がフレーミングを内部処理
-- 最大メッセージサイズはデフォルトで 32MB（要調整時は別途指定）
-
-### 2.4 ワイヤー形式
-
-送受信されるメッセージは JSON 形式で、`send_bytes()` / `recv_bytes()` でフレーミングする。
-
+**ワイヤー形式例**:
 ```json
-{"msg_type": "text", "source": "cli", "content": "hello", "id": "abc123"}
-{"msg_type": "stream", "content": "Hello ", "id": "xyz789", "correlation_id": "abc123", "metadata": {}}
-{"msg_type": "response", "content": "...", "id": "...", "correlation_id": "abc123", "metadata": {"model": "qwen3.5:9b"}}
+{"msg_type": "text", "session_id": "a1b2c3d4e5f6g7h8", "content": "hello", "id": "abc123"}
 ```
 
-## 3. 接続ライフサイクル
+## 3. 接続シーケンス
 
-### 3.1 起動シーケンス
+### 3.1 認証ハンドシェイク
 
 ```
-Supervisor Process (main.py):
-  1. KernelProcess.start() を呼び出し
-
-Kernel Process:
-  1. KernelFactory.build() — 全コンポーネント初期化
-  2. OutputManager.start() — PipeServer(iris-kernel-output) 起動（Listener）
-  3. InputManager.start() — PipeServer(iris-kernel-input) 起動 + 受付スレッド開始
-
-外部 Client:
-  1. 任意のタイミングで iris-kernel-input に Client 接続
-  2. InputMessage の送信を開始
-  3. iris-kernel-output に Client 接続して OutputMessage を受信
+クライアント                           Iris Kernel
+    │                                      │
+    │──── Control Pipe 接続 ────────────────→│
+    │                                      │
+    │── AuthMessage (JSON) ────────────────→│
+    │  {                                    │
+    │    "msg_type": "auth",                │
+    │    "mode": "bidirectional",           │
+    │    "auth_token": "..." (任意)         │
+    │  }                                    │
+    │                                      │
+    │←── ControlMessage (JSON) ─────────────│
+    │  {                                    │
+    │    "msg_type": "auth_success",        │
+    │    "session_id": "a1b2c3d4e5f6g7h8"   │
+    │  }                                    │
+    │                                      │
+    │──── Input Pipe 接続 ──────────────────→│
+    │  (session_id を使用)                  │
+    │                                      │
+    │──── Output Pipe 接続 ─────────────────→│
+    │  (session_id を使用)                  │
+    │                                      │
+    │◄─── 双方向通信開始 ───────────────────►│
 ```
 
-### 3.2 切断と再接続
+### 3.2 接続モード
 
-- クライアント切断 → Kernel は該当スレッドをクリーンアップ
-- Kernel 切断 → 全クライアントが `EOFError` を受信 → 再接続は Client 側の責務
+`AuthMessage.mode` で指定:
+
+| モード | 説明 | 必要な接続 |
+|--------|------|-----------|
+| `bidirectional` | 入出力双方向 | Input + Output |
+| `input_only` | 入力のみ | Input のみ |
+| `output_only` | 出力のみ | Output のみ |
+
+### 3.3 セッション状態遷移
+
+```
+[Control接続] → AUTHENTICATING
+                    │
+                    ├─ mode=input_only  → WAITING_INPUT → [Input接続] → ACTIVE
+                    ├─ mode=output_only → WAITING_OUTPUT → [Output接続] → ACTIVE
+                    └─ mode=bidirectional → WAITING_INPUT → [Input接続] → WAITING_OUTPUT → [Output接続] → ACTIVE
+```
 
 ## 4. メッセージ形式
 
-### 4.1 InputMessage
+### 4.1 AuthMessage (Control Pipe)
 
-外部 Client から Kernel に送信される制御メッセージ。Pydantic BaseModel として定義される。
+認証リクエスト。Control Pipe 接続後に最初に送信。
 
-#### コマンド一覧
+| フィールド | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| `msg_type` | string | 必須 | 常に `"auth"` |
+| `mode` | string | 必須 | `"bidirectional"`, `"input_only"`, `"output_only"` |
+| `auth_token` | string | 任意 | 認証トークン（将来の拡張用） |
 
-| msg_type | content の例 | 説明 |
-|----------|-------------|------|
-| `"command"` | `/status` | Kernel の状態確認 |
-| `"command"` | `/shutdown` | Kernel のグレースフルシャットダウン |
-| `"command"` | `/sleep` | エージェント休止 |
-| `"command"` | `/wakeup` | エージェント再開 |
-| `"command"` | `/help` | コマンド一覧 |
-| `"text"` | `"hello"` | テキスト入力（会話モード） |
-
-```python
-class InputMessage(BaseModel):
-    msg_type: str    # "text" | "command" | "system"
-    source: str      # "cli" | "tcp" など
-    content: str     # 入力内容
-    id: str          # UUID4先頭12文字
-```
-
-ワイヤー形式:
+**リクエスト例**:
 ```json
-{"msg_type": "text", "source": "cli", "content": "hello", "id": "abc123"}
+{
+  "msg_type": "auth",
+  "mode": "bidirectional",
+  "auth_token": "my-secret-token"
+}
 ```
 
-### 4.2 OutputMessage
+### 4.2 ControlMessage (Control Pipe)
 
-Kernel から外部 Client に送信される応答メッセージ。
+認証レスポンス。Kernel から返される。
 
-```python
-class OutputMessage(BaseModel):
-    msg_type: str        # "stream" | "response" | "proactive" | "anomaly"
-    content: str         # 出力内容 (stream時はデルタ)
-    id: str              # メッセージID (UUID4先頭12文字)
-    correlation_id: str  # 対応する InputMessage のID（空文字列可）
-    metadata: dict       # 補足情報（model名, doneフラグ等）
-```
+| フィールド | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| `msg_type` | string | 必須 | `"auth_success"`, `"auth_failure"`, `"error"` |
+| `session_id` | string | 条件付き | 成功時のみ。16文字のセッションID |
+| `error_message` | string | 条件付き | 失敗時のみ。エラー理由 |
 
-ワイヤー形式:
+**成功レスポンス例**:
 ```json
-{"msg_type": "stream", "content": "Hello ", "id": "xyz789", "correlation_id": "abc123", "metadata": {}}
+{
+  "msg_type": "auth_success",
+  "session_id": "a1b2c3d4e5f6g7h8"
+}
 ```
 
-### 4.3 内部イベント (EventBus)
+**失敗レスポンス例**:
+```json
+{
+  "msg_type": "auth_failure",
+  "error_message": "invalid auth_token"
+}
+```
 
-EventBus は以下の Kernel 内部専用イベントのみを運搬する。IPC のワイヤー形式としては現れない。
+### 4.3 InputMessage (Input Pipe)
 
-| イベント | 説明 |
-|----------|------|
-| `TimerTick` | 定期タイマー (ProactiveEngine駆動用) |
-| `AgentStateChangeEvent` | エージェント状態遷移 (busy, idle 等) |
-| `MemoryUpdateEvent` | 記憶更新通知 |
-| `AgentAnomalyEvent` | 異常検知通知 |
+外部クライアントから Kernel への入力メッセージ。
 
-## 5. エラーハンドリング
+| フィールド | 型 | 必須 | デフォルト | 説明 |
+|-----------|-----|------|-----------|------|
+| `id` | string | 必須 | 自動生成 | メッセージID (12文字) |
+| `session_id` | string | 必須 | - | 認証で取得したセッションID |
+| `source` | string | 必須 | - | 送信元識別子 ("cli", "web", etc.) |
+| `msg_type` | string | 必須 | `"text"` | `"text"`, `"command"`, `"system"` |
+| `content` | string | 必須 | - | メッセージ本文 |
+| `content_type` | string | 任意 | `"text/plain"` | コンテンツタイプ |
+| `metadata` | object | 任意 | `{}` | 拡張メタデータ |
 
-| 状況 | Kernel 側の動作 | クライアント側の動作 |
-|------|----------------|-------------------|
-| 不正なイベント受信 | ログ出力 + 無視 | — |
-| 接続断 (予期せず) | 該当スレッド終了 + ログ | 再接続試行 (指数バックオフ) |
-| シリアライズエラー | ログ出力 + 接続断 | ログ出力 + 再接続 |
-| 受信タイムアウト | — | 再接続試行 |
+**テキスト入力例**:
+```json
+{
+  "id": "msg001",
+  "session_id": "a1b2c3d4e5f6g7h8",
+  "source": "cli",
+  "msg_type": "text",
+  "content": "こんにちは"
+}
+```
 
-- Kernel は子プロセスを管理しない。外部 Client の接続・切断は Kernel の動作に影響しない。
-- Supervisor (main.py) は管理コンソールで `/shutdown` を受け付け、Ctrl+C でも停止可能。
-- Named Pipe 経由で `/shutdown` を受信すると KernelProcess がフラグを立て、Supervisor が検知してシャットダウンする。
+**コマンド入力例**:
+```json
+{
+  "id": "msg002",
+  "session_id": "a1b2c3d4e5f6g7h8",
+  "source": "cli",
+  "msg_type": "command",
+  "content": "/status"
+}
+```
 
-## 6. 将来の拡張
+### 4.4 OutputMessage (Output Pipe)
 
-### TCP/IP 対応
+Kernel から外部クライアントへの出力メッセージ。
 
-`AF_PIPE` → `AF_INET` に変更するだけで同一コードが動作する：
+| フィールド | 型 | 必須 | デフォルト | 説明 |
+|-----------|-----|------|-----------|------|
+| `id` | string | 必須 | 自動生成 | メッセージID (12文字) |
+| `session_id` | string | 必須 | - | 宛先セッションID |
+| `correlation_id` | string | 任意 | - | 対応する入力メッセージのID |
+| `msg_type` | string | 必須 | - | `"stream"`, `"response"`, `"proactive"`, `"command"`, `"error"`, `"ack"` |
+| `content` | string | 必須 | - | メッセージ本文 |
+| `content_type` | string | 任意 | `"text/plain"` | コンテンツタイプ |
+| `destinations` | string[] | 任意 | - | 出力先フィルタ |
+| `metadata` | object | 任意 | `{}` | 拡張メタデータ |
 
+**ストリーム応答例**:
+```json
+{
+  "id": "out001",
+  "session_id": "a1b2c3d4e5f6g7h8",
+  "correlation_id": "msg001",
+  "msg_type": "stream",
+  "content": "Hello"
+}
+```
+
+**最終応答例**:
+```json
+{
+  "id": "out002",
+  "session_id": "a1b2c3d4e5f6g7h8",
+  "correlation_id": "msg001",
+  "msg_type": "response",
+  "content": "Hello! How can I help you?",
+  "metadata": {
+    "model": "qwen3.5:9b",
+    "done": true
+  }
+}
+```
+
+**自律発話例**:
+```json
+{
+  "id": "out003",
+  "session_id": "a1b2c3d4e5f6g7h8",
+  "msg_type": "proactive",
+  "content": "そろそろ休憩しませんか？"
+}
+```
+
+### 4.5 コマンド一覧
+
+| コマンド | 説明 | 応答 |
+|---------|------|------|
+| `/status` | Kernel の状態確認 | 状態情報 |
+| `/shutdown` | グレースフルシャットダウン | `"Shutting down..."` |
+| `/sleep` | エージェント休止 | 確認メッセージ |
+| `/wakeup` | エージェント再開 | 確認メッセージ |
+| `/help` | コマンド一覧 | コマンドリスト |
+| `/compact` | 会話履歴の圧縮 | 確認メッセージ |
+
+## 5. ACK メカニズム
+
+重要なメッセージには応答確認 (ACK) が使用される。
+
+- `metadata.ack_required: true` を設定すると、Kernel は `msg_type: "ack"` を返す
+- ACK メッセージの `correlation_id` には元のメッセージの `id` が設定される
+
+**ACK リクエスト例**:
+```json
+{
+  "id": "msg003",
+  "session_id": "a1b2c3d4e5f6g7h8",
+  "source": "cli",
+  "msg_type": "command",
+  "content": "/shutdown",
+  "metadata": {
+    "ack_required": true
+  }
+}
+```
+
+**ACK 応答例**:
+```json
+{
+  "id": "ack001",
+  "session_id": "a1b2c3d4e5f6g7h8",
+  "correlation_id": "msg003",
+  "msg_type": "ack",
+  "content": "ack:msg003"
+}
+```
+
+## 6. エラーハンドリング
+
+| 状況 | Kernel の動作 | クライアントの動作 |
+|------|--------------|-------------------|
+| 認証失敗 | ControlMessage (auth_failure) 送信後、接続切断 | エラー表示、再試行 |
+| 無効な session_id | メッセージを拒否、ログ出力 | 再接続、再認証 |
+| 不正なメッセージ | ログ出力、接続切断 | ログ出力、再接続 |
+| 接続断 (予期せず) | 該当スレッド終了、セッションクリーンアップ | 指数バックオフで再接続 |
+| セッションタイムアウト | セッション削除、接続切断 | 再認証からやり直し |
+
+## 7. 実装ガイドライン
+
+### 7.1 最小クライアント実装 (疑似コード)
+
+```
+# 1. Control Pipe に接続
+control = connect("\\\\.\\pipe\\iris-kernel-control")
+
+# 2. 認証リクエスト送信
+auth = {
+    "msg_type": "auth",
+    "mode": "bidirectional"
+}
+send(control, json.dumps(auth))
+
+# 3. 認証レスポンス受信
+response = json.loads(recv(control))
+session_id = response["session_id"]
+
+# 4. Input/Output Pipe に接続
+input_pipe = connect("\\\\.\\pipe\\iris-kernel-input")
+output_pipe = connect("\\\\.\\pipe\\iris-kernel-output")
+
+# 5. 入力メッセージ送信
+msg = {
+    "session_id": session_id,
+    "source": "my-client",
+    "msg_type": "text",
+    "content": "hello"
+}
+send(input_pipe, json.dumps(msg))
+
+# 6. 出力メッセージ受信
+while True:
+    output = json.loads(recv(output_pipe))
+    print(output["content"])
+```
+
+### 7.2 言語別実装ノート
+
+**Python**:
 ```python
-# TCP 版
-listener = multiprocessing.connection.Listener(
-    address=("127.0.0.1", 9876),
-    family="AF_INET",
-    authkey=b"iris-secret",
-)
+from multiprocessing.connection import Client
+conn = Client(r"\\.\pipe\iris-kernel-control", family="AF_PIPE")
 ```
 
-### TLS 対応
+**C# / .NET**:
+```csharp
+using System.IO.Pipes;
+var pipe = new NamedPipeClientStream(".", "iris-kernel-control", PipeDirection.InOut);
+pipe.Connect();
+```
 
-`multiprocessing.connection.Listener` は直接 TLS をサポートしないため、
-TCP 移行時に別途暗号化層を追加する必要がある。
-当面は localhost 限定のため未対応。
+**C++ (Windows API)**:
+```cpp
+HANDLE hPipe = CreateFile(
+    L"\\\\.\\pipe\\iris-kernel-control",
+    GENERIC_READ | GENERIC_WRITE,
+    0, NULL, OPEN_EXISTING, 0, NULL
+);
+```
+
+**Node.js**:
+```javascript
+// 外部ライブラリ必要 (例: node-named-pipe)
+const pipe = new NamedPipeClient("\\\\.\\pipe\\iris-kernel-control");
+```
+
+### 7.3 再接続ロジック
+
+```
+function connect_with_retry():
+    max_retries = 5
+    backoff = 1.0
+
+    for i in 1..max_retries:
+        try:
+            return connect()
+        except ConnectionError:
+            sleep(backoff)
+            backoff *= 2
+
+    raise ConnectionFailed
+```
+
+## 8. セキュリティ考慮事項
+
+- **認証**: 現在は `session_id` のみで認証。将来的に `auth_token` 検証を追加予定
+- **セッションID**: サーバー側で UUID4 生成。クライアントは推測不可能
+- **ローカル通信**: 現時点で同一マシン内限定。外部ネットワークからの接続は不可
+- **パイプ権限**: Windows の ACL でアクセス制御可能（将来の拡張）
+
+## 9. 将来の拡張
+
+### 9.1 TCP/IP 対応
+
+`AF_PIPE` → `AF_INET` に変更するだけで同一プロトコルが動作:
+
+```
+address: ("127.0.0.1", 9876)
+family: "AF_INET"
+```
+
+### 9.2 TLS 暗号化
+
+TCP 移行時に TLS 層を追加可能。認証トークンとの組み合わせでセキュアな通信を実現。
+
+### 9.3 複数セッション
+
+1クライアントが複数の `session_id` を取得可能。用途別にセッションを分離できる。

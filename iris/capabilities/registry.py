@@ -59,6 +59,7 @@ class CapabilityRegistry:
 
     def __init__(self) -> None:
         self._capabilities: dict[str, Capability] = {}
+        self._drivers: dict[str, dict] = {}
 
     def register(self, capability: Capability) -> None:
         self._capabilities[capability.name] = capability
@@ -94,6 +95,34 @@ class CapabilityRegistry:
     def list_tools_for_role(self, role: str) -> list[dict]:
         return [c.to_openai_tool() for c in self._capabilities.values() if role in c.allowed_roles]
 
+    def register_driver(
+        self,
+        kind: str,
+        driver_id: str,
+        description: str,
+        **kwargs: object,
+    ) -> None:
+        """I/O ドライバーを登録する。
+
+        Args:
+            kind: "input" または "output"
+            driver_id: 一意の識別子 ("cli", "tcp", "file")
+            description: 説明文
+            kwargs: Provider固有の追加データ
+        """
+        self._drivers[driver_id] = {
+            "kind": kind,
+            "driver_id": driver_id,
+            "description": description,
+            **kwargs,
+        }
+
+    def list_drivers(self, kind: str | None = None) -> list[dict]:
+        """登録されたドライバー一覧を返す。kind でフィルタ可能。"""
+        if kind is None:
+            return list(self._drivers.values())
+        return [d for d in self._drivers.values() if d["kind"] == kind]
+
     def execute(self, name: str, **kwargs: object) -> str:
         cap = self.get(name)
         if not cap:
@@ -105,7 +134,7 @@ class CapabilityRegistry:
         base_paths: list[str] | None = None,
     ) -> None:
         """
-        capabilities/*/server.py を動的に発見・登録する。
+        capabilities/*/server.py または driver.py を動的に発見・登録する。
 
         Args:
             base_paths: 検索するディレクトリ一覧。
@@ -121,8 +150,10 @@ class CapabilityRegistry:
             if not p.is_dir():
                 continue
             base_module = base.replace("/", ".").replace("\\", ".")
-            for server_file in p.rglob("server.py"):
-                rel = server_file.relative_to(p)
+            for module_file in p.rglob("*.py"):
+                if module_file.name not in ("server.py", "driver.py"):
+                    continue
+                rel = module_file.relative_to(p)
                 relative_module = str(rel.with_suffix("")).replace("/", ".").replace("\\", ".")
                 module_path = f"{base_module}.{relative_module}"
                 try:

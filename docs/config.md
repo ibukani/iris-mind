@@ -12,6 +12,7 @@ Config
 ├── personality: PersonalityConfig — 人格・プロンプト
 ├── memory: MemoryConfig        — 記憶管理
 ├── proactive: ProactiveConfig  — 自発発話
+├── session: SessionConfig      — セッション・通信
 └── logging: LoggingConfig      — ログ出力
 ```
 
@@ -24,7 +25,7 @@ Config
 | base_url | str | "http://localhost:11434" | API URL（Ollama or OpenRouter） |
 | api_key | str | "" | OpenRouter APIキー（${VAR_NAME}形式対応） |
 | temperature | float | 0.7 | LLM生成温度 |
-| num_gpu | int | 0 | GPUレイヤー数（0=CPU、Ollamaのみ） |
+| num_gpu | int | 99 | GPUレイヤー数（99=全レイヤー、Ollamaのみ） |
 | num_ctx | int | 8192 | コンテキスト長 |
 | context_window | int | 0 | 会話ウィンドウサイズ（0=無制限） |
 | compaction_threshold | float | 0.85 | 要約発動閾値（比率） |
@@ -92,15 +93,6 @@ trigger_weights:
 | mode_default | str | "auto" | 動作モード（auto/manual） |
 | prompt_file | str | ".iris/config/personality_default.md" | システムプロンプトファイル |
 
-## LoggingConfig
-
-| フィールド | 型 | デフォルト | 説明 |
-|-----------|-----|-----------|------|
-| level | str | "INFO" | ログレベル |
-| dir | str | "logs" | ログ出力ディレクトリ |
-| max_bytes | int | 5242880 | ログファイル最大サイズ |
-| backup_count | int | 14 | 保持する起動世代数 |
-
 ## MemoryConfig
 
 | フィールド | 型 | デフォルト | 説明 |
@@ -113,6 +105,26 @@ trigger_weights:
 | rag_max_results | int | 3 | RAG検索最大件数 |
 | agents_md_path | str | ".iris/data/iris_profile.md" | 構造記憶ファイル |
 | agents_md_max_bytes | int | 2048 | 構造記憶最大サイズ |
+
+## SessionConfig
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| auth_timeout_sec | int | 30 | 認証タイムアウト（秒） |
+| pairing_timeout_sec | int | 60 | ペアリングタイムアウト（秒） |
+| pipe_name_control | str | `\\.\pipe\iris-kernel-control` | 制御パイプ名 |
+| pipe_name_input | str | `\\.\pipe\iris-kernel-input` | 入力パイプ名 |
+| pipe_name_output | str | `\\.\pipe\iris-kernel-output` | 出力パイプ名 |
+
+## LoggingConfig
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| file_level | str | "INFO" | ファイルログレベル |
+| console_level | str | "" | コンソールログレベル（空=ファイルに準拠） |
+| dir | str | "logs" | ログ出力ディレクトリ |
+| max_bytes | int | 5242880 | ログファイル最大サイズ |
+| backup_count | int | 14 | 保持する起動世代数 |
 
 ## config.yaml 例
 
@@ -150,4 +162,15 @@ proactive:
     memory: 0.45
     context: 0.15
     mood: 0.15
+
+session:
+  auth_timeout_sec: 30
+  pairing_timeout_sec: 60
+
+logging:
+  file_level: INFO
+  console_level: ""
+  dir: logs
+  max_bytes: 5242880
+  backup_count: 14
 ```

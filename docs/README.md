@@ -15,12 +15,6 @@
 | [`conversation-service.md`](./conversation-service.md) | ConversationService 設計仕様 — 会話処理パイプライン |
 | [`commands.md`](./commands.md) | コマンドシステム仕様 — スラッシュコマンド一覧と拡張方法 |
 
-### Architecture Decision Records
-
-| ファイル | 内容 |
-|---|---|
-| [`adr/001-3-process-architecture.md`](./adr/001-3-process-architecture.md) | 3-Process分解の決定記録 — IPC方式, Phase順, トレードオフ |
-
 ## 設計背景
 
 Iris は Kernel-only プロジェクトとして設計されている。

@@ -51,33 +51,6 @@ class Event:
 
 
 @dataclass
-class UserInputEvent(Event):
-    content: str
-    metadata: dict[str, Any] | None = None
-
-
-@dataclass
-class CommandRequestEvent(Event):
-    command_name: str
-    args: str
-    raw: str
-
-
-@dataclass
-class CommandResponseEvent(Event):
-    command_name: str
-    content: str
-    success: bool = True
-
-
-@dataclass
-class ProactiveSpeechEvent(Event):
-    content: str
-    trigger_type: str
-    confidence: float = 0.0
-
-
-@dataclass
 class TimerTick(Event):
     tick_count: int = 0
 
@@ -95,18 +68,6 @@ class MemoryUpdateEvent(Event):
 
 
 @dataclass
-class AgentStreamEvent(Event):
-    delta: str
-    done: bool = False
-
-
-@dataclass
-class AgentResponseEvent(Event):
-    content: str
-    model: str = ""
-
-
-@dataclass
 class AgentAnomalyEvent(Event):
     anomaly_type: str
     severity: str
@@ -119,15 +80,9 @@ def new_trace_id() -> str:
 
 __all__ = [
     "Event",
-    "UserInputEvent",
-    "CommandRequestEvent",
-    "CommandResponseEvent",
-    "ProactiveSpeechEvent",
     "TimerTick",
     "AgentStateChangeEvent",
     "MemoryUpdateEvent",
-    "AgentStreamEvent",
-    "AgentResponseEvent",
     "AgentAnomalyEvent",
     "new_trace_id",
 ]

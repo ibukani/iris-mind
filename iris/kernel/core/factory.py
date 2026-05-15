@@ -15,9 +15,9 @@ from iris.personality.personality import Personality
 from ..agent_state import AgentStateManager
 from ..config import Config
 from ..event.event_bus import EventBus
-from ..io.control_manager import ControlManager
-from ..io.input_manager import InputManager
-from ..io.output_manager import OutputManager
+from ..io.control_listener import ControlListener
+from ..io.input_listener import InputListener
+from ..io.output_listener import OutputListener
 from ..io.session_manager import SessionManager
 from ..services.context import ContextManager
 from ..services.conversation import ConversationService
@@ -37,34 +37,45 @@ class KernelContext:
     conversation: ConversationService
     proactive: ProactiveEngine
     cmd_handler: CommandHandler
-    output: OutputManager
-    input_mgr: InputManager
+    output_listener: OutputListener
+    input_listener: InputListener
+    control_listener: ControlListener
     session_mgr: SessionManager
-    control_mgr: ControlManager
     shutdown_requested: bool = False
 
 
 class KernelFactory:
     @staticmethod
     def build(config: Config) -> KernelContext:
+        # ============================================================
+        # Phase 1: インフラ基盤 (I/O・イベント・セッション)
+        # ============================================================
         event_bus = EventBus()
         state = AgentStateManager(event_bus=event_bus)
         session_mgr = SessionManager()
-        output = OutputManager(session_manager=session_mgr)
-        input_mgr = InputManager(session_manager=session_mgr)
-        control_mgr = ControlManager(session_manager=session_mgr)
+        output_listener = OutputListener(session_manager=session_mgr)
+        input_listener = InputListener(session_manager=session_mgr)
+        control_listener = ControlListener(session_manager=session_mgr)
 
+        # ============================================================
+        # Phase 2: 記憶レイヤー
+        # ============================================================
         memory, agents_md, persona_profile = KernelFactory._build_memory(config)
+
+        # ============================================================
+        # Phase 3: LLM・パーソナリティレイヤー
+        # ============================================================
         llm, personality, capability_checker, reflexion, context_mgr = KernelFactory._build_llm(config)
-        proactive, kernel = KernelFactory._build_proactive_and_kernel(
-            config,
-            event_bus,
-            state,
-            memory,
-            llm,
-            output,
-        )
+
+        # ============================================================
+        # Phase 4: ケイパビリティ (ツール) レイヤー
+        # ============================================================
         registry, tool_exec = KernelFactory._build_capabilities()
+
+        # ============================================================
+        # Phase 5: パイプライン (LLM処理・内省)
+        # 依存: Phase 3 (llm, personality, ...) + Phase 4 (tool_exec)
+        # ============================================================
         llm_pipeline, reflexion_mgr = KernelFactory._build_pipeline(
             config,
             llm,
@@ -78,34 +89,62 @@ class KernelFactory:
             reflexion,
         )
 
+        # ============================================================
+        # Phase 6: 会話サービス
+        # 依存: Phase 1 (output) + Phase 5 (llm_pipeline, reflexion_mgr, context_mgr)
+        # ============================================================
         conversation = ConversationService(
-            output_manager=output,
+            output_listener=output_listener,
             llm_pipeline=llm_pipeline,
             reflexion_manager=reflexion_mgr,
             context_manager=context_mgr,
             context_window=config.model.context_window,
         )
+
+        # ============================================================
+        # Phase 7: 自発発話エンジン + カーネル (起動はPhase 9で)
+        # 依存: Phase 1 (event_bus, state, output) + Phase 2 (memory) + Phase 3 (llm)
+        # ============================================================
+        proactive, kernel = KernelFactory._build_proactive_and_kernel(
+            config,
+            event_bus,
+            state,
+            memory,
+            llm,
+            output_listener,
+        )
+
+        # ============================================================
+        # Phase 8: コマンドハンドラ
+        # 依存: Phase 1 (state) + Phase 6 (conversation) + Phase 7 (proactive)
+        # ============================================================
         cmd_handler = CommandHandler(
             state=state,
             conversation=conversation,
             proactive=proactive,
         )
 
+        # ============================================================
+        # Phase 9: コンテキスト組み立て + ルーター設定 + カーネル起動
+        # ============================================================
         ctx = KernelContext(
             event_bus=event_bus,
             kernel=kernel,
             conversation=conversation,
             proactive=proactive,
             cmd_handler=cmd_handler,
-            output=output,
-            input_mgr=input_mgr,
+            output_listener=output_listener,
+            input_listener=input_listener,
             session_mgr=session_mgr,
-            control_mgr=control_mgr,
+            control_listener=control_listener,
         )
 
         from ..services.router import InputRouter
 
-        input_mgr.set_on_input(InputRouter(ctx))
+        input_listener.set_on_input(InputRouter(ctx))
+
+        # カーネル起動は全接続完了後に実行
+        kernel.startup()
 
         return ctx
 
@@ -149,12 +188,12 @@ class KernelFactory:
         state: AgentStateManager,
         memory: MemoryManager,
         llm: LLMBridge,
-        output: OutputManager,
+        output: OutputListener,
     ) -> tuple[ProactiveEngine, AgentKernel]:
         proactive = ProactiveEngine(
             config=config.proactive,
             event_bus=event_bus,
-            output_manager=output,
+            output_listener=output,
             state_manager=state,
             memory=memory,
             llm=llm,
@@ -169,7 +208,6 @@ class KernelFactory:
             output_manager=output,
         )
         proactive.set_approval_callback(kernel.evaluate_proactive_request)
-        kernel.startup()
         return proactive, kernel
 
     @staticmethod

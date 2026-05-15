@@ -208,7 +208,7 @@ class FakePersonaProfile:
 # ── Fake AgentsMdStore ────────────────────────────────────────
 
 
-class FakeOutputManager:
+class FakeOutputListener:
     def __init__(self) -> None:
         self.sent: list[OutputMessage] = []
         self.started = False

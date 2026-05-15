@@ -14,7 +14,13 @@ from .session_manager import SessionManager
 logger = logging.getLogger(__name__)
 
 
-class InputManager:
+class InputListener:
+    """Kernel 側の入力管理。
+
+    Named Pipe 経由で Input 接続を受け付け、メッセージを受信してコールバックに渡す。
+    セッションの検証と ACK 応答も担当する。
+    """
+
     def __init__(
         self,
         session_manager: SessionManager,
@@ -40,13 +46,16 @@ class InputManager:
         self._running = True
         self._thread = threading.Thread(target=self._accept_loop, daemon=True, name="input-manager")
         self._thread.start()
-        logger.info("InputManager started on %s", self._pipe_address)
+        logger.info("InputListener started on %s", self._pipe_address)
 
     def stop(self) -> None:
         self._running = False
         if self._listener is not None:
             self._listener.close()
-        logger.info("InputManager stopped")
+        if self._thread is not None:
+            self._thread.join(timeout=3)
+            self._thread = None
+        logger.info("InputListener stopped")
 
     def _accept_loop(self) -> None:
         listener = self._listener
@@ -54,12 +63,12 @@ class InputManager:
         while self._running:
             try:
                 conn: Connection = listener.accept()
-                logger.info("InputManager: connection accepted")
+                logger.info("InputListener: connection accepted")
                 t = threading.Thread(target=self._serve, args=(conn,), daemon=True)
                 t.start()
             except Exception:
                 if self._running:
-                    logger.exception("InputManager accept failed")
+                    logger.exception("InputListener accept failed")
                 break
 
     def _serve(self, conn: Connection) -> None:
@@ -89,7 +98,7 @@ class InputManager:
                     self._session_manager.route_output(msg.session_id, ack)
 
         except (EOFError, ConnectionError, BrokenPipeError):
-            logger.info("InputManager: connection closed")
+            logger.info("InputListener: connection closed")
         except Exception:
             if self._running:
-                logger.exception("InputManager serve error")
+                logger.exception("InputListener serve error")

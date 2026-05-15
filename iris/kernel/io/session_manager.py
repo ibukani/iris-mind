@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import threading
+from dataclasses import dataclass
 from datetime import datetime
 from multiprocessing.connection import Connection
 from uuid import uuid4
@@ -20,6 +21,7 @@ from iris.kernel.io.models import (
 logger = logging.getLogger(__name__)
 
 
+@dataclass
 class SessionConfig:
     auth_timeout_sec: int = 30
     pairing_timeout_sec: int = 60

@@ -10,7 +10,7 @@ from iris.kernel.core import AgentKernel, AnomalyDetector
 from iris.kernel.event import AgentAnomalyEvent, EventBus
 from iris.kernel.io.models import InputMessage
 from iris.kernel.services import ProactiveEngine, ProactiveResult
-from tests.conftest import FakeMemoryManager, FakeOutputManager
+from tests.conftest import FakeMemoryManager, FakeOutputListener
 
 # ── AnomalyDetector ──────────────────────────────────────────
 
@@ -99,9 +99,9 @@ def kernel_setup() -> tuple[AgentKernel, EventBus, AgentStateManager, FakeMemory
     eb = EventBus()
     st = AgentStateManager(event_bus=eb, timeout_seconds=cast(dict, 99999))
     mem = cast(Any, FakeMemoryManager())
-    out = cast(Any, FakeOutputManager())
+    out = cast(Any, FakeOutputListener())
     cfg = ProactiveConfig(enabled=False)
-    engine = ProactiveEngine(config=cfg, event_bus=eb, output_manager=out, state_manager=st, memory=mem)
+    engine = ProactiveEngine(config=cfg, event_bus=eb, output_listener=out, state_manager=st, memory=mem)
     kernel = AgentKernel(event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg, output_manager=out)
     engine.set_approval_callback(kernel.evaluate_proactive_request)
     return kernel, eb, st, mem
@@ -115,9 +115,9 @@ class TestAgentKernel:
         eb = EventBus()
         st = AgentStateManager(event_bus=eb)
         mem = cast(Any, FakeMemoryManager())
-        out = cast(Any, FakeOutputManager())
+        out = cast(Any, FakeOutputListener())
         cfg = ProactiveConfig(enabled=False)
-        engine = ProactiveEngine(config=cfg, event_bus=eb, output_manager=out, state_manager=st, memory=mem)
+        engine = ProactiveEngine(config=cfg, event_bus=eb, output_listener=out, state_manager=st, memory=mem)
         kernel = AgentKernel(
             event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg, output_manager=out
         )
@@ -129,9 +129,9 @@ class TestAgentKernel:
         eb = EventBus()
         st = AgentStateManager(event_bus=eb)
         mem = cast(Any, FakeMemoryManager())
-        out = cast(Any, FakeOutputManager())
+        out = cast(Any, FakeOutputListener())
         cfg = ProactiveConfig(enabled=False)
-        engine = ProactiveEngine(config=cfg, event_bus=eb, output_manager=out, state_manager=st, memory=mem)
+        engine = ProactiveEngine(config=cfg, event_bus=eb, output_listener=out, state_manager=st, memory=mem)
         kernel = AgentKernel(
             event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg, output_manager=out
         )
@@ -188,9 +188,9 @@ class TestAgentKernel:
         eb = EventBus()
         st = AgentStateManager(event_bus=eb)
         mem = cast(Any, FakeMemoryManager())
-        out = cast(Any, FakeOutputManager())
+        out = cast(Any, FakeOutputListener())
         cfg = ProactiveConfig(enabled=False)
-        engine = ProactiveEngine(config=cfg, event_bus=eb, output_manager=out, state_manager=st, memory=mem)
+        engine = ProactiveEngine(config=cfg, event_bus=eb, output_listener=out, state_manager=st, memory=mem)
         kernel = AgentKernel(
             event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg, output_manager=out
         )

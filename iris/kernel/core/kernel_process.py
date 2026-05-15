@@ -32,9 +32,9 @@ class KernelProcess:
 
         self._ctx = KernelFactory.build(self._config)
 
-        self._ctx.control_mgr.start()
-        self._ctx.input_mgr.start()
-        self._ctx.output.start()
+        self._ctx.control_listener.start()
+        self._ctx.input_listener.start()
+        self._ctx.output_listener.start()
 
         logger.info("KernelProcess: started")
 
@@ -46,9 +46,9 @@ class KernelProcess:
             logger.info("KernelProcess: shutdown complete (was not started)")
             return
 
-        ctx.input_mgr.stop()
-        ctx.output.stop()
-        ctx.control_mgr.stop()
+        ctx.input_listener.stop()
+        ctx.output_listener.stop()
+        ctx.control_listener.stop()
         with contextlib.suppress(Exception):
             ctx.conversation.session_reflect()
         ctx.kernel.shutdown()

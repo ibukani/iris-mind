@@ -13,7 +13,7 @@ from .session_manager import SessionManager
 logger = logging.getLogger(__name__)
 
 
-class ControlManager:
+class ControlListener:
     """制御パイプの管理。
 
     認証ハンドシェイク、セッション管理、制御メッセージの処理を担当。
@@ -30,13 +30,13 @@ class ControlManager:
         self._running = True
         self._thread = threading.Thread(target=self._accept_loop, daemon=True, name="control-manager")
         self._thread.start()
-        logger.info("ControlManager started on %s", pipe_address)
+        logger.info("ControlListener started on %s", pipe_address)
 
     def stop(self) -> None:
         self._running = False
         if self._listener is not None:
             self._listener.close()
-        logger.info("ControlManager stopped")
+        logger.info("ControlListener stopped")
 
     def _accept_loop(self) -> None:
         listener = self._listener
@@ -44,12 +44,12 @@ class ControlManager:
         while self._running:
             try:
                 conn: Connection = listener.accept()
-                logger.info("ControlManager: connection accepted")
+                logger.info("ControlListener: connection accepted")
                 t = threading.Thread(target=self._serve, args=(conn,), daemon=True)
                 t.start()
             except Exception:
                 if self._running:
-                    logger.exception("ControlManager accept failed")
+                    logger.exception("ControlListener accept failed")
                 break
 
     def _serve(self, conn: Connection) -> None:
@@ -64,13 +64,13 @@ class ControlManager:
 
             if response.msg_type == "auth_failure":
                 conn.close()
-                logger.info("ControlManager: auth failed, connection closed")
+                logger.info("ControlListener: auth failed, connection closed")
                 return
 
-            logger.info("ControlManager: auth successful, keeping connection open")
+            logger.info("ControlListener: auth successful, keeping connection open")
 
         except (EOFError, ConnectionError, BrokenPipeError):
-            logger.info("ControlManager: connection closed")
+            logger.info("ControlListener: connection closed")
         except Exception:
             if self._running:
-                logger.exception("ControlManager serve error")
+                logger.exception("ControlListener serve error")

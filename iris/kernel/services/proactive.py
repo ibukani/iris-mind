@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from iris.kernel.io.models import OutputMessage
-from iris.kernel.io.output_manager import OutputManager
+from iris.kernel.io.output_listener import OutputListener
 from iris.llm.provider import LLMProvider
 
 from ..agent_state import AgentStateManager, State
@@ -116,7 +116,7 @@ class ProactiveEngine:
         self,
         config: ProactiveConfig,
         event_bus: EventBus,
-        output_manager: OutputManager,
+        output_listener: OutputListener,
         state_manager: AgentStateManager,
         memory: MemoryManager,
         llm: LLMProvider | None = None,
@@ -126,7 +126,7 @@ class ProactiveEngine:
     ) -> None:
         self._config = config
         self._event_bus = event_bus
-        self._output = output_manager
+        self._output = output_listener
         self._state = state_manager
         self._memory = memory
         self._llm = llm

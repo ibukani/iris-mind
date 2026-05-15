@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any
 
 from iris.kernel.io.models import InputMessage, OutputMessage
-from iris.kernel.io.output_manager import OutputManager
+from iris.kernel.io.output_listener import OutputListener
 
 from ..agent_state import AgentStateManager, State
 from ..config import ProactiveConfig
@@ -82,7 +82,7 @@ class AgentKernel:
         proactive: ProactiveEngine,
         memory: MemoryManager,
         config: ProactiveConfig,
-        output_manager: OutputManager,
+        output_manager: OutputListener,
     ) -> None:
         self._event_bus = event_bus
         self._state = state_manager

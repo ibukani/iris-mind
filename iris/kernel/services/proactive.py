@@ -23,6 +23,11 @@ TimeProvider = Callable[[], float]
 
 logger = logging.getLogger(__name__)
 
+_NEGATIVE_RESPONSES = frozenset({
+    "やめて", "静かに", "stop", "やめろ", "黙れ", "うるさい",
+    "やめてください", "shut up",
+})
+
 TIER1_TRIGGERS: set[str] = {"time", "mood"}
 
 SELF_GOVERNANCE_PRINCIPLES = [
@@ -95,6 +100,7 @@ class SuppressionState:
     negative_mood_score: float = 0.0
     cooldown_until: float = 0.0
     is_sleeping: bool = False
+    pending_proactive_time: float = 0.0
 
 
 class ProactiveEngine:
@@ -433,8 +439,10 @@ class ProactiveEngine:
 
     def _publish_speech(self, result: ProactiveResult) -> None:
         s = self._suppression
-        s.last_proactive_time = self._time_provider()
-        s.proactive_timestamps.append(self._time_provider())
+        now = self._time_provider()
+        s.last_proactive_time = now
+        s.pending_proactive_time = now
+        s.proactive_timestamps.append(now)
         self._ignore_recorded_for_proactive = False
 
         self._output.send(
@@ -464,6 +472,19 @@ class ProactiveEngine:
 
     def set_approval_callback(self, callback: ApprovalCallback | None) -> None:
         self._approval_callback = callback
+
+    def on_user_response(self, content: str) -> None:
+        s = self._suppression
+        if s.pending_proactive_time == 0.0:
+            return
+        elapsed = self._time_provider() - s.pending_proactive_time
+        s.pending_proactive_time = 0.0
+        if elapsed > 60.0:
+            return
+        if content.strip().lower() in _NEGATIVE_RESPONSES:
+            self.set_cooldown(600.0)
+        else:
+            self.notify_positive_response()
 
     def notify_user_activity(self) -> None:
         self._suppression.last_user_activity = self._time_provider()

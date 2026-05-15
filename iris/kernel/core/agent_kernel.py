@@ -127,6 +127,7 @@ class AgentKernel:
             logger.debug("Ignoring input: state=%s", self._state.current)
             return
         self._state.transition(State.PROCESSING)
+        self._proactive.on_user_response(msg.content)
         self._proactive.notify_user_activity()
         self._memory.add_episodic(content=msg.content, kind="user_input", metadata=msg.metadata)
 

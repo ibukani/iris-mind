@@ -15,8 +15,10 @@ from iris.personality.personality import Personality
 from ..agent_state import AgentStateManager
 from ..config import Config
 from ..event.event_bus import EventBus
+from ..io.control_manager import ControlManager
 from ..io.input_manager import InputManager
 from ..io.output_manager import OutputManager
+from ..io.session_manager import SessionManager
 from ..services.context import ContextManager
 from ..services.conversation import ConversationService
 from ..services.llm_pipeline import LLMPipeline
@@ -37,6 +39,8 @@ class KernelContext:
     cmd_handler: CommandHandler
     output: OutputManager
     input_mgr: InputManager
+    session_mgr: SessionManager
+    control_mgr: ControlManager
     shutdown_requested: bool = False
 
 
@@ -45,8 +49,10 @@ class KernelFactory:
     def build(config: Config) -> KernelContext:
         event_bus = EventBus()
         state = AgentStateManager(event_bus=event_bus)
-        output = OutputManager()
-        input_mgr = InputManager()
+        session_mgr = SessionManager()
+        output = OutputManager(session_manager=session_mgr)
+        input_mgr = InputManager(session_manager=session_mgr)
+        control_mgr = ControlManager(session_manager=session_mgr)
 
         memory, agents_md, persona_profile = KernelFactory._build_memory(config)
         llm, personality, capability_checker, reflexion, context_mgr = KernelFactory._build_llm(config)
@@ -93,6 +99,8 @@ class KernelFactory:
             cmd_handler=cmd_handler,
             output=output,
             input_mgr=input_mgr,
+            session_mgr=session_mgr,
+            control_mgr=control_mgr,
         )
 
         from ..services.router import InputRouter

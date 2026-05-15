@@ -25,6 +25,7 @@
 | completed | high | `debug_tools/cli/` → `adapters/cli/` リネーム。`server.py` 削除。`debug_tools/` は `tcp_input/` のみに縮小。 | |
 | completed | high | Kernel-only プロジェクト化: `adapters/` 削除、管理コンソール追加、`/shutdown` 対応、`OutputManager` Listener 化 | |
 | completed | high | ドキュメント全面更新: kernel-only を明記。古い 3-Process 分解の記述を削除。ADR-001 に追記。 | |
+| completed | high | セッション管理機能: 3-Pipe構成(Control/Input/Output)、認証ハンドシェイク、SessionManager、Authenticator、ConnectionMode対応 (247 tests) | |
 
 ## 凡例
 

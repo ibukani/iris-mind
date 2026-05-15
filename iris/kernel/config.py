@@ -151,6 +151,14 @@ class MemoryConfig(BaseModel):
     agents_md_max_bytes: int = 2048
 
 
+class SessionConfig(BaseModel):
+    auth_timeout_sec: int = 30
+    pairing_timeout_sec: int = 60
+    pipe_name_control: str = r"\\.\pipe\iris-kernel-control"
+    pipe_name_input: str = r"\\.\pipe\iris-kernel-input"
+    pipe_name_output: str = r"\\.\pipe\iris-kernel-output"
+
+
 class LoggingConfig(BaseModel):
     file_level: str = "INFO"
     console_level: str = ""
@@ -164,6 +172,7 @@ class Config(BaseModel):
     personality: PersonalityConfig = PersonalityConfig()
     memory: MemoryConfig = MemoryConfig()
     proactive: ProactiveConfig = ProactiveConfig()
+    session: SessionConfig = SessionConfig()
     logging: LoggingConfig = LoggingConfig()
 
     @classmethod

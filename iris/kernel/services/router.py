@@ -21,11 +21,17 @@ class InputRouter:
 
             if name == "shutdown":
                 ctx.shutdown_requested = True
-                ctx.output.send(OutputMessage(msg_type="command", content="Shutting down..."))
+                ctx.output.send(
+                    OutputMessage(session_id=msg.session_id, msg_type="command", content="Shutting down...")
+                )
                 return
 
             result = ctx.cmd_handler.handle(name, args)
-            ctx.output.send(OutputMessage(msg_type="command", content=result))
+            ctx.output.send(OutputMessage(session_id=msg.session_id, msg_type="command", content=result))
+            return
+
+        mode = ctx.session_mgr.get_session_mode(msg.session_id)
+        if mode is not None and mode.value == "output_only":
             return
 
         ctx.kernel.on_input(msg)

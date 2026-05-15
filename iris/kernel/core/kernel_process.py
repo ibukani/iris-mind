@@ -32,6 +32,7 @@ class KernelProcess:
 
         self._ctx = KernelFactory.build(self._config)
 
+        self._ctx.control_mgr.start()
         self._ctx.input_mgr.start()
         self._ctx.output.start()
 
@@ -46,10 +47,10 @@ class KernelProcess:
             return
 
         ctx.input_mgr.stop()
+        ctx.output.stop()
+        ctx.control_mgr.stop()
         with contextlib.suppress(Exception):
             ctx.conversation.session_reflect()
-        with contextlib.suppress(Exception):
-            ctx.output.stop()
         ctx.kernel.shutdown()
 
         logger.info("KernelProcess: shutdown complete")

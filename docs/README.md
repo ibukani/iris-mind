@@ -23,16 +23,16 @@
 
 ## 設計背景
 
-Iris v0.3 は3プロセス（Input / Kernel / Output）アーキテクチャを採用している。
-詳細は `adr/001-3-process-architecture.md` を参照。
+Iris は Kernel-only プロジェクトとして設計されている。
+Kernel は Named Pipe で制御インターフェースを公開し、CLI 等の UI は別プロジェクトが提供する。
 
 ### 主要設計決定
 
-1. **ヘキサゴナルアーキテクチャ** — `adapters/` と `iris/kernel/` の分離（v0.2から継続）
+1. **Kernel-only 構成** — このリポジトリは Kernel 本体のみ。CLI 等のアダプターは外部プロジェクト
 2. **イベント駆動** — `EventBus` でコンポーネント間を疎結合に接続
-3. **3-Process分解** — Input / Kernel / Output を別プロセスで動作
-4. **IPC: Named Pipes** — Windows 環境で `AF_PIPE` を使用
-5. **自律発話** — `ProactiveEngine` が3層ガバナンスで自発的に会話を開始
+3. **IPC: Named Pipes** — Kernel は `Listener`（サーバー）として起動、外部 Client の接続を待つ
+4. **自律発話** — `ProactiveEngine` が3層ガバナンスで自発的に会話を開始
+5. **管理コンソール** — `main.py` の Supervisor が stdin 経由で `/status`, `/shutdown` を受け付ける
 
 ### Architecture Decision Records
 

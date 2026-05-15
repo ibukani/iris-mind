@@ -20,10 +20,6 @@ Iris は自律的に行動・進化できるAIアシスタント。Python製でO
     ├── persona_data.json         ← 話し方・性格（動的管理）
     └── chroma_db/                ← ChromaDBベクトルストア
 
-adapters/                         ← UI層 アダプター（Input/Output Process）
-├── cli/                          ← CLIアダプター（input_main, output_main, renderer）
-└── __init__.py
-
 debug_tools/                      ← デバッグ用ツール
 └── tcp_input/                    ← TCP Input アダプター
 
@@ -51,10 +47,10 @@ main.py                           ← エントリーポイント
 ## コンポーネント間依存関係（ヘキサゴナルアーキテクチャ）
 
 ```
-adapters/          ──→ iris/kernel/   ──→ iris/llm/, iris/memory/, iris/capabilities/
-(UI層)               (ドメイン層)         (インフラ層)
+debug_tools/       ──→ iris/kernel/   ──→ iris/llm/, iris/memory/, iris/capabilities/
+(デバッグ用)         (ドメイン層)         (インフラ層)
 ```
-- `adapters/` は `iris/` に依存するが、逆方向の依存はディレクトリ構造で物理禁止
+- `debug_tools/` は `iris/` に依存するが、逆方向の依存はディレクトリ構造で物理禁止
 - `iris/kernel/` は純粋なビジネスロジックに閉じ、外部サービスは kernel 外から注入
 
 ## v0.3 アーキテクチャ

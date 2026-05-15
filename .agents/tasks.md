@@ -23,6 +23,7 @@
 | completed | high | Phase 10: ipc.py→transport.py リネーム、ipc_input.py/ipc_output.py 削除 | |
 | completed | high | Phase 11: テスト修正 + ドキュメント更新 (220 tests) | |
 | completed | high | `debug_tools/cli/` → `adapters/cli/` リネーム。`server.py` 削除。`debug_tools/` は `tcp_input/` のみに縮小。 | |
+| completed | high | Kernel-only プロジェクト化: `adapters/` 削除、管理コンソール追加、`/shutdown` 対応、`OutputManager` Listener 化 | |
 
 ## 凡例
 

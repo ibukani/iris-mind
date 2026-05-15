@@ -2,44 +2,39 @@
 
 ## 1. 全体像
 
-Iris v0.3 は**3プロセス分解アーキテクチャ**を採用する。
-Input / Kernel / Output の3プロセスが Windows Named Pipes 経由で通信する。
+Iris は Kernel プロセスが自律動作する設計。Supervisor (main.py) が Kernel を管理し、
+Named Pipe で外部プロセスからの制御を受け付ける。
 
 ```
-┌───────────────────────────────────────────────────────────┐
-│                    Controller Process                      │
-│          (起動・監視・シャットダウン)                       │
-├───────────────────────────────────────────────────────────┤
-│                                                           │
-│  ┌─────────────────┐   Named Pipe    ┌─────────────────┐  │
-│  │  Input Process  │◄──────────────►│  Kernel Process  │  │
-│  │  (CLI, TCP...)  │   \\.\pipe\      │  (EventBus,      │  │
-│  │                 │   iris-kernel   │   AgentKernel,   │  │
-│  └─────────────────┘                 │   Conversation,  │  │
-│                                      │   Proactive,     │  │
-│  ┌─────────────────┐                 │   Memory, LLM,   │  │
-│  │  Output Process │◄──────────────►│   Tools)          │  │
-│  │  (CLI)          │   \\.\pipe\      └─────────────────┘  │
-│  │                 │   iris-kernel                       │
-│  └─────────────────┘                                      │
-└───────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────┐
+│              Supervisor (main.py)              │
+│  管理コンソール (stdin)  Ctrl+C                │
+│       │                                       │
+│       ▼                                       │
+│  Kernel Process (iris/kernel/)                 │
+│  ├── EventBus, AgentKernel, Conversation       │
+│  ├── Proactive, Memory, LLM, Tools             │
+│  ├── InputManager (Listener) ← 外部制御用       │
+│  └── OutputManager (Listener) → 外部出力用      │
+└──────────────────────────────────────────────┘
 ```
 
-各プロセスは独立して起動・停止・置換可能。
-Kernel が中心的な状態を持ち、Input / Output は stateless に保つ。
+Kernel は InputManager/OutputManager 共に Listener（サーバー）として起動し、
+外部 Client の接続を待つ。UI 層（CLI 等）はこのリポジトリの管轄外とし、
+Named Pipe を介して別プロジェクトから接続する。
 
 ## 2. レイヤードアーキテクチャ（v0.2 からの継承）
 
 ### 依存方向
 
 ```
-adapters/cli/ ──→ iris/kernel/ ──→ iris/llm/, iris/memory/, iris/capabilities/
-(UI層)           (ドメイン層)        (インフラ層)
+debug_tools/ ──→ iris/kernel/ ──→ iris/llm/, iris/memory/, iris/capabilities/
+(デバッグ用)    (ドメイン層)        (インフラ層)
 ```
 
 - v0.2 のヘキサゴナルアーキテクチャを継承
-- v0.3 では `adapters/cli/` が Input / Output の2プロセスに分離される
 - `iris/kernel/` はドメイン層として変化しない
+- Kernel は Named Pipe で公開インターフェースを提供するが、UI層はこのリポジトリの管轄外
 
 ### コンポーネントマップ（Kernel Process 内部）
 
@@ -175,13 +170,6 @@ IDLE / PROCESSING / PROACTIVE / REFLECTING / THINKING / SLEEPING
 ```
 iris-kernel/
 ├── .iris/                       # 設定・データファイル
-├── adapters/                    # UI層 アダプター
-│   ├── __init__.py
-│   └── cli/
-│       ├── __init__.py
-│       ├── input_main.py        # Input Process（send-only）
-│       ├── output_main.py       # Output Process（recv-only）
-│       └── renderer.py          # OutputMessage ベース表示
 ├── debug_tools/                 # デバッグ用ツール
 │   └── tcp_input/
 │       └── main.py              # TCP Input アダプター
@@ -201,7 +189,7 @@ iris-kernel/
 │   │   │   ├── __init__.py
 │   │   │   ├── models.py        # InputMessage / OutputMessage + Pipe 定数
 │   │   │   ├── input_manager.py # Kernel 側 Listener
-│   │   │   └── output_manager.py# Kernel 側 Client
+│   │   │   └── output_manager.py# Kernel 側 Listener
 │   │   ├── logging.py
 │   │   └── services/            # ビジネスロジック
 │   │       ├── __init__.py

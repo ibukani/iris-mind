@@ -4,24 +4,27 @@ Iris は自律的に行動・進化できるAIアシスタントです。Python 
 
 ## アーキテクチャ
 
-Iris v0.3 は **3-Process アーキテクチャ** を採用しています。
+Iris は **Kernel Process** と **Supervisor** の2層構成です。
 
 ```
-Supervisor Process ── 子プロセス管理 ──► Kernel Process ◄── Named Pipe ── Output Process
-  (main.py)             │                (EventBus,           (CLI, GUI...)
-                        │                 AgentKernel,
-                    ┌───┘                 Conversation,
-                    ▼                     Proactive, Memory, LLM...)
-              Input Process
-              (CLI, API...)
+┌──────────────────────────────────────────────┐
+│              Supervisor (main.py)              │
+│  管理コンソール (stdin)  Ctrl+C                │
+│       │                                       │
+│       ▼                                       │
+│  Kernel Process (iris/kernel/)                 │
+│  ├── EventBus, AgentKernel, Conversation       │
+│  ├── Proactive, Memory, LLM, Tools             │
+│  └── Named Pipe Listener ← 外部制御用          │
+└──────────────────────────────────────────────┘
 ```
 
-- **Supervisor Process** — プロセス起動・監視・シャットダウンを統括 (`main.py`)
-- **Kernel Process** — 中心的な状態・ビジネスロジックを保持 (`iris/kernel/`)
-- **Input Process** — ユーザー入力を受け付け、Kernel に送信 (`adapters/cli/input_main.py`)
-- **Output Process** — Kernel からの応答を受け取り表示 (`adapters/cli/output_main.py`)
+- **Supervisor** — Kernel プロセスの起動・監視・管理コンソール (`main.py`)
+- **Kernel Process** — 自律エージェントのビジネスロジック (`iris/kernel/`)
+- **Named Pipe** — 外部プロセスから Kernel を制御するための公開インターフェース
 
-シャットダウンは Supervisor に Ctrl+C を送信する。`exit`/`quit` は Input Process の接続のみ切断する。
+シャットダウンは Supervisor の管理コンソール (`/shutdown`) または Ctrl+C で行う。
+Named Pipe 経由でも `/shutdown` コマンドを送信可能。
 
 詳細な設計は [`docs/`](./docs/README.md) を参照。
 
@@ -82,8 +85,8 @@ OPENROUTER_API_KEY=sk-or-...
 ### 起動
 
 ```powershell
-python main.py                          # Kernel のみ
-python main.py --input --output         # 3-Process 構成（開発用）
+python main.py                          # Supervisor 起動
+python main.py --verbose                # 診断ログを stderr に出力
 ```
 
 ## プロジェクト構成
@@ -100,7 +103,6 @@ iris-kernel/
 │   ├── capabilities/            # ツール実装 (file_ops, code_exec, self_mod)
 │   ├── commands/                # スラッシュコマンド処理
 │   └── personality/             # プロンプト管理
-├── adapters/                    # UI層 アダプター (Input/Output Process)
 ├── debug_tools/                 # デバッグ用ツール (TCP Input)
 ├── docs/                        # 設計ドキュメント
 ├── tests/                       # テストスイート (236 tests, ~9秒)

@@ -33,8 +33,18 @@ Kernel が中心的な状態を持ち、Input / Output は stateless。
 
 ### 依存方向 (v0.2から継続)
 ```
-adapters/ → iris/kernel → iris/llm / iris/memory / iris/capabilities
-(UI層)      (ドメイン層)     (インフラ層)
+debug_tools/ → iris/kernel → iris/llm / iris/memory / iris/capabilities
+(デバッグ用)  (ドメイン層)     (インフラ層)
+```
+
+### アーキテクチャ
+```
+Supervisor (main.py)
+  ├── 管理コンソール (stdin) — /status, /shutdown
+  └── KernelProcess
+       ├── Named Pipe Listener (入力) — 外部プロセスから制御
+       ├── Named Pipe Listener (出力) — 外部プロセスに出力
+       └── iris/kernel/ — ドメイン層
 ```
 
 ### ガバナンスモデル（自律発話, v0.2から継続）
@@ -49,18 +59,11 @@ adapters/ → iris/kernel → iris/llm / iris/memory / iris/capabilities
 - Architecture Decision Records を `docs/adr/` に保存
 - 決定内容は `.agents/context.md` にも追跡
 
-## フォルダ構成 (v0.3現在)
+## フォルダ構成 (v0.3 Kernel-only)
 
 ```
 iris-kernel/
 ├── .iris/                       # 設定・データファイル
-├── adapters/                    # UI層 アダプター
-│   ├── __init__.py
-│   └── cli/
-│       ├── __init__.py
-│       ├── input_main.py        # Input Process (send-only)
-│       ├── output_main.py       # Output Process (recv-only)
-│       └── renderer.py          # OutputMessage ベース表示
 ├── debug_tools/                 # デバッグ用ツール
 │   └── tcp_input/
 │       └── main.py              # TCP Input アダプター

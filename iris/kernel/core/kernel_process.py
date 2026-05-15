@@ -17,12 +17,20 @@ class KernelProcessProtocol(Protocol):
     def start(self) -> None: ...
     def shutdown(self) -> None: ...
 
+    @property
+    def shutdown_requested(self) -> bool: ...
+
 
 class KernelProcess:
     def __init__(self, config: Config) -> None:
         self._config = config
         self._ctx: KernelContext | None = None
         self._input_mgr: InputManager | None = None
+        self._shutdown_requested = False
+
+    @property
+    def shutdown_requested(self) -> bool:
+        return self._shutdown_requested
 
     def start(self) -> None:
         logger.info("KernelProcess: starting")
@@ -44,6 +52,12 @@ class KernelProcess:
             cmd = msg.content[1:].strip().split(maxsplit=1)
             name = cmd[0].lower() if cmd else ""
             args = cmd[1] if len(cmd) > 1 else ""
+
+            if name == "shutdown":
+                self._shutdown_requested = True
+                ctx.output.send(OutputMessage(msg_type="command", content="Shutting down..."))
+                return
+
             result = ctx.cmd_handler.handle(name, args)
             ctx.output.send(OutputMessage(msg_type="command", content=result))
             return

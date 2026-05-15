@@ -1,8 +1,9 @@
-# IPC プロトコル仕様 v1.0
+# IPC プロトコル仕様 v2.0
 
 ## 1. 概要
 
-Kernel / Input / Output の3プロセス間の通信方式を定義する。
+Iris Kernel は Named Pipe 経由で外部プロセスから制御可能な公開インターフェースを持つ。
+Kernel は両方の Pipe で Listener（サーバー）として動作する。
 
 ## 2. 通信方式
 
@@ -14,10 +15,10 @@ Kernel / Input / Output の3プロセス間の通信方式を定義する。
 
 | Pipe 名 | 方向 | 用途 |
 |---------|------|------|
-| `\\.\pipe\iris-kernel-output` | Kernel→Output | Kernel (Client/OutputManager) から Output Process (Listener) への出力送信 |
-| `\\.\pipe\iris-kernel-input` | Input→Kernel | Input Process (Client) から Kernel (Listener/InputManager) へのユーザー入力転送 |
+| `\\.\pipe\iris-kernel-input` | 外部→Kernel | 外部 Client から Kernel (Listener/InputManager) へのコマンド・テキスト入力 |
+| `\\.\pipe\iris-kernel-output` | Kernel→外部 | Kernel (Listener/OutputManager) から外部 Client への出力送信 |
 
-各 Pipe は独立した Listener を持つ（単一Listenerではない）。各 Manager は接続ごとにスレッドを割り当てる。
+各 Pipe は独立した Listener を持つ。各 Manager は接続ごとにスレッドを割り当てる。
 
 ### 2.3 シリアライズ
 
@@ -58,39 +59,41 @@ msg = InputMessage.model_validate_json(raw)
 ### 3.1 起動シーケンス
 
 ```
+Supervisor Process (main.py):
+  1. KernelProcess.start() を呼び出し
+
 Kernel Process:
-  1. AgentKernel.startup() — 内部イベント購読 + タイマースレッド開始
-  2. OutputManager.start() — Output Process (Listener) に Client 接続
+  1. KernelFactory.build() — 全コンポーネント初期化
+  2. OutputManager.start() — PipeServer(iris-kernel-output) 起動（Listener）
   3. InputManager.start() — PipeServer(iris-kernel-input) 起動 + 受付スレッド開始
-  4. 子プロセス起動: output_main (Listener 起動待ち)
-  5. 子プロセス起動: input_main → iris-kernel-input に Client 接続
 
-Input Process:
-  1. Kernel の input Pipe に Client 接続
-  2. InputMessage の送信を開始 (input() ループ)
-
-Output Process:
-  1. PipeServer(iris-kernel-output) 起動 + 受付スレッド開始
-  2. Kernel からの接続を待機
-  3. 受信ループ開始 (OutputMessage 受信 → 表示)
+外部 Client:
+  1. 任意のタイミングで iris-kernel-input に Client 接続
+  2. InputMessage の送信を開始
+  3. iris-kernel-output に Client 接続して OutputMessage を受信
 ```
 
 ### 3.2 切断と再接続
 
 - クライアント切断 → Kernel は該当スレッドをクリーンアップ
-- Kernel 切断 → 全クライアントが `EOFError` を受信 → 再接続待機
-- 再接続時は新しい Listener アドレスを Controller から通知
-
-### 3.3 生存確認
-
-KernelProcess が定期的（5秒間隔）に Input/Output プロセスのプロセス生存確認（`poll()`）を行い、
-応答がない場合は子プロセスを再起動する。専用の制御イベントは使用しない。
+- Kernel 切断 → 全クライアントが `EOFError` を受信 → 再接続は Client 側の責務
 
 ## 4. メッセージ形式
 
 ### 4.1 InputMessage
 
-Input Process から Kernel に送信されるユーザー入力メッセージ。Pydantic BaseModel として定義される。
+外部 Client から Kernel に送信される制御メッセージ。Pydantic BaseModel として定義される。
+
+#### コマンド一覧
+
+| msg_type | content の例 | 説明 |
+|----------|-------------|------|
+| `"command"` | `/status` | Kernel の状態確認 |
+| `"command"` | `/shutdown` | Kernel のグレースフルシャットダウン |
+| `"command"` | `/sleep` | エージェント休止 |
+| `"command"` | `/wakeup` | エージェント再開 |
+| `"command"` | `/help` | コマンド一覧 |
+| `"text"` | `"hello"` | テキスト入力（会話モード） |
 
 ```python
 class InputMessage(BaseModel):
@@ -143,7 +146,9 @@ EventBus は以下の Kernel 内部専用イベントのみを運搬する。IPC
 | シリアライズエラー | ログ出力 + 接続断 | ログ出力 + 再接続 |
 | 受信タイムアウト | — | 再接続試行 |
 
-- KernelProcess が `subprocess.Popen` で Input/Output プロセスを起動・監視する。専用の制御 Pipe 経由のイベントは実装されていない。
+- Kernel は子プロセスを管理しない。外部 Client の接続・切断は Kernel の動作に影響しない。
+- Supervisor (main.py) は管理コンソールで `/shutdown` を受け付け、Ctrl+C でも停止可能。
+- Named Pipe 経由で `/shutdown` を受信すると KernelProcess がフラグを立て、Supervisor が検知してシャットダウンする。
 
 ## 6. 将来の拡張
 

@@ -15,6 +15,7 @@ from iris.personality.personality import Personality
 from ..agent_state import AgentStateManager
 from ..config import Config
 from ..event.event_bus import EventBus
+from ..io.input_manager import InputManager
 from ..io.output_manager import OutputManager
 from ..services.context import ContextManager
 from ..services.conversation import ConversationService
@@ -35,6 +36,8 @@ class KernelContext:
     proactive: ProactiveEngine
     cmd_handler: CommandHandler
     output: OutputManager
+    input_mgr: InputManager | None = None
+    shutdown_requested: bool = False
 
 
 class KernelFactory:
@@ -81,7 +84,7 @@ class KernelFactory:
             proactive=proactive,
         )
 
-        return KernelContext(
+        ctx = KernelContext(
             event_bus=event_bus,
             kernel=kernel,
             conversation=conversation,
@@ -89,6 +92,15 @@ class KernelFactory:
             cmd_handler=cmd_handler,
             output=output,
         )
+
+        from ..io.models import PIPE_NAME_INPUT
+        from ..services.router import InputRouter
+
+        router = InputRouter(ctx)
+        input_mgr = InputManager(on_input=router, pipe_address=PIPE_NAME_INPUT)
+        ctx.input_mgr = input_mgr
+
+        return ctx
 
     @staticmethod
     def _build_memory(config: Config) -> tuple[MemoryManager, AgentsMdStore, PersonaProfile]:

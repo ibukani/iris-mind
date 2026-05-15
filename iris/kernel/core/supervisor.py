@@ -75,8 +75,7 @@ class Supervisor:
                 parts = line[1:].strip().split(maxsplit=1)
                 name = parts[0].lower() if parts else ""
                 if name == "shutdown":
-                    self._shutdown_requested = True
-                    self.shutdown()
+                    self._cmd_shutdown()
                     break
                 elif name == "status":
                     self._cmd_status()
@@ -102,6 +101,10 @@ class Supervisor:
             return
         state = "running" if not self._kernel.shutdown_requested else "shutdown requested"
         print(f"Kernel: {state}")
+
+    def _cmd_shutdown(self) -> None:
+        self._shutdown_requested = True
+        self.shutdown()
 
     def _on_signal(self, sig: int, _frame: object) -> None:
         if self._shutdown_requested:

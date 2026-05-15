@@ -19,5 +19,4 @@ def test_kernel_process_shutdown_before_start_does_not_crash() -> None:
     kp = KernelProcess.__new__(KernelProcess)
     kp._config = _dummy_config()
     kp._ctx = None
-    kp._input_mgr = None
     kp.shutdown()

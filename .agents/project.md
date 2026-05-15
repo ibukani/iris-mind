@@ -54,46 +54,41 @@ debug_tools/ → iris/kernel → iris/llm / iris/memory / iris/capabilities
 ```
 iris-kernel/
 ├── .iris/                       # 設定・データファイル
-├── debug_tools/                 # 入出力分離のデバッグ用ツール群
+├── debug_tools/                 # 入出力デバッグ用ツール群
 │   ├── __init__.py
 │   ├── cli/
-│   │   ├── input_main.py        # Input Process
-│   │   ├── output_main.py       # Output Process
-│   │   ├── renderer.py          # 表示ロジック
+│   │   ├── input_main.py        # Input Process (send-only)
+│   │   ├── output_main.py       # Output Process (recv-only)
+│   │   ├── renderer.py          # OutputMessage ベース表示
 │   │   └── server.py            # 単一プロセス互換用
-│   ├── tcp_input/
-│   │   └── main.py              # TCP Input アダプター
+│   └── tcp_input/
+│       └── main.py              # TCP Input アダプター
 ├── iris/                        # アプリケーションコア
 │   ├── kernel/                  # Kernel Process
-│   │   ├── agent_kernel.py
-│   │   ├── agent_state.py
+│   │   ├── __init__.py
 │   │   ├── config.py
-│   │   ├── context.py
-│   │   ├── kernel_process.py    # KernelProcess
-│   │   ├── conversation.py
-│   │   ├── event.py             # イベントクラス群
-│   │   ├── event_bus.py         # EventBusProtocol + EventBus
-│   │   ├── factory.py           # KernelFactory
-│   │   ├── io/
-│   │   │   ├── models.py
-│   │   │   ├── protocols.py
-│   │   │   ├── input_manager.py
-│   │   │   └── output_manager.py
-│   │   ├── ipc/
-│   │   │   ├── __init__.py
-│   │   │   └── transport.py
-│   │   ├── llm_pipeline.py      # LLMPipeline
-│   │   ├── logging.py           # ログ設定
-│   │   ├── memory_manager.py
-│   │   ├── proactive.py
-│   │   ├── reflexion.py
-│   │   ├── reflexion_manager.py
-│   │   ├── tool_executor.py
-│   │   └── context.py           # ContextManager
+│   │   ├── agent_state.py
+│   │   ├── logging.py
+│   │   ├── core/                # コア（agent_kernel, kernel_process, factory）
+│   │   ├── event/               # 内部イベント（event.py, event_bus.py）
+│   │   ├── io/                  # I/O Manager（models, input_manager, output_manager）
+│   │   └── services/            # ビジネスロジック（conversation, llm_pipeline,
+│   │                              tool_executor, proactive, reflexion, 他）
 │   ├── llm/
 │   ├── memory/
-│   ├── capabilities/
-│   │   └── io/                  # I/O drivers
+│   ├── capabilities/            # ツール実装（@tool デコレータ + ToolRegistry）
+│   │   ├── __init__.py
+│   │   ├── registry.py
+│   │   ├── file_ops/server.py
+│   │   ├── code_exec/server.py
+│   │   └── self_mod/server.py
+│   ├── tools/                   # 型安全ツール基盤（@tool, ToolDef, ToolRegistry）
+│   │   ├── __init__.py
+│   │   ├── models.py
+│   │   ├── decorator.py
+│   │   ├── registry.py
+│   │   └── builtins/
+│   │       └── output.py
 │   ├── commands/
 │   └── personality/
 ├── docs/

@@ -26,14 +26,15 @@ debug_tools/                      ← 入出力分離のデバッグ用ツール
 └── __init__.py
 
 iris/                             ← アプリケーションコア
-├── kernel/                       ← ドメイン層（EventBus, AgentState, Config,
-│                                  MemoryManager, ProactiveEngine, AgentKernel,
-│                                  ConversationService, Reflexion, ReflexionManager,
-│                                  ContextManager, LLMPipeline, ToolExecutionEngine,
-│                                  KernelProcess, KernelFactory, CommandRouter）
+├── kernel/                       ← ドメイン層（core/, event/, io/,
+│                                  services/: ConversationService,
+│                                  LLMPipeline, ToolExecutionEngine,
+│                                  ProactiveEngine, ReflexionManager,
+│                                  MemoryManager, ContextManager）
 ├── llm/                          ← LLM通信（LLMBridge, OllamaProvider, OpenRouterProvider）
 ├── memory/                       ← 記憶管理（stores, vector_store, persona）
-├── capabilities/                 ← ツール実行（registry + 8 tools）
+├── capabilities/                 ← ツール実装（@tool デコレータ + registry）
+├── tools/                        ← 型安全ツール基盤（@tool, ToolDef, ToolRegistry）
 ├── commands/                     ← コマンド処理（CommandHandler）
 ├── personality/                  ← プロンプト管理（Personality）
 └── __init__.py
@@ -66,13 +67,14 @@ Input / Kernel / Output の3プロセスに分解。IPCはWindows Named Pipes（
 - VectorStore: ONNXMiniLM_L6_V2 埋め込み、cosine類似度、統合スコア = vector*0.6 + bm25*0.4
 
 ## capability の追加ルール
-1. `iris/capabilities/<name>/server.py` に配置
-2. `register(registry: CapabilityRegistry)` 関数をエクスポート
-3. `@registry.register_func(...)` デコレータでツール定義
-4. `__init__.py` を各パッケージに配置（必須）
+1. `iris/capabilities/<name>/server.py` に配置（既存互換）または `iris/tools/builtins/`（ビルトイン）
+2. `@tool()` デコレータでツール定義（型ヒント→JSON Schema 自動生成）
+3. 旧 `register_func()` も当面動作可、新規追加は `@tool()` を推奨
+4. `register(registry)` 関数で `registry.register_decorated(fn)` をエクスポート（`discover_modules()` 用）
 5. `allowed_roles` パラメータで利用可能なモデルロールを制限（デフォルトは全てのロールで利用可）
-6. 新しいcapabilityを追加したら `.iris/data/iris_profile.md` の「My Capabilities」セクションも更新する
-7. テンプレート化されたワークフローは `.agents/skills/capability-pattern/SKILL.md` を参照（`skill` ツールでロード可能）
+6. `side_effect=True` で作用系ツール（結果を会話に戻さず短絡）
+7. 新しいcapabilityを追加したら `.iris/data/iris_profile.md` の「My Capabilities」セクションも更新する
+8. テンプレート化されたワークフローは `.agents/skills/capability-pattern/SKILL.md` を参照（`skill` ツールでロード可能）
 
 ## ドキュメント更新
 機能変更時のドキュメント更新手順は `.agents/skills/doc-sync/SKILL.md` を参照（`skill` ツールでロード可能）

@@ -3,7 +3,7 @@
 ## 概要
 
 `iris/commands/` パッケージはスラッシュコマンド（`/command`）の解釈と実行を担当する。
-`CommandRouter`（`ipc_input.py`）が UserInputEvent を購読し、`/` で始まる入力をインターセプトする。通常の会話処理（LLM呼び出し）をバイパスして即座に応答する。
+`ConversationService.process_input()` が `content.startswith("/")` を検出して即座に return し、`CommandHandler` が処理する。通常の会話処理（LLM呼び出し）をバイパスして即座に応答する。
 
 ## コンポーネント
 
@@ -31,7 +31,7 @@ response = handler.handle("/sleep")  # → "おやすみなさい。..."
 ## 依存関係
 
 ```
-CommandRouter (ipc_input.py) → CommandHandler → iris/kernel/{agent_state, conversation, proactive}
+ConversationService (command detection) → CommandHandler → iris/kernel/{agent_state, conversation, proactive}
 ```
 
 - `iris/commands/` は `iris/kernel/` にのみ依存する

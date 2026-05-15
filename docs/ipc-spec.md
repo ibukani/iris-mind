@@ -10,25 +10,11 @@ Kernel / Input / Output の3プロセス間の通信方式を定義する。
 
 `multiprocessing.connection` モジュールの `AF_PIPE` ファミリを使用する。
 
-```python
-# Kernel 側 (Listener)
-listener = multiprocessing.connection.Listener(
-    address=r"\\.\pipe\iris-kernel",
-    family="AF_PIPE",
-)
-
-# クライアント側 (Client)
-conn = multiprocessing.connection.Client(
-    address=r"\\.\pipe\iris-kernel",
-    family="AF_PIPE",
-)
-```
-
 ### 2.2 Pipe アドレス体系
 
 | Pipe 名 | 方向 | 用途 |
 |---------|------|------|
-| `\\.\pipe\iris-kernel` | Kernel→Output | Kernel (Client/OutputManager) から Output Process (Listener) への出力送信 |
+| `\\.\pipe\iris-kernel-output` | Kernel→Output | Kernel (Client/OutputManager) から Output Process (Listener) への出力送信 |
 | `\\.\pipe\iris-kernel-input` | Input→Kernel | Input Process (Client) から Kernel (Listener/InputManager) へのユーザー入力転送 |
 
 各 Pipe は独立した Listener を持つ（単一Listenerではない）。各 Manager は接続ごとにスレッドを割り当てる。
@@ -57,17 +43,15 @@ msg = InputMessage.model_validate_json(raw)
 - `send_bytes()` / `recv_bytes()` がフレーミングを内部処理
 - 最大メッセージサイズはデフォルトで 32MB（要調整時は別途指定）
 
-### 2.4 Replay ファイル形式
+### 2.4 ワイヤー形式
 
-デバッグ用に、送受信されたイベントを JSONL 形式で記録する。
+送受信されるメッセージは JSON 形式で、`send_bytes()` / `recv_bytes()` でフレーミングする。
 
-```jsonl
+```json
 {"msg_type": "text", "source": "cli", "content": "hello", "id": "abc123"}
 {"msg_type": "stream", "content": "Hello ", "id": "xyz789", "correlation_id": "abc123", "metadata": {}}
 {"msg_type": "response", "content": "...", "id": "...", "correlation_id": "abc123", "metadata": {"model": "qwen3.5:9b"}}
 ```
-
-`ReplayableTransport` クラスがこの形式で記録する。再生用クラス（`ReplayTransport`）は未実装。
 
 ## 3. 接続ライフサイクル
 
@@ -86,7 +70,7 @@ Input Process:
   2. InputMessage の送信を開始 (input() ループ)
 
 Output Process:
-  1. PipeServer(iris-kernel) 起動 + 受付スレッド開始
+  1. PipeServer(iris-kernel-output) 起動 + 受付スレッド開始
   2. Kernel からの接続を待機
   3. 受信ループ開始 (OutputMessage 受信 → 表示)
 ```

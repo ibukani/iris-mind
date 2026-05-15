@@ -2,74 +2,77 @@
 
 ## 概要
 
-ConversationService は会話処理パイプラインの要。EventBus 経由で `UserInputEvent` を購読し、
-LLM 応答を生成して `AgentResponseEvent` を発行する。
+ConversationService は会話処理パイプラインの要。`process_input(content, on_complete?)` を
+AgentKernel から呼び出され、LLM 応答を生成して OutputManager から送信する。
 
 ## 責務
 
-1. **UserInputEvent 購読** — ユーザー入力を検知し処理を開始
+1. **ユーザー入力処理** — メッセージ履歴に追加し LLM パイプラインを起動
 2. **LLM 呼び出し** — Personality でシステムプロンプトを構築し、LLM に送信
-3. **AgentResponseEvent 発行** — LLM 応答をイベントとして配信（CLI/API で表示）
-4. **Tool Call 対応** — LLM が生成した tool_calls を CapabilityRegistry 経由で実行
-5. **ContextManager 連携** — トークン数超過時に会話履歴を自動要約
-6. **会話履歴管理** — メッセージリストの保持・クリア
+3. **出力送信** — OutputManager.send(OutputMessage) でストリーム・応答を Output Process へ
+4. **Tool Call 対応** — LLM が生成した tool_calls を ToolExecutionEngine 経由で実行
+5. **side_effect 短絡** — 全 tool_call が side_effect の場合、follow-up LLM 呼び出しをスキップ
+6. **ContextManager 連携** — トークン数超過時に会話履歴を自動要約
+7. **会話履歴管理** — メッセージリストの保持・クリア
 
 ## 処理フロー
 
 ```
-UserInputEvent
+AgentKernel.on_input(InputMessage)
   ↓
-ConversationService._on_user_input()
+ConversationService.process_input(content)
   ├─ 1. メッセージ履歴に user メッセージを追加
-  ├─ 2. AgentStreamEvent(delta="") 発行（思考開始通知）
+  ├─ 2. OutputManager.send(stream, "") 発行（思考開始通知）
   ├─ 3. LLMPipeline.iterate_with_tools(messages, on_token)
   │     ├─ LLMPipeline._build_system_prompt() で system prompt 構築
   │     ├─ LLM 呼び出し（tools 定義付き）
-  │     ├─ tool_calls あり → ToolExecutionEngine.execute_all() → 再度 LLM（最大3回）
-  │     └─ tool_calls なし → テキスト応答を返す
+  │     ├─ tool_calls あり → ToolExecutionEngine.execute_all()
+  │     │   ├─ side_effect のみ → break（短絡）
+  │     │   └─ 通常ツールあり → 結果を追加 → 再度 LLM（最大3回）
+  │     └─ テキスト応答を返す
   ├─ 4. メッセージ履歴に assistant メッセージを追加
-  ├─ 5. AgentStreamEvent(delta="", done=True) 発行（完了通知）
-  ├─ 6. AgentResponseEvent 発行
+  ├─ 5. OutputManager.send(stream, "", done=True) 発行（完了通知）
+  ├─ 6. OutputManager.send(response, text) 発行
   ├─ 7. ReflexionManager.maybe_run()（Nターンごと）
   └─ 8. ContextManager.check_and_summarize()（トークン超過時）
 ```
 
 ## イベント連携
 
+EventBus は Kernel 内部イベント（TimerTick, StateChange, MemoryUpdate, Anomaly）専用。
+ConversationService は EventBus を経由せず、AgentKernel から直接 `process_input()` を呼ばれる。
+
 ```
 CLI入力
   │
   ▼
-UserInputEvent ──→ AgentKernel (IDLE→PROCESSING, 記憶記録)
-                ──→ ConversationService (LLM呼出)
-                        │
-                        ▼
-                   AgentResponseEvent ──→ AgentKernel (PROCESSING→IDLE)
-                                       ──→ CLI (パネル表示)
+InputMessage (Pipe) → InputManager → KernelProcess._on_input()
+  │
+  ▼
+AgentKernel.on_input(msg)
+  ├── 状態遷移 (IDLE→PROCESSING)
+  ├── エピソード記憶に記録
+  └── ConversationService.process_input(content)
+        │
+        ├── LLM 呼び出し + Tool 実行
+        └── OutputManager.send(OutputMessage) → Pipe → Output Process
 ```
-
-AgentKernel が先に購読しているため、イベント発行時の実行順は:
-1. AgentKernel._on_user_input — 状態遷移 (IDLE→PROCESSING)
-2. ConversationService._on_user_input — LLM呼出 → AgentResponseEvent
-3. AgentKernel._on_agent_response — 状態遷移 (PROCESSING→IDLE)
-
-この順序により、LLM呼び出し中は ProactiveEngine の発話が抑制される。
 
 ## クラス構成
 
 ```
 ConversationService
-├── __init__(event_bus, llm_pipeline, reflexion_manager?,
+├── __init__(output_manager, llm_pipeline, reflexion_manager?,
 │             context_manager?, context_window?)
-│   └── subscribe("UserInputEvent", _on_user_input)
-├── _on_user_input(event)
-│   ├── コマンド（/ で始まる）→ CommandRouter に委譲のためスキップ
+├── process_input(content, on_complete?)
+│   ├── コマンド（/ で始まる）→ CommandHandler のためスキップ
 │   ├── self._messages.append({"role": "user", ...})
-│   ├── AgentStreamEvent(delta="") 発行
+│   ├── OutputManager.send(stream, "")
 │   ├── LLMPipeline.iterate_with_tools(messages, on_token) → str
+│   │   └── on_token → OutputManager.send(stream, delta)
 │   ├── self._messages.append({"role": "assistant", ...})
-│   ├── AgentStreamEvent(delta="", done=True) 発行
-│   ├── publish(AgentResponseEvent)
+│   ├── OutputManager.send(stream, "", done=True)
+│   ├── OutputManager.send(response, text)
 │   ├── ReflexionManager.maybe_run()
 │   └── ContextManager.check_and_summarize()
 ├── session_reflect() → セッション終了時の完全反省
@@ -82,7 +85,7 @@ ConversationService
 
 ```
 ConversationService
-├── EventBus（UserInputEvent 購読 / AgentResponseEvent 発行）
+├── OutputManager（OutputMessage 送信 / stream / response）
 ├── LLMPipeline（システムプロンプト構築 + LLM呼び出し + ツールループ）
 ├── ReflexionManager（Nターンごとの quick_reflect、オプション）
 └── ContextManager（会話履歴 compaction、オプション）
@@ -108,5 +111,5 @@ messages = [
 ```
 
 デフォルトでは無制限だが、`ContextManager` を設定するとトークン数が `context_window × compaction_threshold` を超えた時点で要約が実行される。
-要約後は古いメッセージが system メッセージ（`## Session Summary`（v0.2 までは `## 会話の経緯`））に置き換わる。
+要約後は古いメッセージが system メッセージ（`## Session Summary`）に置き換わる。
 `clear_history()` でリセット可能。

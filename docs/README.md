@@ -6,7 +6,7 @@
 |---|---|
 | [`architecture.md`](./architecture.md) | 全体アーキテクチャ設計書 — v0.3 3-Process分解 |
 | [`agent-state.md`](./agent-state.md) | AgentState 状態遷移設計書 — 6状態と遷移テーブル |
-| [`event-bus.md`](./event-bus.md) | EventBus インターフェース仕様書 — Protocol抽象 + IPC |
+| [`event-bus.md`](./event-bus.md) | EventBus インターフェース仕様書 — Protocol抽象（Kernel内部専用） |
 | [`ipc-spec.md`](./ipc-spec.md) | IPC プロトコル仕様 — Named Pipe, シリアライズ, 接続ライフサイクル |
 | [`proactive-engine.md`](./proactive-engine.md) | ProactiveEngine 設計仕様 — 自律発話の全アルゴリズム |
 | [`agent-kernel.md`](./agent-kernel.md) | AgentKernel 設計仕様 — イベント統括・Tier3異常検知 |

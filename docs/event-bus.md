@@ -3,7 +3,7 @@
 ## 概要
 
 EventBus はコンポーネント間の疎結合通信を実現する publish/subscribe バス。
-v0.3 では Protocol として抽象化され、in-memory / Replayable の2実装を持つ。IPC 関連は削除され、EventBus は Kernel 内部のイベントのみを扱う。
+v0.3 では Protocol として抽象化され、in-memory 実装のみを持つ。IPC 関連は削除され、EventBus は Kernel 内部のイベントのみを扱う。
 
 ## インターフェース
 
@@ -27,14 +27,6 @@ class EventBus:
         ハンドラ内例外はログ出力し、次のハンドラの実行を妨げない。"""
     def subscribe(self, event_type: str, handler: Callable) -> None: ...
     def unsubscribe(self, event_type: str, handler: Callable) -> None: ...
-```
-
-### ReplayableTransport（デバッグ用ラッパー）
-
-```python
-class ReplayableTransport:
-    """EventBus の前面に置き、送受信イベントを JSONL に記録する。
-    記録されたイベント列は後で再生可能（ReplayTransport は未実装）。"""
 ```
 
 動作は同期インメモリ。スレッドセーフ（`threading.Lock` で保護）。
@@ -106,4 +98,4 @@ AgentAnomalyEvent → AgentKernel: 異常検知時のアクション
 - イベントクラスは全て `Event` を基底クラスとし、`dataclass` で定義すること
 - `source` フィールドはイベントの発生源デバッグ用。省略不可
 - `trace_id` は EventBus が空文字列の場合に自動生成する
-- デバッグ用の `ReplayableTransport` は `to_dict()` の出力を JSONL に記録する
+- イベントの発行情報はログに出力される

@@ -64,7 +64,7 @@
 イベント処理:
   - TimerTick → ProactiveEngine.check_trigger()
     → スコア >= threshold → PROACTIVE 遷移
-  - UserInputEvent → PROCESSING 遷移
+  - InputMessage (AgentKernel.on_input) → PROCESSING 遷移
   - /sleep → SLEEPING 遷移
   - /think → THINKING 遷移
 
@@ -152,7 +152,7 @@
 
 同時に複数イベントが到着した場合の処理優先順位：
 
-1. **UserInputEvent** — 最優先、常に即処理
+1. **InputMessage** (ユーザー入力) — 最優先、常に即処理
 2. **システムコマンド**（/sleep, /wakeup 等）— 即時処理
 3. **TimerTick** — 状態が IDLE の場合のみ評価
-4. **ProactiveSpeechEvent** — PROCESSING/PROACTIVE 中はキューイング
+4. **ProactiveEngine 発話** — PROCESSING/PROACTIVE 中はキューイング

@@ -44,22 +44,20 @@ debug_tools/ ──→ iris/kernel/ ──→ iris/llm/, iris/memory/, iris/capa
 
 ```
 Kernel Process
-├── EventBus (Protocol)       — イベントルーティング
-│   ├── EventBus (in-memory)  — 単一プロセスモード
-│   └── ReplayableTransport   — デバッグ用記録・再生（transport.py）
+├── EventBus (Protocol)       — 内部イベントルーティング（TimerTick, StateChange...）
+│   └── EventBus (in-memory)  — 単一プロセス同期型イベントバス
 ├── I/O Manager
 │   ├── InputManager          — Named Pipe 待受（multiprocessing.connection.Listener）
-│   ├── OutputManager         — Output Process への送信
-│   ├── InputDriver (Protocol)— 入力アダプター（CLI, TCP, file）
-│   └── OutputDriver (Protocol)— 出力アダプター（CLI）
+│   └── OutputManager         — Output Process への送信（Client）
 ├── KernelProcess             — プロセス起動・監視・ライフサイクル管理
-├── AgentKernel               — 状態管理・異常検知・イベント統括
+│   └── AgentKernel           — 状態管理・異常検知・イベント統括
 ├── ConversationService       — 会話オーケストレーション
-│   ├── LLMPipeline           — LLM呼び出し＋ツールループ
+│   ├── LLMPipeline           — LLM呼び出し＋ツールループ（side_effect 短絡対応）
 │   └── ReflexionManager      — 自己反省スケジューリング
-├── ProactiveEngine           — 自発発話＋3層ガバナンス（応答評価含む）
+├── ProactiveEngine           — 自発発話＋3層ガバナンス
 ├── MemoryManager             — 記憶操作の一元管理
-├── ToolExecutionEngine       — Tool Call実行
+├── ToolExecutionEngine       — Tool Call実行（side_effect 考慮）
+├── CapabilityRegistry        — ツール管理（@tool デコレータ + ToolRegistry 統合）
 ├── CommandHandler            — スラッシュコマンド処理
 └── ContextManager            — 会話履歴 compaction
 ```
@@ -114,15 +112,15 @@ class OutputMessage(BaseModel):
 **データフロー:**
 
 ```
-InputDriver  → InputMessage (JSON) → Pipe → InputManager._serve()
-                                                   ↓
-                                            AgentKernel.on_input()
-                                                   ↓
-                                        ConversationService.process_input()
-                                                   ↓
-                                          OutputManager.send(OutputMessage(...))
-                                                   ↓
-                                              Pipe → OutputDriver.write(message)
+Input Process → InputMessage (JSON) → Pipe → InputManager._serve()
+                                                    ↓
+                                             AgentKernel.on_input()
+                                                    ↓
+                                         ConversationService.process_input()
+                                                    ↓
+                                           OutputManager.send(OutputMessage(...))
+                                                    ↓
+                                               Pipe → Output Process (Renderer)
 ```
 
 ### イベントフロー例
@@ -175,52 +173,60 @@ IDLE / PROCESSING / PROACTIVE / REFLECTING / THINKING / SLEEPING
 
 ```
 iris-kernel/
-├── .iris/                       # 設定・データファイル（不変）
-├── debug_tools/
+├── .iris/                       # 設定・データファイル
+├── debug_tools/                 # 入出力デバッグ用ツール群
 │   ├── __init__.py
 │   ├── cli/
-│   │   ├── __init__.py
-│   │   ├── input_main.py        # Input Process
-│   │   ├── output_main.py       # Output Process
-│   │   ├── renderer.py          # 表示ロジック
+│   │   ├── input_main.py        # Input Process（send-only）
+│   │   ├── output_main.py       # Output Process（recv-only）
+│   │   ├── renderer.py          # OutputMessage ベース表示
 │   │   └── server.py            # 単一プロセス互換用
-│   └── tcp_input/               # TCP Input アダプター
+│   └── tcp_input/
+│       └── main.py              # TCP Input アダプター
 ├── iris/
-│   ├── kernel/
+│   ├── kernel/                  # Kernel Process（ドメイン層）
 │   │   ├── __init__.py
-│   │   ├── agent_kernel.py
-│   │   ├── agent_state.py
-│   │   ├── config.py
-│   │   ├── context.py
-│   │   ├── kernel_process.py    # プロセス管理（IrisController）
-│   │   ├── conversation.py
-│   │   ├── event.py             # イベントクラス群
-│   │   ├── event_bus.py         # EventBusProtocol + EventBus
-│   │   ├── factory.py
-│   │   ├── io/                  # I/O Manager（Input/Output管理）
+│   │   ├── config.py            # Config, ModelConfig
+│   │   ├── agent_state.py       # AgentStateManager
+│   │   ├── core/                # コアコンポーネント
+│   │   │   ├── agent_kernel.py  # AgentKernel
+│   │   │   ├── kernel_process.py# KernelProcess
+│   │   │   └── factory.py       # KernelFactory（composition root）
+│   │   ├── event/               # 内部イベント
+│   │   │   ├── event.py
+│   │   │   └── event_bus.py
+│   │   ├── io/                  # I/O Manager
 │   │   │   ├── __init__.py
-│   │   │   ├── models.py        # InputMessage / OutputMessage
-│   │   │   ├── protocols.py     # InputDriver / OutputDriver Protocol
-│   │   │   ├── input_manager.py # Named Pipe 待受
-│   │   │   └── output_manager.py# Output Pipe 送信
-│   │   ├── ipc/                 # IPC トランスポート
-│   │   │   ├── __init__.py
-│   │   │   └── transport.py     # ReplayableTransport（デバッグ用）
-│   │   ├── memory_manager.py
-│   │   ├── proactive.py         # ProactiveEngine（応答評価含む）
-│   │   ├── reflexion.py
-│   │   ├── reflexion_manager.py
-│   │   ├── llm_pipeline.py
+│   │   │   ├── models.py        # InputMessage / OutputMessage + Pipe 定数
+│   │   │   ├── input_manager.py # Kernel 側 Listener
+│   │   │   └── output_manager.py# Kernel 側 Client
 │   │   ├── logging.py
-│   │   └── tool_executor.py
+│   │   └── services/            # ビジネスロジック
+│   │       ├── __init__.py
+│   │       ├── context.py       # ContextManager
+│   │       ├── conversation.py  # ConversationService
+│   │       ├── llm_pipeline.py  # LLMPipeline（side_effect 短絡対応）
+│   │       ├── memory_manager.py
+│   │       ├── proactive.py     # ProactiveEngine
+│   │       ├── reflexion.py
+│   │       ├── reflexion_manager.py
+│   │       └── tool_executor.py # ToolExecutionEngine（side_effect 対応）
 │   ├── llm/
 │   ├── memory/
-│   ├── capabilities/
-│   │   └── io/                  # I/O Driver 実装
+│   ├── capabilities/            # ツール実装（@tool デコレータ + register() 互換）
+│   │   ├── __init__.py
+│   │   ├── registry.py          # CapabilityRegistry（ToolRegistry 統合）
+│   │   ├── code_exec/server.py
+│   │   ├── file_ops/server.py
+│   │   └── self_mod/server.py
+│   ├── tools/                   # 型安全ツール基盤
+│   │   ├── __init__.py
+│   │   ├── models.py            # ToolDef, ToolResult
+│   │   ├── decorator.py         # @tool() デコレータ + スキーマ自動生成
+│   │   ├── registry.py          # ToolRegistry
+│   │   └── builtins/
 │   │       ├── __init__.py
-│   │       ├── cli/driver.py
-│   │       ├── tcp/driver.py
-│   │       └── file/driver.py
+│   │       └── output.py        # output_to（side_effect）
 │   ├── commands/
 │   └── personality/
 ├── docs/

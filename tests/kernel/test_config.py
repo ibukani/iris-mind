@@ -3,11 +3,16 @@ from __future__ import annotations
 import os
 import tempfile
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
 
 from iris.kernel.config import Config, ModelConfig, ModelEntry, ProactiveConfig
+
+
+def _me(**kwargs: Any) -> ModelEntry:
+    return ModelEntry(**kwargs)
 
 
 def write_config_yaml(path: Path, data: dict) -> None:
@@ -48,7 +53,7 @@ def test_config_save_and_reload() -> None:
     try:
         config = Config(
             model=ModelConfig(
-                models=[{"name": "m1", "roles": ["default"]}],
+                models=[{"name": "m1", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
                 provider="ollama",
                 base_url="http://localhost:11434",
             ),
@@ -63,7 +68,7 @@ def test_config_save_and_reload() -> None:
 def test_get_model_single_mode() -> None:
     config = Config(
         model=ModelConfig(
-            models=[{"name": "only-model", "roles": ["default"]}],
+            models=[{"name": "only-model", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
             provider="ollama",
             base_url="http://localhost:11434",
         ),
@@ -75,7 +80,7 @@ def test_get_model_single_mode() -> None:
 def test_get_model_multi_mode() -> None:
     config = Config(
         model=ModelConfig(
-            models=[
+            models=[  # pyright: ignore[reportArgumentType]
                 {"name": "base-model", "roles": ["default"]},
                 {"name": "smart-model", "roles": ["smart"]},
             ],
@@ -90,7 +95,7 @@ def test_get_model_multi_mode() -> None:
 def test_get_model_unknown_role_falls_back() -> None:
     config = Config(
         model=ModelConfig(
-            models=[{"name": "only-model", "roles": ["default"]}],
+            models=[{"name": "only-model", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
             provider="ollama",
             base_url="http://localhost:11434",
         ),
@@ -101,7 +106,7 @@ def test_get_model_unknown_role_falls_back() -> None:
 def test_get_model_multi_unknown_falls_back() -> None:
     config = Config(
         model=ModelConfig(
-            models=[
+            models=[  # pyright: ignore[reportArgumentType]
                 {"name": "base", "roles": ["default"]},
                 {"name": "smart", "roles": ["smart"]},
             ],
@@ -139,7 +144,7 @@ def test_env_var_resolution() -> None:
 def test_default_values() -> None:
     config = Config(
         model=ModelConfig(
-            models=[{"name": "m", "roles": ["default"]}],
+            models=[{"name": "m", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
             provider="ollama",
             base_url="http://localhost:11434",
         ),
@@ -193,7 +198,7 @@ def test_model_entry_invalid_performance_tier() -> None:
 def test_get_effective_temperature_per_model() -> None:
     config = Config(
         model=ModelConfig(
-            models=[
+            models=[  # pyright: ignore[reportArgumentType]
                 {"name": "base", "roles": ["default"], "temperature": 0.5},
                 {"name": "smart", "roles": ["smart"], "temperature": 0.9},
             ],
@@ -209,7 +214,7 @@ def test_get_effective_temperature_per_model() -> None:
 def test_get_effective_temperature_fallback() -> None:
     config = Config(
         model=ModelConfig(
-            models=[{"name": "base", "roles": ["default"]}],
+            models=[{"name": "base", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
             provider="ollama",
             base_url="http://localhost:11434",
             temperature=0.7,
@@ -221,7 +226,7 @@ def test_get_effective_temperature_fallback() -> None:
 def test_get_effective_temperature_unknown_role() -> None:
     config = Config(
         model=ModelConfig(
-            models=[{"name": "base", "roles": ["default"]}],
+            models=[{"name": "base", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
             provider="ollama",
             base_url="http://localhost:11434",
             temperature=0.7,
@@ -233,7 +238,7 @@ def test_get_effective_temperature_unknown_role() -> None:
 def test_get_effective_num_ctx() -> None:
     config = Config(
         model=ModelConfig(
-            models=[
+            models=[  # pyright: ignore[reportArgumentType]
                 {"name": "base", "roles": ["default"], "num_ctx": 4096},
             ],
             provider="ollama",
@@ -249,7 +254,7 @@ def test_get_effective_num_ctx() -> None:
 def test_get_model_capabilities_explicit() -> None:
     config = Config(
         model=ModelConfig(
-            models=[
+            models=[  # pyright: ignore[reportArgumentType]
                 {"name": "base", "roles": ["default"], "capabilities": ["tools"]},
                 {"name": "smart", "roles": ["smart"], "capabilities": ["tools", "thinking"]},
             ],
@@ -264,7 +269,7 @@ def test_get_model_capabilities_explicit() -> None:
 def test_get_model_capabilities_none() -> None:
     config = Config(
         model=ModelConfig(
-            models=[{"name": "base", "roles": ["default"]}],
+            models=[{"name": "base", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
             provider="ollama",
             base_url="http://localhost:11434",
         ),
@@ -275,7 +280,7 @@ def test_get_model_capabilities_none() -> None:
 def test_get_model_performance_tier() -> None:
     config = Config(
         model=ModelConfig(
-            models=[
+            models=[  # pyright: ignore[reportArgumentType]
                 {"name": "base", "roles": ["default"], "performance_tier": "capable"},
                 {"name": "fast", "roles": ["fast"], "performance_tier": "fast"},
             ],
@@ -290,7 +295,7 @@ def test_get_model_performance_tier() -> None:
 def test_get_model_performance_tier_default() -> None:
     config = Config(
         model=ModelConfig(
-            models=[{"name": "base", "roles": ["default"]}],
+            models=[{"name": "base", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
             provider="ollama",
             base_url="http://localhost:11434",
         ),

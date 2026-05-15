@@ -13,6 +13,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Callable
+from typing import Any
 
 from ollama import Client
 
@@ -44,6 +45,7 @@ class OllamaProvider:
         tools: list[dict] | None = None,
         on_token: Callable[[str], None] | None = None,
         keep_alive: str | None = None,
+        **kwargs: Any,
     ) -> dict:
         """LLM にチャットリクエストを送信する。"""
         effective_model = model or self.model_name
@@ -54,29 +56,30 @@ class OllamaProvider:
             "num_gpu": self.num_gpu,
             "repeat_penalty": 1.1,
         }
-        kwargs: dict = {
+        call_kwargs: dict = {
             "model": effective_model,
             "messages": messages,
             "options": options,
             "stream": on_token is not None,
         }
         if tools:
-            kwargs["tools"] = tools
-        kwargs["think"] = enable_thinking
+            call_kwargs["tools"] = tools
+        call_kwargs["think"] = enable_thinking
         if keep_alive is not None:
-            kwargs["keep_alive"] = keep_alive
+            call_kwargs["keep_alive"] = keep_alive
+        call_kwargs.update(kwargs)
 
         if on_token is not None:
-            return self._stream_chat(**kwargs, on_token=on_token)
+            return self._stream_chat(**call_kwargs, on_token=on_token)
 
-        resp = self.client.chat(**kwargs)
+        resp = self.client.chat(**call_kwargs)
         resp["message"] = _process_message(resp["message"])
         return resp
 
     def _stream_chat(
         self,
         on_token: Callable[[str], None],
-        **kwargs: object,
+        **kwargs: Any,
     ) -> dict:
         stream = self.client.chat(**kwargs)
         content_parts: list[str] = []

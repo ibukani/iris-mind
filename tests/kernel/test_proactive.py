@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Generator
+from typing import Any, cast
 
 from iris.kernel.agent_state import AgentStateManager, State
 from iris.kernel.config import ProactiveConfig
@@ -24,7 +25,7 @@ def make_engine(
     """Build ProactiveEngine with test defaults."""
     eb = event_bus or EventBus()
     st = state or AgentStateManager(event_bus=eb)
-    st._state = State.IDLE  # ensure idle
+    st._current = State.IDLE  # ensure idle
     cfg = config or ProactiveConfig(
         enabled=True,
         check_interval_sec=5.0,
@@ -34,11 +35,11 @@ def make_engine(
         tier1_auto_approve=True,
         tier2_confidence_threshold=0.7,
     )
-    mem = memory or FakeMemoryManager()
+    mem = cast(Any, memory or FakeMemoryManager())
     return ProactiveEngine(
         config=cfg,
         event_bus=eb,
-        output_manager=output_manager or FakeOutputManager(),
+        output_manager=cast(Any, output_manager or FakeOutputManager()),
         state_manager=st,
         memory=mem,
         llm=llm,
@@ -47,7 +48,7 @@ def make_engine(
     )
 
 
-def step_time() -> float:
+def step_time() -> Generator[float]:
     """Simple monotonic time provider."""
     t = 1000.0
     while True:

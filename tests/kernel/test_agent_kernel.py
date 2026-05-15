@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -97,9 +97,9 @@ class TestAnomalyDetector:
 @pytest.fixture
 def kernel_setup() -> tuple[AgentKernel, EventBus, AgentStateManager, FakeMemoryManager]:
     eb = EventBus()
-    st = AgentStateManager(event_bus=eb, timeout_seconds=99999)
-    mem = FakeMemoryManager()
-    out = FakeOutputManager()
+    st = AgentStateManager(event_bus=eb, timeout_seconds=cast(dict, 99999))
+    mem = cast(Any, FakeMemoryManager())
+    out = cast(Any, FakeOutputManager())
     cfg = ProactiveConfig(enabled=False)
     engine = ProactiveEngine(config=cfg, event_bus=eb, output_manager=out, state_manager=st, memory=mem)
     kernel = AgentKernel(event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg, output_manager=out)
@@ -114,8 +114,8 @@ class TestAgentKernel:
     def test_startup_subscribes_events(self) -> None:
         eb = EventBus()
         st = AgentStateManager(event_bus=eb)
-        mem = FakeMemoryManager()
-        out = FakeOutputManager()
+        mem = cast(Any, FakeMemoryManager())
+        out = cast(Any, FakeOutputManager())
         cfg = ProactiveConfig(enabled=False)
         engine = ProactiveEngine(config=cfg, event_bus=eb, output_manager=out, state_manager=st, memory=mem)
         kernel = AgentKernel(
@@ -128,8 +128,8 @@ class TestAgentKernel:
     def test_shutdown_stops_timer(self) -> None:
         eb = EventBus()
         st = AgentStateManager(event_bus=eb)
-        mem = FakeMemoryManager()
-        out = FakeOutputManager()
+        mem = cast(Any, FakeMemoryManager())
+        out = cast(Any, FakeOutputManager())
         cfg = ProactiveConfig(enabled=False)
         engine = ProactiveEngine(config=cfg, event_bus=eb, output_manager=out, state_manager=st, memory=mem)
         kernel = AgentKernel(
@@ -187,8 +187,8 @@ class TestAgentKernel:
     def test_on_proactive_speech_checks_anomaly(self) -> None:
         eb = EventBus()
         st = AgentStateManager(event_bus=eb)
-        mem = FakeMemoryManager()
-        out = FakeOutputManager()
+        mem = cast(Any, FakeMemoryManager())
+        out = cast(Any, FakeOutputManager())
         cfg = ProactiveConfig(enabled=False)
         engine = ProactiveEngine(config=cfg, event_bus=eb, output_manager=out, state_manager=st, memory=mem)
         kernel = AgentKernel(

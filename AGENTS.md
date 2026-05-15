@@ -96,8 +96,9 @@ Input / Kernel / Output の3プロセスに分解。IPCはWindows Named Pipes（
 ruff check .                          # lint
 ruff format --check .                 # format check
 ruff check --fix .                    # lint + auto-fix
-mypy .                                # type check
+mypy .                                # type check (mypy)
 mypy --install-types                  # 型スタブ初回インストール
+npx pyright .                         # type check (pyright)
 pytest tests/                         # 全テスト実行（220 tests, ~9秒）
 pytest tests/kernel/ -q              # kernelテストのみ
 pytest tests/memory/ -q              # memoryテストのみ

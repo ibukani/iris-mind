@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import math
 import threading
+from typing import cast
 
 import chromadb
-from chromadb.utils import embedding_functions
+from chromadb.utils import embedding_functions as ef
 
 
 class VectorStore:
@@ -12,7 +13,7 @@ class VectorStore:
 
     def __init__(self, path: str = ".iris/data/chroma_db"):
         self.client = chromadb.PersistentClient(path=path)
-        self.dense_ef = embedding_functions.ONNXMiniLM_L6_V2()
+        self.dense_ef = cast(chromadb.EmbeddingFunction, ef.ONNXMiniLM_L6_V2())
         self.collection = self.client.get_or_create_collection(
             name="semantic",
             embedding_function=self.dense_ef,
@@ -93,13 +94,16 @@ class VectorStore:
         bm25_scores = self._bm25_search(query)
         merged: dict[str, dict] = {}
         if dense_results["ids"]:
+            docs = dense_results["documents"]
+            metas = dense_results["metadatas"]
+            dists = dense_results["distances"]
             for i, eid in enumerate(dense_results["ids"][0]):
-                distance = dense_results["distances"][0][i]
+                distance = dists[0][i] if dists else 0.0
                 vector_score = max(0.0, 1.0 - distance)
                 merged[eid] = {
                     "id": eid,
-                    "content": dense_results["documents"][0][i],
-                    "type": (dense_results["metadatas"][0][i] or {}).get("type", "lesson"),
+                    "content": docs[0][i] if docs else "",
+                    "type": ((metas[0][i] or {}) if metas else {}).get("type", "lesson"),
                     "_vector_score": vector_score,
                     "_bm25_score": bm25_scores.get(eid, 0.0),
                 }
@@ -153,7 +157,9 @@ class VectorStore:
             self._bm25_dirty = False
             return
         results = self.collection.get()
-        self._all_docs = dict(zip(results["ids"], results["documents"], strict=False))
+        doc_ids = results["ids"]
+        documents = results["documents"] or [""] * len(doc_ids)
+        self._all_docs = dict(zip(doc_ids, documents, strict=False))
         self._inverted_index = {}
         self._bm25_doc_freq = {}
         total_terms = 0

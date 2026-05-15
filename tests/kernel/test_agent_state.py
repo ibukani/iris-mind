@@ -1,3 +1,5 @@
+from typing import cast
+
 import pytest
 
 from iris.kernel.agent_state import AgentStateManager, State
@@ -6,7 +8,7 @@ from iris.kernel.event import AgentStateChangeEvent, EventBus
 
 def make_manager() -> tuple[AgentStateManager, EventBus]:
     eb = EventBus()
-    m = AgentStateManager(event_bus=eb, timeout_seconds=99999)
+    m = AgentStateManager(event_bus=eb, timeout_seconds=cast(dict, 99999))
     m._current = State.IDLE
     return m, eb
 

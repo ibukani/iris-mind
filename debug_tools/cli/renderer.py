@@ -7,21 +7,9 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
 
-from iris.kernel.event import (
-    AgentAnomalyEvent,
-    AgentResponseEvent,
-    AgentStreamEvent,
-    ProactiveSpeechEvent,
-)
+from iris.kernel.io.models import OutputMessage
 
 console = Console()
-
-_HANDLERS: dict[str, str] = {
-    "ProactiveSpeechEvent": "on_proactive_speech",
-    "AgentStreamEvent": "on_stream_token",
-    "AgentResponseEvent": "on_agent_response",
-    "AgentAnomalyEvent": "on_anomaly",
-}
 
 
 class Renderer:
@@ -29,35 +17,26 @@ class Renderer:
         self._stream_live: Live | None = None
         self._stream_text: str = ""
 
-    def handle(self, event: object) -> None:
-        handler_name = _HANDLERS.get(type(event).__name__)
-        if handler_name is not None:
-            getattr(self, handler_name)(event)
+    def handle(self, message: OutputMessage) -> None:
+        handler = {
+            "stream": self._on_stream,
+            "response": self._on_response,
+            "proactive": self._on_proactive,
+            "command": self._on_command,
+            "error": self._on_error,
+        }.get(message.msg_type)
+        if handler is not None:
+            handler(message)
 
-    def on_proactive_speech(self, event: ProactiveSpeechEvent) -> None:
-        tier_label = "auto" if event.confidence >= 1.0 else "self-judge"
-        console.print(
-            Panel(
-                f"[italic]{event.content}[/italic]\n"
-                f"[dim]trigger={event.trigger_type} "
-                f"confidence={event.confidence:.2f} "
-                f"({tier_label})[/dim]",
-                title="[bold yellow]Iris[/bold yellow]",
-                border_style="yellow",
-                padding=(0, 1),
-                width=60,
-            )
-        )
-
-    def on_stream_token(self, event: AgentStreamEvent) -> None:
-        if event.done:
+    def _on_stream(self, message: OutputMessage) -> None:
+        if message.metadata.get("done"):
             self._finalize_stream()
             return
         if self._stream_live is None:
             self._stream_live = Live(console=console, refresh_per_second=12, vertical_overflow="visible")
             self._stream_live.__enter__()
-        if event.delta:
-            self._stream_text += event.delta
+        if message.content:
+            self._stream_text += message.content
             self._stream_live.update(
                 Panel(
                     self._stream_text,
@@ -70,12 +49,12 @@ class Renderer:
         elif not self._stream_text:
             self._stream_live.update(Text("Thinking...", style="dim italic"))
 
-    def on_agent_response(self, event: AgentResponseEvent) -> None:
+    def _on_response(self, message: OutputMessage) -> None:
         if self._stream_live is not None:
             return
         console.print(
             Panel(
-                event.content,
+                message.content,
                 title="[bold green]Iris[/bold green]",
                 border_style="green",
                 padding=(0, 1),
@@ -83,13 +62,28 @@ class Renderer:
             )
         )
 
-    def on_anomaly(self, event: AgentAnomalyEvent) -> None:
-        style = "bold red" if event.severity == "warning" else "bold yellow"
+    def _on_proactive(self, message: OutputMessage) -> None:
         console.print(
             Panel(
-                f"[{style}]{event.detail}[/{style}]",
-                title=f"[{style}]Tier3: {event.anomaly_type}[/{style}]",
-                border_style="red" if event.severity == "warning" else "yellow",
+                f"[italic]{message.content}[/italic]",
+                title="[bold yellow]Iris[/bold yellow]",
+                border_style="yellow",
+                padding=(0, 1),
+                width=60,
+            )
+        )
+
+    def _on_command(self, message: OutputMessage) -> None:
+        console.print(message.content)
+
+    def _on_error(self, message: OutputMessage) -> None:
+        severity = message.metadata.get("severity", "warning")
+        style = "bold red" if severity == "warning" else "bold yellow"
+        console.print(
+            Panel(
+                f"[{style}]{message.content}[/{style}]",
+                title=f"[{style}]Error[/{style}]",
+                border_style="red" if severity == "warning" else "yellow",
                 padding=(0, 1),
                 width=60,
             )
@@ -115,6 +109,3 @@ class Renderer:
     @property
     def is_streaming(self) -> bool:
         return self._stream_live is not None
-
-
-__all__ = ["Renderer"]

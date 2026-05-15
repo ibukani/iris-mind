@@ -39,7 +39,7 @@ iris/                             ← アプリケーションコア
 
 docs/                             ← 設計ドキュメント
 ├── adr/                          ← Architecture Decision Records
-.agents/                          ← コーディングエージェント用コンテキスト
+.agents/                          ← コーディングエージェント用導線・Skills
 config.yaml                       ← Irisの設定ファイル
 main.py                           ← エントリーポイント
 ```
@@ -80,7 +80,7 @@ Input / Kernel / Output の3プロセスに分解。IPCはWindows Named Pipes（
 - Architecture Decision Records (`docs/adr/*.md`)
 - 構造記憶 (`.iris/data/iris_profile.md`)
 - プロジェクトルール (`AGENTS.md`)
-- エージェントコンテキスト (`.agents/*.md`)
+- エージェント導線 (`.agents/README.md`, `.agents/project.md`)
 - Skills (`.agents/skills/*/SKILL.md`)
 
 ## コーディング規約

@@ -1,4 +1,4 @@
-# Iris v0.3 — 3-Process Architecture + Documentation-First
+# Iris v0.3 - Kernel-Only Architecture + Documentation-First
 
 ## コンセプト
 自律的に行動・進化できるAIアシスタント「Iris」の開発。
@@ -10,9 +10,6 @@ Capability Registryによる動的機能拡張を特徴とする。
 - v0.1.0: 基本会話 + Capability拡張（**完了**）
 - v0.2.0: ヘキサゴナルリファクタリング + 自律的会話（ProactiveEngine）（**完了**）
 - v0.3.0: Kernel-only プロジェクト化（Named Pipe IPC + Supervisor 管理コンソール）（**完了**）
-
-## 現在のブランチ
-- `main`
 
 ## アーキテクチャ (v0.3)
 
@@ -48,7 +45,7 @@ Supervisor (main.py)
 ### Documentation-First
 設計変更時はコード実装前に設計文書を作成する。
 - Architecture Decision Records を `docs/adr/` に保存
-- 決定内容は `.agents/context.md` にも追跡
+- エージェント向けの導線は `.agents/README.md` に集約し、決定内容そのものは `docs/adr/` と設計文書に残す
 
 ## フォルダ構成 (v0.3 Kernel-only)
 
@@ -103,3 +100,9 @@ iris-kernel/
 4. テストは `ruff check . && mypy . && pytest tests/` で品質確認
 5. 変更はユーザー承認必須（差分表示 → 承認 → 適用）
 6. コード変更とドキュメント更新は同一コミットに必須
+
+## エージェント運用
+
+- 一次情報は `AGENTS.md`、`docs/architecture.md`、`docs/adr/`、Git 履歴を優先する
+- `.agents/` には永続的な補助導線だけを置き、進行中タスクやブランチ状態は常設しない
+- 反復作業は `skills/` に寄せて、運用ルールの重複を避ける

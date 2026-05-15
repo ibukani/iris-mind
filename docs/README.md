@@ -30,4 +30,4 @@ Kernel は Named Pipe で制御インターフェースを公開し、CLI 等の
 
 ### Architecture Decision Records
 
-設計上の重要な決定は `adr/` ディレクトリに記録する。
+設計上の重要な決定は `docs/adr/` に記録する。

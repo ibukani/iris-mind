@@ -302,8 +302,6 @@ iris-kernel/
 │   └── personality/
 ├── docs/
 │   ├── README.md
-│   ├── adr/
-│   │   └── 001-3-process-architecture.md
 │   ├── architecture.md           # 本書
 │   ├── ipc-spec.md               # IPC プロトコル仕様
 │   └── ... (既存の各設計書)

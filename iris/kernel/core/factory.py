@@ -36,7 +36,7 @@ class KernelContext:
     proactive: ProactiveEngine
     cmd_handler: CommandHandler
     output: OutputManager
-    input_mgr: InputManager | None = None
+    input_mgr: InputManager
     shutdown_requested: bool = False
 
 
@@ -46,6 +46,7 @@ class KernelFactory:
         event_bus = EventBus()
         state = AgentStateManager(event_bus=event_bus)
         output = OutputManager()
+        input_mgr = InputManager()
 
         memory, agents_md, persona_profile = KernelFactory._build_memory(config)
         llm, personality, capability_checker, reflexion, context_mgr = KernelFactory._build_llm(config)
@@ -91,14 +92,12 @@ class KernelFactory:
             proactive=proactive,
             cmd_handler=cmd_handler,
             output=output,
+            input_mgr=input_mgr,
         )
 
-        from ..io.models import PIPE_NAME_INPUT
         from ..services.router import InputRouter
 
-        router = InputRouter(ctx)
-        input_mgr = InputManager(on_input=router, pipe_address=PIPE_NAME_INPUT)
-        ctx.input_mgr = input_mgr
+        input_mgr.set_on_input(InputRouter(ctx))
 
         return ctx
 

@@ -4,8 +4,6 @@ import contextlib
 import logging
 from typing import Protocol
 
-from iris.kernel.io.models import PIPE_NAME_OUTPUT
-
 from ..config import Config
 from .factory import KernelContext, KernelFactory
 
@@ -34,24 +32,24 @@ class KernelProcess:
 
         self._ctx = KernelFactory.build(self._config)
 
-        if self._ctx.input_mgr is not None:
-            self._ctx.input_mgr.start()
-        self._ctx.output.start(PIPE_NAME_OUTPUT)
+        self._ctx.input_mgr.start()
+        self._ctx.output.start()
 
         logger.info("KernelProcess: started")
 
     def shutdown(self) -> None:
         logger.info("KernelProcess: shutting down")
 
-        if self._ctx is not None and self._ctx.input_mgr is not None:
-            self._ctx.input_mgr.stop()
-
         ctx = self._ctx
-        if ctx is not None:
-            with contextlib.suppress(Exception):
-                ctx.conversation.session_reflect()
-            with contextlib.suppress(Exception):
-                ctx.output.stop()
-            ctx.kernel.shutdown()
+        if ctx is None:
+            logger.info("KernelProcess: shutdown complete (was not started)")
+            return
+
+        ctx.input_mgr.stop()
+        with contextlib.suppress(Exception):
+            ctx.conversation.session_reflect()
+        with contextlib.suppress(Exception):
+            ctx.output.stop()
+        ctx.kernel.shutdown()
 
         logger.info("KernelProcess: shutdown complete")

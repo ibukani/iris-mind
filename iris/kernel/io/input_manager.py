@@ -15,17 +15,24 @@ logger = logging.getLogger(__name__)
 class InputManager:
     def __init__(
         self,
-        on_input: Callable[[InputMessage], None],
-        pipe_address: str = PIPE_NAME_INPUT,
+        on_input: Callable[[InputMessage], None] | None = None,
     ) -> None:
-        self._on_input = on_input
-        self._pipe_address = pipe_address
+        self._on_input = on_input or self._noop
+        self._pipe_address: str | None = None
         self._listener: Any = None
         self._running = False
         self._thread: threading.Thread | None = None
 
-    def start(self) -> None:
-        self._listener = Listener(self._pipe_address, family="AF_PIPE")
+    def set_on_input(self, on_input: Callable[[InputMessage], None]) -> None:
+        self._on_input = on_input
+
+    @staticmethod
+    def _noop(_msg: InputMessage) -> None:
+        return
+
+    def start(self, pipe_address: str = PIPE_NAME_INPUT) -> None:
+        self._pipe_address = pipe_address
+        self._listener = Listener(pipe_address, family="AF_PIPE")
         self._running = True
         self._thread = threading.Thread(target=self._accept_loop, daemon=True, name="input-manager")
         self._thread.start()

@@ -4,7 +4,7 @@
 
 | ファイル | 内容 |
 |---|---|
-| [`architecture.md`](./architecture.md) | 全体アーキテクチャ設計書 — v0.3 3-Process分解 |
+| [`architecture.md`](./architecture.md) | 全体アーキテクチャ設計書 — v0.3 Kernel-only |
 | [`agent-state.md`](./agent-state.md) | AgentState 状態遷移設計書 — 6状態と遷移テーブル |
 | [`event-bus.md`](./event-bus.md) | EventBus インターフェース仕様書 — Protocol抽象（Kernel内部専用） |
 | [`ipc-spec.md`](./ipc-spec.md) | IPC プロトコル仕様 — Named Pipe, シリアライズ, 接続ライフサイクル |

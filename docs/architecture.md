@@ -1,9 +1,9 @@
-# Iris アーキテクチャ設計書
+# Iris アーキテクチャ設計書 — Kernel-only
 
 ## 1. 全体像
 
-Iris は Kernel プロセスが自律動作する設計。Supervisor (main.py) が Kernel を管理し、
-Named Pipe で外部プロセスからの制御を受け付ける。
+このリポジトリは Iris Kernel 本体のみを提供する。UI 層（CLI 等）は別プロジェクトが担当する。
+Kernel は Supervisor (main.py) により管理され、Named Pipe で外部プロセスからの制御を受け付ける。
 
 ```
 ┌──────────────────────────────────────────────┐
@@ -14,8 +14,8 @@ Named Pipe で外部プロセスからの制御を受け付ける。
 │  Kernel Process (iris/kernel/)                 │
 │  ├── EventBus, AgentKernel, Conversation       │
 │  ├── Proactive, Memory, LLM, Tools             │
-│  ├── InputManager (Listener) ← 外部制御用       │
-│  └── OutputManager (Listener) → 外部出力用      │
+│  ├── InputManager (Listener) ← 外部 Client     │
+│  └── OutputManager (Listener) → 外部 Client    │
 └──────────────────────────────────────────────┘
 ```
 
@@ -44,7 +44,7 @@ Kernel Process
 │   └── EventBus (in-memory)  — 単一プロセス同期型イベントバス
 ├── I/O Manager
 │   ├── InputManager          — Named Pipe 待受（multiprocessing.connection.Listener）
-│   └── OutputManager         — Output Process への送信（Client）
+│   └── OutputManager         — 外部 Client への出力送信（Listener）
 ├── KernelProcess             — プロセス起動・監視・ライフサイクル管理
 │   └── AgentKernel           — 状態管理・異常検知・イベント統括
 ├── ConversationService       — 会話オーケストレーション
@@ -108,23 +108,23 @@ class OutputMessage(BaseModel):
 **データフロー:**
 
 ```
-Input Process → InputMessage (JSON) → Pipe → InputManager._serve()
-                                                    ↓
-                                             AgentKernel.on_input()
-                                                    ↓
-                                         ConversationService.process_input()
-                                                    ↓
-                                           OutputManager.send(OutputMessage(...))
-                                                    ↓
-                                               Pipe → Output Process (Renderer)
+外部 Client → InputMessage (JSON) → Pipe → InputManager._serve()
+                                                 ↓
+                                          AgentKernel.on_input()
+                                                 ↓
+                                      ConversationService.process_input()
+                                                 ↓
+                                        OutputManager.send(OutputMessage(...))
+                                                 ↓
+                                            Pipe → 外部 Client
 ```
 
 ### イベントフロー例
 
 ```
 [ユーザー入力]
-Input Process:
-  input(">>> ") → InputManager.send(InputMessage(source="cli", content="..."))
+外部 Client (例: CLI):
+  input() → InputMessage(source="cli", content="...")
     ────────── Pipe (\\.\pipe\iris-kernel-input) ──────────
 Kernel Process:
   InputManager._serve(): conn.recv_bytes() → json.loads → InputMessage
@@ -134,8 +134,8 @@ Kernel Process:
       → OutputManager.send(OutputMessage(msg_type="response", content="...")) # 最終
     → ProactiveEngine.notify_user_activity()         # 抑制更新
     ────────── Pipe (\\.\pipe\iris-kernel-output) ──────────
-Output Process:
-  Renderer.handle(message): msg_type で分岐 → Rich Live 更新
+外部 Client (例: CLI):
+  conn.recv_bytes() → OutputMessage → 表示処理
 ```
 
 ## 4. 3層ガバナンス（v0.2 から継承）

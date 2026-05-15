@@ -110,7 +110,7 @@ class InputMessage(BaseModel):
 
 ### 4.2 OutputMessage
 
-Kernel から Output Process に送信される応答メッセージ。
+Kernel から外部 Client に送信される応答メッセージ。
 
 ```python
 class OutputMessage(BaseModel):

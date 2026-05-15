@@ -9,25 +9,16 @@ Capability Registryによる動的機能拡張を特徴とする。
 ## バージョン目標
 - v0.1.0: 基本会話 + Capability拡張（**完了**）
 - v0.2.0: ヘキサゴナルリファクタリング + 自律的会話（ProactiveEngine）（**完了**）
-- v0.3.0: 3-Process分解（Input / Kernel / Output）+ マルチ入力対応（**進行中**）
+- v0.3.0: Kernel-only プロジェクト化（Named Pipe IPC + Supervisor 管理コンソール）（**完了**）
 
 ## 現在のブランチ
 - `main`
 
 ## アーキテクチャ (v0.3)
 
-```
-Controller Process (起動・監視)
-        │
-        ├── Input Process (CLI, API...)
-        │       │ Named Pipe
-        ├── Kernel Process (EventBus, AgentKernel, Conversation, Proactive, Memory, LLM...)
-        │       │ Named Pipe
-        └── Output Process (CLI, GUI...)
-```
-
-Kernel が中心的な状態を持ち、Input / Output は stateless。
-詳細は `docs/adr/001-3-process-architecture.md` および `docs/architecture.md` を参照。
+このリポジトリは Iris Kernel 本体のみを提供する。UI 層（CLI 等）は別プロジェクトが担当する。
+Kernel は Named Pipe の Listener（サーバー）として起動し、外部 Client の接続を待つ。
+詳細は `docs/architecture.md` を参照。
 
 ## 設計原則
 

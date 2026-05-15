@@ -1,8 +1,13 @@
 # ADR-001: 3-Process Decomposition (Input / Kernel / Output)
 
-- **Status**: Accepted
+- **Status**: Partially superseded
 - **Date**: 2026-05-14
 - **Author**: コーディングエージェント + 人間の協働
+
+> **2026-05-15 追記**: その後、プロジェクトは Kernel-only に再定義された。
+> Input Process / Output Process の分離は行わず、Kernel が単一プロセスで Named Pipe Listener として動作する。
+> UI 層（CLI 等）は外部 Client として Named Pipe 経由で接続する別プロジェクトに分離された。
+> 本 ADR の IPC 方式（AF_PIPE）の選定理由や trace_id 設計は引き続き有効。
 
 ## Context
 

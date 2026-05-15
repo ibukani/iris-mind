@@ -1,108 +1,30 @@
-# Iris v0.3 - Kernel-Only Architecture + Documentation-First
+# Iris Project Brief
 
-## コンセプト
-自律的に行動・進化できるAIアシスタント「Iris」の開発。
-Neuro-samaにインスパイアされた、知的で親しみやすいキャラクター。
-ローカルLLM（Ollama + Qwen3.5）またはOpenRouter上で動作し、Reflexionループによる自己改善と
-Capability Registryによる動的機能拡張を特徴とする。
+このファイルは `AGENTS.md` を読んだ後に、Iris 固有の責務境界だけを素早く確認するための補助メモです。
+詳細な構成、コマンド、ルールは `AGENTS.md`、設計判断は `docs/architecture.md` と `docs/adr/` を一次情報にします。
 
-## バージョン目標
-- v0.1.0: 基本会話 + Capability拡張（**完了**）
-- v0.2.0: ヘキサゴナルリファクタリング + 自律的会話（ProactiveEngine）（**完了**）
-- v0.3.0: Kernel-only プロジェクト化（Named Pipe IPC + Supervisor 管理コンソール）（**完了**）
+## Scope
 
-## アーキテクチャ (v0.3)
+- Iris は Python 製の自律型 AI アシスタント Kernel。
+- このリポジトリは Kernel 本体を扱う。UI や外部クライアントは別プロジェクトの責務。
+- LLM provider は Ollama / OpenRouter を設定で切り替える。
+- モデルは単一モデル構成と role ベースの複数モデル構成をサポートする。
 
-このリポジトリは Iris Kernel 本体のみを提供する。UI 層（CLI 等）は別プロジェクトが担当する。
-Kernel は Named Pipe の Listener（サーバー）として起動し、外部 Client の接続を待つ。
-詳細は `docs/architecture.md` を参照。
+## Boundaries
 
-## 設計原則
+- `iris/kernel/` はドメイン層。外部サービス実装を直接持ち込まない。
+- `iris/llm/`, `iris/memory/`, `iris/capabilities/` は kernel へ注入されるインフラ層。
+- `debug_tools/` は `iris/` に依存してよいが、`iris/` から `debug_tools/` へ依存しない。
+- IPC とプロセス設計の詳細は `docs/architecture.md` と `docs/adr/001-3-process-architecture.md` を読む。
 
-### 依存方向 (v0.2から継続)
-```
-debug_tools/ → iris/kernel → iris/llm / iris/memory / iris/capabilities
-(デバッグ用)  (ドメイン層)     (インフラ層)
-```
+## Workflows
 
-### アーキテクチャ
-```
-Supervisor (main.py)
-  ├── 管理コンソール (stdin) — /status, /shutdown
-  └── KernelProcess
-       ├── Named Pipe Listener (入力) — 外部プロセスから制御
-       ├── Named Pipe Listener (出力) — 外部プロセスに出力
-       └── iris/kernel/ — ドメイン層
-```
+- capability 追加: `.agents/skills/capability-pattern/SKILL.md`
+- ドキュメント更新確認: `.agents/skills/doc-sync/SKILL.md`
+- 設計変更: `docs/adr/` に残し、必要な設計文書だけ更新する。
 
-### ガバナンスモデル（自律発話, v0.2から継続）
-| Tier | 方式 | 例 |
-|------|------|-----|
-| Tier 1 | ルールベース自動許可 | 挨拶・定型確認 |
-| Tier 2 | LLM自己判断 | 話題提案・気遣い |
-| Tier 3 | AgentKernel介入 | 異常検知・過剰発話抑制 |
+## Context Rules
 
-### Documentation-First
-設計変更時はコード実装前に設計文書を作成する。
-- Architecture Decision Records を `docs/adr/` に保存
-- エージェント向けの導線は `.agents/README.md` に集約し、決定内容そのものは `docs/adr/` と設計文書に残す
-
-## フォルダ構成 (v0.3 Kernel-only)
-
-```
-iris-kernel/
-├── .iris/                       # 設定・データファイル
-├── debug_tools/                 # デバッグ用ツール
-│   └── tcp_input/
-│       └── main.py              # TCP Input アダプター
-├── iris/                        # アプリケーションコア
-│   ├── kernel/                  # Kernel Process
-│   │   ├── __init__.py
-│   │   ├── config.py
-│   │   ├── agent_state.py
-│   │   ├── logging.py
-│   │   ├── core/                # コア（agent_kernel, kernel_process, factory）
-│   │   ├── event/               # 内部イベント（event.py, event_bus.py）
-│   │   ├── io/                  # I/O Manager（models, input_manager, output_manager）
-│   │   └── services/            # ビジネスロジック（conversation, llm_pipeline,
-│   │                              tool_executor, proactive, reflexion, 他）
-│   ├── llm/
-│   ├── memory/
-│   ├── capabilities/            # ツール実装（@tool デコレータ + ToolRegistry）
-│   │   ├── __init__.py
-│   │   ├── registry.py
-│   │   ├── file_ops/server.py
-│   │   ├── code_exec/server.py
-│   │   └── self_mod/server.py
-│   ├── tools/                   # 型安全ツール基盤（@tool, ToolDef, ToolRegistry）
-│   │   ├── __init__.py
-│   │   ├── models.py
-│   │   ├── decorator.py
-│   │   ├── registry.py
-│   │   └── builtins/
-│   │       └── output.py
-│   ├── commands/
-│   └── personality/
-├── docs/
-│   ├── adr/
-│   │   └── 001-3-process-architecture.md
-│   ├── architecture.md
-│   ├── ipc-spec.md
-│   └── ... (既存設計書)
-├── main.py
-└── config.yaml
-```
-
-## 開発ワークフロー
-1. 設計変更は `docs/adr/` に記録（Documentation-First）
-2. コード実装前に設計文書をレビュー承認
-3. 機能追加は `iris/capabilities/<name>/server.py` に配置
-4. テストは `ruff check . && mypy . && pytest tests/` で品質確認
-5. 変更はユーザー承認必須（差分表示 → 承認 → 適用）
-6. コード変更とドキュメント更新は同一コミットに必須
-
-## エージェント運用
-
-- 一次情報は `AGENTS.md`、`docs/architecture.md`、`docs/adr/`、Git 履歴を優先する
-- `.agents/` には永続的な補助導線だけを置き、進行中タスクやブランチ状態は常設しない
-- 反復作業は `skills/` に寄せて、運用ルールの重複を避ける
+- ブランチ状態、完了済みタスク、過去の決定ログはここに書かない。
+- 実装前に必要なファイルだけ読む。大きい設計文書は該当セクションから確認する。
+- 変更後は `AGENTS.md` と `.agents/README.md` の読み込み方針と矛盾しないか確認する。

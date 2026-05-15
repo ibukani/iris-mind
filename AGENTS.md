@@ -83,6 +83,13 @@ Input / Kernel / Output の3プロセスに分解。IPCはWindows Named Pipes（
 - エージェント導線 (`.agents/README.md`, `.agents/project.md`)
 - Skills (`.agents/skills/*/SKILL.md`)
 
+## コーディングエージェントのコンテキスト運用
+- 常時読む情報はこの `AGENTS.md` と `.agents/README.md` を基本とする
+- `.agents/project.md` は責務境界やプロジェクト概要が必要な場合だけ読む
+- `.agents/skills/*/SKILL.md` は該当ワークフローを実行する場合だけ読む
+- 詳細設計は `docs/` の関連ファイルを必要範囲だけ参照し、`.agents/` に重複要約しない
+- 完了済みタスク、ブランチ状態、過去ログは Git / Issue / PR を一次情報とし、常設コンテキストに含めない
+
 ## コーディング規約
 - 変更差分はユーザーに提示→承認を得てから適用
 - lint/typecheck は必須

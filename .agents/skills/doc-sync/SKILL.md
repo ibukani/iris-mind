@@ -49,7 +49,9 @@ metadata:
 - エージェント向け導線 (`.agents/README.md`)
 - プロジェクト概要 (`.agents/project.md`)
 
-### 5. Skills `.opencode/skills/*/SKILL.md`
+ただし、`.agents/` はトークン効率を優先する。詳細な設計情報、進捗ログ、履歴は重複して書かず、一次情報への参照に留める。
+
+### 5. Skills `.agents/skills/*/SKILL.md`
 
 capability 追加パターンや開発ワークフローが変わった場合に更新。
 

@@ -4,7 +4,7 @@ from iris.kernel.io.models import OutputMessage
 
 
 def test_renderer_stream_chunks_and_is_streaming() -> None:
-    from debug_tools.cli.renderer import Renderer
+    from adapters.cli.renderer import Renderer
 
     r = Renderer()
     assert not r.is_streaming
@@ -23,7 +23,7 @@ def test_renderer_stream_chunks_and_is_streaming() -> None:
 
 
 def test_renderer_response_does_not_crash() -> None:
-    from debug_tools.cli.renderer import Renderer
+    from adapters.cli.renderer import Renderer
 
     r = Renderer()
     msg = OutputMessage(msg_type="response", content="Hello world")
@@ -31,7 +31,7 @@ def test_renderer_response_does_not_crash() -> None:
 
 
 def test_renderer_proactive_does_not_crash() -> None:
-    from debug_tools.cli.renderer import Renderer
+    from adapters.cli.renderer import Renderer
 
     r = Renderer()
     msg = OutputMessage(msg_type="proactive", content="Hey, how are you?")
@@ -39,7 +39,7 @@ def test_renderer_proactive_does_not_crash() -> None:
 
 
 def test_renderer_command_does_not_crash() -> None:
-    from debug_tools.cli.renderer import Renderer
+    from adapters.cli.renderer import Renderer
 
     r = Renderer()
     msg = OutputMessage(msg_type="command", content="/help")
@@ -47,7 +47,7 @@ def test_renderer_command_does_not_crash() -> None:
 
 
 def test_renderer_error_warning_severity() -> None:
-    from debug_tools.cli.renderer import Renderer
+    from adapters.cli.renderer import Renderer
 
     r = Renderer()
     msg = OutputMessage(msg_type="error", content="Something went wrong", metadata={"severity": "warning"})
@@ -55,7 +55,7 @@ def test_renderer_error_warning_severity() -> None:
 
 
 def test_renderer_error_info_severity() -> None:
-    from debug_tools.cli.renderer import Renderer
+    from adapters.cli.renderer import Renderer
 
     r = Renderer()
     msg = OutputMessage(msg_type="error", content="FYI: rate limited", metadata={"severity": "info"})

@@ -22,6 +22,7 @@
 | completed | low | Phase 4a: TCP Input アダプター実装（debug_tools/tcp_input/） | |
 | completed | high | Phase 10: ipc.py→transport.py リネーム、ipc_input.py/ipc_output.py 削除 | |
 | completed | high | Phase 11: テスト修正 + ドキュメント更新 (220 tests) | |
+| completed | high | `debug_tools/cli/` → `adapters/cli/` リネーム。`server.py` 削除。`debug_tools/` は `tcp_input/` のみに縮小。 | |
 
 ## 凡例
 

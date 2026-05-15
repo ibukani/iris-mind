@@ -33,8 +33,8 @@ Kernel が中心的な状態を持ち、Input / Output は stateless。
 
 ### 依存方向 (v0.2から継続)
 ```
-debug_tools/ → iris/kernel → iris/llm / iris/memory / iris/capabilities
-(UI層)         (ドメイン層)     (インフラ層)
+adapters/ → iris/kernel → iris/llm / iris/memory / iris/capabilities
+(UI層)      (ドメイン層)     (インフラ層)
 ```
 
 ### ガバナンスモデル（自律発話, v0.2から継続）
@@ -54,13 +54,14 @@ debug_tools/ → iris/kernel → iris/llm / iris/memory / iris/capabilities
 ```
 iris-kernel/
 ├── .iris/                       # 設定・データファイル
-├── debug_tools/                 # 入出力デバッグ用ツール群
+├── adapters/                    # UI層 アダプター
 │   ├── __init__.py
-│   ├── cli/
-│   │   ├── input_main.py        # Input Process (send-only)
-│   │   ├── output_main.py       # Output Process (recv-only)
-│   │   ├── renderer.py          # OutputMessage ベース表示
-│   │   └── server.py            # 単一プロセス互換用
+│   └── cli/
+│       ├── __init__.py
+│       ├── input_main.py        # Input Process (send-only)
+│       ├── output_main.py       # Output Process (recv-only)
+│       └── renderer.py          # OutputMessage ベース表示
+├── debug_tools/                 # デバッグ用ツール
 │   └── tcp_input/
 │       └── main.py              # TCP Input アダプター
 ├── iris/                        # アプリケーションコア

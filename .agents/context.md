@@ -20,6 +20,7 @@
 | 2026-05-14 | KernelFactory導入: main.py を composition root 化。Adapter は KernelContext のみ受け取る |
 | 2026-05-14 | v0.3: 3-Process分解（Input/Kernel/Output）。IPCはWindows Named Pipes（AF_PIPE） |
 | 2026-05-15 | I/O 分離リファクタリング: EventBus は内部イベントのみに制限。Input/Output は InputMessage/OutputMessage (Pydantic) で通信。InputBridge/OutputBridge 削除、InputManager/OutputManager で置換。ProactiveResponseTracker を ProactiveEngine に統合。ipc.py→transport.py リネーム。 |
+| 2026-05-15 | `debug_tools/cli/` を `adapters/cli/` にリネーム（本番プロセス）。`server.py`（単一プロセス互換）を削除。`debug_tools/` はデバッグ用 `tcp_input/` のみに縮小。 |
 
 ## 既知の課題・注意点
 

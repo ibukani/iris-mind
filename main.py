@@ -27,6 +27,85 @@ logger = logging.getLogger(__name__)
 _SHUTDOWN_TIMEOUT = 5.0
 
 
+class Supervisor:
+    """子プロセス（Input/Output）のライフサイクルを管理する。"""
+
+    def __init__(self, config: Config, *, spawn_input: bool, spawn_output: bool) -> None:
+        self._config = config
+        self._spawn_input = spawn_input
+        self._spawn_output = spawn_output
+        self._kernel: KernelProcessProtocol | None = None
+        self._input_proc: subprocess.Popen | None = None
+        self._output_proc: subprocess.Popen | None = None
+        self._shutdown_requested = False
+
+    def start(self) -> None:
+        from iris.kernel.core import KernelProcess
+
+        self._kernel = KernelProcess(self._config)
+        self._kernel.start()
+
+        if self._spawn_input:
+            from iris.kernel.io.models import PIPE_NAME_INPUT
+
+            self._input_proc = self._spawn(["-m", "adapters.cli.input_main", PIPE_NAME_INPUT], "Input Process")
+        if self._spawn_output:
+            from iris.kernel.io.models import PIPE_NAME_OUTPUT
+
+            self._output_proc = self._spawn(["-m", "adapters.cli.output_main", PIPE_NAME_OUTPUT], "Output Process")
+
+        signal.signal(signal.SIGINT, self._on_signal)
+        if sys.platform != "win32":
+            signal.signal(signal.SIGTERM, self._on_signal)
+
+        logger.info("Supervisor: running")
+
+    def wait(self) -> None:
+        try:
+            while not self._shutdown_requested:
+                time.sleep(1)
+        except KeyboardInterrupt:
+            if not self._shutdown_requested:
+                self.shutdown()
+
+    def shutdown(self) -> None:
+        logger.info("Supervisor: shutting down all processes")
+        if self._input_proc is not None:
+            self._terminate(self._input_proc, "Input Process")
+        if self._kernel is not None:
+            self._kernel.shutdown()
+        if self._output_proc is not None:
+            time.sleep(0.5)
+            self._terminate(self._output_proc, "Output Process")
+        logger.info("Supervisor: all processes terminated")
+
+    def _spawn(self, python_args: list[str], name: str) -> subprocess.Popen:
+        proc = subprocess.Popen(
+            [sys.executable] + python_args,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0,
+        )
+        logger.info("Supervisor: spawned %s (pid=%d)", name, proc.pid)
+        return proc
+
+    def _terminate(self, proc: subprocess.Popen, name: str) -> None:
+        try:
+            proc.terminate()
+            proc.wait(timeout=_SHUTDOWN_TIMEOUT)
+            logger.info("Supervisor: %s terminated gracefully", name)
+        except subprocess.TimeoutExpired:
+            logger.warning("Supervisor: %s did not exit in %.1fs, killing", name, _SHUTDOWN_TIMEOUT)
+            proc.kill()
+            proc.wait(timeout=2)
+
+    def _on_signal(self, sig: int, _frame: object) -> None:
+        if self._shutdown_requested:
+            return
+        self._shutdown_requested = True
+        logger.info("Supervisor: received signal %d, starting shutdown", sig)
+        self.shutdown()
+        sys.exit(0)
+
+
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Iris Supervisor")
     parser.add_argument("--verbose", action="store_true", help="Kernel 診断ログを stderr に出力")
@@ -54,47 +133,6 @@ def _check_environment(config: Config) -> bool:
     return ok
 
 
-def _spawn(python_args: list[str], name: str) -> subprocess.Popen:
-    proc = subprocess.Popen(
-        [sys.executable] + python_args,
-        creationflags=subprocess.CREATE_NEW_PROCESS_GROUP if sys.platform == "win32" else 0,
-    )
-    logger.info("Supervisor: spawned %s (pid=%d)", name, proc.pid)
-    return proc
-
-
-def _terminate(proc: subprocess.Popen | None, name: str, timeout: float = _SHUTDOWN_TIMEOUT) -> None:
-    if proc is None:
-        return
-    try:
-        proc.terminate()
-        proc.wait(timeout=timeout)
-        logger.info("Supervisor: %s terminated gracefully", name)
-    except subprocess.TimeoutExpired:
-        logger.warning("Supervisor: %s did not exit in %.1fs, killing", name, timeout)
-        proc.kill()
-        proc.wait(timeout=2)
-
-
-def _shutdown(
-    kernel: KernelProcessProtocol,
-    input_proc: subprocess.Popen | None,
-    output_proc: subprocess.Popen | None,
-) -> None:
-    logger.info("Supervisor: shutting down all processes")
-
-    if input_proc is not None:
-        _terminate(input_proc, "Input Process")
-
-    kernel.shutdown()
-
-    if output_proc is not None:
-        time.sleep(0.5)
-        _terminate(output_proc, "Output Process")
-
-    logger.info("Supervisor: all processes terminated")
-
-
 def run() -> None:
     args = _parse_args()
     project_root = Path(__file__).parent
@@ -107,45 +145,9 @@ def run() -> None:
     if not _check_environment(config):
         return
 
-    input_proc: subprocess.Popen | None = None
-    output_proc: subprocess.Popen | None = None
-
-    from iris.kernel.core import KernelProcess
-
-    kernel: KernelProcessProtocol = KernelProcess(config)
-    kernel.start()
-
-    if args.input:
-        from iris.kernel.io.models import PIPE_NAME_INPUT
-
-        input_proc = _spawn(["-m", "debug_tools.cli.input_main", PIPE_NAME_INPUT], "Input Process")
-    if args.output:
-        from iris.kernel.io.models import PIPE_NAME_OUTPUT
-
-        output_proc = _spawn(["-m", "debug_tools.cli.output_main", PIPE_NAME_OUTPUT], "Output Process")
-
-    shutdown_requested = False
-
-    def _on_signal(sig: int, _frame: object) -> None:
-        nonlocal shutdown_requested
-        if shutdown_requested:
-            return
-        shutdown_requested = True
-        logger.info("Supervisor: received signal %d, starting shutdown", sig)
-        _shutdown(kernel, input_proc, output_proc)
-        sys.exit(0)
-
-    signal.signal(signal.SIGINT, _on_signal)
-    if sys.platform != "win32":
-        signal.signal(signal.SIGTERM, _on_signal)
-
-    logger.info("Supervisor: running")
-    try:
-        while not shutdown_requested:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        if not shutdown_requested:
-            _shutdown(kernel, input_proc, output_proc)
+    supervisor = Supervisor(config, spawn_input=args.input, spawn_output=args.output)
+    supervisor.start()
+    supervisor.wait()
 
 
 if __name__ == "__main__":

@@ -151,18 +151,25 @@ sequenceDiagram
 ### 5.1 AuthMessage（Client → Server）
 
 認証リクエスト。TCP接続後に最初に送信するメッセージ。
+クライアントは自身の役割（roles）を宣言する。
 
-| フィールド | 型 | 必須 | 説明 |
-|-----------|-----|------|------|
-| `msg_type` | string | 必須 | 常に `"auth"` |
-| `mode` | string | 任意 | `"bidirectional"`（デフォルト）, `"input_only"`, `"output_only"` |
-| `access_token` | string | 条件付き | サーバー側で設定されている場合は必須 |
+| フィールド | 型 | 必須 | デフォルト | 説明 |
+|-----------|-----|------|-----------|------|
+| `msg_type` | string | 必須 | - | 常に `"auth"` |
+| `mode` | string | 任意 | `"bidirectional"` | `"bidirectional"`, `"input_only"`, `"output_only"` |
+| `access_token` | string | 条件付き | - | サーバー側で設定されている場合は必須 |
+| `roles` | string[] | 任意 | 全role | クライアントが持つ機能の一覧（[SessionRole](#sessionrole)参照） |
+| `identity` | string | 任意 | `""` | クライアントの識別名（保存のみ、LLMには非表示） |
+| `description` | string | 任意 | `""` | クライアントの説明（保存のみ、LLMには非表示） |
 
 ```json
 {
   "msg_type": "auth",
   "mode": "bidirectional",
-  "access_token": "my-secret-token"
+  "access_token": "my-secret-token",
+  "roles": ["conversation_input", "conversation_output", "command_input", "command_output"],
+  "identity": "my-app-v2",
+  "description": "Desktop client on Windows"
 }
 ```
 
@@ -238,7 +245,7 @@ Kernel から外部クライアントへの出力メッセージ。
 | `correlation_id` | string | 任意 | - | 対応する入力メッセージのID |
 | `content` | string | 必須 | - | メッセージ本文 |
 | `content_type` | string | 任意 | `"text/plain"` | コンテンツタイプ |
-| `destinations` | string[] | 任意 | - | 出力先フィルタ |
+| `destinations` | string[] | 任意 | `null` | 出力先フィルタ。指定時はこのroleを持つセッションだけに配送（[ルーティングルール](#outputmessage)参照）。`null`の場合は`session_id`で個別配送 |
 | `metadata` | object | 任意 | `{}` | 拡張メタデータ |
 
 **ストリーム応答（途中）**:
@@ -286,7 +293,29 @@ Kernel から外部クライアントへの出力メッセージ。
 }
 ```
 
-### 5.5 PingMessage / PongMessage（Client ↔ Server）
+### 5.5 SessionRole
+
+クライアントが認証時に宣言する役割。LLM はこの role に基づいて出力先を判断する。
+
+| role | 説明 | 用途例 |
+|------|------|--------|
+| `conversation_input` | 対話入力を受け付ける | テキスト入力欄 |
+| `command_input` | コマンド入力を受け付ける | CLI, コマンドパレット |
+| `conversation_output` | 対話応答を表示する | メインチャット表示 |
+| `command_output` | コマンド結果を表示する | コマンド結果ペイン |
+| `log` | ログ・デバッグ情報を表示する | ログビューア, デバッグコンソール |
+
+**ルーティングルール:**
+
+Kernel は `OutputMessage.destinations` の有無で配送先を決定する:
+
+| destinations | 配送動作 |
+|-------------|---------|
+| `null`（未設定） | `session_id` で指定された1セッションに配送 |
+| `["conversation_output"]` | role に `conversation_output` を持つ全セッションに配送 |
+| `""` （空文字かつdestinations=null） | 全アクティブセッションにブロードキャスト |
+
+### 5.6 PingMessage / PongMessage（Client ↔ Server）
 
 ハートビート。クライアントが任意のタイミングで送信し、サーバーが応答する。これによりサーバー側の `last_activity` が更新されるため、アイドルタイムアウト実装の下地として機能する。
 

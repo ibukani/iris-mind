@@ -30,21 +30,25 @@ class ConversationService:
         self._messages: list[dict] = []
         self._msg_count_since_reflect: int = 0
 
-    def process_input(self, content: str, on_complete: Callable[[str], None] | None = None) -> None:
+    def process_input(self, session_id: str, content: str, on_complete: Callable[[str], None] | None = None) -> None:
         if content.startswith("/"):
             return
         self._messages.append({"role": "user", "content": content})
 
         self._session_mgr.route_output(
-            "",
+            session_id,
             OutputMessage(msg_type="stream", content=""),
+        )
+
+        self._llm_pipeline.set_session_roles_summary(
+            self._session_mgr.get_roles_summary(),
         )
 
         try:
             response_text = self._llm_pipeline.iterate_with_tools(
                 self._messages,
                 on_token=lambda delta: self._session_mgr.route_output(
-                    "",
+                    session_id,
                     OutputMessage(msg_type="stream", content=delta),
                 ),
             )
@@ -54,8 +58,8 @@ class ConversationService:
 
         self._messages.append({"role": "assistant", "content": response_text})
 
-        self._session_mgr.route_output("", OutputMessage(msg_type="stream", content="", metadata={"done": True}))
-        self._session_mgr.route_output("", OutputMessage(msg_type="response", content=response_text))
+        self._session_mgr.route_output(session_id, OutputMessage(msg_type="stream", content="", metadata={"done": True}))
+        self._session_mgr.route_output(session_id, OutputMessage(msg_type="response", content=response_text))
 
         if on_complete is not None:
             on_complete(response_text)

@@ -24,10 +24,21 @@ class SessionState(Enum):
     CLOSED = "closed"
 
 
+class SessionRole(Enum):
+    CONVERSATION_INPUT = "conversation_input"
+    COMMAND_INPUT = "command_input"
+    CONVERSATION_OUTPUT = "conversation_output"
+    COMMAND_OUTPUT = "command_output"
+    LOG = "log"
+
+
 class AuthMessage(BaseModel):
     msg_type: str = "auth"
     access_token: str | None = None
     mode: ConnectionMode = ConnectionMode.BIDIRECTIONAL
+    roles: list[SessionRole] = [SessionRole.CONVERSATION_INPUT, SessionRole.CONVERSATION_OUTPUT, SessionRole.COMMAND_INPUT, SessionRole.COMMAND_OUTPUT]
+    identity: str = ""
+    description: str = ""
 
 
 class ControlMessage(BaseModel):
@@ -69,6 +80,9 @@ class SessionInfo(BaseModel):
     session_id: str
     state: SessionState
     mode: ConnectionMode = ConnectionMode.BIDIRECTIONAL
+    roles: list[SessionRole] = []
+    identity: str = ""
+    description: str = ""
     conn: Any | None = None
     created_at: datetime = Field(default_factory=datetime.now)
     last_activity: datetime = Field(default_factory=datetime.now)

@@ -15,6 +15,7 @@ from iris.kernel.io.models import (
     ControlMessage,
     OutputMessage,
     SessionInfo,
+    SessionRole,
     SessionState,
 )
 
@@ -54,6 +55,9 @@ class SessionManager:
                 session_id=session_id,
                 state=SessionState.ACTIVE,
                 mode=msg.mode,
+                roles=msg.roles,
+                identity=msg.identity,
+                description=msg.description,
                 conn=conn,
                 created_at=now,
                 last_activity=now,
@@ -64,7 +68,18 @@ class SessionManager:
             return ControlMessage(msg_type="auth_success", session_id=session_id)
 
     def route_output(self, session_id: str, message: OutputMessage) -> None:
-        """セッションに対応するTCP接続にメッセージを送信する。"""
+        """セッションに対応するTCP接続にメッセージを送信する。
+
+        message.destinations が設定されている場合は role ベースでルーティングする。
+        session_id が空文字かつ destinations 未設定の場合は全アクティブセッションにブロードキャストする。
+        """
+        if message.destinations is not None:
+            self._route_by_destinations(message)
+            return
+        if not session_id:
+            self._broadcast_output(message)
+            return
+
         with self._lock:
             session = self._sessions.get(session_id)
             if session is None:
@@ -89,6 +104,50 @@ class SessionManager:
         except (BrokenPipeError, ConnectionError, EOFError):
             logger.warning("Output connection lost for session: %s", session_id)
             self.remove_session(session_id)
+
+    def _route_by_destinations(self, message: OutputMessage) -> None:
+        """message.destinations に指定された role を持つセッションに配送する。"""
+        matching_roles = set(message.destinations)
+        with self._lock:
+            targets = list(self._sessions.items())
+
+        for sid, session in targets:
+            if session.state != SessionState.ACTIVE:
+                continue
+            if session.conn is None:
+                continue
+            if session.mode == ConnectionMode.INPUT_ONLY:
+                continue
+            session_role_values = {r.value for r in session.roles}
+            if not matching_roles & session_role_values:
+                continue
+            msg = message.model_copy(update={"session_id": sid})
+            raw = msg.model_dump_json().encode("utf-8")
+            try:
+                session.conn.send_bytes(raw)
+                session.last_activity = datetime.now()
+            except (BrokenPipeError, ConnectionError, EOFError):
+                self.remove_session(sid)
+
+    def _broadcast_output(self, message: OutputMessage) -> None:
+        """全アクティブセッションにメッセージをブロードキャストする。"""
+        with self._lock:
+            targets = list(self._sessions.items())
+
+        for sid, session in targets:
+            if session.state != SessionState.ACTIVE:
+                continue
+            if session.conn is None:
+                continue
+            if session.mode == ConnectionMode.INPUT_ONLY:
+                continue
+            msg = message.model_copy(update={"session_id": sid})
+            raw = msg.model_dump_json().encode("utf-8")
+            try:
+                session.conn.send_bytes(raw)
+                session.last_activity = datetime.now()
+            except (BrokenPipeError, ConnectionError, EOFError):
+                self.remove_session(sid)
 
     def update_activity(self, session_id: str | None) -> None:
         """セッションの最終活動時刻を更新する。"""
@@ -122,3 +181,15 @@ class SessionManager:
     def get_active_sessions(self) -> list[SessionInfo]:
         with self._lock:
             return [s for s in self._sessions.values() if s.state == SessionState.ACTIVE]
+
+    def get_roles_summary(self) -> str:
+        """LLM注入用: アクティブセッションの role 一覧を短い文字列で返す。"""
+        with self._lock:
+            sessions = [s for s in self._sessions.values() if s.state == SessionState.ACTIVE]
+        if not sessions:
+            return ""
+        lines: list[str] = []
+        for s in sessions:
+            roles_str = ", ".join(r.value for r in s.roles)
+            lines.append(f"[{roles_str}]")
+        return "Active sessions:\n" + "\n".join(lines)

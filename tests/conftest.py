@@ -375,6 +375,7 @@ class FakePersonality:
         personality_traits: str = "",
         user_preferences: str = "",
         governance_principles: str = "",
+        session_roles: str = "",
     ) -> str:
         parts = [
             f"## Iris Profile\n{agents_md_content}" if agents_md_content else "",
@@ -382,6 +383,7 @@ class FakePersonality:
             f"## Speech Style\n{speech_style}" if speech_style else "",
             f"## User Preferences\n{user_preferences}" if user_preferences else "",
             f"## Governance\n{governance_principles}" if governance_principles else "",
+            f"## Sessions\n{session_roles}" if session_roles else "",
         ]
         self._system_prompt = "\n\n".join(p for p in parts if p) or "Default system prompt"
         return self._system_prompt

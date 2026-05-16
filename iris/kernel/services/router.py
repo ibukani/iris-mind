@@ -40,6 +40,7 @@ class InputRouter:
 
         ctx.kernel.on_input(msg)
         ctx.conversation.process_input(
+            msg.session_id,
             msg.content,
             on_complete=lambda text: ctx.kernel.on_response_complete(text),
         )

@@ -151,6 +151,21 @@ class MemoryConfig(BaseModel):
     agents_md_max_bytes: int = 2048
 
 
+class ResponseReadinessConfig(BaseModel):
+    enabled: bool = True
+    tier1_min_fragments: int = 2
+    tier1_question_detect: bool = True
+    confidence_threshold: float = 0.6
+    llm_model_role: str = "fast"
+
+
+class QuasiSyncConfig(BaseModel):
+    enabled: bool = True
+    input_timeout_ms: int = 800
+    max_buffer_fragments: int = 10
+    response_readiness: ResponseReadinessConfig = ResponseReadinessConfig()
+
+
 class SessionConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 9876
@@ -171,6 +186,7 @@ class Config(BaseModel):
     memory: MemoryConfig = MemoryConfig()
     proactive: ProactiveConfig = ProactiveConfig()
     session: SessionConfig = SessionConfig()
+    quasi_sync: QuasiSyncConfig = QuasiSyncConfig()
     logging: LoggingConfig = LoggingConfig()
 
     @classmethod

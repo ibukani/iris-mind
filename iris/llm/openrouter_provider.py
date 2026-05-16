@@ -75,6 +75,7 @@ class OpenRouterProvider:
         max_tokens: int = 4096,
         tools: list[dict] | None = None,
         on_token: Callable[[str], None] | None = None,
+        interrupt_token: object | None = None,
         **kwargs: Any,  # noqa: ARG002
     ) -> dict:
         """LLM にチャットリクエストを送信する。"""
@@ -99,7 +100,7 @@ class OpenRouterProvider:
 
         try:
             if on_token is not None:
-                return self._stream_chat(body=body, headers=headers, on_token=on_token)
+                return self._stream_chat(body=body, headers=headers, on_token=on_token, interrupt_token=interrupt_token)
             resp = self._request(body=body, headers=headers)
             data = resp.json()
             return _normalize_response(data)
@@ -113,6 +114,7 @@ class OpenRouterProvider:
         body: dict,
         headers: dict,
         on_token: Callable[[str], None],
+        interrupt_token: object | None = None,
     ) -> dict:
         content_parts: list[str] = []
         tool_calls: list[dict] | None = None
@@ -141,6 +143,9 @@ class OpenRouterProvider:
                     raise RuntimeError(f"OpenRouter API エラー ({stream.status_code}): {error_msg}")
 
                 for line in stream.iter_lines():
+                    if interrupt_token is not None and getattr(interrupt_token, "is_cancelled", False):
+                        logger.debug("OpenRouterProvider: interrupted")
+                        break
                     if not line or not line.startswith("data: "):
                         continue
                     payload = line[6:].strip()

@@ -208,9 +208,20 @@ class FakePersonaProfile:
 # ── Fake AgentsMdStore ────────────────────────────────────────
 
 
+@dataclass
+class FakeSessionInfo:
+    session_id: str = ""
+    roles: list = field(default_factory=list)
+    identity: str = ""
+
+
 class FakeSessionManager:
     def __init__(self) -> None:
         self.sent: list[OutputMessage] = []
+        self._session_info: FakeSessionInfo | None = None
+
+    def set_session_info(self, info: FakeSessionInfo) -> None:
+        self._session_info = info
 
     def route_output(self, session_id: str, message: OutputMessage) -> None:
         message.session_id = session_id
@@ -221,6 +232,16 @@ class FakeSessionManager:
 
     def get_session_mode(self, session_id: str) -> ConnectionMode | None:
         return ConnectionMode.BIDIRECTIONAL if session_id else None
+
+    def get_session_info(self, session_id: str) -> FakeSessionInfo | None:
+        return self._session_info
+
+    def get_roles_summary(self) -> str:
+        info = self._session_info
+        if info and info.roles:
+            r = ", ".join(r.value if hasattr(r, "value") else str(r) for r in info.roles)
+            return f"Active sessions:\n[{r}]"
+        return ""
 
 
 class FakeAgentsMdStore:

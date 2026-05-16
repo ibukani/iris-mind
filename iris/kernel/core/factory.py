@@ -24,6 +24,7 @@ from ..services.memory_manager import MemoryManager
 from ..services.proactive import SELF_GOVERNANCE_PRINCIPLES, ProactiveEngine
 from ..services.reflexion import Reflexion
 from ..services.reflexion_manager import ReflexionManager
+from ..services.response_readiness import ResponseReadinessEvaluator
 from ..services.tool_executor import ToolExecutionEngine
 from .agent_kernel import AgentKernel
 
@@ -87,12 +88,19 @@ class KernelFactory:
         # Phase 6: 会話サービス
         # 依存: Phase 1 (output) + Phase 5 (llm_pipeline, reflexion_mgr, context_mgr)
         # ============================================================
+        qs_cfg = config.quasi_sync
+        readiness = ResponseReadinessEvaluator(config=qs_cfg.response_readiness, llm=llm)
         conversation = ConversationService(
             session_manager=session_mgr,
             llm_pipeline=llm_pipeline,
+            state_manager=state,
             reflexion_manager=reflexion_mgr,
             context_manager=context_mgr,
             context_window=config.model.context_window,
+            quasi_timeout_ms=qs_cfg.input_timeout_ms,
+            quasi_max_fragments=qs_cfg.max_buffer_fragments,
+            readiness_config=qs_cfg.response_readiness,
+            readiness_evaluator=readiness,
         )
 
         # ============================================================
@@ -134,6 +142,9 @@ class KernelFactory:
         from ..services.router import InputRouter
 
         tcp_listener.set_on_input(InputRouter(ctx))
+        tcp_listener.set_on_interrupt(
+            lambda msg: conversation.interrupt(msg.session_id),
+        )
 
         # カーネル起動は全接続完了後に実行
         kernel.startup()

@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import logging
+
 from iris.kernel.io.models import InputMessage, OutputMessage
 
 from ..core.factory import KernelContext
+
+logger = logging.getLogger(__name__)
 
 
 class InputRouter:
@@ -38,9 +42,21 @@ class InputRouter:
         if mode is not None and mode.value == "output_only":
             return
 
-        ctx.kernel.on_input(msg)
-        ctx.conversation.process_input(
-            msg.session_id,
-            msg.content,
-            on_complete=lambda text: ctx.kernel.on_response_complete(text),
-        )
+        if msg.msg_type == "dispatch_text":
+            ctx.kernel.on_input(msg)
+            ctx.conversation.process_input(
+                msg.session_id,
+                msg.content,
+                on_complete=lambda text: ctx.kernel.on_response_complete(text),
+            )
+            return
+
+        if msg.msg_type == "converse_text":
+            ctx.conversation.process_quasi_input(
+                msg.session_id,
+                msg.content,
+                is_final=msg.is_final,
+            )
+            return
+
+        logger.warning("InputRouter: unhandled msg_type=%s", msg.msg_type)

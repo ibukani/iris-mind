@@ -21,6 +21,9 @@ flowchart TD
         TcpListener
         SessionManager
         Authenticator
+        InputBuffer
+        ResponseReadiness
+        AgentStateManager
     end
     Console --> TcpListener
     TcpListener --> SessionManager
@@ -30,6 +33,9 @@ flowchart TD
     AgentKernel --> Proactive
     Conversation --> LLM
     Conversation --> Memory
+    Conversation --> InputBuffer
+    Conversation --> ResponseReadiness
+    Conversation --> AgentStateManager
 ```
 
 Kernel は TcpListener が1ポートで全接続を受け付け、認証・入力・出力を単一の TCP 接続で多重化する。
@@ -122,6 +128,10 @@ EventBus は Kernel 内部のイベントルーティングに限定され、プ
 
 ```python
 # iris/kernel/io/models.py
+
+INPUT_MSG_TYPES: frozenset[str] = frozenset({"dispatch_text", "converse_text", "command", "system"})
+OUTPUT_STREAM_STATES: frozenset[str] = frozenset({"thinking", "speaking", "done", "interrupted"})
+
 class ConnectionMode(Enum):
     INPUT_ONLY = "input_only"
     OUTPUT_ONLY = "output_only"
@@ -131,10 +141,20 @@ class SessionState(Enum):
     ACTIVE = "active"
     CLOSED = "closed"
 
+class SessionRole(Enum):
+    CONVERSATION_INPUT = "conversation_input"
+    COMMAND_INPUT = "command_input"
+    CONVERSATION_OUTPUT = "conversation_output"
+    COMMAND_OUTPUT = "command_output"
+    LOG = "log"
+
 class AuthMessage(BaseModel):
     msg_type: str = "auth"
     access_token: str | None = None
     mode: ConnectionMode = ConnectionMode.BIDIRECTIONAL
+    roles: list[SessionRole] = [all roles]
+    identity: str = ""
+    description: str = ""
 
 class ControlMessage(BaseModel):
     msg_type: str  # "auth_success", "auth_failure", "error"
@@ -145,25 +165,32 @@ class InputMessage(BaseModel):
     id: str           # uuid4 hex (12桁)
     session_id: str   # セッション識別子
     source: str       # "cli", "tcp", ...
-    msg_type: str     # "text", "command", ...
+    msg_type: str     # "dispatch_text" | "converse_text" | "command" | "system"
     content: str      # メッセージ本文
     content_type: str # "text/plain" (default)
+    is_final: bool    # converse_text で最終フラグメントか（default True）
     metadata: dict    # 拡張用
+
+class InterruptMessage(BaseModel):
+    msg_type: str = "interrupt"
+    session_id: str
 
 class OutputMessage(BaseModel):
     id: str
-    session_id: str   # セッション識別子
-    correlation_id: str | None  # 対応する入力のID
+    correlation_id: str | None  # 対応する入力のID（converse_text 応答では未設定）
     msg_type: str     # "response", "stream", "proactive", "anomaly", ...
     content: str      # メッセージ本文
     content_type: str # "text/plain", "text/markdown", ...
-    destinations: list[str] | None  # 出力先フィルタ
+    state: str | None # "thinking" | "speaking" | "done" | "interrupted"
     metadata: dict
 
 class SessionInfo(BaseModel):
     session_id: str
     state: SessionState
     mode: ConnectionMode
+    roles: list[SessionRole] = []
+    identity: str = ""
+    description: str = ""
     conn: Any | None
     created_at: datetime
     last_activity: datetime
@@ -244,6 +271,62 @@ sequenceDiagram
     Note over Client,TCP: 外部 Client: conn.recv_bytes() → OutputMessage → 表示
 ```
 
+### 準同期的処理（converse_text / interrupt）
+
+```mermaid
+sequenceDiagram
+    participant Client as 外部 Client
+    participant TCP as TCP (127.0.0.1:9876)
+    participant Tcp as TcpListener
+    participant Session as SessionManager
+    participant Kernel as AgentKernel
+    participant Conv as ConversationService
+    participant Buf as InputBuffer
+    participant LLM as LLMPipeline
+
+    Client->>TCP: InputMessage(converse_text, "こんにち", is_final=false)
+    TCP->>Tcp: router.converse_text()
+    Tcp->>Conv: process_quasi_input("こんにち", is_final=false)
+    Conv->>Buf: add_fragment("こんにち", is_final=false)
+    Note over Conv,State: IDLE → LISTENING
+
+    Client->>TCP: InputMessage(converse_text, "は世界", is_final=true)
+    TCP->>Tcp: router.converse_text()
+    Tcp->>Conv: process_quasi_input("は世界", is_final=true)
+    Conv->>Buf: add_fragment("は世界", is_final=true)
+    Buf-->>Conv: flush → "こんにちは世界"
+    Note over Conv,State: LISTENING → PROCESSING
+    Conv->>Session: route_output("", stream, "", state="thinking")
+    Conv->>LLM: iterate_with_tools(messages, interrupt_token)
+
+    Client->>TCP: InputMessage(converse_text, "ちょっと待って", is_final=true)
+    TCP->>Tcp: router.converse_text()
+    Tcp->>Conv: process_quasi_input(...)
+    Conv->>LLM: interrupt_token.cancel()
+    Note over Conv,State: PROCESSING → INTERRUPTED → IDLE
+    Conv->>Session: route_output("", stream, "", state="interrupted")
+
+    Conv->>Buf: add_fragment("ちょっと待って", is_final=true)
+    Buf-->>Conv: flush → "ちょっと待って"
+    Note over Conv,State: IDLE → LISTENING → PROCESSING
+    Conv->>Session: route_output("", stream, "", state="thinking")
+    Conv->>LLM: iterate_with_tools(messages, interrupt_token)
+    LLM-->>Conv: on_token("わかりました")
+    Conv->>Session: route_output("", stream, "わかりました", state="speaking")
+    LLM-->>Conv: response_text
+    Conv->>Session: route_output("", stream, "", state="done")
+    Conv->>Session: route_output("", response, text)
+    Note over Conv,State: PROCESSING → IDLE
+```
+
+### モード選択ロジック
+
+| 条件 | 使用パス | 説明 |
+|------|---------|------|
+| `msg_type == "dispatch_text"` | `process_input()` | ワンショット非同期。従来の letter-type |
+| `msg_type == "converse_text"` | `process_quasi_input()` | フラグメントバッファリング。タイムアウト or is_final で flush |
+| `msg_type == "interrupt"` | `interrupt()` | 即座に LLM 中断。新規入力として converse_text にフォールスルー |
+
 ## 4. 3層ガバナンス（v0.2 から継承）
 
 | Tier | 方式 | 例 |
@@ -254,10 +337,10 @@ sequenceDiagram
 
 詳細は `docs/proactive-engine.md` を参照。
 
-## 5. 状態遷移（v0.2 から継承）
+## 5. 状態遷移（v0.3 拡張）
 
-`AgentStateManager` が管理する6状態：
-IDLE / PROCESSING / PROACTIVE / REFLECTING / THINKING / SLEEPING
+`AgentStateManager` が管理する8状態：
+IDLE / LISTENING / PROCESSING / INTERRUPTED / PROACTIVE / REFLECTING / THINKING / SLEEPING
 
 詳細は `docs/agent-state.md` を参照。
 

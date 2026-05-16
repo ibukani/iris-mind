@@ -7,7 +7,7 @@ from collections.abc import Callable
 from multiprocessing.connection import Connection, Listener
 from typing import Any
 
-from iris.kernel.io.models import INPUT_MSG_TYPES, TCP_HOST, TCP_PORT, InputMessage
+from iris.kernel.io.models import INPUT_MSG_TYPES, TCP_HOST, TCP_PORT, InputMessage, InterruptMessage
 
 from .session_manager import SessionManager
 
@@ -24,9 +24,11 @@ class TcpListener:
         self,
         session_manager: SessionManager,
         on_input: Callable[[InputMessage], None] | None = None,
+        on_interrupt: Callable[[InterruptMessage], None] | None = None,
     ) -> None:
         self._session_manager = session_manager
         self._on_input = on_input or self._noop
+        self._on_interrupt = on_interrupt or self._noop_interrupt
         self._listener: Any = None
         self._running = False
         self._thread: threading.Thread | None = None
@@ -34,8 +36,15 @@ class TcpListener:
     def set_on_input(self, on_input: Callable[[InputMessage], None]) -> None:
         self._on_input = on_input
 
+    def set_on_interrupt(self, on_interrupt: Callable[[InterruptMessage], None]) -> None:
+        self._on_interrupt = on_interrupt
+
     @staticmethod
     def _noop(_msg: InputMessage) -> None:
+        return
+
+    @staticmethod
+    def _noop_interrupt(_msg: InterruptMessage) -> None:
         return
 
     def start(self, host: str = TCP_HOST, port: int = TCP_PORT) -> None:
@@ -96,6 +105,11 @@ class TcpListener:
                     self._handle_ping(conn, session_id)
                     continue
 
+                if mt == "interrupt":
+                    self._session_manager.update_activity(session_id)
+                    self._handle_interrupt(data, session_id)
+                    continue
+
                 if mt in INPUT_MSG_TYPES:
                     self._session_manager.update_activity(session_id)
                     self._handle_input(data)
@@ -137,6 +151,13 @@ class TcpListener:
             logger.info("TcpListener: ping response failed, connection lost")
             if session_id:
                 self._session_manager.remove_session(session_id)
+
+    def _handle_interrupt(self, data: dict[str, Any], session_id: str | None) -> None:
+        msg = InterruptMessage(**data)
+        if session_id and msg.session_id and msg.session_id != session_id:
+            logger.warning("TcpListener: interrupt session_id mismatch")
+            return
+        self._on_interrupt(msg)
 
     def _handle_input(self, data: dict[str, Any]) -> None:
         from iris.kernel.io.models import InputMessage

@@ -7,6 +7,7 @@ ollama.Client をラップし、ストリーミング・thinking モード・ツ
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import re
 import subprocess
@@ -14,6 +15,8 @@ import sys
 import time
 from collections.abc import Callable
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 from ollama import Client
 
@@ -45,6 +48,7 @@ class OllamaProvider:
         tools: list[dict] | None = None,
         on_token: Callable[[str], None] | None = None,
         keep_alive: str | None = None,
+        interrupt_token: object | None = None,
         **kwargs: Any,
     ) -> dict:
         """LLM にチャットリクエストを送信する。"""
@@ -70,7 +74,7 @@ class OllamaProvider:
         call_kwargs.update(kwargs)
 
         if on_token is not None:
-            return self._stream_chat(**call_kwargs, on_token=on_token)
+            return self._stream_chat(**call_kwargs, on_token=on_token, interrupt_token=interrupt_token)
 
         resp = self.client.chat(**call_kwargs)
         resp["message"] = _process_message(resp["message"])
@@ -79,6 +83,7 @@ class OllamaProvider:
     def _stream_chat(
         self,
         on_token: Callable[[str], None],
+        interrupt_token: object | None = None,
         **kwargs: Any,
     ) -> dict:
         stream = self.client.chat(**kwargs)
@@ -86,6 +91,9 @@ class OllamaProvider:
         tool_calls = None
         final = None
         for chunk in stream:
+            if interrupt_token is not None and getattr(interrupt_token, "is_cancelled", False):
+                logger.debug("OllamaProvider: interrupted")
+                break
             if chunk.get("done"):
                 final = dict(chunk)
                 break

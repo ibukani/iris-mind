@@ -7,8 +7,8 @@ import pytest
 from iris.kernel.agent_state import AgentStateManager, State
 from iris.kernel.config import ProactiveConfig
 from iris.kernel.core import AgentKernel, AnomalyDetector
-from iris.kernel.event import AgentAnomalyEvent, EventBus
-from iris.kernel.io.models import InputMessage
+from iris.event import AgentAnomalyEvent, EventBus
+from iris.io.models import InputMessage
 from iris.kernel.services import ProactiveEngine, ProactiveResult
 from tests.conftest import FakeMemoryManager, FakeSessionManager
 

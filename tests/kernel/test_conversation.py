@@ -5,8 +5,8 @@ from collections.abc import Callable
 import pytest
 
 from iris.kernel.agent_state import AgentStateManager, State
-from iris.kernel.event import EventBus
-from iris.kernel.io.session_manager import SessionManager
+from iris.event import EventBus
+from iris.io.session.manager import SessionManager
 from iris.kernel.services.conversation import ConversationService
 from iris.kernel.services.llm_pipeline import InterruptToken, LLMPipeline
 from iris.kernel.services.response_readiness import ResponseReadinessConfig, ResponseReadinessEvaluator

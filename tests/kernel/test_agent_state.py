@@ -3,7 +3,7 @@ from typing import cast
 import pytest
 
 from iris.kernel.agent_state import AgentStateManager, State
-from iris.kernel.event import AgentStateChangeEvent, EventBus
+from iris.event import AgentStateChangeEvent, EventBus
 
 
 def make_manager() -> tuple[AgentStateManager, EventBus]:

@@ -3,17 +3,13 @@ from __future__ import annotations
 import logging
 import os
 
-from iris.kernel.io.models import AuthMessage
+from iris.io.models import AuthMessage
 
 logger = logging.getLogger(__name__)
 
 
 class Authenticator:
-    """セッション認証を担当する。
-
-    access_tokenが設定されている場合は必須検証を行う。
-    トークン未設定の場合はlocalhost限定としてスキップする。
-    """
+    """セッション認証を担当する。"""
 
     def __init__(self, access_token: str = "") -> None:
         self._access_token = access_token or os.environ.get("IRIS_ACCESS_TOKEN", "")

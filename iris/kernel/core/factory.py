@@ -14,9 +14,9 @@ from iris.personality.personality import Personality
 
 from ..agent_state import AgentStateManager
 from ..config import Config
-from ..event.event_bus import EventBus
-from ..io.session_manager import SessionConfig, SessionManager
-from ..io.tcp_listener import TcpListener
+from iris.event.event_bus import EventBus
+from iris.io.session.manager import SessionConfig, SessionManager
+from iris.io.transport.tcp_listener import TcpListener
 from ..services.context import ContextManager
 from ..services.conversation import ConversationService
 from ..services.llm_pipeline import LLMPipeline

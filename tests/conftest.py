@@ -8,8 +8,8 @@ import pytest
 
 from iris.kernel.agent_state import AgentStateManager
 from iris.kernel.config import Config, ModelConfig, ProactiveConfig
-from iris.kernel.event import EventBus
-from iris.kernel.io.models import ConnectionMode, OutputMessage
+from iris.event import EventBus
+from iris.io.models import ConnectionMode, OutputMessage
 
 # ── Fake LLM Provider ─────────────────────────────────────────
 

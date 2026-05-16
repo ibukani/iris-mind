@@ -5,7 +5,7 @@ from collections.abc import Callable
 
 import pytest
 
-from iris.kernel.io.input_buffer import InputBuffer
+from iris.memory.sensory.buffer import InputBuffer
 
 
 @pytest.fixture

@@ -5,7 +5,7 @@ from typing import Any, cast
 
 from iris.kernel.agent_state import AgentStateManager, State
 from iris.kernel.config import ProactiveConfig
-from iris.kernel.event import EventBus, TimerTick
+from iris.event import EventBus, TimerTick
 from iris.kernel.services import ProactiveEngine
 from tests.conftest import FakeLLMProvider, FakeMemoryManager, FakeSessionManager
 

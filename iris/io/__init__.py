@@ -1,5 +1,4 @@
-from iris.kernel.io.input_buffer import InputBuffer
-from iris.kernel.io.models import (
+from iris.io.models import (
     INPUT_MSG_TYPES,
     OUTPUT_STREAM_STATES,
     TCP_HOST,
@@ -16,15 +15,14 @@ from iris.kernel.io.models import (
     SessionRole,
     SessionState,
 )
-from iris.kernel.io.session_manager import SessionManager
-from iris.kernel.io.tcp_listener import TcpListener
+from iris.io.session.manager import SessionManager
+from iris.io.transport.tcp_listener import TcpListener
 
 __all__ = [
     "AuthMessage",
     "ConnectionMode",
     "ControlMessage",
     "INPUT_MSG_TYPES",
-    "InputBuffer",
     "InputMessage",
     "InterruptMessage",
     "OUTPUT_STREAM_STATES",

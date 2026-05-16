@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 
-from .event.event_bus import AgentStateChangeEvent, EventBus
+from iris.event.event_bus import AgentStateChangeEvent, EventBus
 
 
 class State(StrEnum):

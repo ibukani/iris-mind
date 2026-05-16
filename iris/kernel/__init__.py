@@ -1,8 +1,8 @@
 from iris.kernel.agent_state import AgentStateManager, State
 from iris.kernel.config import Config, ProactiveConfig
 from iris.kernel.core import AgentKernel, KernelContext, KernelFactory
-from iris.kernel.event import EventBus
-from iris.kernel.io import InputMessage, InterruptMessage, OutputMessage
+from iris.event import EventBus
+from iris.io import InputMessage, InterruptMessage, OutputMessage
 from iris.kernel.services import (
     ConversationService,
     InterruptToken,

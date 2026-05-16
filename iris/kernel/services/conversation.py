@@ -4,9 +4,9 @@ import logging
 from collections.abc import Callable
 
 from iris.kernel.agent_state import AgentStateManager, State
-from iris.kernel.io.input_buffer import InputBuffer
-from iris.kernel.io.models import OutputMessage
-from iris.kernel.io.session_manager import SessionManager
+from iris.memory.sensory.buffer import InputBuffer
+from iris.io.models import OutputMessage
+from iris.io.session.manager import SessionManager
 
 from .context import ContextManager
 from .llm_pipeline import InterruptToken, LLMPipeline

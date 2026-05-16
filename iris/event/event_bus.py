@@ -7,7 +7,7 @@ from collections.abc import Callable
 from contextlib import suppress
 from typing import Protocol, runtime_checkable
 
-from .event import (
+from iris.event.event import (
     AgentAnomalyEvent,
     AgentStateChangeEvent,
     Event,

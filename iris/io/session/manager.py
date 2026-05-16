@@ -8,8 +8,8 @@ from datetime import datetime
 from multiprocessing.connection import Connection
 from uuid import uuid4
 
-from iris.kernel.io.authenticator import Authenticator
-from iris.kernel.io.models import (
+from iris.io.auth.authenticator import Authenticator
+from iris.io.models import (
     AuthMessage,
     ConnectionMode,
     ControlMessage,
@@ -29,10 +29,7 @@ class SessionConfig:
 
 
 class SessionManager:
-    """セッションのライフサイクルを管理する。
-
-    認証、メッセージルーティングを担当。1セッション=1TCP接続。
-    """
+    """セッションのライフサイクルを管理する。"""
 
     def __init__(self, config: SessionConfig | None = None) -> None:
         self._sessions: dict[str, SessionInfo] = {}
@@ -42,7 +39,6 @@ class SessionManager:
         self._lock = threading.Lock()
 
     def authenticate(self, conn: Connection, msg: AuthMessage) -> ControlMessage:
-        """認証処理を行い、session_idを生成しセッションをACTIVEにする。"""
         with self._lock:
             success, error = self._authenticator.authenticate(msg)
             if not success:
@@ -67,10 +63,6 @@ class SessionManager:
             return ControlMessage(msg_type="auth_success", session_id=session_id)
 
     def route_output(self, session_id: str, message: OutputMessage) -> None:
-        """セッションに対応するTCP接続にメッセージを送信する。
-
-        session_id が空文字の場合は全アクティブセッションにブロードキャストする。
-        """
         if not session_id:
             self._broadcast_output(message)
             return
@@ -100,7 +92,6 @@ class SessionManager:
             self.remove_session(session_id)
 
     def _broadcast_output(self, message: OutputMessage) -> None:
-        """全アクティブセッションにメッセージをブロードキャストする。"""
         with self._lock:
             targets = list(self._sessions.items())
 
@@ -119,7 +110,6 @@ class SessionManager:
                 self.remove_session(sid)
 
     def update_activity(self, session_id: str | None) -> None:
-        """セッションの最終活動時刻を更新する。"""
         if session_id is None:
             return
         with self._lock:
@@ -156,7 +146,6 @@ class SessionManager:
             return [s for s in self._sessions.values() if s.state == SessionState.ACTIVE]
 
     def get_roles_summary(self) -> str:
-        """LLM注入用: アクティブセッションの role 一覧を短い文字列で返す。"""
         with self._lock:
             sessions = [s for s in self._sessions.values() if s.state == SessionState.ACTIVE]
         if not sessions:

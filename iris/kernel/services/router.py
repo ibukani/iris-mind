@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from iris.kernel.io.models import InputMessage, OutputMessage
+from iris.io.models import InputMessage, OutputMessage
 
 from ..core.factory import KernelContext
 

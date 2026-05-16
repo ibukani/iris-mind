@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from iris.kernel.event import (
+from iris.event import (
     AgentAnomalyEvent,
     AgentStateChangeEvent,
     Event,

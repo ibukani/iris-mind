@@ -9,13 +9,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from iris.kernel.io.models import OutputMessage
-from iris.kernel.io.session_manager import SessionManager
+from iris.io.models import OutputMessage
+from iris.io.session.manager import SessionManager
 from iris.llm.provider import LLMProvider
 
 from ..agent_state import AgentStateManager, State
 from ..config import ProactiveConfig
-from ..event.event_bus import EventBus, TimerTick
+from iris.event.event_bus import EventBus, TimerTick
 from .memory_manager import MemoryManager
 
 ApprovalCallback = Callable[[dict[str, float], float, str], bool]

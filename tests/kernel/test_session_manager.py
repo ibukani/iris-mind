@@ -4,8 +4,8 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from iris.kernel.io.models import AuthMessage, ConnectionMode, OutputMessage, SessionRole
-from iris.kernel.io.session_manager import SessionConfig, SessionManager
+from iris.io.models import AuthMessage, ConnectionMode, OutputMessage, SessionRole
+from iris.io.session.manager import SessionConfig, SessionManager
 
 
 def _get_session_id(manager: SessionManager, mode: ConnectionMode) -> str:

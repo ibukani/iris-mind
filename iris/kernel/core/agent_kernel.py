@@ -8,12 +8,12 @@ from collections.abc import Callable
 from datetime import datetime
 from typing import Any
 
-from iris.kernel.io.models import InputMessage, OutputMessage
-from iris.kernel.io.session_manager import SessionManager
+from iris.io.models import InputMessage, OutputMessage
+from iris.io.session.manager import SessionManager
 
 from ..agent_state import AgentStateManager, State
 from ..config import ProactiveConfig
-from ..event.event_bus import (
+from iris.event.event_bus import (
     AgentAnomalyEvent,
     AgentStateChangeEvent,
     EventBus,

@@ -7,18 +7,15 @@ from collections.abc import Callable
 from multiprocessing.connection import Connection, Listener
 from typing import Any
 
-from iris.kernel.io.models import INPUT_MSG_TYPES, TCP_HOST, TCP_PORT, InputMessage, InterruptMessage
+from iris.io.models import INPUT_MSG_TYPES, TCP_HOST, TCP_PORT, InputMessage, InterruptMessage
 
-from .session_manager import SessionManager
+from iris.io.session.manager import SessionManager
 
 logger = logging.getLogger(__name__)
 
 
 class TcpListener:
-    """TCP接続を1ポートで受け付け、メッセージ種別に応じてディスパッチする。
-
-    1接続 = 1セッション。認証、入力、出力を単一のTCP接続で多重化。
-    """
+    """TCP接続を1ポートで受け付け、メッセージ種別に応じてディスパッチする。"""
 
     def __init__(
         self,
@@ -125,7 +122,7 @@ class TcpListener:
                     self._session_manager.remove_session(session_id)
 
     def _handle_auth(self, conn: Connection, data: dict[str, Any]) -> str | None:
-        from iris.kernel.io.models import AuthMessage
+        from iris.io.models import AuthMessage
 
         msg = AuthMessage(**data)
         response = self._session_manager.authenticate(conn, msg)
@@ -138,7 +135,7 @@ class TcpListener:
         return response.session_id
 
     def _handle_ping(self, conn: Connection, session_id: str | None) -> None:
-        from iris.kernel.io.models import PongMessage
+        from iris.io.models import PongMessage
 
         self._session_manager.update_activity(session_id)
         raw = PongMessage().model_dump_json().encode("utf-8")
@@ -150,7 +147,7 @@ class TcpListener:
                 self._session_manager.remove_session(session_id)
 
     def _handle_input(self, data: dict[str, Any]) -> None:
-        from iris.kernel.io.models import InputMessage
+        from iris.io.models import InputMessage
 
         msg = InputMessage(**data)
         session_id = msg.session_id
@@ -164,7 +161,7 @@ class TcpListener:
         self._on_input(msg)
 
         if msg.metadata.get("ack_required", False):
-            from iris.kernel.io.models import OutputMessage
+            from iris.io.models import OutputMessage
 
             ack = OutputMessage(
                 msg_type="ack",

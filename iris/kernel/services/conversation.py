@@ -33,7 +33,14 @@ class ConversationService:
     def process_input(self, session_id: str, content: str, on_complete: Callable[[str], None] | None = None) -> None:
         if content.startswith("/"):
             return
-        self._messages.append({"role": "user", "content": content})
+
+        info = self._session_mgr.get_session_info(session_id)
+        if info and info.roles:
+            roles_str = ", ".join(r.value for r in info.roles)
+            tagged = f"[from: {roles_str}] {content}"
+        else:
+            tagged = content
+        self._messages.append({"role": "user", "content": tagged})
 
         self._session_mgr.route_output(
             session_id,

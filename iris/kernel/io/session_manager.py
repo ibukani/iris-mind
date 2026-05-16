@@ -168,6 +168,10 @@ class SessionManager:
             session = self._sessions.get(session_id)
             return session.mode if session else None
 
+    def get_session_info(self, session_id: str) -> SessionInfo | None:
+        with self._lock:
+            return self._sessions.get(session_id)
+
     def remove_session(self, session_id: str) -> None:
         with self._lock:
             session = self._sessions.pop(session_id, None)

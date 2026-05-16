@@ -72,8 +72,6 @@ class OutputMessage(BaseModel):
 class InterruptMessage(BaseModel):
     msg_type: str = "interrupt"
     session_id: str
-
-
 class PingMessage(BaseModel):
     msg_type: str = "ping"
 

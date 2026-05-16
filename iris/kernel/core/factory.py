@@ -85,11 +85,21 @@ class KernelFactory:
         )
 
         # ============================================================
-        # Phase 6: 会話サービス
-        # 依存: Phase 1 (output) + Phase 5 (llm_pipeline, reflexion_mgr, context_mgr)
+        # Phase 5.5: 準同期応答準備評価
+        # 依存: Phase 3 (llm)
         # ============================================================
         qs_cfg = config.quasi_sync
-        readiness = ResponseReadinessEvaluator(config=qs_cfg.response_readiness, llm=llm)
+        readiness: ResponseReadinessEvaluator | None = None
+        if qs_cfg.enabled:
+            readiness = ResponseReadinessEvaluator(
+                config=qs_cfg.response_readiness,
+                llm=llm,
+            )
+
+        # ============================================================
+        # Phase 6: 会話サービス
+        # 依存: Phase 1 (output) + Phase 5 (llm_pipeline, reflexion_mgr, context_mgr) + Phase 5.5 (readiness)
+        # ============================================================
         conversation = ConversationService(
             session_manager=session_mgr,
             llm_pipeline=llm_pipeline,
@@ -142,9 +152,7 @@ class KernelFactory:
         from ..services.router import InputRouter
 
         tcp_listener.set_on_input(InputRouter(ctx))
-        tcp_listener.set_on_interrupt(
-            lambda msg: conversation.interrupt(msg.session_id),
-        )
+        tcp_listener.set_on_interrupt(ctx.conversation.interrupt)
 
         # カーネル起動は全接続完了後に実行
         kernel.startup()

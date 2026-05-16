@@ -14,6 +14,8 @@ flowchart TD
         EventBus
         AgentKernel
         Conversation
+        InputBuffer["InputBuffer"]
+        ResponseReadiness["ResponseReadiness"]
         Proactive
         Memory
         LLM
@@ -21,9 +23,7 @@ flowchart TD
         TcpListener
         SessionManager
         Authenticator
-        InputBuffer
-        ResponseReadiness
-        AgentStateManager
+        AgentStateManager["AgentStateManager"]
     end
     Console --> TcpListener
     TcpListener --> SessionManager

@@ -47,7 +47,6 @@ class ConversationService:
         )
         self._quasi.set_flush_callback(self._on_quasi_flush)
         self._readiness = readiness_evaluator
-
     def process_input(self, session_id: str, content: str, on_complete: Callable[[str], None] | None = None) -> None:
         if content.startswith("/"):
             return

@@ -1,13 +1,11 @@
 from __future__ import annotations
 
 import logging
-
 from iris.kernel.io.models import InputMessage, OutputMessage
 
 from ..core.factory import KernelContext
 
 logger = logging.getLogger(__name__)
-
 
 class InputRouter:
     """入力メッセージの種別に応じて適切なサービスにルーティングする。"""

@@ -13,6 +13,7 @@ from iris.kernel.io.models import (
     PingMessage,
     PongMessage,
     SessionInfo,
+    SessionRole,
     SessionState,
 )
 from iris.kernel.io.session_manager import SessionManager
@@ -32,6 +33,7 @@ __all__ = [
     "PongMessage",
     "SessionInfo",
     "SessionManager",
+    "SessionRole",
     "SessionState",
     "TCP_HOST",
     "TCP_PORT",

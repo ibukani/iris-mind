@@ -1,4 +1,4 @@
-# Iris Kernel 通信プロトコル仕様 v5.0
+# Iris Kernel 通信プロトコル仕様 v4.0
 
 ## 1. 概要
 
@@ -9,7 +9,6 @@ Iris Kernel は TCP 経由で外部プロセスと通信する。このドキュ
 - **言語非依存**: JSON + UTF-8 エンコーディング。特定言語のライブラリに依存しない
 - **セッションベース**: 認証 → セッション確立 → 通信 の明確な段階
 - **1ポート多重**: 認証・入力・出力すべてを単一のTCP接続で多重化
-- **準同期モード**: 断片メッセージ・割り込み可能な会話フローをサポート
 
 ## 2. 通信方式
 
@@ -39,6 +38,13 @@ Iris Kernel は TCP 経由で外部プロセスと通信する。このドキュ
 | ペイロード長 | 4バイト (uint32, big-endian) | バイナリ |
 | ペイロード | 可変 (0〜32MB) | UTF-8 JSON |
 
+**例**: メッセージ `{"msg_type":"auth"}` のワイヤー表現:
+
+```
+00 00 00 18 7B 22 6D 73 67 5F 74 79 70 65 22 3A 22 61 75 74 68 22 7D
+├── length=24 ──┤ ├── UTF-8 JSON (24 bytes) ──────────────────────────┤
+```
+
 ## 3. プロトコル概要（メッセージの方向性）
 
 接続上の全メッセージは `msg_type` フィールドで種類を判別する。
@@ -47,10 +53,7 @@ Iris Kernel は TCP 経由で外部プロセスと通信する。このドキュ
 |------|--------------|------|
 | Client → Server | `auth` | 認証リクエスト |
 | Server → Client | `auth_success`, `auth_failure`, `error` | 認証レスポンス |
-| Client → Server | `dispatch_text` | 一問一答モード（従来の完全メッセージ） |
-| Client → Server | `converse_text` | 準同期モード（断片可、is_final で制御） |
-| Client → Server | `interrupt` | 現在の応答生成を中断 |
-| Client → Server | `command`, `system` | コマンド・システムメッセージ |
+| Client → Server | `text`, `command`, `system` | ユーザー入力 |
 | Client → Server | `ping` | ハートビート（任意。サーバーは `pong` で応答） |
 | Server → Client | `pong` | ハートビート応答 |
 | Server → Client | `response`, `stream`, `proactive`, `ack` | 出力メッセージ |
@@ -59,21 +62,29 @@ Iris Kernel は TCP 経由で外部プロセスと通信する。このドキュ
 
 ## 4. 接続シーケンス
 
-### 4.1 認証ハンドシェイク（v4.0 から変更なし）
+### 4.1 認証ハンドシェイク
 
 ```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: "#e8f0fe"
+    secondaryColor: "#e6f4ea"
+    tertiaryColor: "#fce8e6"
+---
 sequenceDiagram
     autonumber
     participant Client as クライアント
     participant Kernel as Iris Kernel
 
     Client->>+Kernel: TCP connect (127.0.0.1:9876)
-    Client->>+Kernel: AuthMessage (msg_type: auth)
+    Client->>+Kernel: AuthMessage (msg_type: auth, mode: bidirectional)
     Kernel-->>-Client: auth_success (session_id: "a1b2c3d4...")
     Note over Client,Kernel: 以降、同一接続で双方向通信
 ```
 
-### 4.2 接続モード（v4.0 から変更なし）
+### 4.2 接続モード
 
 `AuthMessage.mode` で指定:
 
@@ -83,17 +94,34 @@ sequenceDiagram
 | `input_only` | 入力のみ。Kernelは出力を送信しない |
 | `output_only` | 出力のみ。Kernelは入力を受け付けない |
 
-### 4.3 セッション状態遷移（v4.0 から変更なし）
+### 4.3 セッション状態遷移
 
 ```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: "#e8f0fe"
+    secondaryColor: "#e6f4ea"
+---
 stateDiagram-v2
     [*] --> ACTIVE : 認証成功 (auth_success)
     ACTIVE --> [*] : 切断／明示的削除
 ```
 
-### 4.4 通信フロー: dispatch_text（一問一答モード）
+セッションは認証成功後ただちに `ACTIVE` となり、切断または `remove_session` で `CLOSED` となる。
+
+### 4.4 完全な通信フロー（テキスト入力〜応答受信）
 
 ```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: "#e8f0fe"
+    secondaryColor: "#e6f4ea"
+    tertiaryColor: "#fef7e0"
+---
 sequenceDiagram
     autonumber
     participant Client as クライアント
@@ -101,92 +129,53 @@ sequenceDiagram
 
     rect rgb(232, 240, 254)
         Note over Client,Kernel: 認証
-        Client->>+Kernel: AuthMessage
-        Kernel-->>-Client: auth_success
+        Client->>+Kernel: AuthMessage (msg_type: auth)
+        Kernel-->>-Client: auth_success (session_id: "sess001")
     end
 
     rect rgb(230, 245, 225)
-        Note over Client,Kernel: 一問一答
-        Client->>+Kernel: dispatch_text: "こんにちは"
-        Kernel-->>Client: stream: ""
-        Kernel-->>Client: stream: "こんにちは！"
-        Kernel-->>Client: stream: "どうしましたか？"
-        Kernel-->>Client: stream: "" (done)
-        Kernel-->>-Client: response: "こんにちは！どうしましたか？"
+        Note over Client,Kernel: 入力・応答
+        Client->>+Kernel: InputMessage (msg_type: text, content: "hello")
+        Kernel-->>Client: stream (content: "Hello")
+        Kernel-->>Client: stream (content: "! How")
+        Kernel-->>Client: stream (content: " can I help?")
+        Kernel-->>Client: stream (content: "", metadata: {done: true})
+        Kernel-->>-Client: response (content: "Hello! How can I help?")
     end
 ```
 
-### 4.5 通信フロー: converse_text（準同期モード）
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Client as クライアント
-    participant Kernel as Iris Kernel
-
-    rect rgb(230, 245, 225)
-        Note over Client,Kernel: 準同期会話（断片収集 → 応答）
-        Client->>Kernel: converse_text(is_final=false): "私は元気です"
-        Client->>Kernel: converse_text(is_final=true): "今日は何する？"
-        Kernel-->>Client: stream(state=thinking): ""
-        Kernel-->>Client: stream(state=speaking): "いい天気ですね"
-        Kernel-->>Client: stream(state=speaking): "散歩でもどう？"
-        Kernel-->>Client: stream(state=done): ""
-        Kernel-->>Client: response: "いい天気ですね。散歩でもどう？"
-    end
-```
-
-### 4.6 通信フロー: 割り込み
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant Client as クライアント
-    participant Kernel as Iris Kernel
-
-    rect rgb(230, 245, 225)
-        Note over Client,Kernel: dispatch/converse 処理中に割り込み
-        Client->>Kernel: dispatch_text: "天気は？"
-        Kernel-->>Client: stream: "今日"
-        Client->>Kernel: interrupt
-        Kernel-->>Client: stream(state=interrupted): ""
-        Note over Client,Kernel: 新しい入力で再開
-        Client->>Kernel: dispatch_text: "全然違う話"
-        Kernel-->>Client: stream: "はい"
-        Kernel-->>Client: stream: "何の話？" (done)
-        Kernel-->>Client: response: "はい。何の話？"
-    end
-```
+**出力ストリームの終端判定**: `msg_type="stream"` で `metadata.done == true` が最終チャンクの合図。その後 `msg_type="response"` で完全な応答テキストが届く。
 
 ## 5. メッセージ形式
 
 ### 5.1 AuthMessage（Client → Server）
 
 認証リクエスト。TCP接続後に最初に送信するメッセージ。
-v4.0 から変更なし。
+クライアントは自身の役割（roles）を宣言する。
 
 | フィールド | 型 | 必須 | デフォルト | 説明 |
 |-----------|-----|------|-----------|------|
 | `msg_type` | string | 必須 | - | 常に `"auth"` |
 | `mode` | string | 任意 | `"bidirectional"` | `"bidirectional"`, `"input_only"`, `"output_only"` |
 | `access_token` | string | 条件付き | - | サーバー側で設定されている場合は必須 |
-| `roles` | string[] | 任意 | 全role | クライアントが持つ機能の一覧 |
-| `identity` | string | 任意 | `""` | クライアントの識別名 |
-| `description` | string | 任意 | `""` | クライアントの説明 |
+| `roles` | string[] | 任意 | 全role | クライアントが持つ機能の一覧（[SessionRole](#sessionrole)参照） |
+| `identity` | string | 任意 | `""` | クライアントの識別名（保存のみ、LLMには非表示） |
+| `description` | string | 任意 | `""` | クライアントの説明（保存のみ、LLMには非表示） |
 
 ```json
 {
   "msg_type": "auth",
   "mode": "bidirectional",
-  "roles": ["conversation_input", "conversation_output"],
+  "access_token": "my-secret-token",
+  "roles": ["conversation_input", "conversation_output", "command_input", "command_output"],
   "identity": "my-app-v2",
-  "description": "Desktop client"
+  "description": "Desktop client on Windows"
 }
 ```
 
 ### 5.2 ControlMessage（Server → Client）
 
-v4.0 から変更なし。
+認証レスポンス。Kernel から返される。
 
 | フィールド | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
@@ -202,70 +191,63 @@ v4.0 から変更なし。
 }
 ```
 
+**失敗**:
+```json
+{
+  "msg_type": "auth_failure",
+  "error_message": "invalid access_token"
+}
+```
+
 ### 5.3 InputMessage（Client → Server）
 
 外部クライアントから Kernel への入力メッセージ。
-v5.0 では `msg_type` の値が変更・追加された。
 
 | フィールド | 型 | 必須 | デフォルト | 説明 |
 |-----------|-----|------|-----------|------|
-| `msg_type` | string | 必須 | - | `"dispatch_text"`, `"converse_text"`, `"command"`, `"system"` |
+| `msg_type` | string | 必須 | - | `"text"`, `"command"`, `"system"` |
 | `id` | string | 任意 | 自動生成 | メッセージID (12文字) |
 | `session_id` | string | 必須 | - | 認証で取得したセッションID |
 | `source` | string | 必須 | - | 送信元識別子 (`"cli"`, `"web"`, etc.) |
 | `content` | string | 必須 | - | メッセージ本文 |
 | `content_type` | string | 任意 | `"text/plain"` | コンテンツタイプ |
-| `is_final` | boolean | 任意 | `true` | converse_text 時のみ有効。断片の終端かどうか |
 | `metadata` | object | 任意 | `{}` | 拡張メタデータ |
 
-**一問一答**:
+**テキスト入力**:
 ```json
 {
-  "msg_type": "dispatch_text",
+  "msg_type": "text",
   "session_id": "a1b2c3d4e5f6g7h8",
   "source": "cli",
   "content": "こんにちは"
 }
 ```
 
-**準同期（断片送信）**:
+**コマンド入力**:
 ```json
 {
-  "msg_type": "converse_text",
+  "msg_type": "command",
   "session_id": "a1b2c3d4e5f6g7h8",
   "source": "cli",
-  "content": "私は元気です",
-  "is_final": false
-}
-```
-
-**準同期（断片終了）**:
-```json
-{
-  "msg_type": "converse_text",
-  "session_id": "a1b2c3d4e5f6g7h8",
-  "source": "cli",
-  "content": "今日は何する？",
-  "is_final": true
+  "content": "/status"
 }
 ```
 
 ### 5.4 OutputMessage（Server → Client）
 
 Kernel から外部クライアントへの出力メッセージ。
-v5.0 では `state` フィールドが追加された。
+配送先は Kernel の `route_output()` パラメータで決定されるため、メッセージ本体に session_id は不要。
 
 | フィールド | 型 | 必須 | デフォルト | 説明 |
 |-----------|-----|------|-----------|------|
-| `msg_type` | string | 必須 | - | `"response"`, `"stream"`, `"proactive"`, `"ack"`, `"command"`, `"error"` |
+| `msg_type` | string | 必須 | - | `"response"`, `"stream"`, `"proactive"`, `"ack"` |
 | `id` | string | 任意 | 自動生成 | メッセージID (12文字) |
-| `correlation_id` | string | 任意 | - | 対応する入力メッセージのID（dispatch/command時） |
+| `correlation_id` | string | 任意 | - | 対応する入力メッセージのID（ACK応答時など） |
 | `content` | string | 必須 | - | メッセージ本文 |
 | `content_type` | string | 任意 | `"text/plain"` | コンテンツタイプ |
-| `state` | string | 任意 | - | `"thinking"`, `"speaking"`, `"done"`, `"interrupted"`（converse時） |
 | `metadata` | object | 任意 | `{}` | 拡張メタデータ |
 
-**dispatch_text 応答（従来のストリーム）**:
+**ストリーム応答（途中）**:
 ```json
 {
   "msg_type": "stream",
@@ -274,35 +256,15 @@ v5.0 では `state` フィールドが追加された。
 }
 ```
 
-**converse_text 応答（thinking → speaking → done）**:
+**ストリーム応答（最終）** — `metadata.done = true` が終端:
 ```json
 {
   "msg_type": "stream",
+  "correlation_id": "msg001",
   "content": "",
-  "state": "thinking"
-}
-```
-```json
-{
-  "msg_type": "stream",
-  "content": "こんにちは！",
-  "state": "speaking"
-}
-```
-```json
-{
-  "msg_type": "stream",
-  "content": "",
-  "state": "done"
-}
-```
-
-**割り込み発生時**:
-```json
-{
-  "msg_type": "stream",
-  "content": "",
-  "state": "interrupted"
+  "metadata": {
+    "done": true
+  }
 }
 ```
 
@@ -310,6 +272,7 @@ v5.0 では `state` フィールドが追加された。
 ```json
 {
   "msg_type": "response",
+  "correlation_id": "msg001",
   "content": "Hello! How can I help you?",
   "metadata": {
     "model": "qwen3.5:9b"
@@ -317,168 +280,268 @@ v5.0 では `state` フィールドが追加された。
 }
 ```
 
-### 5.5 InterruptMessage（Client → Server）【新設】
-
-現在の応答生成を中断する。dispatch_text / converse_text 処理中に送信可能。
-
-| フィールド | 型 | 必須 | 説明 |
-|-----------|-----|------|------|
-| `msg_type` | string | 必須 | 常に `"interrupt"` |
-| `session_id` | string | 必須 | 中断対象のセッションID |
-
+**自律発話（ユーザー入力なしでKernelが自発的に送信）**:
 ```json
 {
-  "msg_type": "interrupt",
-  "session_id": "a1b2c3d4e5f6g7h8"
+  "msg_type": "proactive",
+  "content": "そろそろ休憩しませんか？"
 }
 ```
 
+### 5.5 SessionRole
+
+クライアントが認証時に宣言する役割。LLM はこの role に基づいて出力先を判断する。
+
+| role | 説明 | 用途例 |
+|------|------|--------|
+| `conversation_input` | 対話入力を受け付ける | テキスト入力欄 |
+| `command_input` | コマンド入力を受け付ける | CLI, コマンドパレット |
+| `conversation_output` | 対話応答を表示する | メインチャット表示 |
+| `command_output` | コマンド結果を表示する | コマンド結果ペイン |
+| `log` | ログ・デバッグ情報を表示する | ログビューア, デバッグコンソール |
+
 ### 5.6 PingMessage / PongMessage（Client ↔ Server）
 
-v4.0 から変更なし。
+ハートビート。クライアントが任意のタイミングで送信し、サーバーが応答する。これによりサーバー側の `last_activity` が更新されるため、アイドルタイムアウト実装の下地として機能する。
 
 | 方向 | msg_type | 説明 |
 |------|----------|------|
 | Client → Server | `ping` | ハートビート要求 |
 | Server → Client | `pong` | ハートビート応答 |
 
+サーバーは接続単位でセッションを識別するため、Ping/Pong メッセージに session_id は不要。
+
+**Ping リクエスト**:
 ```json
-{ "msg_type": "ping" }
-{ "msg_type": "pong" }
+{
+  "msg_type": "ping"
+}
 ```
 
-## 6. 準同期モード詳細（converse_text）
+**Pong 応答**:
+```json
+{
+  "msg_type": "pong"
+}
+```
 
-### 6.1 断片バッファリング
+## 6. ACK メカニズム
 
-converse_text で `is_final=false` のメッセージは Kernel 側でバッファリングされる。
-以下のいずれかの条件でバッファがフラッシュされ、LLM による処理が開始される:
+入力メッセージに `metadata.ack_required: true` を設定すると、Kernel は `msg_type: "ack"` の OutputMessage を返す。
+ACK メッセージの `correlation_id` には元のメッセージの `id` が設定される。
 
-1. `is_final=true` のメッセージを受信
-2. 最終断片から `input_timeout_ms`（デフォルト800ms）経過
-3. バッファ最大断片数（デフォルト10）に到達
+**ACK リクエスト**:
+```json
+{
+  "msg_type": "command",
+  "session_id": "a1b2c3d4e5f6g7h8",
+  "source": "cli",
+  "content": "/shutdown",
+  "metadata": {
+    "ack_required": true
+  }
+}
+```
 
-### 6.2 割り込み動作
-
-- dispatch_text / converse_text 処理中に `interrupt` を受信 → 応答生成を即時中断
-- converse_text 処理中に新しい converse_text を受信 → 暗黙的に割り込み、新たな断片としてバッファ
-- 割り込み後は `stream(state=interrupted)` が出力される
-
-### 6.3 出力 state 値
-
-| state | 意味 | 発話エンジン連携 |
-|-------|------|-----------------|
-| `thinking` | LLM が応答を生成中 | 考え中アニメーション表示 |
-| `speaking` | 応答テキストをストリーム中 | 音声合成開始 |
-| `done` | 応答完了 | 発話終了 |
-| `interrupted` | 割り込み発生 | 発話中断 |
+**ACK 応答**:
+```json
+{
+  "msg_type": "ack",
+  "correlation_id": "msg003",
+  "content": "ack:msg003"
+}
+```
 
 ## 7. コマンド一覧
 
-v4.0 から変更なし。
+`msg_type="command"` で送信すると、スラッシュコマンドとして解釈される。
 
-| コマンド | 説明 |
-|---------|------|
-| `/status` | Kernel の状態確認 |
-| `/shutdown` | グレースフルシャットダウン |
-| `/sleep` | エージェント休止 |
-| `/wakeup` | エージェント再開 |
-| `/help` | コマンド一覧 |
-| `/compact` | 会話履歴の圧縮 |
+| コマンド | 説明 | 応答の例 |
+|---------|------|---------|
+| `/status` | Kernel の状態確認 | `"Status: IDLE, uptime: 1h"` |
+| `/shutdown` | グレースフルシャットダウン | `"Shutting down..."` |
+| `/sleep` | エージェント休止 | `"Iris is going to sleep."` |
+| `/wakeup` | エージェント再開 | `"Iris is awake."` |
+| `/help` | コマンド一覧 | `"Available commands: /status, /shutdown..."` |
+| `/compact` | 会話履歴の圧縮 | `"Conversation compacted."` |
+
+応答は `msg_type="command"` の OutputMessage として返される。
 
 ## 8. エラーハンドリング
 
-v4.0 から変更なし。
+| 状況 | Kernel の動作 | クライアントの動作 |
+|------|--------------|-------------------|
+| 認証失敗 | `auth_failure` 送信後、接続切断 | エラー表示、再試行 |
+| 無効な session_id | メッセージを無視、ログ出力 | 再接続 → 再認証 |
+| 不正なメッセージ（JSONパース失敗等） | ログ出力、接続切断 | ログ出力、再接続 |
+| 接続断（予期せず） | 該当スレッド終了、セッションクリーンアップ | 指数バックオフで再接続 |
 
 ## 9. 実装例（言語別）
 
-### 9.1 Python — 準同期モード対応クライアント例
+### 9.1 最小クライアント（Python — 生ソケット版）
+
+以下のコードはワイヤー形式に従った**リファレンス実装**。全言語の実装はこの構造を模倣すればよい。
 
 ```python
 import json
 import socket
 import struct
-import time
 
-class IrisQuasiClient:
-    def __init__(self, host="127.0.0.1", port=9876):
+class IrisClient:
+    def __init__(self, host: str = "127.0.0.1", port: int = 9876):
         self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._sock.connect((host, port))
         self._buf = b""
-        self._session_id = ""
 
-    def _send_frame(self, obj):
+    # ── フレーミング ──────────────────────────────────────
+    def _send_frame(self, obj: dict) -> None:
         data = json.dumps(obj, ensure_ascii=False).encode("utf-8")
         self._sock.sendall(struct.pack("!I", len(data)) + data)
 
-    def _recv_frame(self):
+    def _recv_frame(self) -> dict:
         while len(self._buf) < 4:
-            self._buf += self._sock.recv(4096)
+            chunk = self._sock.recv(4096)
+            if not chunk:
+                raise ConnectionError("connection closed")
+            self._buf += chunk
         size = struct.unpack("!I", self._buf[:4])[0]
         self._buf = self._buf[4:]
         while len(self._buf) < size:
-            self._buf += self._sock.recv(4096)
+            chunk = self._sock.recv(4096)
+            if not chunk:
+                raise ConnectionError("connection closed")
+            self._buf += chunk
         payload = self._buf[:size]
         self._buf = self._buf[size:]
-        return json.loads(payload)
+        return json.loads(payload.decode("utf-8"))
 
-    def authenticate(self, token=""):
+    # ── 認証 ──────────────────────────────────────────────
+    def authenticate(self, access_token: str = "") -> str:
         msg = {"msg_type": "auth", "mode": "bidirectional"}
-        if token: msg["access_token"] = token
+        if access_token:
+            msg["access_token"] = access_token
         self._send_frame(msg)
         resp = self._recv_frame()
         if resp["msg_type"] != "auth_success":
-            raise RuntimeError(f"Auth failed: {resp}")
+            raise RuntimeError(f"Auth failed: {resp.get('error_message', 'unknown')}")
         self._session_id = resp["session_id"]
         return self._session_id
 
-    # ── 準同期（断片）送信 ──────────────────────────
-    def send_fragment(self, text, is_final=False):
-        self._send_frame({
-            "msg_type": "converse_text",
-            "session_id": self._session_id,
-            "source": "cli",
-            "content": text,
-            "is_final": is_final,
-        })
+    # ── ハートビート ────────────────────────────────────────
+    def ping(self) -> dict:
+        self._send_frame({"msg_type": "ping"})
+        return self._recv_frame()  # pong
 
-    # ── 一問一答送信 ─────────────────────────────
-    def send_dispatch(self, text):
+    # ── 入力送信 ──────────────────────────────────────────
+    def send_input(self, text: str, source: str = "cli") -> None:
         self._send_frame({
-            "msg_type": "dispatch_text",
+            "msg_type": "text",
             "session_id": self._session_id,
-            "source": "cli",
+            "source": source,
             "content": text,
         })
 
-    # ── 割り込み送信 ─────────────────────────────
-    def send_interrupt(self):
-        self._send_frame({
-            "msg_type": "interrupt",
-            "session_id": self._session_id,
-        })
-
-    # ── 出力受信（1メッセージ） ─────────────────────
-    def recv_output(self):
+    # ── 出力受信（1メッセージ） ────────────────────────────
+    def recv_output(self) -> dict:
         return self._recv_frame()
 
-# ── 使用例（準同期会話） ──────────────────────────────
-client = IrisQuasiClient()
-client.authenticate()
-client.send_fragment("私は元気です", is_final=False)
-time.sleep(0.1)
-client.send_fragment("今日は何する？", is_final=True)
-while True:
-    msg = client.recv_output()
-    state = msg.get("state", "")
-    if state == "thinking":
-        print("[thinking...]", end="", flush=True)
-    elif state == "speaking":
-        print(msg["content"], end="", flush=True)
-    elif state == "done":
-        print()
-        break
+    # ── 出力受信（ストリーム完了までまとめて受信） ──────────
+    def recv_response(self) -> list[dict]:
+        messages = []
+        while True:
+            msg = self._recv_frame()
+            messages.append(msg)
+            if msg.get("metadata", {}).get("done"):
+                break
+            if msg["msg_type"] == "response":
+                break
+        return messages
+
+    def close(self) -> None:
+        self._sock.close()
+
+# ── 使用例 ────────────────────────────────────────────────
+client = IrisClient()
+session_id = client.authenticate()
+client.send_input("hello")
+for msg in client.recv_response():
+    if msg["msg_type"] == "stream" and msg["content"]:
+        print(msg["content"], end="")
     elif msg["msg_type"] == "response":
         print(f"\n[complete] {msg['content']}")
-        break
+client.close()
 ```
+
+### 9.2 Python — multiprocessing.connection 版
+
+```python
+from multiprocessing.connection import Client
+
+conn = Client(("127.0.0.1", 9876), family="AF_INET")
+conn.send_bytes(json.dumps({"msg_type": "auth"}).encode("utf-8"))
+resp = json.loads(conn.recv_bytes().decode("utf-8"))
+```
+
+**注意**: `multiprocessing.connection` の内部フレーミング形式は標準ライブラリの実装詳細であり、他言語からの互換性は保証されない。他言語で実装する場合は **9.1 のワイヤー形式** に従うこと。
+
+### 9.3 C# / .NET
+
+```csharp
+using System.Net.Sockets;
+using System.Text;
+using System.Text.Json;
+
+using var client = new TcpClient("127.0.0.1", 9876);
+var stream = client.GetStream();
+
+byte[] Send(Dictionary<string, object> obj) {
+    var json = JsonSerializer.Serialize(obj);
+    var data = Encoding.UTF8.GetBytes(json);
+    var len = BitConverter.GetBytes(data.Length); // big-endian
+    if (BitConverter.IsLittleEndian) Array.Reverse(len);
+    stream.Write(len);
+    stream.Write(data);
+}
+
+byte[] buf = new byte[4];
+stream.Read(buf, 0, 4);
+if (BitConverter.IsLittleEndian) Array.Reverse(buf);
+int size = BitConverter.ToInt32(buf);
+// 読み捨て… 完全な実装は9.1の構造を参照
+```
+
+### 9.4 Rust
+
+```rust
+use std::io::{Read, Write};
+use std::net::TcpStream;
+
+let mut stream = TcpStream::connect("127.0.0.1:9876")?;
+let data = br#"{"msg_type":"auth","mode":"bidirectional"}"#;
+let len = (data.len() as u32).to_be_bytes();
+stream.write_all(&len)?;
+stream.write_all(data)?;
+```
+
+### 9.5 Node.js
+
+```javascript
+const net = require('net');
+
+function createFrame(obj) {
+    const data = Buffer.from(JSON.stringify(obj), 'utf-8');
+    const header = Buffer.alloc(4);
+    header.writeUInt32BE(data.length, 0);
+    return Buffer.concat([header, data]);
+}
+
+const client = net.createConnection(9876, '127.0.0.1', () => {
+    client.write(createFrame({ msg_type: 'auth', mode: 'bidirectional' }));
+});
+```
+
+## 10. セキュリティ
+
+- **認証**: `access_token` によるトークン検証をサポート。`config.yaml` の `session.access_token` または環境変数 `IRIS_ACCESS_TOKEN` で指定
+- **ローカル限定**: デフォルトでは `127.0.0.1` にバインド。リモート接続を許可する場合は `access_token` 必須
+- **TLS**: 現バージョンでは未対応（将来の拡張）

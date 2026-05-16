@@ -29,18 +29,39 @@ debug_tools/                      ← デバッグ用ツール
 └── tcp_input/                    ← TCP Input アダプター
 
 iris/                             ← アプリケーションコア
-├── kernel/                       ← ドメイン層（core/, event/, io/,
-│                                  services/: ConversationService,
-│                                  LLMPipeline, ToolExecutionEngine,
-│                                  ProactiveEngine, ReflexionManager,
-│                                  MemoryManager, ContextManager）
-├── llm/                          ← LLM通信（LLMBridge, OllamaProvider, OpenRouterProvider）
-├── memory/                       ← 記憶管理（stores, vector_store, persona）
-├── capabilities/                 ← ツール実装（@tool デコレータ + registry）
-├── tools/                        ← 型安全ツール基盤（@tool, ToolDef, ToolRegistry）
-├── commands/                     ← コマンド処理（CommandHandler）
-├── personality/                  ← プロンプト管理（Personality）
-└── __init__.py
+├── kernel/                       ← 脳幹: プロセス管理 + DI + コマンド処理
+│   ├── manager.py                ← KernelManager（全体状態集約）
+│   ├── process.py                ← KernelProcess（起動・停止）
+│   ├── supervisor.py             ← Supervisor（シグナル管理）
+│   ├── factory.py                ← DIコンテナ（全層構築）
+│   └── commands/                 ← CommandHandler（/shutdown 等）
+├── io/                           ← 視床: 入出力中継
+│   ├── manager.py                ← IOManager
+│   ├── models.py                 ← InputMessage, OutputMessage
+│   ├── transport/                ← TcpListener
+│   ├── session/                  ← SessionManager
+│   └── auth/                     ← Authenticator
+├── event/                        ← 神経路: Global EventBus
+│   └── bus.py                    ← EventBus（kernel から分離）
+├── memory/                       ← 記憶系: 感覚野+海馬+皮質
+│   ├── manager.py                ← MemoryManager（汎用 store/retrieve/search）
+│   ├── sensory/                  ← InputBuffer（断片的入力保持）
+│   ├── episodic/                 ← EpisodicStore（JSONL）
+│   ├── semantic/                 ← SemanticStore（ChromaDB+BM25）
+│   ├── hippocampal/              ← Reflexion + ContextManager（海馬: 整理・圧縮）
+│   └── vector/                   ← VectorStore（ONNX埋め込み）
+├── agency/                       ← 高度認知: PFC+基底核+運動野
+│   ├── manager.py                ← AgencyManager（global↔internal橋渡し）
+│   ├── bus.py                    ← 内部 EventBus（planning↔execution）
+│   ├── planning/                 ← 前頭前野: 意思決定
+│   │   └── manager.py            ← PlanningManager
+│   └── execution/                ← 基底核+運動野: 行動実行
+│       ├── manager.py            ← ExecutionManager
+│       └── pipeline.py           ← LLMPipeline（LLM+ツールループ）
+├── llm/                          ← LLM通信（変更なし）
+├── capabilities/                 ← ツール実装（変更なし）
+├── tools/                        ← @tool, ToolRegistry（変更なし）
+└── personality/                  ← プロンプト管理（変更なし）
 
 docs/                             ← 設計ドキュメント
 ├── adr/                          ← Architecture Decision Records
@@ -49,19 +70,36 @@ config.yaml                       ← Irisの設定ファイル
 main.py                           ← エントリーポイント
 ```
 
-## コンポーネント間依存関係（ヘキサゴナルアーキテクチャ）
+## コンポーネント間依存関係（神経科学ベース層分割）
 
 ```
-debug_tools/       ──→ iris/kernel/   ──→ iris/llm/, iris/memory/, iris/capabilities/
-(デバッグ用)         (ドメイン層)         (インフラ層)
+debug_tools/       ──→ iris/ (全層)
+(デバッグ用)
+
+iris/event/ (神経路: グローバルEventBus)
+    ↑ subscribe / publish（全層が利用）
+    │
+iris/kernel/  ──→ EventBus
+iris/io/      ──→ EventBus     (io/transport/ → TCP)
+iris/memory/  ──→ EventBus
+iris/agency/  ──→ EventBus     (agency/bus/ → 内部通信)
+iris/llm/     ──→ EventBus     (LLM provider ファサード)
 ```
-- `debug_tools/` は `iris/` に依存するが、逆方向の依存はディレクトリ構造で物理禁止
-- `iris/kernel/` は純粋なビジネスロジックに閉じ、外部サービスは kernel 外から注入
+- 全層は EventBus を介して疎結合。直接の依存を持たない
+- Factory (kernel/factory.py) のみ全層のインスタンス生成を行う
+- `debug_tools/` は `iris/` に依存してよいが、逆方向は物理禁止
 
-## v0.3 アーキテクチャ
+## v2 アーキテクチャ（神経科学ベース）
 
-Input / Kernel / Output の3プロセスに分解。IPCはWindows Named Pipes（`AF_PIPE`）。
-詳細は `docs/adr/001-3-process-architecture.md` および `docs/architecture.md` を参照。
+脳科学・神経科学の構造を参考にした層分割。詳細は `docs/v2/architecture.md` を参照。
+
+| 層 | 脳科学対応 | 責務 |
+|----|-----------|------|
+| `kernel/` | 脳幹+視床下部 | プロセス管理、状態集約、Command、DI |
+| `io/` | 視床 | 入出力中継（TCP、セッション、認証） |
+| `event/` | 神経路 | グローバル EventBus（全層間通信） |
+| `memory/` | 感覚野+海馬+皮質 | 感覚バッファ、エピソード/意味記憶、Reflexion、圧縮 |
+| `agency/` | PFC+基底核+運動野 | 意思決定（planning）と行動実行（execution） |
 
 ## Iris の記憶体系
 - `.iris/data/iris_profile.md`: Irisの構造記憶（自己認識用、上限2KB固定）※話し方・性格は含まず、別JSONで動的管理
@@ -124,7 +162,7 @@ pytest tests/memory/ -q              # memoryテストのみ
 - **マルチモード**（`models` が2つ以上）: `get_model(role)` で role ベースのモデル選択
   - 未知の role が指定された場合は `models[0]` にフォールバック
 - `config.yaml` の `model.provider` で Ollama / OpenRouter を切り替え可能
-- 会話履歴は `context_window`（トークン数）を超えた場合、`compaction_threshold` に基づき自動要約（ContextManager）
+- 会話履歴は `context_window`（トークン数）を超えた場合、`compaction_threshold` に基づき自動要約（ContextManager → `memory/hippocampal/`）
 - 要約は `## Session Summary` としてシステムプロンプトに注入。`/compact` コマンドで手動トリガー可能
 - 要約時のモデルは `ModelConfig.get_model("default")` を使用（単一モデルも複数モデルも同じインターフェース）
 

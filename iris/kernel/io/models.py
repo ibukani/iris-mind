@@ -59,12 +59,10 @@ class InputMessage(BaseModel):
 
 class OutputMessage(BaseModel):
     id: str = Field(default_factory=lambda: uuid4().hex[:12])
-    session_id: str = ""
     correlation_id: str | None = None
     msg_type: str
     content: str
     content_type: str = "text/plain"
-    destinations: list[str] | None = None
     metadata: dict = {}
 
 

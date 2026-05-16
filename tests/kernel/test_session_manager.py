@@ -78,7 +78,7 @@ class TestSessionManager:
     def test_route_output_rejects_input_only(self, manager: SessionManager) -> None:
         session_id = _get_session_id(manager, ConnectionMode.INPUT_ONLY)
 
-        output_msg = OutputMessage(session_id=session_id, msg_type="test", content="hello")
+        output_msg = OutputMessage(msg_type="test", content="hello")
         manager.route_output(session_id, output_msg)
 
     def test_route_output_delivers_to_conn(self, manager: SessionManager) -> None:
@@ -88,7 +88,7 @@ class TestSessionManager:
         assert response.session_id is not None
         assert manager.is_session_active(response.session_id) is True
 
-        output_msg = OutputMessage(session_id=response.session_id, msg_type="test", content="hello")
+        output_msg = OutputMessage(msg_type="test", content="hello")
         manager.route_output(response.session_id, output_msg)
         conn.send_bytes.assert_called_once()
 
@@ -102,7 +102,7 @@ class TestSessionManager:
         assert r1.session_id is not None
         assert r2.session_id is not None
 
-        output_msg = OutputMessage(session_id="", msg_type="broadcast", content="hello")
+        output_msg = OutputMessage(msg_type="broadcast", content="hello")
         manager.route_output("", output_msg)
 
         conn1.send_bytes.assert_called_once()
@@ -116,7 +116,7 @@ class TestSessionManager:
         assert r1.session_id is not None
         assert r2.session_id is not None
 
-        output_msg = OutputMessage(session_id="", msg_type="broadcast", content="hello")
+        output_msg = OutputMessage(msg_type="broadcast", content="hello")
         manager.route_output("", output_msg)
 
         conn1.send_bytes.assert_called_once()
@@ -154,7 +154,7 @@ class TestSessionManager:
         response = manager.authenticate(conn, msg)
         assert response.session_id is not None
 
-        output_msg = OutputMessage(session_id=response.session_id, msg_type="test", content="x")
+        output_msg = OutputMessage(msg_type="test", content="x")
         manager.route_output(response.session_id, output_msg)
 
         assert manager.is_session_active(response.session_id) is False
@@ -177,52 +177,6 @@ class TestSessionManager:
         info = manager._sessions[response.session_id]
         assert info.identity == "debug-console"
         assert info.description == "Debug console on Mac mini"
-
-    def test_route_output_by_destinations_delivers_to_matching_roles(self, manager: SessionManager) -> None:
-        conn1 = MagicMock()
-        conn2 = MagicMock()
-        r1 = manager.authenticate(conn1, AuthMessage(
-            mode=ConnectionMode.BIDIRECTIONAL, roles=[SessionRole.CONVERSATION_OUTPUT],
-        ))
-        r2 = manager.authenticate(conn2, AuthMessage(
-            mode=ConnectionMode.BIDIRECTIONAL, roles=[SessionRole.LOG],
-        ))
-        assert r1.session_id and r2.session_id
-
-        output_msg = OutputMessage(session_id="", msg_type="test", content="hello", destinations=["conversation_output"])
-        manager.route_output("", output_msg)
-
-        conn1.send_bytes.assert_called_once()
-        conn2.send_bytes.assert_not_called()
-
-    def test_route_output_by_destinations_matches_any_role(self, manager: SessionManager) -> None:
-        conn1 = MagicMock()
-        conn2 = MagicMock()
-        r1 = manager.authenticate(conn1, AuthMessage(
-            mode=ConnectionMode.BIDIRECTIONAL, roles=[SessionRole.CONVERSATION_OUTPUT, SessionRole.LOG],
-        ))
-        r2 = manager.authenticate(conn2, AuthMessage(
-            mode=ConnectionMode.BIDIRECTIONAL, roles=[SessionRole.COMMAND_OUTPUT],
-        ))
-        assert r1.session_id and r2.session_id
-
-        output_msg = OutputMessage(session_id="", msg_type="test", content="hello", destinations=["log", "command_output"])
-        manager.route_output("", output_msg)
-
-        conn1.send_bytes.assert_called_once()
-        conn2.send_bytes.assert_called_once()
-
-    def test_route_output_ignores_destinations_on_input_only(self, manager: SessionManager) -> None:
-        conn = MagicMock()
-        r = manager.authenticate(conn, AuthMessage(
-            mode=ConnectionMode.INPUT_ONLY, roles=[SessionRole.CONVERSATION_OUTPUT],
-        ))
-        assert r.session_id
-
-        output_msg = OutputMessage(session_id="", msg_type="test", content="hello", destinations=["conversation_output"])
-        manager.route_output("", output_msg)
-
-        conn.send_bytes.assert_not_called()
 
     def test_get_roles_summary_returns_empty_when_no_sessions(self, manager: SessionManager) -> None:
         assert manager.get_roles_summary() == ""

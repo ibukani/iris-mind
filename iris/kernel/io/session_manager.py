@@ -15,7 +15,6 @@ from iris.kernel.io.models import (
     ControlMessage,
     OutputMessage,
     SessionInfo,
-    SessionRole,
     SessionState,
 )
 
@@ -70,12 +69,8 @@ class SessionManager:
     def route_output(self, session_id: str, message: OutputMessage) -> None:
         """セッションに対応するTCP接続にメッセージを送信する。
 
-        message.destinations が設定されている場合は role ベースでルーティングする。
-        session_id が空文字かつ destinations 未設定の場合は全アクティブセッションにブロードキャストする。
+        session_id が空文字の場合は全アクティブセッションにブロードキャストする。
         """
-        if message.destinations is not None:
-            self._route_by_destinations(message)
-            return
         if not session_id:
             self._broadcast_output(message)
             return
@@ -97,37 +92,12 @@ class SessionManager:
             conn = session.conn
             session.last_activity = datetime.now()
 
-        message.session_id = session_id
         raw = message.model_dump_json().encode("utf-8")
         try:
             conn.send_bytes(raw)
         except (BrokenPipeError, ConnectionError, EOFError):
             logger.warning("Output connection lost for session: %s", session_id)
             self.remove_session(session_id)
-
-    def _route_by_destinations(self, message: OutputMessage) -> None:
-        """message.destinations に指定された role を持つセッションに配送する。"""
-        matching_roles = set(message.destinations)
-        with self._lock:
-            targets = list(self._sessions.items())
-
-        for sid, session in targets:
-            if session.state != SessionState.ACTIVE:
-                continue
-            if session.conn is None:
-                continue
-            if session.mode == ConnectionMode.INPUT_ONLY:
-                continue
-            session_role_values = {r.value for r in session.roles}
-            if not matching_roles & session_role_values:
-                continue
-            msg = message.model_copy(update={"session_id": sid})
-            raw = msg.model_dump_json().encode("utf-8")
-            try:
-                session.conn.send_bytes(raw)
-                session.last_activity = datetime.now()
-            except (BrokenPipeError, ConnectionError, EOFError):
-                self.remove_session(sid)
 
     def _broadcast_output(self, message: OutputMessage) -> None:
         """全アクティブセッションにメッセージをブロードキャストする。"""
@@ -141,8 +111,7 @@ class SessionManager:
                 continue
             if session.mode == ConnectionMode.INPUT_ONLY:
                 continue
-            msg = message.model_copy(update={"session_id": sid})
-            raw = msg.model_dump_json().encode("utf-8")
+            raw = message.model_dump_json().encode("utf-8")
             try:
                 session.conn.send_bytes(raw)
                 session.last_activity = datetime.now()

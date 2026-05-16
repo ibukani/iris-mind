@@ -156,7 +156,6 @@ class TcpListener:
             from iris.kernel.io.models import OutputMessage
 
             ack = OutputMessage(
-                session_id=session_id,
                 msg_type="ack",
                 content=f"ack:{msg.id}",
                 correlation_id=msg.id,

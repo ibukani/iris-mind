@@ -113,7 +113,6 @@ trigger_weights:
 | host | str | "127.0.0.1" | バインドアドレス |
 | port | int | 9876 | TCPポート番号 |
 | access_token | str | "" | アクセストークン（空文字 = 検証スキップ） |
-| auth_timeout_sec | int | 30 | 認証タイムアウト（秒） |
 
 ## LoggingConfig
 
@@ -163,8 +162,9 @@ proactive:
     mood: 0.15
 
 session:
-  auth_timeout_sec: 30
-  pairing_timeout_sec: 60
+  host: 127.0.0.1
+  port: 9876
+  access_token: ""
 
 logging:
   file_level: INFO

@@ -128,8 +128,6 @@ class ConnectionMode(Enum):
     BIDIRECTIONAL = "bidirectional"
 
 class SessionState(Enum):
-    CONNECTING = "connecting"
-    AUTHENTICATING = "authenticating"
     ACTIVE = "active"
     CLOSED = "closed"
 

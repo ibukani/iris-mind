@@ -4,6 +4,7 @@ import contextlib
 import logging
 import threading
 from dataclasses import dataclass
+from datetime import datetime
 from multiprocessing.connection import Connection
 from uuid import uuid4
 
@@ -25,7 +26,6 @@ class SessionConfig:
     host: str = "127.0.0.1"
     port: int = 9876
     access_token: str = ""
-    auth_timeout_sec: int = 30
 
 
 class SessionManager:
@@ -48,12 +48,15 @@ class SessionManager:
             if not success:
                 return ControlMessage(msg_type="auth_failure", error_message=error)
 
+            now = datetime.now()
             session_id = uuid4().hex[:16]
             session = SessionInfo(
                 session_id=session_id,
                 state=SessionState.ACTIVE,
                 mode=msg.mode,
                 conn=conn,
+                created_at=now,
+                last_activity=now,
             )
             self._sessions[session_id] = session
 
@@ -77,6 +80,7 @@ class SessionManager:
                 return
 
             conn = session.conn
+            session.last_activity = datetime.now()
 
         message.session_id = session_id
         raw = message.model_dump_json().encode("utf-8")
@@ -84,8 +88,16 @@ class SessionManager:
             conn.send_bytes(raw)
         except (BrokenPipeError, ConnectionError, EOFError):
             logger.warning("Output connection lost for session: %s", session_id)
-            with self._lock:
-                session.conn = None
+            self.remove_session(session_id)
+
+    def update_activity(self, session_id: str | None) -> None:
+        """セッションの最終活動時刻を更新する。"""
+        if session_id is None:
+            return
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session:
+                session.last_activity = datetime.now()
 
     def is_session_active(self, session_id: str) -> bool:
         with self._lock:

@@ -10,6 +10,8 @@ from pydantic import BaseModel, Field
 TCP_HOST = "127.0.0.1"
 TCP_PORT = 9876
 
+INPUT_MSG_TYPES: frozenset[str] = frozenset({"text", "command", "system"})
+
 
 class ConnectionMode(Enum):
     INPUT_ONLY = "input_only"
@@ -18,10 +20,6 @@ class ConnectionMode(Enum):
 
 
 class SessionState(Enum):
-    CONNECTING = "connecting"
-    AUTHENTICATING = "authenticating"
-    WAITING_INPUT = "waiting_input"
-    WAITING_OUTPUT = "waiting_output"
     ACTIVE = "active"
     CLOSED = "closed"
 
@@ -57,6 +55,14 @@ class OutputMessage(BaseModel):
     content_type: str = "text/plain"
     destinations: list[str] | None = None
     metadata: dict = {}
+
+
+class PingMessage(BaseModel):
+    msg_type: str = "ping"
+
+
+class PongMessage(BaseModel):
+    msg_type: str = "pong"
 
 
 class SessionInfo(BaseModel):

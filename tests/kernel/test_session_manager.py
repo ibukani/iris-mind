@@ -108,3 +108,27 @@ class TestSessionManager:
         session_id2 = _get_session_id(manager, ConnectionMode.BIDIRECTIONAL)
 
         assert session_id1 != session_id2
+
+    def test_update_activity_touches_last_activity(self, manager: SessionManager) -> None:
+        session_id = _get_session_id(manager, ConnectionMode.BIDIRECTIONAL)
+        old = manager._sessions[session_id].last_activity
+
+        manager.update_activity(session_id)
+        new = manager._sessions[session_id].last_activity
+
+        assert new > old
+
+    def test_update_activity_unknown_session(self, manager: SessionManager) -> None:
+        manager.update_activity("nonexistent")
+
+    def test_route_output_removes_session_on_disconnect(self, manager: SessionManager) -> None:
+        conn = MagicMock()
+        conn.send_bytes.side_effect = BrokenPipeError
+        msg = AuthMessage(mode=ConnectionMode.BIDIRECTIONAL)
+        response = manager.authenticate(conn, msg)
+        assert response.session_id is not None
+
+        output_msg = OutputMessage(session_id=response.session_id, msg_type="test", content="x")
+        manager.route_output(response.session_id, output_msg)
+
+        assert manager.is_session_active(response.session_id) is False

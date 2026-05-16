@@ -7,13 +7,11 @@ from collections.abc import Callable
 from multiprocessing.connection import Connection, Listener
 from typing import Any
 
-from iris.kernel.io.models import TCP_HOST, TCP_PORT, InputMessage
+from iris.kernel.io.models import INPUT_MSG_TYPES, TCP_HOST, TCP_PORT, InputMessage
 
 from .session_manager import SessionManager
 
 logger = logging.getLogger(__name__)
-
-_INPUT_MSG_TYPES = frozenset({"text", "command", "system"})
 
 
 class TcpListener:
@@ -72,6 +70,7 @@ class TcpListener:
 
     def _serve(self, conn: Connection) -> None:
         auth_done = False
+        session_id: str | None = None
         try:
             while self._running:
                 raw = conn.recv_bytes()
@@ -82,15 +81,23 @@ class TcpListener:
                     if auth_done:
                         logger.warning("TcpListener: duplicate auth, ignoring")
                         continue
-                    if not self._handle_auth(conn, data):
+                    sid = self._handle_auth(conn, data)
+                    if sid is None:
                         return
+                    session_id = sid
                     auth_done = True
                     continue
 
-                if mt in _INPUT_MSG_TYPES:
-                    if not auth_done:
-                        logger.warning("TcpListener: input before auth, ignoring")
-                        continue
+                if not auth_done:
+                    logger.warning("TcpListener: message before auth, ignoring")
+                    continue
+
+                if mt == "ping":
+                    self._handle_ping(conn, session_id)
+                    continue
+
+                if mt in INPUT_MSG_TYPES:
+                    self._session_manager.update_activity(session_id)
                     self._handle_input(data)
                     continue
 
@@ -98,11 +105,15 @@ class TcpListener:
 
         except (EOFError, ConnectionError, BrokenPipeError):
             logger.info("TcpListener: connection closed")
+            if session_id:
+                self._session_manager.remove_session(session_id)
         except Exception:
             if self._running:
                 logger.exception("TcpListener serve error")
+                if session_id:
+                    self._session_manager.remove_session(session_id)
 
-    def _handle_auth(self, conn: Connection, data: dict[str, Any]) -> bool:
+    def _handle_auth(self, conn: Connection, data: dict[str, Any]) -> str | None:
         from iris.kernel.io.models import AuthMessage
 
         msg = AuthMessage(**data)
@@ -111,9 +122,21 @@ class TcpListener:
         conn.send_bytes(response_raw)
         if response.msg_type == "auth_failure":
             logger.info("TcpListener: auth failed, closing connection")
-            return False
+            return None
         logger.info("TcpListener: session %s authenticated", response.session_id)
-        return True
+        return response.session_id
+
+    def _handle_ping(self, conn: Connection, session_id: str | None) -> None:
+        from iris.kernel.io.models import PongMessage
+
+        self._session_manager.update_activity(session_id)
+        raw = PongMessage().model_dump_json().encode("utf-8")
+        try:
+            conn.send_bytes(raw)
+        except (BrokenPipeError, ConnectionError, EOFError):
+            logger.info("TcpListener: ping response failed, connection lost")
+            if session_id:
+                self._session_manager.remove_session(session_id)
 
     def _handle_input(self, data: dict[str, Any]) -> None:
         from iris.kernel.io.models import InputMessage

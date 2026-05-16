@@ -6,6 +6,8 @@ from iris.kernel.io.models import (
     ControlMessage,
     InputMessage,
     OutputMessage,
+    PingMessage,
+    PongMessage,
     SessionInfo,
     SessionState,
 )
@@ -18,6 +20,8 @@ __all__ = [
     "ControlMessage",
     "InputMessage",
     "OutputMessage",
+    "PingMessage",
+    "PongMessage",
     "SessionInfo",
     "SessionManager",
     "SessionState",

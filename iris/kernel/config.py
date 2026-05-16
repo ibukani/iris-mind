@@ -155,7 +155,6 @@ class SessionConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 9876
     access_token: str = ""
-    auth_timeout_sec: int = 30
 
 
 class LoggingConfig(BaseModel):

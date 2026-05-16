@@ -2,8 +2,8 @@
 Architecture tests — enforce dependency direction constraints.
 
 Rules (from AGENTS.md):
-  adapters/ → iris/kernel/ → iris/llm/, iris/memory/, iris/capabilities/
-  iris/kernel/ must NOT import from adapters/
+  debug_tools/ → iris/kernel/ → iris/llm/, iris/memory/, iris/capabilities/
+  iris/kernel/ must NOT import from debug_tools/
   iris/kernel/ must NOT directly import from iris/llm/, iris/memory/, iris/capabilities/
 """
 
@@ -37,25 +37,25 @@ def _get_imports(filepath: Path) -> list[str]:
     return imports
 
 
-def test_kernel_does_not_import_adapters() -> None:
-    forbidden = {"adapters"}
+def test_kernel_does_not_import_debug_tools() -> None:
+    forbidden = {"debug_tools"}
     for filepath in _get_python_files("iris/kernel"):
         imports = _get_imports(filepath)
         for imp in imports:
             top_level = imp.split(".")[0]
-            assert top_level not in forbidden, f"{filepath} imports from 'adapters' (violates dependency rule)"
+            assert top_level not in forbidden, f"{filepath} imports from 'debug_tools' (violates dependency rule)"
 
 
-def test_kernel_does_not_directly_import_adapters() -> None:
-    """iris/kernel/ should not directly import adapters."""
-    forbidden_prefixes = {"adapters"}
+def test_kernel_does_not_directly_import_debug_tools() -> None:
+    """iris/kernel/ should not directly import debug_tools."""
+    forbidden_prefixes = {"debug_tools"}
     for filepath in _get_python_files("iris/kernel"):
         imports = _get_imports(filepath)
         for imp in imports:
             for prefix in forbidden_prefixes:
                 if imp.startswith(prefix):
                     raise AssertionError(
-                        f"{filepath} imports '{imp}' (violates dependency rule: kernel must not depend on adapters)"
+                        f"{filepath} imports '{imp}' (violates dependency rule: kernel must not depend on debug_tools)"
                     )
 
 
@@ -105,11 +105,11 @@ def test_no_circular_imports() -> None:
             visit(filepath, set())
 
 
-def test_adapters_imports_kernel() -> None:
-    """adapters/ should import from iris.kernel (but not vice versa)."""
-    for filepath in _get_python_files("adapters"):
+def test_debug_tools_imports_kernel() -> None:
+    """debug_tools/ should import from iris.kernel (but not vice versa)."""
+    for filepath in _get_python_files("debug_tools"):
         imports = _get_imports(filepath)
         kernel_imports = [i for i in imports if i.startswith("iris.kernel")]
         assert len(kernel_imports) >= 0, (
-            f"{filepath} does not import from iris.kernel — adapters should depend on kernel"
+            f"{filepath} does not import from iris.kernel — debug_tools should depend on kernel"
         )

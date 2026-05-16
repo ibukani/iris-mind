@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=70"]
-build-backend = "setuptools.backends._legacy:_Backend"
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "iris-kernel"
-version = "0.2.0"
+version = "0.3.0"
 description = "Autonomous AI assistant that learns and evolves"
 requires-python = ">=3.13"
 dependencies = [

@@ -151,6 +151,12 @@ class MemoryConfig(BaseModel):
     agents_md_max_bytes: int = 2048
 
 
+class SessionConfig(BaseModel):
+    host: str = "127.0.0.1"
+    port: int = 9876
+    access_token: str = ""
+
+
 class LoggingConfig(BaseModel):
     file_level: str = "INFO"
     console_level: str = ""
@@ -164,6 +170,7 @@ class Config(BaseModel):
     personality: PersonalityConfig = PersonalityConfig()
     memory: MemoryConfig = MemoryConfig()
     proactive: ProactiveConfig = ProactiveConfig()
+    session: SessionConfig = SessionConfig()
     logging: LoggingConfig = LoggingConfig()
 
     @classmethod

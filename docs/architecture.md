@@ -1,67 +1,96 @@
-# Iris アーキテクチャ設計書
+# Iris アーキテクチャ設計書 — Kernel-only
 
 ## 1. 全体像
 
-Iris v0.3 は**3プロセス分解アーキテクチャ**を採用する。
-Input / Kernel / Output の3プロセスが Windows Named Pipes 経由で通信する。
+このリポジトリは Iris Kernel 本体のみを提供する。UI 層（CLI 等）は別プロジェクトが担当する。
+Kernel は Supervisor (main.py) により管理され、TCP で外部プロセスからの制御を受け付ける。
 
-```
-┌───────────────────────────────────────────────────────────┐
-│                    Controller Process                      │
-│          (起動・監視・シャットダウン)                       │
-├───────────────────────────────────────────────────────────┤
-│                                                           │
-│  ┌─────────────────┐   Named Pipe    ┌─────────────────┐  │
-│  │  Input Process  │◄──────────────►│  Kernel Process  │  │
-│  │  (CLI, TCP...)  │   \\.\pipe\      │  (EventBus,      │  │
-│  │                 │   iris-kernel   │   AgentKernel,   │  │
-│  └─────────────────┘                 │   Conversation,  │  │
-│                                      │   Proactive,     │  │
-│  ┌─────────────────┐                 │   Memory, LLM,   │  │
-│  │  Output Process │◄──────────────►│   Tools)          │  │
-│  │  (CLI)          │   \\.\pipe\      └─────────────────┘  │
-│  │                 │   iris-kernel                       │
-│  └─────────────────┘                                      │
-└───────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Supervisor["Supervisor (main.py)"]
+        Console["管理コンソール (stdin)  Ctrl+C"]
+    end
+    subgraph Kernel["Kernel Process (iris/kernel/)"]
+        EventBus
+        AgentKernel
+        Conversation
+        Proactive
+        Memory
+        LLM
+        Tools
+        TcpListener
+        SessionManager
+        Authenticator
+    end
+    Console --> TcpListener
+    TcpListener --> SessionManager
+    SessionManager --> Authenticator
+    SessionManager --> AgentKernel
+    AgentKernel --> Conversation
+    AgentKernel --> Proactive
+    Conversation --> LLM
+    Conversation --> Memory
 ```
 
-各プロセスは独立して起動・停止・置換可能。
-Kernel が中心的な状態を持ち、Input / Output は stateless に保つ。
+Kernel は TcpListener が1ポートで全接続を受け付け、認証・入力・出力を単一の TCP 接続で多重化する。
+認証は接続確立後の最初のメッセージとして行い、成功後は同一接続で双方向通信を行う。
+UI 層（CLI 等）はこのリポジトリの管轄外とし、TCP を介して別プロジェクトから接続する。
 
 ## 2. レイヤードアーキテクチャ（v0.2 からの継承）
 
 ### 依存方向
 
-```
-debug_tools/ ──→ iris/kernel/ ──→ iris/llm/, iris/memory/, iris/capabilities/
+```mermaid
+flowchart LR
+    Debug["debug_tools/ (デバッグ用)"] --> Kernel["iris/kernel/ (ドメイン層)"]
+    Kernel --> Infra["iris/llm/, iris/memory/, iris/capabilities/ (インフラ層)"]
 ```
 
 - v0.2 のヘキサゴナルアーキテクチャを継承
-- v0.3 では `debug_tools/` が Input / Output の2プロセスに分離される
 - `iris/kernel/` はドメイン層として変化しない
+- Kernel は TCP で公開インターフェースを提供するが、UI層はこのリポジトリの管轄外
 
 ### コンポーネントマップ（Kernel Process 内部）
 
-```
-Kernel Process
-├── EventBus (Protocol)       — イベントルーティング
-│   ├── EventBus (in-memory)  — 単一プロセスモード
-│   ├── PipeServer            — Named Pipe 待受
-│   ├── ReplayableTransport   — デバッグ用記録・再生
-│   ├── InputBridge           — Input Process 接続受付
-│   └── OutputBridge          — Output Process 接続受付
-├── KernelProcess             — プロセス起動・監視・ライフサイクル管理
-├── AgentKernel               — 状態管理・異常検知・イベント統括
-├── ConversationService       — 会話オーケストレーション
-│   ├── LLMPipeline           — LLM呼び出し＋ツールループ
-│   └── ReflexionManager      — 自己反省スケジューリング
-├── ProactiveEngine           — 自発発話＋3層ガバナンス
-├── ProactiveResponseTracker  — 自発発話へのユーザー反応評価
-├── MemoryManager             — 記憶操作の一元管理
-├── ToolExecutionEngine       — Tool Call実行
-├── CommandHandler            — スラッシュコマンド処理
-├── CommandRouter             — UserInputEvent からのコマンド抽出
-└── ContextManager            — 会話履歴 compaction
+```mermaid
+flowchart TD
+    subgraph KP["Kernel Process"]
+        subgraph Event["EventBus"]
+            EventBus["EventBus (Protocol) — 内部イベントルーティング"]
+            EventBusImpl["EventBus (in-memory) — 単一プロセス同期型"]
+        end
+        subgraph IO["I/O Manager"]
+            Tcp["TcpListener — TCP 待受 (認証・入力・出力を1ポートで多重)"]
+            Session["SessionManager — セッション管理・ルーティング"]
+            Auth["Authenticator — 認証ロジック (access_token 検証)"]
+        end
+        subgraph Core["Core"]
+            KProc["KernelProcess — プロセス起動・監視・ライフサイクル管理"]
+            AgKrnl["AgentKernel — 状態管理・異常検知・イベント統括"]
+        end
+        subgraph Services["Services"]
+            Conv["ConversationService — 会話オーケストレーション"]
+            LLM["LLMPipeline — LLM呼び出し＋ツールループ"]
+            Reflex["ReflexionManager — 自己反省スケジューリング"]
+            Proactive["ProactiveEngine — 自発発話＋3層ガバナンス"]
+            MemMgr["MemoryManager — 記憶操作の一元管理"]
+            ToolExec["ToolExecutionEngine — Tool Call実行"]
+            CapReg["CapabilityRegistry — ツール管理 (@tool + ToolRegistry)"]
+            CmdHndlr["CommandHandler — スラッシュコマンド処理"]
+            CtxMgr["ContextManager — 会話履歴 compaction"]
+        end
+    end
+
+    Tcp --> Session
+    Session --> Auth
+    Session --> AgKrnl
+    AgKrnl --> Conv
+    AgKrnl --> Proactive
+    Conv --> LLM
+    Conv --> Reflex
+    Conv --> CtxMgr
+    LLM --> ToolExec
+    ToolExec --> CapReg
 ```
 
 ## 3. イベント駆動設計
@@ -77,36 +106,142 @@ class EventBusProtocol(Protocol):
 
 ### イベント種別
 
+内部イベント（EventBus 経由）:
+
 | イベント | 説明 | 送信元 → 送信先 |
 |----------|------|----------------|
-| `UserInputEvent` | ユーザー入力 | Input → Kernel |
-| `ProactiveSpeechEvent` | 自発発話 | Kernel → Output |
 | `TimerTick` | 定期タイマー | Kernel (内部) |
 | `AgentStateChangeEvent` | 状態遷移 | Kernel (内部) |
 | `MemoryUpdateEvent` | 記憶更新 | Kernel (内部) |
-| `AgentStreamEvent` | LLMストリーミングトークン | Kernel → Output |
-| `AgentResponseEvent` | LLM最終応答 | Kernel → Output |
 | `AgentAnomalyEvent` | 異常検知 | Kernel → Output |
+
+### I/O Message モデル
+
+プロセス間通信は Event ではなく Pydantic モデル（`InputMessage` / `OutputMessage`）を使用する。
+EventBus は Kernel 内部のイベントルーティングに限定され、プロセス間は Pipe 経由の JSON メッセージでやり取りする。
+
+```python
+# iris/kernel/io/models.py
+class ConnectionMode(Enum):
+    INPUT_ONLY = "input_only"
+    OUTPUT_ONLY = "output_only"
+    BIDIRECTIONAL = "bidirectional"
+
+class SessionState(Enum):
+    ACTIVE = "active"
+    CLOSED = "closed"
+
+class AuthMessage(BaseModel):
+    msg_type: str = "auth"
+    access_token: str | None = None
+    mode: ConnectionMode = ConnectionMode.BIDIRECTIONAL
+
+class ControlMessage(BaseModel):
+    msg_type: str  # "auth_success", "auth_failure", "error"
+    session_id: str | None = None
+    error_message: str | None = None
+
+class InputMessage(BaseModel):
+    id: str           # uuid4 hex (12桁)
+    session_id: str   # セッション識別子
+    source: str       # "cli", "tcp", ...
+    msg_type: str     # "text", "command", ...
+    content: str      # メッセージ本文
+    content_type: str # "text/plain" (default)
+    metadata: dict    # 拡張用
+
+class OutputMessage(BaseModel):
+    id: str
+    session_id: str   # セッション識別子
+    correlation_id: str | None  # 対応する入力のID
+    msg_type: str     # "response", "stream", "proactive", "anomaly", ...
+    content: str      # メッセージ本文
+    content_type: str # "text/plain", "text/markdown", ...
+    destinations: list[str] | None  # 出力先フィルタ
+    metadata: dict
+
+class SessionInfo(BaseModel):
+    session_id: str
+    state: SessionState
+    mode: ConnectionMode
+    conn: Any | None
+    created_at: datetime
+    last_activity: datetime
+```
+
+**データフロー:**
+
+```mermaid
+sequenceDiagram
+    participant Client as 外部 Client
+    participant TCP as TCP 1接続
+    participant Tcp as TcpListener
+    participant Session as SessionManager
+    participant Kernel as AgentKernel
+    participant Conv as ConversationService
+
+    Client->>TCP: AuthMessage (認証)
+    TCP->>Session: SessionManager.authenticate()
+    Session-->>TCP: ControlMessage (auth_success)
+    TCP-->>Client: auth_success
+    Client->>TCP: InputMessage (session_id 付き)
+    TCP->>Tcp: TcpListener._dispatch()
+    Tcp->>Kernel: AgentKernel.on_input()
+    Kernel->>Conv: ConversationService.process_input()
+    Conv->>Session: SessionManager.route_output(session_id, OutputMessage)
+    Session-->>TCP: OutputMessage
+    TCP-->>Client: OutputMessage
+```
+
+### 認証・セッション管理フロー
+
+```mermaid
+sequenceDiagram
+    participant Client as 外部 Client
+    participant TCP as TCP (127.0.0.1:9876)
+    participant Tcp as TcpListener
+    participant Session as SessionManager
+    participant Auth as Authenticator
+
+    Client->>TCP: TCP 接続
+    Client->>TCP: AuthMessage(msg_type="auth", mode="bidirectional")
+    TCP->>Tcp: TcpListener._serve() 受信
+    Tcp->>Session: SessionManager.authenticate(conn, msg)
+    Session->>Auth: Authenticator.authenticate()
+    Auth-->>Session: ok
+    Session-->>Tcp: ControlMessage(auth_success)
+    Tcp-->>TCP: send_bytes()
+    TCP-->>Client: auth_success + session_id
+    Note over Client,TCP: セッション状態: ACTIVE<br/>即座に双方向通信可能
+```
 
 ### イベントフロー例
 
-```
-[ユーザー入力]
-Input Process:
-  input(">>> ") → PipeClient.send(UserInputEvent)
-    ────────── Pipe ──────────
-Kernel Process:
-  InputBridge: conn.recv() → EventBus.publish(UserInputEvent)
-    → ProactiveResponseTracker._on_user_input()  # 応答評価
-    → AgentKernel._on_user_input()               # 状態遷移 + 記憶
-    → ConversationService._on_user_input()        # LLM処理
-      → EventBus.publish(AgentStreamEvent)        # 逐次
-      → EventBus.publish(AgentResponseEvent)      # 最終
-    → ProactiveEngine.notify_user_activity()      # 抑制更新
-    ────────── Pipe ──────────
-Output Process:
-  PipeClient.recv() → Renderer.on_stream_token()
-    → Rich Live 更新
+```mermaid
+sequenceDiagram
+    participant Client as 外部 Client (CLI)
+    participant TCP as TCP (127.0.0.1:9876)
+    participant Tcp as TcpListener
+    participant Session as SessionManager
+    participant Kernel as AgentKernel
+    participant Conv as ConversationService
+    participant LLM as LLMPipeline
+
+    Client->>TCP: input() → InputMessage(text)
+    TCP->>Tcp: conn.recv_bytes() → InputMessage
+    Tcp->>Session: session_id のACTIVE確認
+    Tcp->>Kernel: AgentKernel.on_input(msg)
+    Kernel->>Kernel: 状態遷移 + 記憶
+    Kernel->>Conv: ConversationService.process_input(content)
+    Conv->>Session: route_output("", stream, "") 思考開始通知
+    Conv->>LLM: LLMPipeline.iterate_with_tools(messages)
+    LLM-->>Conv: on_token(delta)
+    Conv->>Session: route_output("", stream, delta)
+    LLM-->>Conv: response_text
+    Conv->>Session: route_output("", stream, "", done=True)
+    Conv->>Session: route_output("", response, text)
+    Kernel->>Kernel: ProactiveEngine.notify_user_activity()
+    Note over Client,TCP: 外部 Client: conn.recv_bytes() → OutputMessage → 表示
 ```
 
 ## 4. 3層ガバナンス（v0.2 から継承）
@@ -140,51 +275,24 @@ IDLE / PROCESSING / PROACTIVE / REFLECTING / THINKING / SLEEPING
 
 ```
 iris-kernel/
-├── .iris/                       # 設定・データファイル（不変）
-├── debug_tools/
-│   ├── __init__.py
-│   ├── cli/
-│   │   ├── __init__.py
-│   │   ├── input_main.py        # Input Process
-│   │   ├── output_main.py       # Output Process
-│   │   ├── renderer.py          # 表示ロジック
-│   │   └── server.py            # 単一プロセス互換用
-│   └── tcp_input/               # TCP Input アダプター
+├── .iris/                    # 設定・データ
+│   ├── config/
+│   └── data/
+├── debug_tools/              # デバッグ用
+├── docs/
+│   └── adr/
 ├── iris/
-│   ├── kernel/
-│   │   ├── __init__.py
-│   │   ├── agent_kernel.py
-│   │   ├── agent_state.py
-│   │   ├── config.py
-│   │   ├── context.py
-│   │   ├── kernel_process.py    # プロセス管理（IrisController）
-│   │   ├── conversation.py
-│   │   ├── event.py             # イベントクラス群
-│   │   ├── event_bus.py         # EventBusProtocol + EventBus
-│   │   ├── factory.py
-│   │   ├── ipc.py               # PipeServer / PipeClient
-│   │   ├── ipc_output.py        # OutputBridge
-│   │   ├── ipc_input.py         # InputBridge
-│   │   ├── memory_manager.py
-│   │   ├── proactive.py
-│   │   ├── proactive_response_tracker.py  # Proactive 応答追跡
-│   │   ├── reflexion.py
-│   │   ├── reflexion_manager.py
-│   │   ├── llm_pipeline.py
-│   │   ├── logging.py
-│   │   └── tool_executor.py
-│   ├── llm/
-│   ├── memory/
-│   ├── capabilities/
+│   ├── kernel/               # ドメイン層
+│   │   ├── core/             # AgentKernel, KernelProcess, Factory
+│   │   ├── event/            # EventBus
+│   │   ├── io/               # TcpListener, SessionManager, Authenticator, models
+│   │   └── services/         # Conversation, Proactive, Memory, LLMPipeline, Reflexion, ToolExec
+│   ├── llm/                  # LLM通信
+│   ├── memory/               # 記憶管理
+│   ├── capabilities/         # ツール実装
+│   ├── tools/                # ToolRegistry, @tool
 │   ├── commands/
 │   └── personality/
-├── docs/
-│   ├── README.md
-│   ├── adr/
-│   │   └── 001-3-process-architecture.md  # 新規
-│   ├── architecture.md           # 本書
-│   ├── ipc-spec.md               # IPC プロトコル仕様
-│   └── ... (既存の各設計書)
 ├── main.py
 └── config.yaml
 ```

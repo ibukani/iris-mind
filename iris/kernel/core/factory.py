@@ -1,10 +1,3 @@
-"""
-KernelFactory — Iris カーネルコンポーネントの組み立て。
-
-Adapter は KernelFactory.build(config) で組み立て済みの KernelContext を
-受け取り、内部の依存関係構築を意識せずに動作できる。
-"""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -21,8 +14,9 @@ from iris.personality.personality import Personality
 
 from ..agent_state import AgentStateManager
 from ..config import Config
-from ..controllers.proactive_response_tracker import ProactiveResponseTracker
 from ..event.event_bus import EventBus
+from ..io.session_manager import SessionConfig, SessionManager
+from ..io.tcp_listener import TcpListener
 from ..services.context import ContextManager
 from ..services.conversation import ConversationService
 from ..services.llm_pipeline import LLMPipeline
@@ -36,37 +30,46 @@ from .agent_kernel import AgentKernel
 
 @dataclass
 class KernelContext:
-    """組み立て済みカーネルコンポーネントのコンテナ。
-
-    Adapter はこのオブジェクトを受け取り、必要なコンポーネントにアクセスする。
-    """
-
     event_bus: EventBus
     kernel: AgentKernel
     conversation: ConversationService
     proactive: ProactiveEngine
     cmd_handler: CommandHandler
+    tcp_listener: TcpListener
+    session_mgr: SessionManager
+    shutdown_requested: bool = False
 
 
 class KernelFactory:
-    """カーネルコンポーネントの組み立てを担当するファクトリ。"""
-
     @staticmethod
     def build(config: Config) -> KernelContext:
-        """設定に基づき全コンポーネントを組み立てる。"""
+        # ============================================================
+        # Phase 1: インフラ基盤 (I/O・イベント・セッション)
+        # ============================================================
         event_bus = EventBus()
         state = AgentStateManager(event_bus=event_bus)
+        session_mgr = SessionManager(config=SessionConfig(**config.session.model_dump()))
+        tcp_listener = TcpListener(session_manager=session_mgr)
 
+        # ============================================================
+        # Phase 2: 記憶レイヤー
+        # ============================================================
         memory, agents_md, persona_profile = KernelFactory._build_memory(config)
+
+        # ============================================================
+        # Phase 3: LLM・パーソナリティレイヤー
+        # ============================================================
         llm, personality, capability_checker, reflexion, context_mgr = KernelFactory._build_llm(config)
-        proactive, kernel = KernelFactory._build_proactive_and_kernel(
-            config,
-            event_bus,
-            state,
-            memory,
-            llm,
-        )
+
+        # ============================================================
+        # Phase 4: ケイパビリティ (ツール) レイヤー
+        # ============================================================
         registry, tool_exec = KernelFactory._build_capabilities()
+
+        # ============================================================
+        # Phase 5: パイプライン (LLM処理・内省)
+        # 依存: Phase 3 (llm, personality, ...) + Phase 4 (tool_exec)
+        # ============================================================
         llm_pipeline, reflexion_mgr = KernelFactory._build_pipeline(
             config,
             llm,
@@ -80,38 +83,67 @@ class KernelFactory:
             reflexion,
         )
 
+        # ============================================================
+        # Phase 6: 会話サービス
+        # 依存: Phase 1 (output) + Phase 5 (llm_pipeline, reflexion_mgr, context_mgr)
+        # ============================================================
         conversation = ConversationService(
-            event_bus=event_bus,
+            session_manager=session_mgr,
             llm_pipeline=llm_pipeline,
             reflexion_manager=reflexion_mgr,
             context_manager=context_mgr,
             context_window=config.model.context_window,
         )
+
+        # ============================================================
+        # Phase 7: 自発発話エンジン + カーネル (起動はPhase 9で)
+        # 依存: Phase 1 (event_bus, state, output) + Phase 2 (memory) + Phase 3 (llm)
+        # ============================================================
+        proactive, kernel = KernelFactory._build_proactive_and_kernel(
+            config,
+            event_bus,
+            state,
+            memory,
+            llm,
+            session_mgr,
+        )
+
+        # ============================================================
+        # Phase 8: コマンドハンドラ
+        # 依存: Phase 1 (state) + Phase 6 (conversation) + Phase 7 (proactive)
+        # ============================================================
         cmd_handler = CommandHandler(
             state=state,
             conversation=conversation,
             proactive=proactive,
         )
-        ProactiveResponseTracker(proactive=proactive, event_bus=event_bus)
 
-        return KernelContext(
+        # ============================================================
+        # Phase 9: コンテキスト組み立て + ルーター設定 + カーネル起動
+        # ============================================================
+        ctx = KernelContext(
             event_bus=event_bus,
             kernel=kernel,
             conversation=conversation,
             proactive=proactive,
             cmd_handler=cmd_handler,
+            tcp_listener=tcp_listener,
+            session_mgr=session_mgr,
         )
 
+        from ..services.router import InputRouter
+
+        tcp_listener.set_on_input(InputRouter(ctx))
+
+        # カーネル起動は全接続完了後に実行
+        kernel.startup()
+
+        return ctx
+
     @staticmethod
-    def _build_memory(
-        config: Config,
-    ) -> tuple[MemoryManager, AgentsMdStore, PersonaProfile]:
-        """記憶関連コンポーネントを組み立てる。"""
+    def _build_memory(config: Config) -> tuple[MemoryManager, AgentsMdStore, PersonaProfile]:
         cfg = config.memory
-        episodic = EpisodicStore(
-            path=cfg.episodic_path,
-            max_entries=cfg.episodic_max_entries,
-        )
+        episodic = EpisodicStore(path=cfg.episodic_path, max_entries=cfg.episodic_max_entries)
         semantic = SemanticStore(
             path=cfg.semantic_path,
             max_entries=cfg.semantic_max_entries,
@@ -121,17 +153,11 @@ class KernelFactory:
         memory = MemoryManager(episodic=episodic, semantic=semantic, vector_store=vector)
         persona_data = PersonaData()
         persona_profile = PersonaProfile(persona_data=persona_data)
-        agents_md = AgentsMdStore(
-            path=cfg.agents_md_path,
-            max_bytes=cfg.agents_md_max_bytes,
-        )
+        agents_md = AgentsMdStore(path=cfg.agents_md_path, max_bytes=cfg.agents_md_max_bytes)
         return memory, agents_md, persona_profile
 
     @staticmethod
-    def _build_llm(
-        config: Config,
-    ) -> tuple[LLMBridge, Personality, CapabilityChecker, Reflexion, ContextManager]:
-        """LLM 関連コンポーネントを組み立てる。"""
+    def _build_llm(config: Config) -> tuple[LLMBridge, Personality, CapabilityChecker, Reflexion, ContextManager]:
         provider = create_provider(
             provider_type=config.model.provider,
             base_url=config.model.base_url,
@@ -144,10 +170,7 @@ class KernelFactory:
         personality = Personality(name=config.personality.name)
         capability_checker = CapabilityChecker(config=config.model)
         reflexion = Reflexion(llm=llm, compact_model=config.model.get_model("compact"))
-        context_mgr = ContextManager(
-            llm=llm,
-            compact_model=config.model.get_model("default"),
-        )
+        context_mgr = ContextManager(llm=llm, compact_model=config.model.get_model("default"))
         return llm, personality, capability_checker, reflexion, context_mgr
 
     @staticmethod
@@ -157,11 +180,12 @@ class KernelFactory:
         state: AgentStateManager,
         memory: MemoryManager,
         llm: LLMBridge,
+        session_mgr: SessionManager,
     ) -> tuple[ProactiveEngine, AgentKernel]:
-        """自発発話エンジンとカーネルを組み立てる。"""
         proactive = ProactiveEngine(
             config=config.proactive,
             event_bus=event_bus,
+            session_manager=session_mgr,
             state_manager=state,
             memory=memory,
             llm=llm,
@@ -173,16 +197,20 @@ class KernelFactory:
             proactive=proactive,
             memory=memory,
             config=config.proactive,
+            session_manager=session_mgr,
         )
         proactive.set_approval_callback(kernel.evaluate_proactive_request)
-        kernel.startup()
         return proactive, kernel
 
     @staticmethod
     def _build_capabilities() -> tuple[CapabilityRegistry, ToolExecutionEngine]:
-        """Capability レジストリとツール実行エンジンを組み立てる。"""
         registry = CapabilityRegistry()
         registry.discover_modules()
+
+        from iris.tools.builtins.output import output_to
+
+        registry.register_decorated(output_to)
+
         tool_exec = ToolExecutionEngine(registry=registry)
         return registry, tool_exec
 
@@ -199,7 +227,6 @@ class KernelFactory:
         context_mgr: ContextManager,
         reflexion: Reflexion,
     ) -> tuple[LLMPipeline, ReflexionManager]:
-        """LLM パイプラインと Reflexion マネージャを組み立てる。"""
         governance_str = "\n".join(f"- {p}" for p in SELF_GOVERNANCE_PRINCIPLES) if SELF_GOVERNANCE_PRINCIPLES else ""
         llm_pipeline = LLMPipeline(
             llm=llm,

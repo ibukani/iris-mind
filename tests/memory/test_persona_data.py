@@ -14,10 +14,10 @@ def _make_data() -> PersonaData:
     return PersonaData(path=path)
 
 
-def _clean(path: str) -> None:
+def _clean(path: str | Path) -> None:
     p = Path(path)
     if p.exists():
-        os.unlink(path)
+        os.unlink(str(p))
 
 
 def test_add_and_get_top() -> None:

@@ -13,31 +13,21 @@
 
 ## 状態遷移図
 
-```
-                 ┌──────────────┐
-                 │              │ TimerTick + スコア>閾値
-                 │  ┌─────┐     │
-                 ▼  │     │     ▼
-              ┌─────┐    ┌──────────┐     ┌──────────┐     ┌──────────┐
-  ──────────► │ IDLE │───►│PROCESSING│────►│REFLECTING│     │THINKING  │
-  起動/復帰    └──┬──┘    └──────────┘     └──────────┘     └──────────┘
-                 │         ▲   │                            │
-                 │         │   │ 正常完了                    │ 推論完了
-                 │         │   │ /timeout                    │ /ユーザー入力
-                 │         │   │ /error                      ▼
-                 │    /sleep│   │                     ┌──────────┐
-                 │         │   ├─────────────────────►│  IDLE   │
-                 │         │   │                      └──────────┘
-                 │         ▼   │
-                 │    ┌──────────┐    ┌───────────┐
-                 │    │PROACTIVE │───►│SLEEPING   │
-                 │    └──────────┘    └─────┬─────┘
-                 │         ▲                │
-                 │         │                │ /wakeup or
-                 │         │                │ timeout
-                 │    /sleep│                │
-                 │         │                │
-                 └─────────┘────────────────┘
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE : 起動/復帰
+    IDLE --> PROCESSING : ユーザー入力
+    IDLE --> PROACTIVE : TimerTick + スコア>閾値
+    IDLE --> THINKING : /think cmd
+    IDLE --> SLEEPING : /sleep cmd
+    PROCESSING --> IDLE : 正常完了/timeout/error
+    PROCESSING --> REFLECTING : 処理完了
+    PROCESSING --> SLEEPING : /sleep cmd
+    REFLECTING --> IDLE : 反省完了
+    PROACTIVE --> IDLE : 発話完了
+    PROACTIVE --> SLEEPING : /sleep cmd
+    SLEEPING --> IDLE : /wakeup or timeout
+    THINKING --> IDLE : 推論完了/ユーザー入力
 ```
 
 ## 遷移テーブル
@@ -64,7 +54,7 @@
 イベント処理:
   - TimerTick → ProactiveEngine.check_trigger()
     → スコア >= threshold → PROACTIVE 遷移
-  - UserInputEvent → PROCESSING 遷移
+  - InputMessage (AgentKernel.on_input) → PROCESSING 遷移
   - /sleep → SLEEPING 遷移
   - /think → THINKING 遷移
 
@@ -152,7 +142,7 @@
 
 同時に複数イベントが到着した場合の処理優先順位：
 
-1. **UserInputEvent** — 最優先、常に即処理
+1. **InputMessage** (ユーザー入力) — 最優先、常に即処理
 2. **システムコマンド**（/sleep, /wakeup 等）— 即時処理
 3. **TimerTick** — 状態が IDLE の場合のみ評価
-4. **ProactiveSpeechEvent** — PROCESSING/PROACTIVE 中はキューイング
+4. **ProactiveEngine 発話** — PROCESSING/PROACTIVE 中はキューイング

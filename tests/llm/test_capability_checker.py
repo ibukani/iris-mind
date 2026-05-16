@@ -10,7 +10,7 @@ def _make_checker(
     role: str = "default",
 ) -> CapabilityChecker:
     config = ModelConfig(
-        models=[{"name": "test", "roles": [role], "capabilities": capabilities, "performance_tier": performance_tier}],
+        models=[{"name": "test", "roles": [role], "capabilities": capabilities, "performance_tier": performance_tier}],  # noqa: E501  # pyright: ignore[reportArgumentType]
         provider="ollama",
         base_url="http://localhost:11434",
     )

@@ -1,19 +1,13 @@
-"""
-Capability Registry — ツールの一元管理と動的発見。
-
-capabilities/*/server.py の register() 関数を動的に発見・登録する。
-ConversationService から ToolExecutionEngine 経由で利用される。
-"""
-
 from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
 
+from iris.tools.decorator import get_tool_def
+from iris.tools.registry import ToolRegistry
+
 
 class Capability:
-    """1つのツール（関数）を表す。"""
-
     def __init__(
         self,
         name: str,
@@ -29,7 +23,6 @@ class Capability:
         self.allowed_roles = allowed_roles or {"base", "smart"}
 
     def to_openai_tool(self) -> dict:
-        """OpenAI 形式のツール定義を返す。"""
         required: list[str] = []
         clean_params: dict = {}
         for k, v in self.parameters.items():
@@ -50,15 +43,13 @@ class Capability:
         }
 
     def execute(self, **kwargs: object) -> str:
-        """ツールを実行する。"""
         return self.func(**kwargs)
 
 
 class CapabilityRegistry:
-    """全 Capability を一元管理するレジストリ。"""
-
     def __init__(self) -> None:
         self._capabilities: dict[str, Capability] = {}
+        self.tool_registry = ToolRegistry()
 
     def register(self, capability: Capability) -> None:
         self._capabilities[capability.name] = capability
@@ -70,8 +61,6 @@ class CapabilityRegistry:
         parameters: dict | None = None,
         allowed_roles: set[str] | None = None,
     ) -> Callable:
-        """デコレータとして capability を登録する。"""
-
         def decorator(func: Callable) -> Callable:
             c = Capability(
                 name=name or func.__name__,
@@ -85,32 +74,46 @@ class CapabilityRegistry:
 
         return decorator
 
+    def register_decorated(self, fn: Callable) -> None:
+        td = get_tool_def(fn)
+        if td is None:
+            raise ValueError(f"Function {fn.__name__} has no _tool_def. Use @tool decorator.")
+        self.tool_registry.register(td)
+
     def get(self, name: str) -> Capability | None:
         return self._capabilities.get(name)
 
     def list_tools(self) -> list[dict]:
-        return [c.to_openai_tool() for c in self._capabilities.values()]
+        old = [c.to_openai_tool() for c in self._capabilities.values()]
+        new = self.tool_registry.list_tools()
+        names = {t["function"]["name"] for t in old}
+        for t in new:
+            if t["function"]["name"] not in names:
+                old.append(t)
+        return old
 
     def list_tools_for_role(self, role: str) -> list[dict]:
-        return [c.to_openai_tool() for c in self._capabilities.values() if role in c.allowed_roles]
+        result = [c.to_openai_tool() for c in self._capabilities.values() if role in c.allowed_roles]
+        known = {t["function"]["name"] for t in result}
+        for t in self.tool_registry.list_tools():
+            td = self.tool_registry.get(t["function"]["name"])
+            if td and t["function"]["name"] not in known and role in (td.allowed_roles or {"base", "smart"}):
+                result.append(t)
+        return result
 
     def execute(self, name: str, **kwargs: object) -> str:
         cap = self.get(name)
-        if not cap:
-            return f"Error: capability '{name}' not found"
-        return cap.execute(**kwargs)
+        if cap:
+            return cap.execute(**kwargs)
+        return self.tool_registry.execute(name, **kwargs)
+
+    def is_side_effect(self, name: str) -> bool:
+        return self.tool_registry.is_side_effect(name)
 
     def discover_modules(
         self,
         base_paths: list[str] | None = None,
     ) -> None:
-        """
-        capabilities/*/server.py を動的に発見・登録する。
-
-        Args:
-            base_paths: 検索するディレクトリ一覧。
-                        デフォルトは ["iris/capabilities"]
-        """
         if base_paths is None:
             base_paths = ["iris/capabilities"]
 
@@ -121,8 +124,10 @@ class CapabilityRegistry:
             if not p.is_dir():
                 continue
             base_module = base.replace("/", ".").replace("\\", ".")
-            for server_file in p.rglob("server.py"):
-                rel = server_file.relative_to(p)
+            for module_file in p.rglob("*.py"):
+                if module_file.name != "server.py":
+                    continue
+                rel = module_file.relative_to(p)
                 relative_module = str(rel.with_suffix("")).replace("/", ".").replace("\\", ".")
                 module_path = f"{base_module}.{relative_module}"
                 try:

@@ -18,8 +18,6 @@ logger = logging.getLogger(__name__)
 
 
 class LLMPipeline:
-    """LLM呼び出し・システムプロンプト構築・ツールループを担当。"""
-
     def __init__(
         self,
         llm: LLMBridge,
@@ -43,7 +41,11 @@ class LLMPipeline:
         self._capability_checker = capability_checker
         self._context_manager = context_manager
         self._governance_principles = governance_principles
+        self._session_roles_summary: str = ""
         self._max_tool_iterations: int = 3
+
+    def set_session_roles_summary(self, summary: str) -> None:
+        self._session_roles_summary = summary
 
     def _build_system_prompt(self) -> str:
         agents_md = self._agents_md_store.load() if self._agents_md_store else ""
@@ -52,6 +54,7 @@ class LLMPipeline:
         prefs_list = self._memory.get_user_preferences() if self._memory else []
         user_prefs = "\n".join(f"- {p['content']}" for p in prefs_list) if prefs_list else ""
         governance = self._governance_principles or ""
+        session_roles = self._session_roles_summary or "（なし）"
 
         return self._personality.build_system_prompt(
             agents_md_content=agents_md,
@@ -59,6 +62,7 @@ class LLMPipeline:
             personality_traits=traits,
             user_preferences=user_prefs,
             governance_principles=governance,
+            session_roles=session_roles,
         )
 
     def _get_tools(self) -> list[dict] | None:
@@ -72,7 +76,6 @@ class LLMPipeline:
         tools: list[dict] | None = None,
         on_token: Callable[[str], None] | None = None,
     ) -> dict:
-        """システムプロンプトを構築しLLMを呼び出す。"""
         system_prompt = self._build_system_prompt()
 
         ctx_mgr = self._context_manager
@@ -95,7 +98,6 @@ class LLMPipeline:
         messages: list[dict],
         on_token: Callable[[str], None] | None = None,
     ) -> str:
-        """Tool Call 対応の LLM 呼び出しループ。最終的なテキスト応答を返す。"""
         tools = self._get_tools()
         if tools and self._capability_checker and not self._capability_checker.supports_tools("default"):
             tools = None
@@ -110,7 +112,11 @@ class LLMPipeline:
 
             if msg.get("tool_calls") and self._tool_executor is not None:
                 messages.append(msg)
-                self._tool_executor.execute_all(messages)
+                results = self._tool_executor.execute_all(messages)
+
+                if self._tool_executor.all_side_effects(results):
+                    break
+
                 for m in messages[-len(msg["tool_calls"]) :]:
                     if m["role"] == "tool" and len(m.get("content", "")) > 200:
                         m["content"] = m["content"][:200] + "..."

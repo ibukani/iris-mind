@@ -1,162 +1,547 @@
-# IPC プロトコル仕様 v1.0
+# Iris Kernel 通信プロトコル仕様 v4.0
 
 ## 1. 概要
 
-Kernel / Input / Output の3プロセス間の通信方式を定義する。
+Iris Kernel は TCP 経由で外部プロセスと通信する。このドキュメントは**言語非依存**のプロトコル仕様を定義する。任意のプログラミング言語から実装可能。
+
+### 設計原則
+
+- **言語非依存**: JSON + UTF-8 エンコーディング。特定言語のライブラリに依存しない
+- **セッションベース**: 認証 → セッション確立 → 通信 の明確な段階
+- **1ポート多重**: 認証・入力・出力すべてを単一のTCP接続で多重化
 
 ## 2. 通信方式
 
-### 2.1 Windows Named Pipes
+### 2.1 トランスポート
 
-`multiprocessing.connection` モジュールの `AF_PIPE` ファミリを使用する。
+**TCP/IP** (`AF_INET`)
+
+- アドレス: `127.0.0.1:9876`（デフォルト）
+- 双方向通信可能
+- 同一マシン内プロセス間通信専用（デフォルト）
+- 設定によりリモート接続可能（その場合は `access_token` 必須）
+
+### 2.2 セッション構成
+
+1セッション = 1TCP接続。認証・入力・出力すべてを1本の接続で処理する。
+
+### 2.3 ワイヤー形式（フレーミング）
+
+全メッセージは以下の形式で送受信する:
+
+```
+[4バイト: ペイロード長 (big-endian)] [UTF-8 JSON ペイロード]
+```
+
+| 部品 | サイズ | エンコーディング |
+|------|--------|-----------------|
+| ペイロード長 | 4バイト (uint32, big-endian) | バイナリ |
+| ペイロード | 可変 (0〜32MB) | UTF-8 JSON |
+
+**例**: メッセージ `{"msg_type":"auth"}` のワイヤー表現:
+
+```
+00 00 00 18 7B 22 6D 73 67 5F 74 79 70 65 22 3A 22 61 75 74 68 22 7D
+├── length=24 ──┤ ├── UTF-8 JSON (24 bytes) ──────────────────────────┤
+```
+
+## 3. プロトコル概要（メッセージの方向性）
+
+接続上の全メッセージは `msg_type` フィールドで種類を判別する。
+
+| 方向 | msg_type 一覧 | 説明 |
+|------|--------------|------|
+| Client → Server | `auth` | 認証リクエスト |
+| Server → Client | `auth_success`, `auth_failure`, `error` | 認証レスポンス |
+| Client → Server | `text`, `command`, `system` | ユーザー入力 |
+| Client → Server | `ping` | ハートビート（任意。サーバーは `pong` で応答） |
+| Server → Client | `pong` | ハートビート応答 |
+| Server → Client | `response`, `stream`, `proactive`, `ack` | 出力メッセージ |
+
+クライアントは認証成功後、**同一接続で**入力送信と出力受信を並行して行う。
+
+## 4. 接続シーケンス
+
+### 4.1 認証ハンドシェイク
+
+```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: "#e8f0fe"
+    secondaryColor: "#e6f4ea"
+    tertiaryColor: "#fce8e6"
+---
+sequenceDiagram
+    autonumber
+    participant Client as クライアント
+    participant Kernel as Iris Kernel
+
+    Client->>+Kernel: TCP connect (127.0.0.1:9876)
+    Client->>+Kernel: AuthMessage (msg_type: auth, mode: bidirectional)
+    Kernel-->>-Client: auth_success (session_id: "a1b2c3d4...")
+    Note over Client,Kernel: 以降、同一接続で双方向通信
+```
+
+### 4.2 接続モード
+
+`AuthMessage.mode` で指定:
+
+| モード | 説明 |
+|--------|------|
+| `bidirectional` | 入出力双方向（デフォルト） |
+| `input_only` | 入力のみ。Kernelは出力を送信しない |
+| `output_only` | 出力のみ。Kernelは入力を受け付けない |
+
+### 4.3 セッション状態遷移
+
+```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: "#e8f0fe"
+    secondaryColor: "#e6f4ea"
+---
+stateDiagram-v2
+    [*] --> ACTIVE : 認証成功 (auth_success)
+    ACTIVE --> [*] : 切断／明示的削除
+```
+
+セッションは認証成功後ただちに `ACTIVE` となり、切断または `remove_session` で `CLOSED` となる。
+
+### 4.4 完全な通信フロー（テキスト入力〜応答受信）
+
+```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: "#e8f0fe"
+    secondaryColor: "#e6f4ea"
+    tertiaryColor: "#fef7e0"
+---
+sequenceDiagram
+    autonumber
+    participant Client as クライアント
+    participant Kernel as Iris Kernel
+
+    rect rgb(232, 240, 254)
+        Note over Client,Kernel: 認証
+        Client->>+Kernel: AuthMessage (msg_type: auth)
+        Kernel-->>-Client: auth_success (session_id: "sess001")
+    end
+
+    rect rgb(230, 245, 225)
+        Note over Client,Kernel: 入力・応答
+        Client->>+Kernel: InputMessage (msg_type: text, content: "hello")
+        Kernel-->>Client: stream (content: "Hello")
+        Kernel-->>Client: stream (content: "! How")
+        Kernel-->>Client: stream (content: " can I help?")
+        Kernel-->>Client: stream (content: "", metadata: {done: true})
+        Kernel-->>-Client: response (content: "Hello! How can I help?")
+    end
+```
+
+**出力ストリームの終端判定**: `msg_type="stream"` で `metadata.done == true` が最終チャンクの合図。その後 `msg_type="response"` で完全な応答テキストが届く。
+
+## 5. メッセージ形式
+
+### 5.1 AuthMessage（Client → Server）
+
+認証リクエスト。TCP接続後に最初に送信するメッセージ。
+クライアントは自身の役割（roles）を宣言する。
+
+| フィールド | 型 | 必須 | デフォルト | 説明 |
+|-----------|-----|------|-----------|------|
+| `msg_type` | string | 必須 | - | 常に `"auth"` |
+| `mode` | string | 任意 | `"bidirectional"` | `"bidirectional"`, `"input_only"`, `"output_only"` |
+| `access_token` | string | 条件付き | - | サーバー側で設定されている場合は必須 |
+| `roles` | string[] | 任意 | 全role | クライアントが持つ機能の一覧（[SessionRole](#sessionrole)参照） |
+| `identity` | string | 任意 | `""` | クライアントの識別名（保存のみ、LLMには非表示） |
+| `description` | string | 任意 | `""` | クライアントの説明（保存のみ、LLMには非表示） |
+
+```json
+{
+  "msg_type": "auth",
+  "mode": "bidirectional",
+  "access_token": "my-secret-token",
+  "roles": ["conversation_input", "conversation_output", "command_input", "command_output"],
+  "identity": "my-app-v2",
+  "description": "Desktop client on Windows"
+}
+```
+
+### 5.2 ControlMessage（Server → Client）
+
+認証レスポンス。Kernel から返される。
+
+| フィールド | 型 | 必須 | 説明 |
+|-----------|-----|------|------|
+| `msg_type` | string | 必須 | `"auth_success"`, `"auth_failure"`, `"error"` |
+| `session_id` | string | 条件付き | 成功時のみ。16文字のセッションID |
+| `error_message` | string | 条件付き | 失敗時のみ。エラー理由 |
+
+**成功**:
+```json
+{
+  "msg_type": "auth_success",
+  "session_id": "a1b2c3d4e5f6g7h8"
+}
+```
+
+**失敗**:
+```json
+{
+  "msg_type": "auth_failure",
+  "error_message": "invalid access_token"
+}
+```
+
+### 5.3 InputMessage（Client → Server）
+
+外部クライアントから Kernel への入力メッセージ。
+
+| フィールド | 型 | 必須 | デフォルト | 説明 |
+|-----------|-----|------|-----------|------|
+| `msg_type` | string | 必須 | - | `"text"`, `"command"`, `"system"` |
+| `id` | string | 任意 | 自動生成 | メッセージID (12文字) |
+| `session_id` | string | 必須 | - | 認証で取得したセッションID |
+| `source` | string | 必須 | - | 送信元識別子 (`"cli"`, `"web"`, etc.) |
+| `content` | string | 必須 | - | メッセージ本文 |
+| `content_type` | string | 任意 | `"text/plain"` | コンテンツタイプ |
+| `metadata` | object | 任意 | `{}` | 拡張メタデータ |
+
+**テキスト入力**:
+```json
+{
+  "msg_type": "text",
+  "session_id": "a1b2c3d4e5f6g7h8",
+  "source": "cli",
+  "content": "こんにちは"
+}
+```
+
+**コマンド入力**:
+```json
+{
+  "msg_type": "command",
+  "session_id": "a1b2c3d4e5f6g7h8",
+  "source": "cli",
+  "content": "/status"
+}
+```
+
+### 5.4 OutputMessage（Server → Client）
+
+Kernel から外部クライアントへの出力メッセージ。
+配送先は Kernel の `route_output()` パラメータで決定されるため、メッセージ本体に session_id は不要。
+
+| フィールド | 型 | 必須 | デフォルト | 説明 |
+|-----------|-----|------|-----------|------|
+| `msg_type` | string | 必須 | - | `"response"`, `"stream"`, `"proactive"`, `"ack"` |
+| `id` | string | 任意 | 自動生成 | メッセージID (12文字) |
+| `correlation_id` | string | 任意 | - | 対応する入力メッセージのID（ACK応答時など） |
+| `content` | string | 必須 | - | メッセージ本文 |
+| `content_type` | string | 任意 | `"text/plain"` | コンテンツタイプ |
+| `metadata` | object | 任意 | `{}` | 拡張メタデータ |
+
+**ストリーム応答（途中）**:
+```json
+{
+  "msg_type": "stream",
+  "correlation_id": "msg001",
+  "content": "Hello"
+}
+```
+
+**ストリーム応答（最終）** — `metadata.done = true` が終端:
+```json
+{
+  "msg_type": "stream",
+  "correlation_id": "msg001",
+  "content": "",
+  "metadata": {
+    "done": true
+  }
+}
+```
+
+**完全な応答（ストリーム終了後に1回送信）**:
+```json
+{
+  "msg_type": "response",
+  "correlation_id": "msg001",
+  "content": "Hello! How can I help you?",
+  "metadata": {
+    "model": "qwen3.5:9b"
+  }
+}
+```
+
+**自律発話（ユーザー入力なしでKernelが自発的に送信）**:
+```json
+{
+  "msg_type": "proactive",
+  "content": "そろそろ休憩しませんか？"
+}
+```
+
+### 5.5 SessionRole
+
+クライアントが認証時に宣言する役割。LLM はこの role に基づいて出力先を判断する。
+
+| role | 説明 | 用途例 |
+|------|------|--------|
+| `conversation_input` | 対話入力を受け付ける | テキスト入力欄 |
+| `command_input` | コマンド入力を受け付ける | CLI, コマンドパレット |
+| `conversation_output` | 対話応答を表示する | メインチャット表示 |
+| `command_output` | コマンド結果を表示する | コマンド結果ペイン |
+| `log` | ログ・デバッグ情報を表示する | ログビューア, デバッグコンソール |
+
+### 5.6 PingMessage / PongMessage（Client ↔ Server）
+
+ハートビート。クライアントが任意のタイミングで送信し、サーバーが応答する。これによりサーバー側の `last_activity` が更新されるため、アイドルタイムアウト実装の下地として機能する。
+
+| 方向 | msg_type | 説明 |
+|------|----------|------|
+| Client → Server | `ping` | ハートビート要求 |
+| Server → Client | `pong` | ハートビート応答 |
+
+サーバーは接続単位でセッションを識別するため、Ping/Pong メッセージに session_id は不要。
+
+**Ping リクエスト**:
+```json
+{
+  "msg_type": "ping"
+}
+```
+
+**Pong 応答**:
+```json
+{
+  "msg_type": "pong"
+}
+```
+
+## 6. ACK メカニズム
+
+入力メッセージに `metadata.ack_required: true` を設定すると、Kernel は `msg_type: "ack"` の OutputMessage を返す。
+ACK メッセージの `correlation_id` には元のメッセージの `id` が設定される。
+
+**ACK リクエスト**:
+```json
+{
+  "msg_type": "command",
+  "session_id": "a1b2c3d4e5f6g7h8",
+  "source": "cli",
+  "content": "/shutdown",
+  "metadata": {
+    "ack_required": true
+  }
+}
+```
+
+**ACK 応答**:
+```json
+{
+  "msg_type": "ack",
+  "correlation_id": "msg003",
+  "content": "ack:msg003"
+}
+```
+
+## 7. コマンド一覧
+
+`msg_type="command"` で送信すると、スラッシュコマンドとして解釈される。
+
+| コマンド | 説明 | 応答の例 |
+|---------|------|---------|
+| `/status` | Kernel の状態確認 | `"Status: IDLE, uptime: 1h"` |
+| `/shutdown` | グレースフルシャットダウン | `"Shutting down..."` |
+| `/sleep` | エージェント休止 | `"Iris is going to sleep."` |
+| `/wakeup` | エージェント再開 | `"Iris is awake."` |
+| `/help` | コマンド一覧 | `"Available commands: /status, /shutdown..."` |
+| `/compact` | 会話履歴の圧縮 | `"Conversation compacted."` |
+
+応答は `msg_type="command"` の OutputMessage として返される。
+
+## 8. エラーハンドリング
+
+| 状況 | Kernel の動作 | クライアントの動作 |
+|------|--------------|-------------------|
+| 認証失敗 | `auth_failure` 送信後、接続切断 | エラー表示、再試行 |
+| 無効な session_id | メッセージを無視、ログ出力 | 再接続 → 再認証 |
+| 不正なメッセージ（JSONパース失敗等） | ログ出力、接続切断 | ログ出力、再接続 |
+| 接続断（予期せず） | 該当スレッド終了、セッションクリーンアップ | 指数バックオフで再接続 |
+
+## 9. 実装例（言語別）
+
+### 9.1 最小クライアント（Python — 生ソケット版）
+
+以下のコードはワイヤー形式に従った**リファレンス実装**。全言語の実装はこの構造を模倣すればよい。
 
 ```python
-# Kernel 側 (Listener)
-listener = multiprocessing.connection.Listener(
-    address=r"\\.\pipe\iris-kernel",
-    family="AF_PIPE",
-)
+import json
+import socket
+import struct
 
-# クライアント側 (Client)
-conn = multiprocessing.connection.Client(
-    address=r"\\.\pipe\iris-kernel",
-    family="AF_PIPE",
-)
+class IrisClient:
+    def __init__(self, host: str = "127.0.0.1", port: int = 9876):
+        self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self._sock.connect((host, port))
+        self._buf = b""
+
+    # ── フレーミング ──────────────────────────────────────
+    def _send_frame(self, obj: dict) -> None:
+        data = json.dumps(obj, ensure_ascii=False).encode("utf-8")
+        self._sock.sendall(struct.pack("!I", len(data)) + data)
+
+    def _recv_frame(self) -> dict:
+        while len(self._buf) < 4:
+            chunk = self._sock.recv(4096)
+            if not chunk:
+                raise ConnectionError("connection closed")
+            self._buf += chunk
+        size = struct.unpack("!I", self._buf[:4])[0]
+        self._buf = self._buf[4:]
+        while len(self._buf) < size:
+            chunk = self._sock.recv(4096)
+            if not chunk:
+                raise ConnectionError("connection closed")
+            self._buf += chunk
+        payload = self._buf[:size]
+        self._buf = self._buf[size:]
+        return json.loads(payload.decode("utf-8"))
+
+    # ── 認証 ──────────────────────────────────────────────
+    def authenticate(self, access_token: str = "") -> str:
+        msg = {"msg_type": "auth", "mode": "bidirectional"}
+        if access_token:
+            msg["access_token"] = access_token
+        self._send_frame(msg)
+        resp = self._recv_frame()
+        if resp["msg_type"] != "auth_success":
+            raise RuntimeError(f"Auth failed: {resp.get('error_message', 'unknown')}")
+        self._session_id = resp["session_id"]
+        return self._session_id
+
+    # ── ハートビート ────────────────────────────────────────
+    def ping(self) -> dict:
+        self._send_frame({"msg_type": "ping"})
+        return self._recv_frame()  # pong
+
+    # ── 入力送信 ──────────────────────────────────────────
+    def send_input(self, text: str, source: str = "cli") -> None:
+        self._send_frame({
+            "msg_type": "text",
+            "session_id": self._session_id,
+            "source": source,
+            "content": text,
+        })
+
+    # ── 出力受信（1メッセージ） ────────────────────────────
+    def recv_output(self) -> dict:
+        return self._recv_frame()
+
+    # ── 出力受信（ストリーム完了までまとめて受信） ──────────
+    def recv_response(self) -> list[dict]:
+        messages = []
+        while True:
+            msg = self._recv_frame()
+            messages.append(msg)
+            if msg.get("metadata", {}).get("done"):
+                break
+            if msg["msg_type"] == "response":
+                break
+        return messages
+
+    def close(self) -> None:
+        self._sock.close()
+
+# ── 使用例 ────────────────────────────────────────────────
+client = IrisClient()
+session_id = client.authenticate()
+client.send_input("hello")
+for msg in client.recv_response():
+    if msg["msg_type"] == "stream" and msg["content"]:
+        print(msg["content"], end="")
+    elif msg["msg_type"] == "response":
+        print(f"\n[complete] {msg['content']}")
+client.close()
 ```
 
-### 2.2 Pipe アドレス体系
-
-| Pipe 名 | 方向 | 用途 |
-|---------|------|------|
-| `\\.\pipe\iris-kernel` | Kernel→Output | Kernel から Output Process へのイベント配信（OutputBridge） |
-| `\\.\pipe\iris-kernel-input` | Input→Kernel | Input Process から Kernel へのユーザー入力転送（InputBridge） |
-
-Input / Output は独立した PipeServer を持つ（単一Listenerではない）。各 Bridge は接続ごとにスレッドを割り当てる。
-
-### 2.3 シリアライズ
-
-JSON Lines 形式を使用する。`send_bytes()` / `recv_bytes()` でフレーミングする。
+### 9.2 Python — multiprocessing.connection 版
 
 ```python
-# 送信
-data = json.dumps(event.to_dict(), ensure_ascii=False)
-conn.send_bytes(data.encode("utf-8"))
+from multiprocessing.connection import Client
 
-# 受信
-raw = conn.recv_bytes().decode("utf-8")
-event = Event.from_dict(json.loads(raw))
+conn = Client(("127.0.0.1", 9876), family="AF_INET")
+conn.send_bytes(json.dumps({"msg_type": "auth"}).encode("utf-8"))
+resp = json.loads(conn.recv_bytes().decode("utf-8"))
 ```
 
-**ワイヤー形式** (他言語から読み書きする場合):
+**注意**: `multiprocessing.connection` の内部フレーミング形式は標準ライブラリの実装詳細であり、他言語からの互換性は保証されない。他言語で実装する場合は **9.1 のワイヤー形式** に従うこと。
 
-```
-{ "type": "UserInputEvent", "content": "hello", "source": "cli", "timestamp": "...", "trace_id": "abc" }
-```
+### 9.3 C# / .NET
 
-**制約**:
-- `send_bytes()` / `recv_bytes()` がフレーミングを内部処理
-- 最大メッセージサイズはデフォルトで 32MB（要調整時は別途指定）
+```csharp
+using System.Net.Sockets;
+using System.Text;
+using System.Text.Json;
 
-### 2.4 Replay ファイル形式
+using var client = new TcpClient("127.0.0.1", 9876);
+var stream = client.GetStream();
 
-デバッグ用に、送受信されたイベントを JSONL 形式で記録する。
+byte[] Send(Dictionary<string, object> obj) {
+    var json = JsonSerializer.Serialize(obj);
+    var data = Encoding.UTF8.GetBytes(json);
+    var len = BitConverter.GetBytes(data.Length); // big-endian
+    if (BitConverter.IsLittleEndian) Array.Reverse(len);
+    stream.Write(len);
+    stream.Write(data);
+}
 
-```jsonl
-{"type": "UserInputEvent", "timestamp": "...", "source": "cli", "trace_id": "abc-123", "content": "hello", "metadata": null}
-{"type": "AgentStreamEvent", "timestamp": "...", "source": "system", "trace_id": "abc-123", "delta": "Hello", "done": false}
-{"type": "AgentResponseEvent", "timestamp": "...", "source": "system", "trace_id": "abc-123", "content": "...", "model": ""}
-```
-
-`ReplayableTransport` クラスがこの形式で記録する。再生用クラス（`ReplayTransport`）は未実装。
-
-## 3. 接続ライフサイクル
-
-### 3.1 起動シーケンス
-
-```
-Kernel Process:
-  1. AgentKernel.startup() — イベント購読 + タイマースレッド開始
-  2. OutputBridge.start() — PipeServer(iris-kernel) 起動 + 受付スレッド開始
-  3. InputBridge.start() — PipeServer(iris-kernel-input) 起動 + 受付スレッド開始
-  4. 子プロセス起動: output_main → iris-kernel に接続
-  5. 子プロセス起動: input_main → iris-kernel-input に接続
-
-Input Process:
-  1. Kernel の input Pipe に接続
-  2. UserInputEvent の送信を開始 (input() ループ)
-
-Output Process:
-  1. Kernel の output Pipe に接続
-  2. 受信ループ開始 (イベント受信 → 表示)
+byte[] buf = new byte[4];
+stream.Read(buf, 0, 4);
+if (BitConverter.IsLittleEndian) Array.Reverse(buf);
+int size = BitConverter.ToInt32(buf);
+// 読み捨て… 完全な実装は9.1の構造を参照
 ```
 
-### 3.2 切断と再接続
+### 9.4 Rust
 
-- クライアント切断 → Kernel は該当スレッドをクリーンアップ
-- Kernel 切断 → 全クライアントが `EOFError` を受信 → 再接続待機
-- 再接続時は新しい Listener アドレスを Controller から通知
+```rust
+use std::io::{Read, Write};
+use std::net::TcpStream;
 
-### 3.3 生存確認
-
-KernelProcess が定期的（5秒間隔）に Input/Output プロセスのプロセス生存確認（`poll()`）を行い、
-応答がない場合は子プロセスを再起動する。専用の制御イベントは使用しない。
-
-## 4. イベント形式
-
-### 4.1 基底イベント
-
-```python
-@dataclass
-class Event:
-    timestamp: datetime | None  # イベント生成時刻
-    source: str                 # 発生源
-    trace_id: str               # UUID4先頭12文字 — 全プロセス横断追跡ID（空文字列時は publish 時に自動生成）
+let mut stream = TcpStream::connect("127.0.0.1:9876")?;
+let data = br#"{"msg_type":"auth","mode":"bidirectional"}"#;
+let len = (data.len() as u32).to_be_bytes();
+stream.write_all(&len)?;
+stream.write_all(data)?;
 ```
 
-### 4.2 Kernel → Output イベント
+### 9.5 Node.js
 
-| イベント | フィールド | 説明 |
-|----------|-----------|------|
-| `AgentStreamEvent` | `delta: str`, `done: bool` | LLM ストリーミングトークン |
-| `AgentResponseEvent` | `content: str`, `model: str` | 最終応答 |
-| `ProactiveSpeechEvent` | `content: str`, `trigger_type: str`, `confidence: float` | 自発発話 |
-| `AgentAnomalyEvent` | `anomaly_type: str`, `severity: str`, `detail: str` | 異常検知 |
-| `AgentStateChangeEvent` | `previous_state: str \| None`, `new_state: str \| None` | 状態遷移通知（Kernel 内部のみ） |
+```javascript
+const net = require('net');
 
-### 4.3 Input → Kernel イベント
+function createFrame(obj) {
+    const data = Buffer.from(JSON.stringify(obj), 'utf-8');
+    const header = Buffer.alloc(4);
+    header.writeUInt32BE(data.length, 0);
+    return Buffer.concat([header, data]);
+}
 
-| イベント | フィールド | 説明 |
-|----------|-----------|------|
-| `UserInputEvent` | `content: str`, `metadata: dict \| None` | ユーザー入力 |
-
-## 5. エラーハンドリング
-
-| 状況 | Kernel 側の動作 | クライアント側の動作 |
-|------|----------------|-------------------|
-| 不正なイベント受信 | ログ出力 + 無視 | — |
-| 接続断 (予期せず) | 該当スレッド終了 + ログ | 再接続試行 (指数バックオフ) |
-| シリアライズエラー | ログ出力 + 接続断 | ログ出力 + 再接続 |
-| 受信タイムアウト | — | 再接続試行 |
-
-- KernelProcess が `subprocess.Popen` で Input/Output プロセスを起動・監視する。専用の制御 Pipe 経由のイベントは実装されていない。
-
-## 6. 将来の拡張
-
-### TCP/IP 対応
-
-`AF_PIPE` → `AF_INET` に変更するだけで同一コードが動作する：
-
-```python
-# TCP 版
-listener = multiprocessing.connection.Listener(
-    address=("127.0.0.1", 9876),
-    family="AF_INET",
-    authkey=b"iris-secret",
-)
+const client = net.createConnection(9876, '127.0.0.1', () => {
+    client.write(createFrame({ msg_type: 'auth', mode: 'bidirectional' }));
+});
 ```
 
-### TLS 対応
+## 10. セキュリティ
 
-`multiprocessing.connection.Listener` は直接 TLS をサポートしないため、
-TCP 移行時に別途暗号化層を追加する必要がある。
-当面は localhost 限定のため未対応。
+- **認証**: `access_token` によるトークン検証をサポート。`config.yaml` の `session.access_token` または環境変数 `IRIS_ACCESS_TOKEN` で指定
+- **ローカル限定**: デフォルトでは `127.0.0.1` にバインド。リモート接続を許可する場合は `access_token` 必須
+- **TLS**: 現バージョンでは未対応（将来の拡張）

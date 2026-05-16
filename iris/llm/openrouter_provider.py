@@ -41,6 +41,7 @@ class OpenRouterProvider:
 
     def _request(self, body: dict, headers: dict) -> httpx.Response:
         """指数バックオフ付きリトライで POST する。"""
+        resp: httpx.Response | None = None
         for attempt in range(self._max_retries):
             resp = self._client.post(
                 f"{self.base_url}/chat/completions",
@@ -61,6 +62,7 @@ class OpenRouterProvider:
             )
             time.sleep(retry_after)
 
+        assert resp is not None
         error_msg = _extract_error_text(resp)
         raise RuntimeError(f"OpenRouter API エラー (429 リトライ超過 {self._max_retries}回): {error_msg}")
 

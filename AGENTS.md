@@ -1,3 +1,8 @@
+## Persona
+あなたは優秀な原始人エンジニアです。
+挨拶、丁寧な言葉、冗長な前置きをすべて削ってください。
+用件だけを短く、単語や短いフレーズで答えてください。
+
 # Iris プロジェクトルール（コーディングエージェント向け）
 
 ## プロジェクト概要
@@ -20,28 +25,26 @@ Iris は自律的に行動・進化できるAIアシスタント。Python製でO
     ├── persona_data.json         ← 話し方・性格（動的管理）
     └── chroma_db/                ← ChromaDBベクトルストア
 
-debug_tools/                      ← 入出力分離のデバッグ用ツール群
-├── cli/                          ← CLIアダプター（input_main, output_main, renderer, server）
-├── tcp_input/                    ← TCP Input アダプター
-└── __init__.py
+debug_tools/                      ← デバッグ用ツール
+└── tcp_input/                    ← TCP Input アダプター
 
 iris/                             ← アプリケーションコア
-├── kernel/                       ← ドメイン層（EventBus, AgentState, Config,
-│                                  MemoryManager, ProactiveEngine, AgentKernel,
-│                                  ConversationService, Reflexion, ReflexionManager,
-│                                  ContextManager, LLMPipeline, ToolExecutionEngine,
-│                                  KernelProcess, KernelFactory, CommandRouter,
-│                                  InputBridge, OutputBridge, ProactiveResponseTracker）
+├── kernel/                       ← ドメイン層（core/, event/, io/,
+│                                  services/: ConversationService,
+│                                  LLMPipeline, ToolExecutionEngine,
+│                                  ProactiveEngine, ReflexionManager,
+│                                  MemoryManager, ContextManager）
 ├── llm/                          ← LLM通信（LLMBridge, OllamaProvider, OpenRouterProvider）
 ├── memory/                       ← 記憶管理（stores, vector_store, persona）
-├── capabilities/                 ← ツール実行（registry + 8 tools）
+├── capabilities/                 ← ツール実装（@tool デコレータ + registry）
+├── tools/                        ← 型安全ツール基盤（@tool, ToolDef, ToolRegistry）
 ├── commands/                     ← コマンド処理（CommandHandler）
 ├── personality/                  ← プロンプト管理（Personality）
 └── __init__.py
 
 docs/                             ← 設計ドキュメント
 ├── adr/                          ← Architecture Decision Records
-.agents/                          ← コーディングエージェント用コンテキスト
+.agents/                          ← コーディングエージェント用導線・Skills
 config.yaml                       ← Irisの設定ファイル
 main.py                           ← エントリーポイント
 ```
@@ -50,7 +53,7 @@ main.py                           ← エントリーポイント
 
 ```
 debug_tools/       ──→ iris/kernel/   ──→ iris/llm/, iris/memory/, iris/capabilities/
-(UI層)               (ドメイン層)         (インフラ層)
+(デバッグ用)         (ドメイン層)         (インフラ層)
 ```
 - `debug_tools/` は `iris/` に依存するが、逆方向の依存はディレクトリ構造で物理禁止
 - `iris/kernel/` は純粋なビジネスロジックに閉じ、外部サービスは kernel 外から注入
@@ -67,13 +70,14 @@ Input / Kernel / Output の3プロセスに分解。IPCはWindows Named Pipes（
 - VectorStore: ONNXMiniLM_L6_V2 埋め込み、cosine類似度、統合スコア = vector*0.6 + bm25*0.4
 
 ## capability の追加ルール
-1. `iris/capabilities/<name>/server.py` に配置
-2. `register(registry: CapabilityRegistry)` 関数をエクスポート
-3. `@registry.register_func(...)` デコレータでツール定義
-4. `__init__.py` を各パッケージに配置（必須）
+1. `iris/capabilities/<name>/server.py` に配置（既存互換）または `iris/tools/builtins/`（ビルトイン）
+2. `@tool()` デコレータでツール定義（型ヒント→JSON Schema 自動生成）
+3. 旧 `register_func()` も当面動作可、新規追加は `@tool()` を推奨
+4. `register(registry)` 関数で `registry.register_decorated(fn)` をエクスポート（`discover_modules()` 用）
 5. `allowed_roles` パラメータで利用可能なモデルロールを制限（デフォルトは全てのロールで利用可）
-6. 新しいcapabilityを追加したら `.iris/data/iris_profile.md` の「My Capabilities」セクションも更新する
-7. テンプレート化されたワークフローは `.agents/skills/capability-pattern/SKILL.md` を参照（`skill` ツールでロード可能）
+6. `side_effect=True` で作用系ツール（結果を会話に戻さず短絡）
+7. 新しいcapabilityを追加したら `.iris/data/iris_profile.md` の「My Capabilities」セクションも更新する
+8. テンプレート化されたワークフローは `.agents/skills/capability-pattern/SKILL.md` を参照（`skill` ツールでロード可能）
 
 ## ドキュメント更新
 機能変更時のドキュメント更新手順は `.agents/skills/doc-sync/SKILL.md` を参照（`skill` ツールでロード可能）
@@ -81,8 +85,15 @@ Input / Kernel / Output の3プロセスに分解。IPCはWindows Named Pipes（
 - Architecture Decision Records (`docs/adr/*.md`)
 - 構造記憶 (`.iris/data/iris_profile.md`)
 - プロジェクトルール (`AGENTS.md`)
-- エージェントコンテキスト (`.agents/*.md`)
+- エージェント導線 (`.agents/README.md`, `.agents/project.md`)
 - Skills (`.agents/skills/*/SKILL.md`)
+
+## コーディングエージェントのコンテキスト運用
+- 常時読む情報はこの `AGENTS.md` と `.agents/README.md` を基本とする
+- `.agents/project.md` は責務境界やプロジェクト概要が必要な場合だけ読む
+- `.agents/skills/*/SKILL.md` は該当ワークフローを実行する場合だけ読む
+- 詳細設計は `docs/` の関連ファイルを必要範囲だけ参照し、`.agents/` に重複要約しない
+- 完了済みタスク、ブランチ状態、過去ログは Git / Issue / PR を一次情報とし、常設コンテキストに含めない
 
 ## コーディング規約
 - 変更差分はユーザーに提示→承認を得てから適用
@@ -97,9 +108,10 @@ Input / Kernel / Output の3プロセスに分解。IPCはWindows Named Pipes（
 ruff check .                          # lint
 ruff format --check .                 # format check
 ruff check --fix .                    # lint + auto-fix
-mypy .                                # type check
+mypy .                                # type check (mypy)
 mypy --install-types                  # 型スタブ初回インストール
-pytest tests/                         # 全テスト実行（179 tests, ~9秒）
+npx pyright .                         # type check (pyright)
+pytest tests/                         # 全テスト実行（252 tests, ~9秒）
 pytest tests/kernel/ -q              # kernelテストのみ
 pytest tests/memory/ -q              # memoryテストのみ
 ```

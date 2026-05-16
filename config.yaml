@@ -42,6 +42,10 @@ proactive:
     context: 0.15
     mood: 0.10
   speak_threshold: 0.20
+session:
+  host: 127.0.0.1
+  port: 9876
+  access_token: ""
 logging:
   file_level: INFO              # ファイルログのしきい値
   console_level: ""             # コンソールログのしきい値（""=出力なし、"INFO"/"DEBUG"等）

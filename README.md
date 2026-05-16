@@ -4,19 +4,32 @@ Iris は自律的に行動・進化できるAIアシスタントです。Python 
 
 ## アーキテクチャ
 
-Iris v0.3 は **3-Process アーキテクチャ** を採用しています。
+Iris は **Supervisor** と **Kernel Process** の2層構成です。
 
-```
-Input Process ── Named Pipe ──► Kernel Process ◄── Named Pipe ── Output Process
-  (CLI, API...)                    (EventBus,           (CLI, GUI...)
-                                   AgentKernel,
-                                   Conversation,
-                                   Proactive, Memory, LLM...)
+```mermaid
+flowchart TD
+    subgraph Supervisor["Supervisor (main.py)"]
+        Console["管理コンソール (stdin)  Ctrl+C"]
+    end
+    subgraph Kernel["Kernel Process (iris/kernel/)"]
+        Core["EventBus / AgentKernel / Conversation"]
+        Services["Proactive / Memory / LLM / Tools"]
+        IO["TcpListener / SessionManager"]
+    end
+    subgraph External["外部クライアント"]
+        Client["CLI / Web / 他言語クライアント"]
+    end
+
+    Console --> Kernel
+    Client <-->|TCP 127.0.0.1:9876| IO
 ```
 
-- **Kernel Process** — 中心的な状態・ビジネスロジックを保持 (`main.py`)
-- **Input Process** — ユーザー入力を受け付け、Kernel に送信 (`debug_tools/cli/input_main.py`)
-- **Output Process** — Kernel からの応答を受け取り表示 (`debug_tools/cli/output_main.py`)
+- **Supervisor** — Kernel プロセスの起動・監視・管理コンソール (`main.py`)
+- **Kernel Process** — 自律エージェントのビジネスロジック (`iris/kernel/`)
+- **TCP** — 外部クライアントから Kernel を制御する公開インターフェース。認証・入力・出力を1ポートで多重化
+
+シャットダウンは Supervisor の管理コンソール (`/shutdown`) または Ctrl+C で行う。
+TCP 経由でも `/shutdown` コマンドを送信可能。
 
 詳細な設計は [`docs/`](./docs/README.md) を参照。
 
@@ -66,6 +79,10 @@ model:
   models:
     - name: qwen3.5:9b
       roles: [default]
+session:
+  host: 127.0.0.1
+  port: 9876
+  access_token: ""              # 空文字の場合は検証スキップ
 ```
 
 2. OpenRouter 利用時は `.env` ファイルを作成
@@ -77,28 +94,35 @@ OPENROUTER_API_KEY=sk-or-...
 ### 起動
 
 ```powershell
-python main.py
+python main.py                          # Supervisor 起動
+python main.py --verbose                # 診断ログを stderr に出力
 ```
 
 ## プロジェクト構成
 
 ```
 iris-kernel/
-├── .iris/                       # 設定・データファイル
+├── .agents/                     # コーディングエージェント用導線・Skills
+├── .iris/                       # 設定・データ
 │   ├── config/personality_default.md
 │   └── data/                    # 記憶データ (runtime generated)
+├── docs/                        # 設計ドキュメント
+│   └── adr/                     # Architecture Decision Records
 ├── iris/                        # アプリケーションコア
-│   ├── kernel/                  # ドメイン層 (EventBus, AgentKernel, Conversation, etc.)
+│   ├── kernel/                  # ドメイン層
+│   │   ├── core/                # AgentKernel, KernelProcess, Factory
+│   │   ├── event/               # EventBus
+│   │   ├── io/                  # TcpListener, SessionManager, Authenticator, models
+│   │   └── services/            # Conversation, Proactive, LLMPipeline, Reflexion, etc.
 │   ├── llm/                     # LLM通信 (LLMBridge, OllamaProvider, OpenRouterProvider)
 │   ├── memory/                  # 記憶管理 (stores, vector_store, persona)
-│   ├── capabilities/            # ツール実装 (file_ops, code_exec, self_mod)
+│   ├── capabilities/            # ツール実装 (file_ops, code_exec, etc.)
+│   ├── tools/                   # 型安全ツール基盤 (@tool, ToolRegistry)
 │   ├── commands/                # スラッシュコマンド処理
 │   └── personality/             # プロンプト管理
-├── debug_tools/                 # デバッグ用 CLI (Input/Output Process)
-├── docs/                        # 設計ドキュメント
-├── tests/                       # テストスイート (179 tests, ~9秒)
+├── tests/                       # テストスイート (249 tests, ~8秒)
 ├── config.yaml                  # Iris 設定ファイル
-└── main.py                      # エントリーポイント (Kernel Process)
+└── main.py                      # Supervisor エントリーポイント
 ```
 
 ## 開発
@@ -115,8 +139,8 @@ pytest tests/                         # 全テスト実行
 ### Capability 追加
 
 1. `iris/capabilities/<name>/server.py` に配置
-2. `register(registry: CapabilityRegistry)` 関数をエクスポート
-3. `@registry.register_func(...)` デコレータでツール定義
+2. `@tool()` デコレータでツール定義（型ヒント→JSON Schema 自動生成）
+3. `register(registry)` 関数で `registry.register_decorated(fn)` をエクスポート
 4. `.iris/data/iris_profile.md` の `My Capabilities` を更新
 
 詳細は `.agents/skills/capability-pattern/SKILL.md` を参照。
@@ -127,9 +151,9 @@ pytest tests/                         # 全テスト実行
 
 | ドキュメント | 内容 |
 |---|---|
-| [architecture.md](./docs/architecture.md) | 全体アーキテクチャ — v0.3 3-Process分解 |
+| [architecture.md](./docs/architecture.md) | 全体アーキテクチャ — v0.3 1ポート統合 |
 | [event-bus.md](./docs/event-bus.md) | EventBus インターフェース仕様 |
-| [ipc-spec.md](./docs/ipc-spec.md) | IPC プロトコル仕様 (Named Pipe) |
+| [ipc-spec.md](./docs/ipc-spec.md) | IPC プロトコル仕様 (TCP, 1ポート多重) |
 | [agent-state.md](./docs/agent-state.md) | AgentState 状態遷移 |
 | [proactive-engine.md](./docs/proactive-engine.md) | ProactiveEngine 自律発話 |
 | [memory-manager.md](./docs/memory-manager.md) | 記憶システム |
@@ -140,9 +164,9 @@ pytest tests/                         # 全テスト実行
 - **言語**: Python 3.13+
 - **LLM**: Ollama / OpenRouter (Qwen3.5:9b 他)
 - **ベクトル検索**: ChromaDB + ONNX MiniLM-L6-v2
-- **IPC**: Windows Named Pipes (`AF_PIPE`)
+- **IPC**: TCP/IP (`AF_INET`) — 1ポート多重
 - **UI**: Rich (TUI), prompt_toolkit
-- **テスト**: pytest, hypothesis, mypy, ruff
+- **テスト**: pytest, mypy, ruff
 
 ## ライセンス
 

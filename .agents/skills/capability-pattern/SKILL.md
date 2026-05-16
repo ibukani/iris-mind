@@ -1,6 +1,6 @@
 ---
 name: capability-pattern
-description: Iris capability 追加の全手順を実行するワークフロー
+description: Iris capability 追加の最小ワークフロー
 license: MIT
 compatibility: opencode
 metadata:
@@ -8,74 +8,69 @@ metadata:
   workflow: iris-extension
 ---
 
-## What I do
+## Purpose
 
-新規 capability を Iris に追加する全手順をテンプレート化したものです。
+新規 capability（ツール）を Iris に追加するときだけ読む。
+詳細調査は既存 capability と `iris/tools/` の実装を一次情報にする。
 
 ## Steps
 
-### 1. Create `capabilities/<name>/server.py`
+1. 配置を決める
 
-以下のテンプレートに従ってファイルを作成する：
+- 通常: `iris/capabilities/<name>/server.py`
+- built-in: `iris/tools/builtins/` に実装し、`iris/kernel/core/factory.py` で明示登録
+
+2. `@tool()` で定義する
 
 ```python
-from capabilities.registry import CapabilityRegistry
+from iris.tools.decorator import tool
 
 
-def register(registry: CapabilityRegistry):
-    @registry.register_func(
-        name="<tool_name>",
-        description="<日本語の説明>",
-        parameters={
-            "<param>": {
-                "type": "string",
-                "description": "<日本語の説明>",
-                "required": True,
-            },
-        },
-    )
-    def my_tool(param: str) -> str:
-        # 実装
-        return f"Result: {param}"
+@tool(allowed_roles={"base", "smart"})
+def my_tool(param: str) -> str:
+    """日本語の説明。この docstring が tool description になる。"""
+    return f"Result: {param}"
 ```
 
-注意点：
-- `__init__.py` を各パッケージに配置（必須）
-- 戻り値は必ず `str`
-- パラメータの型ヒントは `str` を推奨（LLMがJSONを正しくマッピングできるように）
+- 型ヒントから JSON Schema が生成される
+- デフォルト値なしは required、ありは optional
+- パラメータ説明が必要な場合は `descriptions={...}` を使う
+- 会話に結果を戻さない作用系ツールは `side_effect=True` を使う
 
-### 2. Verify registry discovers it
+3. 自動発見用 `register()` を置く
 
-capability の `server.py` を作成すると、起動時に `CapabilityRegistry.discover_modules()` が自動発見する。
-手動での registry 登録は不要。
-
-### 3. Update `.iris/data/iris_profile.md`
-
-`## My Capabilities` セクションに追加する：
-```markdown
-- <tool_name> — <機能の簡潔な説明>
+```python
+def register(registry):
+    registry.register_decorated(my_tool)
 ```
 
-### 4. Sandbox test で動作確認
+複数ツールの場合は `iris.tools.decorator.register_decorated_tools` の既存利用例を参照する。
 
-テストには以下のいずれかを使用：
-- `sandbox_test` ツール（capabilities/self_mod 内）：既存コードの構文チェック
-- `run_python` ツール：実際の動作確認
+4. テストを追加する
 
-### 5. Run lint/typecheck
+- `tests/tools/` または関連領域の既存テストに追加
+- 最低限、`get_tool_def()` で name / schema / `side_effect` / `allowed_roles` を確認する
+- 実行時の副作用がある場合は Fake や一時ディレクトリで検証する
+
+5. ドキュメントと構造記憶を更新する
+
+- `.iris/data/iris_profile.md` の `## My Capabilities`
+- 必要なら `docs/` または `docs/adr/`
+- ドキュメント更新漏れ確認は `.agents/skills/doc-sync/SKILL.md`
+
+6. 検証してコミットする
 
 ```powershell
-ruff check . && ruff format --check . && mypy .
+ruff check .
+mypy .
+pytest tests/ -q
+git add .
+git commit -m "feat: <ツール名> capability を追加"
 ```
 
-### 6. Commit
+## Rules
 
-```powershell
-git add . && git commit -m "feat: <日本語で説明>"
-```
-
-## When to use me
-
-- 新しい capability を追加するとき
-- 既存 capability の構造を確認したいとき
-- Capability Registry のパターンに従いたいとき
+- 新規追加は `@tool()` を使う。旧 `register_func()` は既存互換用。
+- `__init__.py` を必要なパッケージに置く。
+- 戻り値は基本 `str`。
+- `allowed_roles` を指定しない場合は全ロール利用可。

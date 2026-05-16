@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Generator
+from typing import Any, cast
 
 from iris.kernel.agent_state import AgentStateManager, State
 from iris.kernel.config import ProactiveConfig
 from iris.kernel.event import EventBus, TimerTick
 from iris.kernel.services import ProactiveEngine
-from tests.conftest import FakeLLMProvider, FakeMemoryManager
+from tests.conftest import FakeLLMProvider, FakeMemoryManager, FakeSessionManager
 
 # ── Helper ────────────────────────────────────────────────────
 
@@ -19,11 +20,12 @@ def make_engine(
     llm: Any = None,
     fast_model: str | None = None,
     time_provider: Any = None,
+    session_manager: FakeSessionManager | None = None,
 ) -> ProactiveEngine:
     """Build ProactiveEngine with test defaults."""
     eb = event_bus or EventBus()
     st = state or AgentStateManager(event_bus=eb)
-    st._state = State.IDLE  # ensure idle
+    st._current = State.IDLE  # ensure idle
     cfg = config or ProactiveConfig(
         enabled=True,
         check_interval_sec=5.0,
@@ -33,10 +35,11 @@ def make_engine(
         tier1_auto_approve=True,
         tier2_confidence_threshold=0.7,
     )
-    mem = memory or FakeMemoryManager()
+    mem = cast(Any, memory or FakeMemoryManager())
     return ProactiveEngine(
         config=cfg,
         event_bus=eb,
+        session_manager=cast(Any, session_manager or FakeSessionManager()),
         state_manager=st,
         memory=mem,
         llm=llm,
@@ -45,7 +48,7 @@ def make_engine(
     )
 
 
-def step_time() -> float:
+def step_time() -> Generator[float]:
     """Simple monotonic time provider."""
     t = 1000.0
     while True:
@@ -452,15 +455,10 @@ class TestPublicAPI:
         gen = step_time()
         eb = EventBus()
         st = AgentStateManager(event_bus=eb)
-        engine = make_engine(config=config, event_bus=eb, state=st, time_provider=lambda: next(gen))
-        results: list[str] = []
-
-        def collect(event: Any) -> None:
-            results.append(event.content)
-
-        eb.subscribe("ProactiveSpeechEvent", collect)
+        sm = FakeSessionManager()
+        engine = make_engine(config=config, event_bus=eb, state=st, time_provider=lambda: next(gen), session_manager=sm)
         engine._on_timer_tick(TimerTick(timestamp=None, source="test", tick_count=0))
-        assert len(results) >= 1
+        assert len(sm.sent) >= 1
 
     # ── Model injection ────────────────────────────────────────
 

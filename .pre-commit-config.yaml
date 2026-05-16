@@ -11,6 +11,14 @@ repos:
       - id: mypy
         args: [--no-strict-optional, --ignore-missing-imports]
         additional_dependencies: [types-PyYAML]
+  - repo: local
+    hooks:
+      - id: pyright
+        name: pyright
+        entry: npx pyright .
+        language: system
+        pass_filenames: false
+        types: [python]
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
     hooks:

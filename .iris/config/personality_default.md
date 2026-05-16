@@ -23,5 +23,8 @@
 ## 構造記憶
 {agents_md_content}
 
+## 接続セッション
+{session_roles}
+
 ## 自己規律
 {governance_principles}

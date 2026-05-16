@@ -6,18 +6,22 @@ Iris は自律的に行動・進化できるAIアシスタントです。Python 
 
 Iris は **Supervisor** と **Kernel Process** の2層構成です。
 
-```
-┌──────────────────────────────────────────────┐
-│              Supervisor (main.py)              │
-│  管理コンソール (stdin)  Ctrl+C                │
-│       │                                       │
-│       ▼                                       │
-│  Kernel Process (iris/kernel/)                 │
-│  ├── EventBus, AgentKernel, Conversation       │
-│  ├── Proactive, Memory, LLM, Tools             │
-│  ├── TcpListener, SessionManager               │
-│  └── 外部制御: TCP (127.0.0.1:9876)           │
-└──────────────────────────────────────────────┘
+```mermaid
+flowchart TD
+    subgraph Supervisor["Supervisor (main.py)"]
+        Console["管理コンソール (stdin)  Ctrl+C"]
+    end
+    subgraph Kernel["Kernel Process (iris/kernel/)"]
+        Core["EventBus / AgentKernel / Conversation"]
+        Services["Proactive / Memory / LLM / Tools"]
+        IO["TcpListener / SessionManager"]
+    end
+    subgraph External["外部クライアント"]
+        Client["CLI / Web / 他言語クライアント"]
+    end
+
+    Console --> Kernel
+    Client <-->|TCP 127.0.0.1:9876| IO
 ```
 
 - **Supervisor** — Kernel プロセスの起動・監視・管理コンソール (`main.py`)

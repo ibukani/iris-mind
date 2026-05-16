@@ -141,6 +141,11 @@ iris/
 │   │   ├── __init__.py
 │   │   ├── reflexion.py       Reflexion（LLM分析）
 │   │   └── compression.py     ContextManager（会話要約）
+│   ├── personality/            # 人格: 性格特性・話し方（記憶から形成）
+│   │   ├── __init__.py
+│   │   ├── personality.py     Personality（システムプロンプト構築）
+│   │   ├── persona_data.py    PersonaData（動的管理）
+│   │   └── persona_profile.py PersonaProfile（話し方・性格）
 │   └── vector/
 │       ├── __init__.py
 │       └── store.py           VectorStore（ONNX埋め込み）
@@ -174,10 +179,7 @@ iris/
 │   ├── models.py
 │   └── registry.py
 │
-├── commands/                  # 削除（kernel/commands/ に移動）
-│
-└── personality/               # 変更なし
-    └── ...
+└── commands/                  # 削除（kernel/commands/ に移動）
 ```
 
 ## 4. グローバル EventBus 定義

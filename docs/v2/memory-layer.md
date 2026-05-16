@@ -136,6 +136,30 @@ class ContextManager:
     def clear(self) -> None
 ```
 
+### personality/
+
+**脳科学対応**: 前頭前野・連合野 — 人格は記憶の蓄積から形成される。
+現在 `iris/personality/` にあるが、v2 では `iris/memory/personality/` に移動する。
+
+```python
+class Personality:
+    """システムプロンプト構築。記憶層から特性・話し方・ユーザー好みを取得し、
+    LLM に注入するシステムプロンプトを組み立てる。
+    人格は記憶の一部 — Reflexion が抽出した特性が人格を更新する。
+    """
+    def build_system_prompt(self, agents_md_content, speech_style, personality_traits,
+                            user_preferences, governance_principles, session_roles) -> str
+
+class PersonaData:
+    """人格データの動的管理。JSON 永続化。"""
+
+class PersonaProfile:
+    """話し方・性格特性のプロファイル。Reflexion の結果を元に更新される。"""
+    def get_speech_style(self) -> str
+    def get_traits(self) -> str
+    def update_from_reflection(self, result: dict) -> None
+```
+
 ### vector/
 
 ```python

@@ -49,6 +49,7 @@ iris/                             ← アプリケーションコア
 │   ├── episodic/                 ← EpisodicStore（JSONL）
 │   ├── semantic/                 ← SemanticStore（ChromaDB+BM25）
 │   ├── hippocampal/              ← Reflexion + ContextManager（海馬: 整理・圧縮）
+│   ├── personality/              ← 人格: 性格特性・話し方（記憶から形成）
 │   └── vector/                   ← VectorStore（ONNX埋め込み）
 ├── agency/                       ← 高度認知: PFC+基底核+運動野
 │   ├── manager.py                ← AgencyManager（global↔internal橋渡し）
@@ -60,8 +61,7 @@ iris/                             ← アプリケーションコア
 │       └── pipeline.py           ← LLMPipeline（LLM+ツールループ）
 ├── llm/                          ← LLM通信（変更なし）
 ├── capabilities/                 ← ツール実装（変更なし）
-├── tools/                        ← @tool, ToolRegistry（変更なし）
-└── personality/                  ← プロンプト管理（変更なし）
+└── tools/                        ← @tool, ToolRegistry（変更なし）
 
 docs/                             ← 設計ドキュメント
 ├── adr/                          ← Architecture Decision Records
@@ -98,7 +98,7 @@ iris/llm/     ──→ EventBus     (LLM provider ファサード)
 | `kernel/` | 脳幹+視床下部 | プロセス管理、状態集約、Command、DI |
 | `io/` | 視床 | 入出力中継（TCP、セッション、認証） |
 | `event/` | 神経路 | グローバル EventBus（全層間通信） |
-| `memory/` | 感覚野+海馬+皮質 | 感覚バッファ、エピソード/意味記憶、Reflexion、圧縮 |
+| `memory/` | 感覚野+海馬+皮質 | 感覚バッファ、エピソード/意味記憶、Reflexion、圧縮、人格 |
 | `agency/` | PFC+基底核+運動野 | 意思決定（planning）と行動実行（execution） |
 
 ## Iris の記憶体系

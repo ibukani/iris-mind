@@ -60,19 +60,7 @@ Iris Kernel は TCP 経由で外部プロセスと通信する。このドキュ
 
 ## 4. 接続シーケンス
 
-### 4.1 接続モード
-
-`AuthMessage.mode` で指定:
-
-| mode | Description |
-|------|-------------|
-| `bidirectional` | 入出力双方向（デフォルト） |
-| `input_only` | 入力のみ。Kernelは出力を送信しない |
-| `output_only` | 出力のみ。Kernelは入力を受け付けない |
-
-### 4.2 セッションライフサイクル
-
-以下の1つの図が認証・状態遷移・通信をすべてカバーする。
+### 4.1 認証ハンドシェイク
 
 ```mermaid
 ---
@@ -85,37 +73,77 @@ config:
 ---
 sequenceDiagram
     autonumber
-    participant Client
+    participant Client as クライアント
+    participant Kernel as Iris Kernel
+
+    Client->>+Kernel: TCP connect (127.0.0.1:9876)
+    Client->>+Kernel: AuthMessage (msg_type: auth, mode: bidirectional)
+    Kernel-->>-Client: auth_success (session_id: "a1b2c3d4...")
+    Note over Client,Kernel: 以降、同一接続で双方向通信
+```
+
+### 4.2 接続モード
+
+`AuthMessage.mode` で指定:
+
+| モード | 説明 |
+|--------|------|
+| `bidirectional` | 入出力双方向（デフォルト） |
+| `input_only` | 入力のみ。Kernelは出力を送信しない |
+| `output_only` | 出力のみ。Kernelは入力を受け付けない |
+
+### 4.3 セッション状態遷移
+
+```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: "#e8f0fe"
+    secondaryColor: "#e6f4ea"
+---
+stateDiagram-v2
+    [*] --> AUTHENTICATING : TCP接続 / AuthMessage
+    AUTHENTICATING --> ACTIVE : 認証成功 (auth_success)
+    AUTHENTICATING --> [*] : 認証失敗 (auth_failure → 切断)
+```
+
+認証成功後、即座に ACTIVE 状態となる。Input/Output の個別接続は不要。
+
+### 4.4 完全な通信フロー（テキスト入力〜応答受信）
+
+```mermaid
+---
+config:
+  theme: base
+  themeVariables:
+    primaryColor: "#e8f0fe"
+    secondaryColor: "#e6f4ea"
+    tertiaryColor: "#fef7e0"
+---
+sequenceDiagram
+    autonumber
+    participant Client as クライアント
     participant Kernel as Iris Kernel
 
     rect rgb(232, 240, 254)
-        Note over Client,Kernel: AUTH
-        Client->>+Kernel: TCP connect
-        Client->>+Kernel: AuthMessage<br/><small>{msg_type: auth, mode: bidirectional}</small>
-
-        alt success
-            Kernel-->>-Client: auth_success<br/><small>{session_id: "sess001"}</small>
-            Note right of Kernel: state → ACTIVE
-        else failure
-            Kernel-->>Client: auth_failure<br/><small>{error_message: "invalid token"}</small>
-            Note right of Kernel: state → CLOSED<br/>connection dropped
-        end
+        Note over Client,Kernel: 認証
+        Client->>+Kernel: AuthMessage (msg_type: auth)
+        Kernel-->>-Client: auth_success (session_id: "sess001")
     end
 
     rect rgb(230, 245, 225)
-        Note over Client,Kernel: MESSAGE EXCHANGE
-        Client->>+Kernel: InputMessage<br/><small>{msg_type: text, content: "hello"}</small>
-        Kernel-->>Client: stream<br/><small>{content: "Hello"}</small>
-        Kernel-->>Client: stream<br/><small>{content: "! How"}</small>
-        Kernel-->>Client: stream<br/><small>{content: " can I help?"}</small>
-        Kernel-->>Client: stream<br/><small>{content: "", metadata: {done: true}}</small>
-        Kernel-->>-Client: response<br/><small>{content: "Hello! How can I help?"}</small>
+        Note over Client,Kernel: 入力・応答
+        Client->>+Kernel: InputMessage (msg_type: text, content: "hello")
+        Kernel-->>Client: stream (content: "Hello")
+        Kernel-->>Client: stream (content: "! How")
+        Kernel-->>Client: stream (content: " can I help?")
+        Kernel-->>Client: stream (content: "", metadata: {done: true})
+        Kernel-->>-Client: response (content: "Hello! How can I help?")
     end
 ```
 
-**State transitions**: `CLOSED → AUTHENTICATING → ACTIVE` on success, or `→ CLOSED` on failure.
-
-**Stream termination**: `msg_type="stream"` with `metadata.done == true` marks end of chunks. Followed by one `msg_type="response"` with the complete text.
+**出力ストリームの終端判定**: `msg_type="stream"` で `metadata.done == true` が最終チャンクの合図。その後 `msg_type="response"` で完全な応答テキストが届く。
 
 ## 5. メッセージ形式
 

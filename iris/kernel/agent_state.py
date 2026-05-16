@@ -20,7 +20,9 @@ class State(StrEnum):
     """AgentState の状態一覧。"""
 
     IDLE = "idle"
+    LISTENING = "listening"
     PROCESSING = "processing"
+    INTERRUPTED = "interrupted"
     PROACTIVE = "proactive"
     REFLECTING = "reflecting"
     THINKING = "thinking"
@@ -29,8 +31,10 @@ class State(StrEnum):
 
 # 許可される状態遷移テーブル
 _ALLOWED_TRANSITIONS: dict[State, set[State]] = {
-    State.IDLE: {State.PROCESSING, State.PROACTIVE, State.SLEEPING, State.THINKING},
-    State.PROCESSING: {State.IDLE, State.REFLECTING, State.SLEEPING, State.PROCESSING},
+    State.IDLE: {State.PROCESSING, State.PROACTIVE, State.SLEEPING, State.THINKING, State.LISTENING},
+    State.LISTENING: {State.PROCESSING, State.IDLE, State.SLEEPING},
+    State.PROCESSING: {State.IDLE, State.REFLECTING, State.SLEEPING, State.PROCESSING, State.INTERRUPTED},
+    State.INTERRUPTED: {State.IDLE, State.LISTENING, State.PROCESSING},
     State.PROACTIVE: {State.IDLE, State.SLEEPING},
     State.REFLECTING: {State.IDLE, State.PROCESSING},
     State.THINKING: {State.IDLE, State.PROCESSING},
@@ -51,10 +55,12 @@ class AgentStateManager:
     event_bus: EventBus
     timeout_seconds: dict[State, float] = field(
         default_factory=lambda: {
+            State.LISTENING: 30.0,
             State.PROCESSING: 60.0,
             State.PROACTIVE: 30.0,
             State.REFLECTING: 15.0,
             State.THINKING: 120.0,
+            State.INTERRUPTED: 5.0,
         }
     )
 
@@ -74,8 +80,14 @@ class AgentStateManager:
     def is_processing(self) -> bool:
         return self._current == State.PROCESSING
 
+    def is_listening(self) -> bool:
+        return self._current == State.LISTENING
+
     def is_proactive(self) -> bool:
         return self._current == State.PROACTIVE
+
+    def is_interrupted(self) -> bool:
+        return self._current == State.INTERRUPTED
 
     def is_sleeping(self) -> bool:
         return self._current == State.SLEEPING

@@ -7,7 +7,7 @@ from collections.abc import Callable
 from multiprocessing.connection import Connection, Listener
 from typing import Any
 
-from iris.kernel.io.models import INPUT_MSG_TYPES, TCP_HOST, TCP_PORT, InputMessage
+from iris.kernel.io.models import INPUT_MSG_TYPES, TCP_HOST, TCP_PORT, InputMessage, InterruptMessage
 
 from .session_manager import SessionManager
 
@@ -24,15 +24,20 @@ class TcpListener:
         self,
         session_manager: SessionManager,
         on_input: Callable[[InputMessage], None] | None = None,
+        on_interrupt: Callable[[str], None] | None = None,
     ) -> None:
         self._session_manager = session_manager
         self._on_input = on_input or self._noop
+        self._on_interrupt = on_interrupt
         self._listener: Any = None
         self._running = False
         self._thread: threading.Thread | None = None
 
     def set_on_input(self, on_input: Callable[[InputMessage], None]) -> None:
         self._on_input = on_input
+
+    def set_on_interrupt(self, on_interrupt: Callable[[str], None]) -> None:
+        self._on_interrupt = on_interrupt
 
     @staticmethod
     def _noop(_msg: InputMessage) -> None:
@@ -94,6 +99,12 @@ class TcpListener:
 
                 if mt == "ping":
                     self._handle_ping(conn, session_id)
+                    continue
+
+                if mt == "interrupt":
+                    im = InterruptMessage(**data)
+                    if self._on_interrupt:
+                        self._on_interrupt(im.session_id)
                     continue
 
                 if mt in INPUT_MSG_TYPES:

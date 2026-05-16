@@ -5,7 +5,9 @@
 | 状態 | 定数値 | 説明 |
 |------|--------|------|
 | IDLE | `idle` | 待機中。トリガー監視・自発発話の起点 |
+| LISTENING | `listening` | フラグメント受信中。quasi-sync 入力のバッファリング中 |
 | PROCESSING | `processing` | ユーザー入力を処理中。LLM応答・Tool呼び出し・ストリーミング |
+| INTERRUPTED | `interrupted` | 処理中に新入力で割り込み発生。即座に IDLE または LISTENING へ遷移 |
 | PROACTIVE | `proactive` | 自発発話を実行中。抑制ロジックのクールダウン開始 |
 | REFLECTING | `reflecting` | Reflexionによる自己反省処理中。PersonaProfile更新 |
 | THINKING | `thinking` | 思考モード（Chain-of-Thought）推論中 |
@@ -16,13 +18,19 @@
 ```mermaid
 stateDiagram-v2
     [*] --> IDLE : 起動/復帰
-    IDLE --> PROCESSING : ユーザー入力
+    IDLE --> PROCESSING : dispatch_text 入力
+    IDLE --> LISTENING : converse_text 入力（1st フラグメント）
     IDLE --> PROACTIVE : TimerTick + スコア>閾値
     IDLE --> THINKING : /think cmd
     IDLE --> SLEEPING : /sleep cmd
+    LISTENING --> IDLE : タイムアウト（空フラッシュ）
+    LISTENING --> PROCESSING : フラグメント完了 / 最大数到達 / タイムアウト
     PROCESSING --> IDLE : 正常完了/timeout/error
     PROCESSING --> REFLECTING : 処理完了
+    PROCESSING --> INTERRUPTED : 新 converse_text / interrupt 受信
     PROCESSING --> SLEEPING : /sleep cmd
+    INTERRUPTED --> IDLE : 割り込み完了
+    INTERRUPTED --> LISTENING : 次フラグメントが続く
     REFLECTING --> IDLE : 反省完了
     PROACTIVE --> IDLE : 発話完了
     PROACTIVE --> SLEEPING : /sleep cmd
@@ -32,14 +40,16 @@ stateDiagram-v2
 
 ## 遷移テーブル
 
-| From \ To | IDLE | PROCESSING | PROACTIVE | REFLECTING | THINKING | SLEEPING |
-|-----------|------|-----------|-----------|-----------|---------|---------|
-| **IDLE** | ○ | ○ | ○ | × | ○ | ○ |
-| **PROCESSING** | ○ | ○ | × | ○ | × | ○ |
-| **PROACTIVE** | ○ | × | × | × | × | ○ |
-| **REFLECTING** | ○ | ○ | × | × | × | × |
-| **THINKING** | ○ | ○ | × | × | × | × |
-| **SLEEPING** | ○ | × | × | × | × | × |
+| From \ To | IDLE | LISTENING | PROCESSING | INTERRUPTED | PROACTIVE | REFLECTING | THINKING | SLEEPING |
+|-----------|------|----------|-----------|------------|-----------|-----------|---------|---------|
+| **IDLE** | ○ | ○ | ○ | × | ○ | × | ○ | ○ |
+| **LISTENING** | ○ | ○ | ○ | × | × | × | × | ○ |
+| **PROCESSING** | ○ | × | ○ | ○ | × | ○ | × | ○ |
+| **INTERRUPTED** | ○ | ○ | ○ | ○ | × | × | × | × |
+| **PROACTIVE** | ○ | × | × | × | ○ | × | × | ○ |
+| **REFLECTING** | ○ | × | ○ | × | × | ○ | × | × |
+| **THINKING** | ○ | × | ○ | × | × | × | ○ | × |
+| **SLEEPING** | ○ | × | × | × | × | × | × | ○ |
 
 ※ ○ = 許可, × = 禁止
 
@@ -54,7 +64,8 @@ stateDiagram-v2
 イベント処理:
   - TimerTick → ProactiveEngine.check_trigger()
     → スコア >= threshold → PROACTIVE 遷移
-  - InputMessage (AgentKernel.on_input) → PROCESSING 遷移
+  - dispatch_text InputMessage → PROCESSING 遷移
+  - converse_text InputMessage（1st フラグメント）→ LISTENING 遷移
   - /sleep → SLEEPING 遷移
   - /think → THINKING 遷移
 
@@ -62,20 +73,51 @@ stateDiagram-v2
   - 上記イベントのいずれかを受信
 ```
 
+### LISTENING（フラグメント受信中）
+```
+入口アクション:
+  - InputBuffer でタイムアウト計測開始（デフォルト 800ms）
+  - フラグメント蓄積
+
+イベント処理:
+  - フラグメント追加 → InputBuffer.add_fragment()
+  - is_final=true or タイムアウト or max_fragments 到達
+    → PROCESSING 遷移（フラッシュ）
+  - /sleep → SLEEPING 遷移
+
+出口条件:
+  - フラッシュ → PROCESSING
+  - 空フラッシュ or interrupt → IDLE
+```
+
 ### PROCESSING（処理中）
 ```
 入口アクション:
   - タイムアウト計測開始（デフォルト 60秒）
-  - ユーザー入力バッファリング開始
+  - LLM応答生成開始
 
 イベント処理:
-  - 新規ユーザー入力 → 無視（IDLE 時のみ受付、AgentKernel がガード）
   - 正常完了 → IDLE 遷移、応答イベント発行
+  - 割り込み（新 converse_text / interrupt）→ INTERRUPTED 遷移
   - Quick Reflection 条件達成 → REFLECTING 遷移
   - /sleep → SLEEPING 遷移（処理中断）
 
 タイムアウト:
   - 60秒超過 → エラー応答 → IDLE 遷移
+```
+
+### INTERRUPTED（割り込み発生）
+```
+入口アクション:
+  - LLM ストリーム中断（InterruptToken.cancel()）
+  - "interrupted" state の OutputMessage 送信
+
+イベント処理:
+  - 割り込み完了 → IDLE 遷移（割り込んだ側が直後に処理開始）
+  - 次フラグメントが到着 → LISTENING 遷移
+
+出口条件:
+  - IDLE または LISTENING へ即座に遷移（滞留なし）
 ```
 
 ### PROACTIVE（自発発話中）
@@ -131,7 +173,9 @@ stateDiagram-v2
 
 | 状態 | タイムアウト | 動作 |
 |------|------------|------|
+| LISTENING | 30秒 | 空フラッシュ → IDLE |
 | PROCESSING | 60秒 | エラー応答 → IDLE |
+| INTERRUPTED | 5秒 | 強制終了 → IDLE |
 | PROACTIVE | 30秒 | 強制終了 → IDLE |
 | REFLECTING | 15秒 | 中断 → IDLE |
 | THINKING | 120秒 | 中断 → IDLE |

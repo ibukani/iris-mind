@@ -16,34 +16,52 @@ def make_manager() -> tuple[AgentStateManager, EventBus]:
 # Actual transition rules from agent_state.py _ALLOWED_TRANSITIONS
 # + same-state is always True (line 96)
 TRANSITION_TABLE: list[tuple[State, State, bool]] = [
+    # IDLE
     (State.IDLE, State.PROCESSING, True),
     (State.IDLE, State.PROACTIVE, True),
     (State.IDLE, State.SLEEPING, True),
     (State.IDLE, State.THINKING, True),
+    (State.IDLE, State.LISTENING, True),
     (State.IDLE, State.REFLECTING, False),
     (State.IDLE, State.IDLE, True),
+    # LISTENING
+    (State.LISTENING, State.PROCESSING, True),
+    (State.LISTENING, State.IDLE, True),
+    (State.LISTENING, State.SLEEPING, True),
+    (State.LISTENING, State.LISTENING, True),
+    # PROCESSING
     (State.PROCESSING, State.IDLE, True),
     (State.PROCESSING, State.REFLECTING, True),
     (State.PROCESSING, State.SLEEPING, True),
     (State.PROCESSING, State.PROCESSING, True),
+    (State.PROCESSING, State.INTERRUPTED, True),
     (State.PROCESSING, State.PROACTIVE, False),
     (State.PROCESSING, State.THINKING, False),
+    # INTERRUPTED
+    (State.INTERRUPTED, State.IDLE, True),
+    (State.INTERRUPTED, State.LISTENING, True),
+    (State.INTERRUPTED, State.PROCESSING, True),
+    (State.INTERRUPTED, State.INTERRUPTED, True),
+    # PROACTIVE
     (State.PROACTIVE, State.IDLE, True),
     (State.PROACTIVE, State.SLEEPING, True),
     (State.PROACTIVE, State.PROCESSING, False),
     (State.PROACTIVE, State.REFLECTING, False),
     (State.PROACTIVE, State.THINKING, False),
     (State.PROACTIVE, State.PROACTIVE, True),
+    # REFLECTING
     (State.REFLECTING, State.IDLE, True),
     (State.REFLECTING, State.PROCESSING, True),
     (State.REFLECTING, State.SLEEPING, False),
     (State.REFLECTING, State.THINKING, False),
     (State.REFLECTING, State.REFLECTING, True),
+    # THINKING
     (State.THINKING, State.IDLE, True),
     (State.THINKING, State.PROCESSING, True),
     (State.THINKING, State.SLEEPING, False),
     (State.THINKING, State.REFLECTING, False),
     (State.THINKING, State.THINKING, True),
+    # SLEEPING
     (State.SLEEPING, State.IDLE, True),
     (State.SLEEPING, State.PROCESSING, False),
     (State.SLEEPING, State.REFLECTING, False),

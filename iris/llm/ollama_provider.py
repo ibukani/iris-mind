@@ -67,10 +67,12 @@ class OllamaProvider:
         call_kwargs["think"] = enable_thinking
         if keep_alive is not None:
             call_kwargs["keep_alive"] = keep_alive
+
+        interrupt_token = kwargs.pop("interrupt_token", None)
         call_kwargs.update(kwargs)
 
         if on_token is not None:
-            return self._stream_chat(**call_kwargs, on_token=on_token)
+            return self._stream_chat(**call_kwargs, on_token=on_token, interrupt_token=interrupt_token)
 
         resp = self.client.chat(**call_kwargs)
         resp["message"] = _process_message(resp["message"])
@@ -79,6 +81,7 @@ class OllamaProvider:
     def _stream_chat(
         self,
         on_token: Callable[[str], None],
+        interrupt_token: Any = None,
         **kwargs: Any,
     ) -> dict:
         stream = self.client.chat(**kwargs)
@@ -86,6 +89,8 @@ class OllamaProvider:
         tool_calls = None
         final = None
         for chunk in stream:
+            if interrupt_token is not None and getattr(interrupt_token, "is_cancelled", False):
+                break
             if chunk.get("done"):
                 final = dict(chunk)
                 break

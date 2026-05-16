@@ -25,6 +25,7 @@ class LLMProvider(Protocol):
         max_tokens: int = 4096,
         tools: list[dict] | None = None,
         on_token: Callable[[str], None] | None = None,
+        interrupt_token: object | None = None,
         **kwargs: Any,
     ) -> dict: ...
 

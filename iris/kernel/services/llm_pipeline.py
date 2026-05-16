@@ -11,6 +11,7 @@ from iris.personality.personality import Personality
 
 from ..config import ModelConfig
 from .context import ContextManager
+from .interrupt_token import InterruptToken
 from .memory_manager import MemoryManager
 from .tool_executor import ToolExecutionEngine
 
@@ -75,6 +76,7 @@ class LLMPipeline:
         messages: list[dict],
         tools: list[dict] | None = None,
         on_token: Callable[[str], None] | None = None,
+        interrupt_token: InterruptToken | None = None,
     ) -> dict:
         system_prompt = self._build_system_prompt()
 
@@ -91,12 +93,14 @@ class LLMPipeline:
             temperature=self._model_config.temperature,
             tools=tools,
             on_token=on_token,
+            interrupt_token=interrupt_token,
         )
 
     def iterate_with_tools(
         self,
         messages: list[dict],
         on_token: Callable[[str], None] | None = None,
+        interrupt_token: InterruptToken | None = None,
     ) -> str:
         tools = self._get_tools()
         if tools and self._capability_checker and not self._capability_checker.supports_tools("default"):
@@ -106,8 +110,12 @@ class LLMPipeline:
         final_text = ""
 
         while iteration < self._max_tool_iterations:
+            if interrupt_token and interrupt_token.is_cancelled:
+                logger.debug("LLMPipeline: interrupted during tool iteration")
+                break
+
             iteration += 1
-            resp = self.call(messages, tools=tools, on_token=on_token)
+            resp = self.call(messages, tools=tools, on_token=on_token, interrupt_token=interrupt_token)
             msg = resp.get("message", {})
 
             if msg.get("tool_calls") and self._tool_executor is not None:

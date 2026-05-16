@@ -35,9 +35,9 @@ class ConversationService:
             return
 
         info = self._session_mgr.get_session_info(session_id)
-        if info and info.roles:
+        if info:
             roles_str = ", ".join(r.value for r in info.roles)
-            tagged = f"[from: {roles_str}] {content}"
+            tagged = f"[session: {session_id}, roles: {roles_str}] {content}"
         else:
             tagged = content
         self._messages.append({"role": "user", "content": tagged})

@@ -1,0 +1,49 @@
+{
+    "name": "Iris Kernel",
+    "build": {
+        "dockerfile": "Dockerfile",
+        "context": ".."
+    },
+    "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+    "workspaceFolder": "/workspace",
+    "forwardPorts": [11434],
+    "portsAttributes": {
+        "11434": {
+            "label": "Ollama",
+            "onAutoForward": "notify"
+        }
+    },
+    "customizations": {
+        "vscode": {
+            "extensions": [
+                "ms-python.python",
+                "ms-python.vscode-pylance",
+                "charliermarsh.ruff",
+                "ms-python.mypy-type-checker",
+                "tamasfe.even-better-toml",
+                "yzhang.markdown-all-in-one"
+            ],
+            "settings": {
+                "python.defaultInterpreterPath": "/usr/local/bin/python",
+                "python.terminal.activateEnvironment": true,
+                "[python]": {
+                    "editor.formatOnSave": true,
+                    "editor.codeActionsOnSave": {
+                        "source.fixAll.ruff": "explicit",
+                        "source.organizeImports.ruff": "explicit"
+                    },
+                    "editor.defaultFormatter": "charliermarsh.ruff"
+                },
+                "ruff.lineLength": 120,
+                "ruff.importStrategy": "fromExtension",
+                "mypy-type-checker.importStrategy": "fromExtension",
+                "files.watcherExclude": {
+                    "**/.iris/data/**": true,
+                    "**/__pycache__/**": true
+                }
+            }
+        }
+    },
+    "postCreateCommand": "pre-commit install && pip install -e \".[dev]\"",
+    "remoteUser": "root"
+}

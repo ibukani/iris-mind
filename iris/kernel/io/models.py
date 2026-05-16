@@ -7,9 +7,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
-PIPE_NAME_CONTROL = r"\\.\pipe\iris-kernel-control"
-PIPE_NAME_INPUT = r"\\.\pipe\iris-kernel-input"
-PIPE_NAME_OUTPUT = r"\\.\pipe\iris-kernel-output"
+TCP_HOST = "127.0.0.1"
+TCP_PORT = 9876
 
 
 class ConnectionMode(Enum):
@@ -29,7 +28,7 @@ class SessionState(Enum):
 
 class AuthMessage(BaseModel):
     msg_type: str = "auth"
-    auth_token: str | None = None
+    access_token: str | None = None
     mode: ConnectionMode = ConnectionMode.BIDIRECTIONAL
 
 
@@ -64,8 +63,6 @@ class SessionInfo(BaseModel):
     session_id: str
     state: SessionState
     mode: ConnectionMode = ConnectionMode.BIDIRECTIONAL
-    control_conn: Any | None = None
-    input_conn: Any | None = None
-    output_conn: Any | None = None
+    conn: Any | None = None
     created_at: datetime = Field(default_factory=datetime.now)
     last_activity: datetime = Field(default_factory=datetime.now)

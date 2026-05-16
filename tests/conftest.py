@@ -9,7 +9,7 @@ import pytest
 from iris.kernel.agent_state import AgentStateManager
 from iris.kernel.config import Config, ModelConfig, ProactiveConfig
 from iris.kernel.event import EventBus
-from iris.kernel.io.models import OutputMessage
+from iris.kernel.io.models import ConnectionMode, OutputMessage
 
 # ── Fake LLM Provider ─────────────────────────────────────────
 
@@ -208,19 +208,19 @@ class FakePersonaProfile:
 # ── Fake AgentsMdStore ────────────────────────────────────────
 
 
-class FakeOutputListener:
+class FakeSessionManager:
     def __init__(self) -> None:
         self.sent: list[OutputMessage] = []
-        self.started = False
 
-    def start(self, pipe_address: str = "") -> None:
-        self.started = True
-
-    def stop(self) -> None:
-        self.started = False
-
-    def send(self, message: OutputMessage) -> None:
+    def route_output(self, session_id: str, message: OutputMessage) -> None:
+        message.session_id = session_id
         self.sent.append(message)
+
+    def is_session_active(self, session_id: str) -> bool:
+        return bool(session_id)
+
+    def get_session_mode(self, session_id: str) -> ConnectionMode | None:
+        return ConnectionMode.BIDIRECTIONAL if session_id else None
 
 
 class FakeAgentsMdStore:

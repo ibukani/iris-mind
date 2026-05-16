@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from iris.kernel.io.models import OutputMessage
-from iris.kernel.io.output_listener import OutputListener
+from iris.kernel.io.session_manager import SessionManager
 from iris.llm.provider import LLMProvider
 
 from ..agent_state import AgentStateManager, State
@@ -116,7 +116,7 @@ class ProactiveEngine:
         self,
         config: ProactiveConfig,
         event_bus: EventBus,
-        output_listener: OutputListener,
+        session_manager: SessionManager,
         state_manager: AgentStateManager,
         memory: MemoryManager,
         llm: LLMProvider | None = None,
@@ -126,7 +126,7 @@ class ProactiveEngine:
     ) -> None:
         self._config = config
         self._event_bus = event_bus
-        self._output = output_listener
+        self._session_mgr = session_manager
         self._state = state_manager
         self._memory = memory
         self._llm = llm
@@ -454,7 +454,7 @@ class ProactiveEngine:
         s.proactive_timestamps.append(now)
         self._ignore_recorded_for_proactive = False
 
-        self._output.send(OutputMessage(msg_type="proactive", content=result.content))
+        self._session_mgr.route_output("", OutputMessage(msg_type="proactive", content=result.content))
         logger.info(
             "Proactive speech [T%s] confidence=%.2f trigger=%s: %s",
             result.tier,

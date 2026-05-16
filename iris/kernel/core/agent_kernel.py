@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Any
 
 from iris.kernel.io.models import InputMessage, OutputMessage
-from iris.kernel.io.output_listener import OutputListener
+from iris.kernel.io.session_manager import SessionManager
 
 from ..agent_state import AgentStateManager, State
 from ..config import ProactiveConfig
@@ -82,14 +82,14 @@ class AgentKernel:
         proactive: ProactiveEngine,
         memory: MemoryManager,
         config: ProactiveConfig,
-        output_manager: OutputListener,
+        session_manager: SessionManager,
     ) -> None:
         self._event_bus = event_bus
         self._state = state_manager
         self._proactive = proactive
         self._memory = memory
         self._config = config
-        self._output = output_manager
+        self._session_mgr = session_manager
         self._anomaly = AnomalyDetector()
         self._running = False
         self._timer_thread: threading.Thread | None = None
@@ -160,7 +160,7 @@ class AgentKernel:
                 detail="自発発話の頻度が高すぎます",
             )
             self._event_bus.publish(ev)
-            self._output.send(OutputMessage(msg_type="error", content=ev.detail))
+            self._session_mgr.route_output("", OutputMessage(msg_type="error", content=ev.detail))
             if flag == "frequency_exceeded":
                 self._proactive.set_cooldown(300.0)
 
@@ -177,7 +177,7 @@ class AgentKernel:
             )
             self._event_bus.publish(ev)
             if issue["severity"] == "warning":
-                self._output.send(OutputMessage(msg_type="error", content=ev.detail))
+                self._session_mgr.route_output("", OutputMessage(msg_type="error", content=ev.detail))
 
     def evaluate_proactive_request(self, _scores: dict[str, float], confidence: float, trigger_type: str) -> bool:
         anomaly_flags = self._anomaly.check_frequency()

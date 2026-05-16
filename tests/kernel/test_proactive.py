@@ -7,7 +7,7 @@ from iris.kernel.agent_state import AgentStateManager, State
 from iris.kernel.config import ProactiveConfig
 from iris.kernel.event import EventBus, TimerTick
 from iris.kernel.services import ProactiveEngine
-from tests.conftest import FakeLLMProvider, FakeMemoryManager, FakeOutputListener
+from tests.conftest import FakeLLMProvider, FakeMemoryManager, FakeSessionManager
 
 # ── Helper ────────────────────────────────────────────────────
 
@@ -20,7 +20,7 @@ def make_engine(
     llm: Any = None,
     fast_model: str | None = None,
     time_provider: Any = None,
-    output_manager: FakeOutputListener | None = None,
+    session_manager: FakeSessionManager | None = None,
 ) -> ProactiveEngine:
     """Build ProactiveEngine with test defaults."""
     eb = event_bus or EventBus()
@@ -39,7 +39,7 @@ def make_engine(
     return ProactiveEngine(
         config=cfg,
         event_bus=eb,
-        output_listener=cast(Any, output_manager or FakeOutputListener()),
+        session_manager=cast(Any, session_manager or FakeSessionManager()),
         state_manager=st,
         memory=mem,
         llm=llm,
@@ -455,10 +455,10 @@ class TestPublicAPI:
         gen = step_time()
         eb = EventBus()
         st = AgentStateManager(event_bus=eb)
-        out = FakeOutputListener()
-        engine = make_engine(config=config, event_bus=eb, state=st, time_provider=lambda: next(gen), output_manager=out)
+        sm = FakeSessionManager()
+        engine = make_engine(config=config, event_bus=eb, state=st, time_provider=lambda: next(gen), session_manager=sm)
         engine._on_timer_tick(TimerTick(timestamp=None, source="test", tick_count=0))
-        assert len(out.sent) >= 1
+        assert len(sm.sent) >= 1
 
     # ── Model injection ────────────────────────────────────────
 

@@ -4,7 +4,7 @@ import logging
 from collections.abc import Callable
 
 from iris.kernel.io.models import OutputMessage
-from iris.kernel.io.output_listener import OutputListener
+from iris.kernel.io.session_manager import SessionManager
 
 from .context import ContextManager
 from .llm_pipeline import LLMPipeline
@@ -16,13 +16,13 @@ logger = logging.getLogger(__name__)
 class ConversationService:
     def __init__(
         self,
-        output_listener: OutputListener,
+        session_manager: SessionManager,
         llm_pipeline: LLMPipeline,
         reflexion_manager: ReflexionManager | None = None,
         context_manager: ContextManager | None = None,
         context_window: int = 0,
     ) -> None:
-        self._output = output_listener
+        self._session_mgr = session_manager
         self._llm_pipeline = llm_pipeline
         self._reflexion_manager = reflexion_manager
         self._context_manager = context_manager
@@ -35,14 +35,16 @@ class ConversationService:
             return
         self._messages.append({"role": "user", "content": content})
 
-        self._output.send(
+        self._session_mgr.route_output(
+            "",
             OutputMessage(msg_type="stream", content=""),
         )
 
         try:
             response_text = self._llm_pipeline.iterate_with_tools(
                 self._messages,
-                on_token=lambda delta: self._output.send(
+                on_token=lambda delta: self._session_mgr.route_output(
+                    "",
                     OutputMessage(msg_type="stream", content=delta),
                 ),
             )
@@ -52,8 +54,8 @@ class ConversationService:
 
         self._messages.append({"role": "assistant", "content": response_text})
 
-        self._output.send(OutputMessage(msg_type="stream", content="", metadata={"done": True}))
-        self._output.send(OutputMessage(msg_type="response", content=response_text))
+        self._session_mgr.route_output("", OutputMessage(msg_type="stream", content="", metadata={"done": True}))
+        self._session_mgr.route_output("", OutputMessage(msg_type="response", content=response_text))
 
         if on_complete is not None:
             on_complete(response_text)

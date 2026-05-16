@@ -152,11 +152,10 @@ class MemoryConfig(BaseModel):
 
 
 class SessionConfig(BaseModel):
+    host: str = "127.0.0.1"
+    port: int = 9876
+    access_token: str = ""
     auth_timeout_sec: int = 30
-    pairing_timeout_sec: int = 60
-    pipe_name_control: str = r"\\.\pipe\iris-kernel-control"
-    pipe_name_input: str = r"\\.\pipe\iris-kernel-input"
-    pipe_name_output: str = r"\\.\pipe\iris-kernel-output"
 
 
 class LoggingConfig(BaseModel):

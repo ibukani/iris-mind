@@ -13,31 +13,21 @@
 
 ## 状態遷移図
 
-```
-                 ┌──────────────┐
-                 │              │ TimerTick + スコア>閾値
-                 │  ┌─────┐     │
-                 ▼  │     │     ▼
-              ┌─────┐    ┌──────────┐     ┌──────────┐     ┌──────────┐
-  ──────────► │ IDLE │───►│PROCESSING│────►│REFLECTING│     │THINKING  │
-  起動/復帰    └──┬──┘    └──────────┘     └──────────┘     └──────────┘
-                 │         ▲   │                            │
-                 │         │   │ 正常完了                    │ 推論完了
-                 │         │   │ /timeout                    │ /ユーザー入力
-                 │         │   │ /error                      ▼
-                 │    /sleep│   │                     ┌──────────┐
-                 │         │   ├─────────────────────►│  IDLE   │
-                 │         │   │                      └──────────┘
-                 │         ▼   │
-                 │    ┌──────────┐    ┌───────────┐
-                 │    │PROACTIVE │───►│SLEEPING   │
-                 │    └──────────┘    └─────┬─────┘
-                 │         ▲                │
-                 │         │                │ /wakeup or
-                 │         │                │ timeout
-                 │    /sleep│                │
-                 │         │                │
-                 └─────────┘────────────────┘
+```mermaid
+stateDiagram-v2
+    [*] --> IDLE : 起動/復帰
+    IDLE --> PROCESSING : ユーザー入力
+    IDLE --> PROACTIVE : TimerTick + スコア>閾値
+    IDLE --> THINKING : /think cmd
+    IDLE --> SLEEPING : /sleep cmd
+    PROCESSING --> IDLE : 正常完了/timeout/error
+    PROCESSING --> REFLECTING : 処理完了
+    PROCESSING --> SLEEPING : /sleep cmd
+    REFLECTING --> IDLE : 反省完了
+    PROACTIVE --> IDLE : 発話完了
+    PROACTIVE --> SLEEPING : /sleep cmd
+    SLEEPING --> IDLE : /wakeup or timeout
+    THINKING --> IDLE : 推論完了/ユーザー入力
 ```
 
 ## 遷移テーブル

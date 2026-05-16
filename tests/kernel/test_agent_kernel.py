@@ -10,7 +10,7 @@ from iris.kernel.core import AgentKernel, AnomalyDetector
 from iris.kernel.event import AgentAnomalyEvent, EventBus
 from iris.kernel.io.models import InputMessage
 from iris.kernel.services import ProactiveEngine, ProactiveResult
-from tests.conftest import FakeMemoryManager, FakeOutputListener
+from tests.conftest import FakeMemoryManager, FakeSessionManager
 
 # ── AnomalyDetector ──────────────────────────────────────────
 
@@ -99,10 +99,10 @@ def kernel_setup() -> tuple[AgentKernel, EventBus, AgentStateManager, FakeMemory
     eb = EventBus()
     st = AgentStateManager(event_bus=eb, timeout_seconds=cast(dict, 99999))
     mem = cast(Any, FakeMemoryManager())
-    out = cast(Any, FakeOutputListener())
+    sm = cast(Any, FakeSessionManager())
     cfg = ProactiveConfig(enabled=False)
-    engine = ProactiveEngine(config=cfg, event_bus=eb, output_listener=out, state_manager=st, memory=mem)
-    kernel = AgentKernel(event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg, output_manager=out)
+    engine = ProactiveEngine(config=cfg, event_bus=eb, session_manager=sm, state_manager=st, memory=mem)
+    kernel = AgentKernel(event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg, session_manager=sm)
     engine.set_approval_callback(kernel.evaluate_proactive_request)
     return kernel, eb, st, mem
 
@@ -115,11 +115,11 @@ class TestAgentKernel:
         eb = EventBus()
         st = AgentStateManager(event_bus=eb)
         mem = cast(Any, FakeMemoryManager())
-        out = cast(Any, FakeOutputListener())
+        sm = cast(Any, FakeSessionManager())
         cfg = ProactiveConfig(enabled=False)
-        engine = ProactiveEngine(config=cfg, event_bus=eb, output_listener=out, state_manager=st, memory=mem)
+        engine = ProactiveEngine(config=cfg, event_bus=eb, session_manager=sm, state_manager=st, memory=mem)
         kernel = AgentKernel(
-            event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg, output_manager=out
+            event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg, session_manager=sm
         )
         kernel.startup()
         assert kernel._running is True
@@ -129,11 +129,11 @@ class TestAgentKernel:
         eb = EventBus()
         st = AgentStateManager(event_bus=eb)
         mem = cast(Any, FakeMemoryManager())
-        out = cast(Any, FakeOutputListener())
+        sm = cast(Any, FakeSessionManager())
         cfg = ProactiveConfig(enabled=False)
-        engine = ProactiveEngine(config=cfg, event_bus=eb, output_listener=out, state_manager=st, memory=mem)
+        engine = ProactiveEngine(config=cfg, event_bus=eb, session_manager=sm, state_manager=st, memory=mem)
         kernel = AgentKernel(
-            event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg, output_manager=out
+            event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg, session_manager=sm
         )
         kernel.startup()
         kernel.shutdown()
@@ -188,11 +188,11 @@ class TestAgentKernel:
         eb = EventBus()
         st = AgentStateManager(event_bus=eb)
         mem = cast(Any, FakeMemoryManager())
-        out = cast(Any, FakeOutputListener())
+        sm = cast(Any, FakeSessionManager())
         cfg = ProactiveConfig(enabled=False)
-        engine = ProactiveEngine(config=cfg, event_bus=eb, output_listener=out, state_manager=st, memory=mem)
+        engine = ProactiveEngine(config=cfg, event_bus=eb, session_manager=sm, state_manager=st, memory=mem)
         kernel = AgentKernel(
-            event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg, output_manager=out
+            event_bus=eb, state_manager=st, proactive=engine, memory=mem, config=cfg, session_manager=sm
         )
         anomalies: list[AgentAnomalyEvent] = []
 
@@ -205,5 +205,5 @@ class TestAgentKernel:
                 ProactiveResult(content="x", tier=1, confidence=0.5, trigger_type="time", reasoning="test")
             )
         assert any(a.anomaly_type == "frequency_exceeded" for a in anomalies)
-        # Anomaly should also send error to OutputManager
-        assert any(m.msg_type == "error" for m in out.sent)
+        # Anomaly should also send error via session manager
+        assert any(m.msg_type == "error" for m in sm.sent)

@@ -7,6 +7,12 @@
       "skillPath": "skills/mermaid-diagrams/SKILL.md",
       "computedHash": "b6c206a3cab0333a1d3d3cf27114099d0d5f25eb07d86c8f12472b7aa7d59a4c"
     },
+    "pretty-mermaid": {
+      "source": "imxv/pretty-mermaid-skills",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "8fbeb58625ef4f3d50338ca5c77f62b51e75606acb524cb44a7b1d596277fc41"
+    },
     "python-patterns": {
       "source": "affaan-m/everything-claude-code",
       "sourceType": "github",

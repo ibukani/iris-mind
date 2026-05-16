@@ -110,11 +110,10 @@ trigger_weights:
 
 | フィールド | 型 | デフォルト | 説明 |
 |-----------|-----|-----------|------|
+| host | str | "127.0.0.1" | バインドアドレス |
+| port | int | 9876 | TCPポート番号 |
+| access_token | str | "" | アクセストークン（空文字 = 検証スキップ） |
 | auth_timeout_sec | int | 30 | 認証タイムアウト（秒） |
-| pairing_timeout_sec | int | 60 | ペアリングタイムアウト（秒） |
-| pipe_name_control | str | `\\.\pipe\iris-kernel-control` | 制御パイプ名 |
-| pipe_name_input | str | `\\.\pipe\iris-kernel-input` | 入力パイプ名 |
-| pipe_name_output | str | `\\.\pipe\iris-kernel-output` | 出力パイプ名 |
 
 ## LoggingConfig
 

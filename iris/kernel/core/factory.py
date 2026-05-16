@@ -15,10 +15,8 @@ from iris.personality.personality import Personality
 from ..agent_state import AgentStateManager
 from ..config import Config
 from ..event.event_bus import EventBus
-from ..io.control_listener import ControlListener
-from ..io.input_listener import InputListener
-from ..io.output_listener import OutputListener
-from ..io.session_manager import SessionManager
+from ..io.session_manager import SessionConfig, SessionManager
+from ..io.tcp_listener import TcpListener
 from ..services.context import ContextManager
 from ..services.conversation import ConversationService
 from ..services.llm_pipeline import LLMPipeline
@@ -37,9 +35,7 @@ class KernelContext:
     conversation: ConversationService
     proactive: ProactiveEngine
     cmd_handler: CommandHandler
-    output_listener: OutputListener
-    input_listener: InputListener
-    control_listener: ControlListener
+    tcp_listener: TcpListener
     session_mgr: SessionManager
     shutdown_requested: bool = False
 
@@ -52,10 +48,8 @@ class KernelFactory:
         # ============================================================
         event_bus = EventBus()
         state = AgentStateManager(event_bus=event_bus)
-        session_mgr = SessionManager()
-        output_listener = OutputListener(session_manager=session_mgr)
-        input_listener = InputListener(session_manager=session_mgr)
-        control_listener = ControlListener(session_manager=session_mgr)
+        session_mgr = SessionManager(config=SessionConfig(**config.session.model_dump()))
+        tcp_listener = TcpListener(session_manager=session_mgr)
 
         # ============================================================
         # Phase 2: 記憶レイヤー
@@ -94,7 +88,7 @@ class KernelFactory:
         # 依存: Phase 1 (output) + Phase 5 (llm_pipeline, reflexion_mgr, context_mgr)
         # ============================================================
         conversation = ConversationService(
-            output_listener=output_listener,
+            session_manager=session_mgr,
             llm_pipeline=llm_pipeline,
             reflexion_manager=reflexion_mgr,
             context_manager=context_mgr,
@@ -111,7 +105,7 @@ class KernelFactory:
             state,
             memory,
             llm,
-            output_listener,
+            session_mgr,
         )
 
         # ============================================================
@@ -133,15 +127,13 @@ class KernelFactory:
             conversation=conversation,
             proactive=proactive,
             cmd_handler=cmd_handler,
-            output_listener=output_listener,
-            input_listener=input_listener,
+            tcp_listener=tcp_listener,
             session_mgr=session_mgr,
-            control_listener=control_listener,
         )
 
         from ..services.router import InputRouter
 
-        input_listener.set_on_input(InputRouter(ctx))
+        tcp_listener.set_on_input(InputRouter(ctx))
 
         # カーネル起動は全接続完了後に実行
         kernel.startup()
@@ -188,12 +180,12 @@ class KernelFactory:
         state: AgentStateManager,
         memory: MemoryManager,
         llm: LLMBridge,
-        output: OutputListener,
+        session_mgr: SessionManager,
     ) -> tuple[ProactiveEngine, AgentKernel]:
         proactive = ProactiveEngine(
             config=config.proactive,
             event_bus=event_bus,
-            output_listener=output,
+            session_manager=session_mgr,
             state_manager=state,
             memory=memory,
             llm=llm,
@@ -205,7 +197,7 @@ class KernelFactory:
             proactive=proactive,
             memory=memory,
             config=config.proactive,
-            output_manager=output,
+            session_manager=session_mgr,
         )
         proactive.set_approval_callback(kernel.evaluate_proactive_request)
         return proactive, kernel

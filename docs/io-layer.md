@@ -1,5 +1,7 @@
 # Iris v2 IO 層
 
+> **注記**: 脳科学・神経科学の用語との対応付けは設計指針であり、厳密な解剖学的正確性を保証するものではありません。
+
 **脳科学対応**: 視床（Thalamus）
 
 ## 責務
@@ -90,7 +92,7 @@ sequenceDiagram
     IO->>EB: OutputSent(session_id, message_id)
 ```
 
-## models.py（v0.3 から継承）
+## models.py
 
 ```python
 INPUT_MSG_TYPES = frozenset({"dispatch_text", "converse_text", "command", "system"})
@@ -108,7 +110,7 @@ class OutputMessage(BaseModel)
 class SessionInfo(BaseModel)
 ```
 
-**準同期入力（converse_text）の扱い**: v2 では入力種別の区別を IO 層で行わず、すべて `InputReceived` として Memory 層に送る。Memory/sensory/InputBuffer が断片的入力を統合する。`msg_type` はメタデータとして保持される。
+**準同期入力（converse_text）の扱い**: 入力種別の区別を IO 層で行わず、すべて `InputReceived` として Memory 層に送る。Memory/sensory/InputBuffer が断片的入力を統合する。`msg_type` はメタデータとして保持される。
 
 ## transport/
 
@@ -166,14 +168,4 @@ class Authenticator:
 | Outbound | IO ← EventBus | `OutputRequest(session_id, msg)` | 出力要求 |
 | Outbound | IO → EventBus | `OutputSent(session_id, msg_id)` | 出力完了通知 |
 
-## v0.3 からの変更点
 
-| v0.3 | v2 |
-|------|----|
-| kernel/io/models.py | io/models.py に移動（内容は継承） |
-| kernel/io/tcp_listener.py | io/transport/tcp_listener.py に移動 |
-| kernel/io/session_manager.py | io/session/manager.py に移動 |
-| kernel/io/authenticator.py | io/auth/authenticator.py に移動 |
-| kernel/io/input_buffer.py | memory/sensory/buffer.py に移動 |
-| InputRouter (services/router.py) | 削除 → IOManager が代行（+ EventBus 経由） |
-| msg_type による分岐 (dispatch/converse) | IO 層では行わない。Memory 層の sensory buffer に委譲 |

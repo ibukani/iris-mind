@@ -1,5 +1,7 @@
 # Iris v2 Agency 層
 
+> **注記**: 脳科学・神経科学の用語との対応付けは設計指針であり、厳密な解剖学的正確性を保証するものではありません。
+
 **脳科学対応**: 前頭前野（PFC）+ 大脳基底核（BG）+ 運動野
 
 ## 責務
@@ -190,17 +192,4 @@ sequenceDiagram
     end
 ```
 
-## v0.3 / 経緯 からの変更点
 
-| 項目 | 移行先 |
-|------|--------|
-| ConversationService | 解体 → PlanningManager + ExecutionManager |
-| LLMPipeline (services/) | execution/pipeline.py に移動 |
-| ProactiveEngine | 解体: Memory(rate-limit) + Planning(scoring+threshold) + Execution(inhibition) |
-| TimerGate | 削除（rate-limit→Memory, scoring+threshold→Planning） |
-| ProactiveScoring | → memory/scoring.py → agency/planning/scoring.py（PFC所属に確定） |
-| ContextManager | → memory/hippocampal/compression.py → iris/llm/context_window.py |
-| ToolExecutionEngine (services/) | execution/ 配下に移動 |
-| ReflexionManager (services/) | memory/hippocampal/ に移動 |
-| Internal Bus | agency/bus.py |
-| AgencyManager | 橋渡し → 現在は compact_context のみ中継 |

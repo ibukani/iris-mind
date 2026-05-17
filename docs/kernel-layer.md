@@ -1,5 +1,7 @@
 # Iris v2 Kernel 層
 
+> **注記**: 脳科学・神経科学の用語との対応付けは設計指針であり、厳密な解剖学的正確性を保証するものではありません。
+
 **脳科学対応**: 脳幹 + 視床下部
 
 ## 責務
@@ -177,15 +179,4 @@ class KernelContext:
     shutdown_requested: bool = False
 ```
 
-## v0.3 からの変更点
 
-| v0.3 | v2 |
-|------|----|
-| kernel/event/ | iris/event/ に分離 |
-| kernel/io/ | iris/io/ に分離 |
-| kernel/services/ | 全ファイル削除（各層に分散） |
-| kernel/core/agent_kernel.py | 削除（状態管理は KernelManager に集約） |
-| kernel/core/process.py | kernel/process.py に維持（純粋プロセス管理） |
-| kernel/core/supervisor.py | kernel/supervisor.py に維持 |
-| kernel/core/factory.py | kernel/factory.py に維持（DI は肥大化） |
-| iris/commands/ | kernel/commands/ に移動 |

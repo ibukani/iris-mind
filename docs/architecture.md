@@ -1,5 +1,7 @@
 # Iris v2 アーキテクチャ設計書
 
+> **注記**: 本ドキュメントにおける脳科学・神経科学の用語と層分割の対応付けは、AI による文献調査を参考にした設計指針です。厳密な解剖学的・神経科学的正確性を保証するものではありません。
+
 ## 1. 全体像
 
 Iris v2 は脳科学・神経科学の構造を参考にした層分割アーキテクチャを採用する。
@@ -298,18 +300,4 @@ flowchart LR
 - Agency の planning → execution は内部 EventBus を介する
 - IO 層は TCP への依存を持つが、`io/transport/` に閉じる
 
-## 7. 旧 v0.3 からの変更点一覧
 
-| 項目 | v0.3 | v2 |
-|------|------|----|
-| kernel/services/ | 13ファイル全て | 解体、各層に分散 |
-| kernel/event/ | kernel 内 | iris/event/ に分離 |
-| kernel/io/ | kernel 内 | iris/io/ に分離 |
-| ConversationService | 中央集権 | planning + execution に分散 |
-| ProactiveEngine | 単一サービス | 解体: Memory(rate-limit) + Planning(scoring+threshold) + Execution(inhibition) |
-| Reflexion | kernel/services/ | memory/hippocampal/ |
-| ContextManager | kernel/services/ | → memory/hippocampal/ → iris/llm/context_window.py |
-| TimerGate | agency/planning/ | 削除（責務分散完了） |
-| ProactiveScoring | agency/planning/ | → memory/scoring.py → agency/planning/scoring.py |
-| InputBuffer | kernel/io/ | memory/sensory/ |
-| CommandHandler | iris/commands/ | kernel/commands/ |

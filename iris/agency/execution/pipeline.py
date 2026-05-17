@@ -15,6 +15,17 @@ from iris.memory.stores import AgentsMdStore
 
 logger = logging.getLogger(__name__)
 
+_SITUATION_INSTRUCTIONS: dict[str, str] = {
+    "proactive": (
+        "## 状況: 自発的な一声\n"
+        "時間帯や会話の流れに合わせて、自然に声をかけてください。"
+    ),
+}
+
+_SITUATION_USER_MESSAGES: dict[str, str] = {
+    "proactive": "一声かけてください。",
+}
+
 
 class LLMPipeline:
     def __init__(
@@ -95,21 +106,19 @@ class LLMPipeline:
 
     def _generate_without_tools(self, plan: dict, max_tokens: int | None, temperature: float) -> str:
         system_prompt = self._build_system_prompt()
-        extra_prompt = plan.get(
-            "short_prompt",
-            "あなたはIrisです。ユーザーに自然に声をかけてください。\n\n"
-            "■ ルール:\n"
-            "- 短く（40文字以内）で友好的\n"
-            "- ユーザーのことを推測せず、確実にわかることだけ\n"
-            "- 質問形式より気遣い・報告形式を優先\n"
-            "- 発話内容のみ出力",
-        )
+        situation = plan.get("situation", "")
         context_hint = plan.get("context_hint", "")
-        tier_prompt = f"{extra_prompt}\n\n■ コンテキスト:\n{context_hint}" if context_hint else extra_prompt
-        user_msg = plan.get("short_user_message", "短く自然な一言を生成してください。")
+
+        parts = [system_prompt]
+        if situation in _SITUATION_INSTRUCTIONS:
+            parts.append(_SITUATION_INSTRUCTIONS[situation])
+        if context_hint:
+            parts.append(f"## コンテキスト\n{context_hint}")
+
+        user_msg = _SITUATION_USER_MESSAGES.get(situation, "")
         msgs = [
-            {"role": "system", "content": system_prompt + "\n\n" + tier_prompt},
-            {"role": "user", "content": user_msg},
+            {"role": "system", "content": "\n\n".join(parts)},
+            {"role": "user", "content": user_msg} if user_msg else {"role": "user", "content": "応答してください。"},
         ]
         try:
             resp = self._llm.chat(

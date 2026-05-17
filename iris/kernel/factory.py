@@ -226,6 +226,7 @@ class KernelFactory:
             inhibition=inhibition,
             scoring=scoring,
             config=config,
+            memory=memory,
         )
 
         monitor = OutputMonitor(internal_bus=internal_bus)

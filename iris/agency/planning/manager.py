@@ -9,6 +9,7 @@ from iris.agency.planning.scoring import ProactiveScoring
 from iris.event.event_bus import EventBus
 from iris.event.event_types import InputReady
 from iris.kernel.config import Config
+from iris.memory.manager import MemoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -21,10 +22,12 @@ class PlanningManager:
         inhibition: InhibitionController,
         scoring: ProactiveScoring,
         config: Config,
+        memory: MemoryManager | None = None,
     ) -> None:
         self._bus = internal_bus
         self._inhibition = inhibition
         self._scoring = scoring
+        self._memory = memory
         self._cfg = config.proactive
         event_bus.subscribe("InputReady", self._on_input_ready)
 
@@ -67,24 +70,16 @@ class PlanningManager:
             scores = context.get("scores", {})
             return {
                 "content": "",
+                "situation": "proactive",
+                "context_hint": context.get("context_hint", ""),
                 "scores": scores,
                 "total_score": context.get("salience", 0.0),
                 "trigger_type": max(scores, key=lambda k: scores[k]) if scores else "unknown",
-                "context_hint": context.get("context_hint", ""),
-                "short_prompt": (
-                    "あなたはIrisです。ユーザーに自然に声をかけてください。\n\n"
-                    "■ ルール:\n"
-                    "- 短く（40文字以内）で友好的\n"
-                    "- ユーザーのことを推測せず、確実にわかることだけ\n"
-                    "- 質問形式より気遣い・報告形式を優先\n"
-                    "- 発話内容のみ出力"
-                ),
-                "short_user_message": "短く自然な一言を生成してください。",
                 "abbreviated": False,
                 "tools_allowed": False,
                 "streaming": False,
-                "max_tokens": 80,
-                "temperature": 0.5,
+                "max_tokens": 120,
+                "temperature": 0.8,
                 "show_thinking": False,
                 "run_reflexion": False,
                 "run_compression": False,
@@ -108,10 +103,24 @@ class PlanningManager:
             "record_history": True,
         }
 
-    @staticmethod
-    def _build_context_hint(scores: dict[str, float]) -> str:
+    def _build_context_hint(self, scores: dict[str, float]) -> str:
         now = time.localtime()
         hour = now.tm_hour
         time_str = "午前" if hour < 12 else "午後" if hour < 17 else "夕方以降"
         trigger = max(scores, key=lambda k: scores[k])
-        return f"時間帯: {time_str} / トリガー: {trigger}"
+        parts = [f"時間帯: {time_str}", f"トリガー: {trigger}"]
+
+        if self._memory:
+            try:
+                recent = self._memory.get_recent(3)
+                topics = [item.get("summary", "") for item in recent if item.get("summary")]
+                if topics:
+                    joined = " | ".join(topics)
+                    parts.append(f"直近の話題: {joined[:100]}")
+                prefs = self._memory.get_user_preferences()
+                if prefs:
+                    parts.append(f"ユーザーの関心: {prefs[0].get('content', '')[:80]}")
+            except Exception:
+                logger.debug("Memory hint failed", exc_info=True)
+
+        return " / ".join(parts)

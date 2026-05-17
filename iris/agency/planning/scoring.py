@@ -9,6 +9,18 @@ logger = logging.getLogger(__name__)
 
 
 class ProactiveScoring:
+    """PFC が自発発話の価値を評価するスコアリング。
+
+    脳: 前頭前野 (PFC) の背外側部 (dlPFC) が環境と内部状態を統合し、
+    「今、自発的に行動を起こす価値があるか」を判断する処理に対応する。
+
+    4つの因子を重み付け統合:
+    - time: 前回の行動からの経過時間
+    - memory: 長期記憶との関連性（新奇性＋既存知識との接続）
+    - context: 直近会話の文脈的一貫性
+    - mood: 感情状態（扁桃体からの入力を受けた値）
+    """
+
     def __init__(self, config: ProactiveConfig, memory: MemoryManager) -> None:
         self._config = config
         self._memory = memory

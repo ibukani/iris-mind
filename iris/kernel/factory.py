@@ -11,6 +11,7 @@ from iris.agency.execution.pipeline import LLMPipeline
 from iris.agency.execution.tool_executor import ToolExecutionEngine
 from iris.agency.manager import AgencyManager
 from iris.agency.planning.manager import PlanningManager
+from iris.agency.planning.scoring import ProactiveScoring
 from iris.event.event_bus import EventBus
 from iris.io.manager import IOManager
 from iris.io.session.manager import SessionConfig, SessionManager
@@ -25,7 +26,6 @@ from iris.memory.manager import MemoryManager
 from iris.memory.personality.persona_data import PersonaData
 from iris.memory.personality.persona_profile import PersonaProfile
 from iris.memory.personality.personality import Personality
-from iris.memory.scoring import ProactiveScoring
 from iris.memory.sensory.buffer import InputBuffer
 from iris.memory.sensory.readiness import ReadinessEvaluator
 from iris.memory.stores import AgentsMdStore, EpisodicStore, SemanticStore

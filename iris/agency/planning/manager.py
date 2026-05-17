@@ -5,10 +5,10 @@ import time
 
 from iris.agency.bus import InternalBus, PlanDecided
 from iris.agency.execution.inhibition import GateVerdict, InhibitionController
+from iris.agency.planning.scoring import ProactiveScoring
 from iris.event.event_bus import EventBus
 from iris.event.event_types import InputReady
 from iris.kernel.config import Config
-from iris.memory.scoring import ProactiveScoring
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +50,8 @@ class PlanningManager:
                 "scores": scores,
                 "context_hint": self._build_context_hint(scores),
             }
+        else:
+            self._inhibition.notify_user_activity()
 
         plan = self._build_plan(event.content, context, gate)
         plan["session_id"] = event.session_id

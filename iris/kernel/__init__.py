@@ -1,43 +1,14 @@
-from iris.kernel.agent_state import AgentStateManager, State
+from iris.event import EventBus
+from iris.io import InputMessage, InterruptMessage, OutputMessage
 from iris.kernel.config import Config, ProactiveConfig
-from iris.kernel.core import AgentKernel, KernelContext, KernelFactory
-from iris.kernel.event import EventBus
-from iris.kernel.io import InputMessage, InterruptMessage, OutputMessage
-from iris.kernel.services import (
-    ConversationService,
-    InterruptToken,
-    LLMPipeline,
-    MemoryManager,
-    ProactiveEngine,
-    ProactiveResult,
-    ReadinessResult,
-    Reflexion,
-    ReflexionManager,
-    ResponseReadinessEvaluator,
-    ToolExecutionEngine,
-)
+from iris.kernel.manager import KernelManager
 
 __all__ = [
-    "AgentKernel",
-    "AgentStateManager",
     "Config",
-    "ConversationService",
+    "ProactiveConfig",
+    "KernelManager",
     "EventBus",
     "InputMessage",
     "InterruptMessage",
-    "InterruptToken",
-    "KernelContext",
-    "KernelFactory",
-    "LLMPipeline",
-    "MemoryManager",
     "OutputMessage",
-    "ProactiveConfig",
-    "ProactiveEngine",
-    "ProactiveResult",
-    "ReadinessResult",
-    "Reflexion",
-    "ReflexionManager",
-    "ResponseReadinessEvaluator",
-    "State",
-    "ToolExecutionEngine",
 ]

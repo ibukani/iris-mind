@@ -6,10 +6,9 @@ from typing import Any
 
 import pytest
 
-from iris.kernel.agent_state import AgentStateManager
+from iris.event import EventBus
+from iris.io.models import ConnectionMode, OutputMessage
 from iris.kernel.config import Config, ModelConfig, ProactiveConfig
-from iris.kernel.event import EventBus
-from iris.kernel.io.models import ConnectionMode, OutputMessage
 
 # ── Fake LLM Provider ─────────────────────────────────────────
 
@@ -420,11 +419,6 @@ class FakePersonality:
 @pytest.fixture
 def event_bus() -> EventBus:
     return EventBus()
-
-
-@pytest.fixture
-def state_manager(event_bus: EventBus) -> AgentStateManager:
-    return AgentStateManager(event_bus=event_bus)
 
 
 @pytest.fixture

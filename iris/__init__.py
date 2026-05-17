@@ -1,7 +1,4 @@
-from iris.kernel.agent_state import AgentStateManager
-from iris.kernel.agent_state import State as AgentState
-from iris.kernel.config import Config, ProactiveConfig
-from iris.kernel.event import (
+from iris.event import (
     AgentAnomalyEvent,
     AgentStateChangeEvent,
     Event,
@@ -9,6 +6,7 @@ from iris.kernel.event import (
     MemoryUpdateEvent,
     TimerTick,
 )
+from iris.kernel.config import Config, ProactiveConfig
 
 __all__ = [
     "Config",
@@ -19,6 +17,4 @@ __all__ = [
     "AgentStateChangeEvent",
     "AgentAnomalyEvent",
     "MemoryUpdateEvent",
-    "AgentStateManager",
-    "AgentState",
 ]

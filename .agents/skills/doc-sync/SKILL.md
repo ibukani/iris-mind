@@ -21,12 +21,11 @@ metadata:
 | 変更対象 | 更新すべき文書 |
 |----------|---------------|
 | アーキテクチャ変更 | `architecture.md` |
-| 記憶システム変更 | `memory-manager.md` |
-| EventBus変更 | `event-bus.md` |
-| AgentState変更 | `agent-state.md` |
-| 自発発話変更 | `proactive-engine.md` |
-| AgentKernel変更 | `agent-kernel.md` |
-| ConversationService変更 | `conversation-service.md` |
+| 記憶システム変更 | `memory-layer.md` |
+| EventBus変更 | `io-layer.md`, `event_types.py` |
+| 意思決定/行動実行変更 | `agency-layer.md` |
+| プロセス管理変更 | `kernel-layer.md` |
+| 入出力変更 | `io-layer.md` |
 | 設定変更 | `config.md` |
 | 新機能全般 | 該当する文書がない場合は新規作成を検討 |
 

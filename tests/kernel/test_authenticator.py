@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from iris.kernel.io.authenticator import Authenticator
-from iris.kernel.io.models import AuthMessage, ConnectionMode
+from iris.io.auth.authenticator import Authenticator
+from iris.io.models import AuthMessage, ConnectionMode
 
 
 class TestAuthenticator:

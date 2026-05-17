@@ -2,7 +2,7 @@
 
 ## 概要
 
-Iris v0.3 の設定は Pydantic BaseModel で構成される。`config.yaml` から読み込み、型バリデーションを自動実行する。
+Iris の設定は Pydantic BaseModel で構成される。`config.yaml` から読み込み、型バリデーションを自動実行する。
 
 ## Config ツリー
 

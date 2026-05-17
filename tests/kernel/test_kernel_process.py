@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from iris.kernel.config import Config, ModelConfig
-from iris.kernel.core import KernelProcess
+from iris.kernel.process import KernelProcess
 
 
 def _dummy_config() -> Config:

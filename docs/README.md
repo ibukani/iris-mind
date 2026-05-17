@@ -2,32 +2,37 @@
 
 ## ドキュメント一覧
 
+### 外部開発者向け（Client接続）
+
 | ファイル | 内容 |
-|---|---|
-| [`architecture.md`](./architecture.md) | 全体アーキテクチャ設計書 — v0.3 Kernel-only |
-| [`agent-state.md`](./agent-state.md) | AgentState 状態遷移設計書 — 6状態と遷移テーブル |
-| [`event-bus.md`](./event-bus.md) | EventBus インターフェース仕様書 — Protocol抽象（Kernel内部専用） |
-| [`ipc-spec.md`](./ipc-spec.md) | IPC プロトコル仕様 — TCP, シリアライズ, 接続ライフサイクル |
-| [`proactive-engine.md`](./proactive-engine.md) | ProactiveEngine 設計仕様 — 自律発話の全アルゴリズム |
-| [`agent-kernel.md`](./agent-kernel.md) | AgentKernel 設計仕様 — イベント統括・Tier3異常検知 |
-| [`memory-manager.md`](./memory-manager.md) | MemoryManager 設計仕様 — 記憶操作の一元管理 |
+|---|--->|
+| [`client-guide.md`](./client-guide.md) | **Iris Client Guide** — 応答パターン、自発発話、コマンド、クイックリファレンス |
+| [`ipc-spec.md`](./ipc-spec.md) | **IPCプロトコル仕様** — ワイヤー形式、メッセージ構造、認証、実装例 |
+
+### 内部設計（アーキテクチャ理解向け）
+
+| ファイル | 内容 |
+|---|--->|
+| [`architecture.md`](./architecture.md) | **全体アーキテクチャ設計書** — 脳科学ベース層分割、C4図、イベントフロー、状態管理 |
+| [`agency-layer.md`](./agency-layer.md) | **Agency 層（前頭前野+基底核+運動野）** — 意思決定(planning) と行動実行(execution) |
+| [`io-layer.md`](./io-layer.md) | **IO 層（視床）** — TCP入出力、セッション管理、認証、EventBusマッピング |
+| [`kernel-layer.md`](./kernel-layer.md) | **Kernel 層（脳幹+視床下部）** — プロセス管理、DI、CommandHandler、TimerTick |
+| [`memory-layer.md`](./memory-layer.md) | **Memory 層（感覚野+海馬+皮質）** — 感覚バッファ、エピソード/意味記憶、海馬整理、人格 |
 | [`config.md`](./config.md) | Config 設定一覧 — 全フィールドとデフォルト値 |
-| [`conversation-service.md`](./conversation-service.md) | ConversationService 設計仕様 — 会話処理パイプライン |
-| [`commands.md`](./commands.md) | コマンドシステム仕様 — スラッシュコマンド一覧と拡張方法 |
+| [`ipc-spec.md`](./ipc-spec.md) | IPC プロトコル仕様 — TCP, シリアライズ, 接続ライフサイクル |
 
 ## 設計背景
 
-Iris は Kernel-only プロジェクトとして設計されている。
-Kernel は TCP で制御インターフェースを公開し、CLI 等の UI は別プロジェクトが提供する。
+Iris は脳科学・神経科学の構造を参考にした層分割アーキテクチャを採用する（参考マッピングの正確性については各層設計書の注記を参照）。
+
+各層は独立した責務を持ち、`iris/event/`（神経路）のグローバル EventBus を介して疎結合する。
+詳細は [`architecture.md`](./architecture.md) および各層ドキュメントを参照。
 
 ### 主要設計決定
 
-1. **Kernel-only 構成** — このリポジトリは Kernel 本体のみ。CLI 等のアダプターは外部プロジェクト
-2. **イベント駆動** — `EventBus` でコンポーネント間を疎結合に接続
+1. **脳科学ベース層分割** — 脳幹(Kernel)、視床(IO)、感覚野+海馬(Memory)、前頭前野+基底核(Agency)、神経路(Event)
+2. **イベント駆動** — Global EventBus で全層を疎結合。各層は publish/subscribe のみ
 3. **IPC: TCP** — Kernel は `TcpListener` で1ポートの待受、外部 Client の接続を待つ
-4. **自律発話** — `ProactiveEngine` が3層ガバナンスで自発的に会話を開始
-5. **管理コンソール** — `main.py` の Supervisor が stdin 経由で `/status`, `/shutdown` を受け付ける
+4. **Internal Bus** — Agency 層内の planning↔execution 通信は内部 EventBus を使用
+5. **DI コンテナ** — Factory (`kernel/factory.py`) のみ全層のインスタンス生成を行う
 
-### Architecture Decision Records
-
-設計上の重要な決定は `docs/adr/` に記録する。

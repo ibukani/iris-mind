@@ -13,9 +13,12 @@
 ## Boundaries
 
 - `iris/kernel/` はドメイン層。外部サービス実装を直接持ち込まない。
-- `iris/llm/`, `iris/memory/`, `iris/capabilities/` は kernel へ注入されるインフラ層。
+- `iris/llm/`, `iris/tools/` は kernel へ注入されるインフラ層。
+- `iris/memory/` は記憶系層。過去のインフラ層から昇格。
+- `iris/io/`, `iris/agency/`, `iris/event/` は kernel から分離された独立層。
+- 全層は EventBus (`iris/event/`) を介して疎結合。
 - `debug_tools/` は `iris/` に依存してよいが、`iris/` から `debug_tools/` へ依存しない。
-- IPC とプロセス設計の詳細は `docs/architecture.md` と `docs/adr/001-3-process-architecture.md` を読む。
+- IPC とプロセス設計の詳細は `docs/architecture.md` と `docs/adr/` を読む。
 
 ## Workflows
 

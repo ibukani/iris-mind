@@ -12,7 +12,7 @@ import argparse
 from pathlib import Path
 
 from iris.kernel.config import Config
-from iris.kernel.core.supervisor import Supervisor
+from iris.kernel.supervisor import Supervisor
 
 
 def _parse_args() -> argparse.Namespace:

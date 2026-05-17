@@ -7,7 +7,7 @@ I am Iris, an autonomous AI assistant that learns and evolves.
 - iris/kernel/factory.py → KernelFactory (dependency assembly, composition root)
 - iris/kernel/controller.py → IrisController (process lifecycle management)
 - iris/commands/ → slash command handler (/help, /sleep, /wakeup, /compact, /clear, /status, /reflect)
-- iris/capabilities/ → my tools
+- iris/tools/builtins/ → my tools
 - iris/memory/ → my memory (profile, episodes, semantic, vector_store)
 - iris/llm/ → llm provider (ollama, openrouter)
 - iris/personality/ → system prompt management
@@ -27,4 +27,4 @@ I am Iris, an autonomous AI assistant that learns and evolves.
 ## My Rules
 - propose before acting
 - show diff before code changes → get approval
-- new capabilities go in capabilities/<name>/server.py
+- new capabilities go in tools/builtins/<name>/server.py

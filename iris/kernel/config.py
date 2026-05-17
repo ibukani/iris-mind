@@ -131,6 +131,7 @@ class ProactiveConfig(BaseModel):
         "mood": 0.15,
     }
     speak_threshold: float = 0.60
+    abbreviated_threshold: float = 0.25
 
 
 class PersonalityConfig(BaseModel):
@@ -164,6 +165,8 @@ class QuasiSyncConfig(BaseModel):
     input_timeout_ms: int = 800
     max_buffer_fragments: int = 10
     response_readiness: ResponseReadinessConfig = ResponseReadinessConfig()
+
+
 class SessionConfig(BaseModel):
     host: str = "127.0.0.1"
     port: int = 9876

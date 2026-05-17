@@ -1,46 +1,106 @@
 # Iris — Autonomous AI Assistant
 
-Iris は自律的に行動・進化できるAIアシスタントです。Python 製で Ollama または OpenRouter 上で動作し、Reflexion ループによる自己改善、Capability Registry による動的機能拡張、3層ガバナンスによる自律発話を特徴とします。
+Iris は自律的に行動・進化できるAIアシスタント。Python 製で Ollama または OpenRouter 上で動作する。
+
+脳科学・神経科学の構造を参考にした層分割アーキテクチャを採用する（詳細は [`docs/`](./docs/README.md)）。
+
+> **注記**: 脳科学マッピングは AI による文献調査を参考にした設計指針であり、厳密な解剖学的正確性を保証するものではありません。
 
 ## アーキテクチャ
-
-Iris は **Supervisor** と **Kernel Process** の2層構成です。
 
 ```mermaid
 flowchart TD
     subgraph Supervisor["Supervisor (main.py)"]
         Console["管理コンソール (stdin)  Ctrl+C"]
     end
-    subgraph Kernel["Kernel Process (iris/kernel/)"]
-        Core["EventBus / AgentKernel / Conversation"]
-        Services["Proactive / Memory / LLM / Tools"]
-        IO["TcpListener / SessionManager"]
+    subgraph Kernel["kernel/ 脳幹+視床下部"]
+        KP["KernelProcess / KernelManager<br/>起動・停止・状態"]
+        CMD["CommandHandler<br/>スラッシュコマンド"]
+        DI["Factory<br/>DIコンテナ"]
     end
-    subgraph External["外部クライアント"]
-        Client["CLI / Web / 他言語クライアント"]
+    subgraph IO["io/ 視床"]
+        IO_M["IOManager<br/>入出力中継"]
+        TCP["TcpListener / SessionManager"]
+    end
+    subgraph Memory["memory/ 感覚野+海馬+皮質"]
+        MM["MemoryManager<br/>記憶オーケストレーション"]
+        SEN["sensory/ 感覚バッファ"]
+        EP["episodic/ エピソード記憶"]
+        SEM["semantic/ 意味記憶"]
+        HIP["hippocampal/ Reflexion"]
+        PER["personality/ 人格"]
+    end
+    subgraph Agency["agency/ 前頭前野+基底核+運動野"]
+        IB["Internal Bus"]
+        PL["planning/ 意思決定<br/>ProactiveScoring"]
+        EX["execution/ 行動実行<br/>InhibitionController<br/>LLMPipeline"]
+    end
+    subgraph LLM["llm/ 言語処理基盤"]
+        LB["LLMBridge / Provider<br/>LLMContextWindowManager"]
+    end
+    subgraph Event["event/ 神経路"]
+        EB["Global EventBus"]
+    end
+    subgraph External["外部"]
+        CLI["CLI / Web / 他言語Client"]
     end
 
     Console --> Kernel
-    Client <-->|TCP 127.0.0.1:9876| IO
+    CLI <-->|TCP 127.0.0.1:9876| IO
+    EB --- IO
+    EB --- Memory
+    EB --- Agency
+    EB --- Kernel
+    EB --- LLM
+    IB --- PL
+    IB --- EX
 ```
 
 - **Supervisor** — Kernel プロセスの起動・監視・管理コンソール (`main.py`)
-- **Kernel Process** — 自律エージェントのビジネスロジック (`iris/kernel/`)
-- **TCP** — 外部クライアントから Kernel を制御する公開インターフェース。認証・入力・出力を1ポートで多重化
+- **Kernel 層** — 脳幹+視床下部。プロセス管理、DIコンテナ、スラッシュコマンド。TimerTick(5秒) 発行
+- **IO 層** — 視床。TCP入出力、セッション管理
+- **Memory 層** — 感覚野+海馬+皮質。断片的入力の統合、エピソード/意味記憶、Reflexion、人格
+- **Agency 層** — 前頭前野+基底核+運動野。PFC評価（ProactiveScoring）、意思決定、基底核抑制、行動実行
+- **LLM 層** — 言語処理基盤。LLM接続、ContextWindow圧縮
+- **Event 層** — 神経路。全層を疎結合するグローバルEventBus
 
 シャットダウンは Supervisor の管理コンソール (`/shutdown`) または Ctrl+C で行う。
 TCP 経由でも `/shutdown` コマンドを送信可能。
 
 詳細な設計は [`docs/`](./docs/README.md) を参照。
 
+## 外部開発者向け（Client接続）
+
+Iris に TCP 接続して会話するクライアントを開発する場合:
+
+1. **[Client Guide](./docs/client-guide.md)** — 応答パターン・自発発話・コマンド・期待される動作
+2. **[IPC Protocol Spec](./docs/ipc-spec.md)** — ワイヤー形式・認証・メッセージ構造・実装例
+3. 実装例: [Python (生ソケット)](./docs/ipc-spec.md#91-最小クライアントpython--生ソケット版) / [C#](./docs/ipc-spec.md#93-c--net) / [Rust](./docs/ipc-spec.md#94-rust) / [Node.js](./docs/ipc-spec.md#95-nodejs)
+
+```mermaid
+flowchart LR
+    subgraph Ext["外部クライアント"]
+        CLI["CLI / Web / 他言語"]
+    end
+    subgraph Iris["Iris Mind"]
+        TCP["TcpListener :9876"]
+        IO["IOManager"]
+        EV["EventBus"]
+    end
+    CLI <-->|TCP| TCP
+    TCP --> IO
+    IO --> EV
+    EV --> IO --> TCP --> CLI
+```
+
 ## 機能
 
 - **LLM 会話** — Ollama / OpenRouter 経由でローカルまたはクラウド LLM と会話
-- **自律発話 (ProactiveEngine)** — 3層ガバナンス (Tier1 自動 / Tier2 LLM自己判断 / Tier3 AgentKernel介入)
-- **Reflexion 自己改善** — 会話後に自己反省し、行動を改善
-- **動的 Capability 拡張** — 実行時にツールを追加可能
+- **自律発話 (Proactive)** — PFCスコアリング（時間×記憶×文脈×感情）＋基底核抑制制御で適切なタイミングに自発発話
+- **Reflexion 自己改善** — 会話後に自己反省し、話し方・性格・教訓を記憶に統合
+- **動的ツール拡張** — 実行時にツールを追加可能
 - **記憶システム** — エピソード記憶 (JSONL)、意味記憶 (ChromaDB + BM25 ハイブリッド検索)、動的パーソナリティ
-- **会話履歴圧縮** — ContextManager が token window 超過時に自動要約
+- **会話履歴圧縮** — LLMContextWindowManager が token window 超過時に自動要約
 - **スラッシュコマンド** — `/help`, `/sleep`, `/wakeup`, `/compact`, `/clear`, `/status`, `/reflect`
 - **シングル / マルチモデルモード** — 設定したモデル数に応じて自動切替
 
@@ -56,8 +116,8 @@ TCP 経由でも `/shutdown` コマンドを送信可能。
 
 ```powershell
 # リポジトリをクローン
-git clone https://github.com/your-org/iris-kernel.git
-cd iris-kernel
+git clone https://github.com/your-org/iris-mind.git
+cd iris-mind
 
 # 仮想環境を作成
 python -m venv .venv
@@ -101,26 +161,42 @@ python main.py --verbose                # 診断ログを stderr に出力
 ## プロジェクト構成
 
 ```
-iris-kernel/
+iris-mind/
 ├── .agents/                     # コーディングエージェント用導線・Skills
 ├── .iris/                       # 設定・データ
-│   ├── config/personality_default.md
+│   ├── config/
+│   │   └── personality_default.md
 │   └── data/                    # 記憶データ (runtime generated)
 ├── docs/                        # 設計ドキュメント
-│   └── adr/                     # Architecture Decision Records
+│   ├── adr/                     # Architecture Decision Records
+│   ├── architecture.md          # 全体アーキテクチャ
+│   ├── agency-layer.md          # Agency 層設計
+│   ├── memory-layer.md          # Memory 層設計
+│   ├── io-layer.md              # IO 層設計
+│   ├── kernel-layer.md          # Kernel 層設計
+│   └── ipc-spec.md              # IPC プロトコル仕様
 ├── iris/                        # アプリケーションコア
-│   ├── kernel/                  # ドメイン層
-│   │   ├── core/                # AgentKernel, KernelProcess, Factory
-│   │   ├── event/               # EventBus
-│   │   ├── io/                  # TcpListener, SessionManager, Authenticator, models
-│   │   └── services/            # Conversation, Proactive, LLMPipeline, Reflexion, etc.
-│   ├── llm/                     # LLM通信 (LLMBridge, OllamaProvider, OpenRouterProvider)
-│   ├── memory/                  # 記憶管理 (stores, vector_store, persona)
-│   ├── capabilities/            # ツール実装 (file_ops, code_exec, etc.)
-│   ├── tools/                   # 型安全ツール基盤 (@tool, ToolRegistry)
-│   ├── commands/                # スラッシュコマンド処理
-│   └── personality/             # プロンプト管理
-├── tests/                       # テストスイート (249 tests, ~8秒)
+│   ├── agency/                  # 前頭前野+基底核+運動野
+│   │   ├── planning/            # PFC: 意思決定・スコアリング
+│   │   └── execution/           # 基底核+運動野: 行動実行・抑制制御
+│   ├── event/                   # 神経路: グローバル EventBus
+│   ├── io/                      # 視床: TCP入出力・セッション・認証
+│   │   ├── transport/
+│   │   ├── session/
+│   │   └── auth/
+│   ├── kernel/                  # 脳幹: プロセス管理・DI・コマンド
+│   │   └── commands/
+│   ├── llm/                     # LLM接続・ContextWindow管理
+│   ├── memory/                  # 感覚野+海馬+皮質記憶
+│   │   ├── sensory/             # 感覚バッファ
+│   │   ├── episodic/            # エピソード記憶 (stores.py)
+│   │   ├── semantic/            # 意味記憶 (stores.py)
+│   │   ├── hippocampal/         # 海馬: Reflexion
+│   │   ├── personality/         # 人格
+│   │   └── vector/              # ベクトル検索 (vector_store.py)
+│   └── tools/                   # @tool, ToolRegistry, ビルトイン
+│       └── builtins/
+├── tests/                       # テストスイート (138 tests, ~3秒)
 ├── config.yaml                  # Iris 設定ファイル
 └── main.py                      # Supervisor エントリーポイント
 ```
@@ -132,13 +208,14 @@ iris-kernel/
 ```powershell
 ruff check .                          # lint
 ruff format --check .                 # format check
+ruff check --fix .                    # lint + auto-fix
 mypy .                                # type check
 pytest tests/                         # 全テスト実行
 ```
 
 ### Capability 追加
 
-1. `iris/capabilities/<name>/server.py` に配置
+1. `iris/tools/builtins/<name>/server.py` に配置
 2. `@tool()` デコレータでツール定義（型ヒント→JSON Schema 自動生成）
 3. `register(registry)` 関数で `registry.register_decorated(fn)` をエクスポート
 4. `.iris/data/iris_profile.md` の `My Capabilities` を更新
@@ -151,13 +228,13 @@ pytest tests/                         # 全テスト実行
 
 | ドキュメント | 内容 |
 |---|---|
-| [architecture.md](./docs/architecture.md) | 全体アーキテクチャ — v0.3 1ポート統合 |
-| [event-bus.md](./docs/event-bus.md) | EventBus インターフェース仕様 |
-| [ipc-spec.md](./docs/ipc-spec.md) | IPC プロトコル仕様 (TCP, 1ポート多重) |
-| [agent-state.md](./docs/agent-state.md) | AgentState 状態遷移 |
-| [proactive-engine.md](./docs/proactive-engine.md) | ProactiveEngine 自律発話 |
-| [memory-manager.md](./docs/memory-manager.md) | 記憶システム |
-| [adr/001-3-process-architecture.md](./docs/adr/001-3-process-architecture.md) | 3-Process分解の決定記録 |
+| [architecture.md](./docs/architecture.md) | 全体アーキテクチャ — 脳科学ベース層分割 |
+| [agency-layer.md](./docs/agency-layer.md) | Agency 層 — 意思決定と行動実行 |
+| [io-layer.md](./docs/io-layer.md) | IO 層 — TCP入出力・セッション管理 |
+| [kernel-layer.md](./docs/kernel-layer.md) | Kernel 層 — プロセス管理・DI |
+| [memory-layer.md](./docs/memory-layer.md) | Memory 層 — 感覚野+海馬+皮質記憶 |
+| [config.md](./docs/config.md) | Config 設定一覧 |
+| [ipc-spec.md](./docs/ipc-spec.md) | IPC プロトコル仕様 (TCP) |
 
 ## 技術スタック
 
@@ -166,7 +243,7 @@ pytest tests/                         # 全テスト実行
 - **ベクトル検索**: ChromaDB + ONNX MiniLM-L6-v2
 - **IPC**: TCP/IP (`AF_INET`) — 1ポート多重
 - **UI**: Rich (TUI), prompt_toolkit
-- **テスト**: pytest, mypy, ruff
+- **テスト**: pytest (138 tests), ruff, mypy
 
 ## ライセンス
 

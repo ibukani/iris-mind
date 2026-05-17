@@ -60,11 +60,16 @@ class Supervisor:
 
     def _console_loop(self) -> None:
         while not self._shutdown_requested:
+            sys.stdout.write("> ")
+            sys.stdout.flush()
             try:
-                text = input("> ")
+                text = sys.stdin.readline()
             except (EOFError, KeyboardInterrupt):
                 break
-            if not text or not text.strip():
+            if not text:
+                continue
+            text = text.rstrip("\r\n")
+            if not text.strip():
                 continue
             line = text.strip()
             if line.lower() in ("exit", "quit"):

@@ -77,6 +77,12 @@ class TcpListener:
                 raw = conn.recv_bytes()
                 data: dict[str, Any] = json.loads(raw.decode("utf-8"))
                 mt: str = data.get("msg_type", "")
+                logger.debug(
+                    "TcpListener: recv msg_type=%s data_keys=%s raw_bytes=%d",
+                    mt,
+                    list(data.keys()),
+                    len(raw),
+                )
 
                 if mt == "auth":
                     if auth_done:
@@ -99,6 +105,7 @@ class TcpListener:
 
                 if mt == "interrupt":
                     im = InterruptMessage(**data)
+                    logger.debug("TcpListener: interrupt session=%s", im.session_id)
                     if self._on_interrupt:
                         self._on_interrupt(im.session_id)
                     continue
@@ -136,10 +143,12 @@ class TcpListener:
     def _handle_ping(self, conn: Connection, session_id: str | None) -> None:
         from iris.io.models import PongMessage
 
+        logger.debug("TcpListener: ping session=%s", session_id)
         self._session_manager.update_activity(session_id)
         raw = PongMessage().model_dump_json().encode("utf-8")
         try:
             conn.send_bytes(raw)
+            logger.debug("TcpListener: pong sent session=%s", session_id)
         except (BrokenPipeError, ConnectionError, EOFError):
             logger.info("TcpListener: ping response failed, connection lost")
             if session_id:
@@ -157,6 +166,15 @@ class TcpListener:
             logger.warning("TcpListener: InputMessage from inactive session: %s", session_id)
             return
 
+        truncated = msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
+        logger.debug(
+            "TcpListener: input dispatch id=%s session=%s type=%s final=%s content=%.200s",
+            msg.id,
+            session_id,
+            msg.msg_type,
+            msg.is_final,
+            truncated,
+        )
         self._on_input(msg)
 
         if msg.metadata.get("ack_required", False):

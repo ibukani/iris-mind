@@ -5,6 +5,7 @@ import threading
 from collections import defaultdict
 from collections.abc import Callable
 from contextlib import suppress
+from datetime import UTC, datetime
 from typing import Protocol, runtime_checkable
 
 from iris.event.event_types import Event, new_trace_id
@@ -25,6 +26,8 @@ class EventBus:
         self._lock: threading.Lock = threading.Lock()
 
     def publish(self, event: Event) -> None:
+        if event.timestamp is None:
+            event.timestamp = datetime.now(UTC)
         if not event.trace_id:
             event.trace_id = new_trace_id()
         event_type = type(event).__name__

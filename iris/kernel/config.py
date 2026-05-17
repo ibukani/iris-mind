@@ -179,6 +179,8 @@ class LoggingConfig(BaseModel):
     dir: str = "logs"
     max_bytes: int = 5_242_880
     backup_count: int = 14
+    loggers: dict[str, str] = {}
+    console_format: str = ""
 
 
 class Config(BaseModel):

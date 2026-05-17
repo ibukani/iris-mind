@@ -57,6 +57,8 @@ class ExecutionManager:
         if show_thinking:
             self._event_bus.publish(
                 OutputRequest(
+                    timestamp=None,
+                    source="execution",
                     session_id=session_id,
                     message_type="stream",
                     content="",
@@ -73,6 +75,8 @@ class ExecutionManager:
             def _on_token(delta: str) -> None:
                 self._event_bus.publish(
                     OutputRequest(
+                        timestamp=None,
+                        source="execution",
                         session_id=session_id,
                         message_type="stream",
                         content=delta,
@@ -111,6 +115,8 @@ class ExecutionManager:
         if show_thinking:
             self._event_bus.publish(
                 OutputRequest(
+                    timestamp=None,
+                    source="execution",
                     session_id=session_id,
                     message_type="stream",
                     content="",
@@ -120,6 +126,8 @@ class ExecutionManager:
 
         self._event_bus.publish(
             OutputRequest(
+                timestamp=None,
+                source="execution",
                 session_id=session_id,
                 message_type="response",
                 content=response_text,

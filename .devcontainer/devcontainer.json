@@ -14,33 +14,38 @@
         }
     },
     "customizations": {
-        "vscode": {
+        "zed": {
             "extensions": [
-                "ms-python.python",
-                "ms-python.vscode-pylance",
-                "charliermarsh.ruff",
-                "ms-python.mypy-type-checker",
-                "tamasfe.even-better-toml",
-                "yzhang.markdown-all-in-one"
+                "python",
+                "ruff",
+                "pyright"
             ],
             "settings": {
-                "python.defaultInterpreterPath": "/usr/local/bin/python",
-                "python.terminal.activateEnvironment": true,
-                "[python]": {
-                    "editor.formatOnSave": true,
-                    "editor.codeActionsOnSave": {
-                        "source.fixAll.ruff": "explicit",
-                        "source.organizeImports.ruff": "explicit"
+                "lsp": {
+                    "ruff": {
+                        "settings": {
+                            "lineLength": 120
+                        }
                     },
-                    "editor.defaultFormatter": "charliermarsh.ruff"
+                    "pyright": {},
+                    "mypy": {}
                 },
-                "ruff.lineLength": 120,
-                "ruff.importStrategy": "fromExtension",
-                "mypy-type-checker.importStrategy": "fromExtension",
-                "files.watcherExclude": {
-                    "**/.iris/data/**": true,
-                    "**/__pycache__/**": true
-                }
+                "languages": {
+                    "Python": {
+                        "format_on_save": "on",
+                        "language_servers": ["ruff", "pyright"],
+                        "code_actions_on_format": {
+                            "source.fixAll.ruff": true,
+                            "source.organizeImports.ruff": true
+                        }
+                    }
+                },
+                "file_watcher_exclude": [
+                    "**/.iris/data/**",
+                    "**/__pycache__/**",
+                    "**/.git/**"
+                ],
+                "tab_size": 4
             }
         }
     },

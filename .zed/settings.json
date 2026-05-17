@@ -1,13 +1,31 @@
 {
-  "lsp": {},
+  "lsp": {
+    "ruff": {
+      "settings": {
+        "lineLength": 120
+      }
+    },
+    "pyright": {
+      "settings": {}
+    },
+    "mypy": {
+      "settings": {}
+    }
+  },
   "languages": {
     "Python": {
       "format_on_save": "on",
       "language_servers": ["ruff", "pyright"],
       "code_actions_on_format": {
         "source.fixAll.ruff": true,
-        "source.organizeImports.ruff": true,
-      },
-    },
+        "source.organizeImports.ruff": true
+      }
+    }
   },
+  "file_watcher_exclude": [
+    "**/.iris/data/**",
+    "**/__pycache__/**",
+    "**/.git/**"
+  ],
+  "tab_size": 4
 }

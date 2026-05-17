@@ -64,6 +64,7 @@ class SessionManager:
 
     def route_output(self, session_id: str, message: OutputMessage) -> None:
         if not session_id:
+            logger.debug("SessionManager: broadcast output type=%s", message.msg_type)
             self._broadcast_output(message)
             return
 
@@ -84,6 +85,14 @@ class SessionManager:
             conn = session.conn
             session.last_activity = datetime.now()
 
+        truncated = message.content[:200] + "..." if len(message.content) > 200 else message.content
+        logger.debug(
+            "SessionManager: output session=%s type=%s state=%s content=%.200s",
+            session_id,
+            message.msg_type,
+            message.state,
+            truncated,
+        )
         raw = message.model_dump_json().encode("utf-8")
         try:
             conn.send_bytes(raw)
@@ -95,6 +104,7 @@ class SessionManager:
         with self._lock:
             targets = list(self._sessions.items())
 
+        logger.debug("SessionManager: broadcast to %d sessions type=%s", len(targets), message.msg_type)
         for sid, session in targets:
             if session.state != SessionState.ACTIVE:
                 continue

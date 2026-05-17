@@ -25,6 +25,22 @@ _CONSOLE_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 _FILE_FORMAT = "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s"
 _FILE_DATE = "%Y-%m-%d %H:%M:%S"
 
+
+class _ConsoleHandler(logging.StreamHandler):
+    """コンソール出力用ハンドラ。ログ行の前に \r を挿入し、直後にプロンプトを再表示する。
+
+    これにより ``input("> ")`` のプロンプト行にログが混入する問題を防ぐ。
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = self.format(record)
+            self.stream.write("\r" + msg + "\n> ")
+            self.flush()
+        except Exception:
+            self.handleError(record)
+
+
 _LOG_PATTERN = re.compile(r"^iris_\d{8}_\d{6}\.log(?:\.\d+)?$")
 
 
@@ -70,18 +86,26 @@ def setup_logging(cfg: LoggingConfig) -> None:
     root.addHandler(file_handler)
 
     # --- コンソールハンドラ（条件付き。Kernel 診断用、UI 表示とは無関係） ---
+    # カスタムハンドラ: ログ出力時に \r で行頭に戻り、ログ行を出力後、プロンプトを再表示する
     if cfg.console_level:
-        console_handler = logging.StreamHandler(sys.stderr)
+        fmt = cfg.console_format or _CONSOLE_FORMAT
+        console_handler = _ConsoleHandler(sys.stderr)
         console_handler.setLevel(cfg.console_level.upper())
-        console_handler.setFormatter(logging.Formatter(_CONSOLE_FORMAT))
+        console_handler.setFormatter(logging.Formatter(fmt))
         root.addHandler(console_handler)
 
     # --- 既存の起動世代クリーンアップ ---
     _cleanup_old_sessions(log_dir, cfg.backup_count)
 
+    # --- ロガー個別レベルの適用（config.loggers） ---
+    for name, level in cfg.loggers.items():
+        logging.getLogger(name).setLevel(level.upper())
+
+    log_overrides = ", ".join(f"{k}={v}" for k, v in cfg.loggers.items()) or "(none)"
     logging.info(
-        "Logging initialized: file_level=%s, console_level=%s, file=%s",
+        "Logging initialized: file_level=%s, console_level=%s, loggers=%s, file=%s",
         cfg.file_level,
         cfg.console_level or "(none)",
+        log_overrides,
         log_path,
     )

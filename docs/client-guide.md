@@ -18,7 +18,7 @@ sequenceDiagram
     C->>K: auth
     K-->>C: auth_success
 
-    C->>K: text "hello"
+    C->>K: dispatch_text "hello"
     K-->>C: stream (thinking)
     K-->>C: stream (speaking) "Hello! "
     K-->>C: stream (speaking) "How can I help?"
@@ -41,7 +41,7 @@ sequenceDiagram
 
 ### 2.1 通常の会話応答
 
-テキスト入力 (`msg_type="text"`) に対する Iris の応答は以下の順序で届く:
+テキスト入力 (`msg_type="dispatch_text"`) に対する Iris の応答は以下の順序で届く:
 
 | 順 | msg_type | state | content | 意味 |
 |----|----------|-------|---------|------|
@@ -138,12 +138,8 @@ proactive:
 |----------|------|--------|
 | `/status` | Iris の状態確認 | `Status: IDLE, uptime: 1h 23m, messages: 42, proactive: enabled` |
 | `/shutdown` | グレースフルシャットダウン | `Shutting down...` |
-| `/sleep` | 自発発話を停止 | `Iris is going to sleep. Use /wakeup to resume.` |
-| `/wakeup` | 自発発話を再開 | `Iris is awake.` |
-| `/help` | コマンド一覧表示 | `Available commands: /status, /shutdown, /sleep, /wakeup, /help, /compact, /clear, /reflect` |
+| `/help` | コマンド一覧表示 | `Available commands: /status, /shutdown, /help, /compact` |
 | `/compact` | 会話履歴を強制圧縮 | `Compacted: 240 chars summary, kept last 6 messages` |
-| `/clear` | 全記憶消去 | 実行後の応答 |
-| `/reflect` | セッション振り返り実行 | 実行後の応答 |
 
 ---
 
@@ -155,8 +151,8 @@ proactive:
 |------|------|------|
 | 接続がすぐ閉じられる | 認証失敗 | `access_token` が正しいか確認 |
 | 応答が返ってこない | session_id が無効 | 再接続して再認証 |
-| メッセージが無視される | 不正な msg_type | `msg_type` を `text` / `command` / `system` のいずれかに |
-| `msg_type` が `dispatch_text` や `converse_text` になっている | モデルの msg_type 誤り | `text` に変更（`dispatch_text` / `converse_text` は内部形式） |
+| メッセージが無視される | 不正な msg_type | `msg_type` を `dispatch_text` / `converse_text` / `command` / `system` のいずれかに |
+| `msg_type` が `text` になっている | 外部向けに公開されていない内部形式 | `dispatch_text` または `converse_text` に変更 |
 
 ### 5.2 セッション管理
 
@@ -184,7 +180,7 @@ proactive:
 1. TCP connect (127.0.0.1:9876)
 2. 送信: {"msg_type": "auth", "mode": "bidirectional"}
 3. 受信: {"msg_type": "auth_success", "session_id": "..."}
-4. 送信: {"msg_type": "text", "session_id": "...", "source": "cli", "content": "hello"}
+4. 送信: {"msg_type": "dispatch_text", "session_id": "...", "source": "cli", "content": "hello"}
 5. 受信: {"msg_type": "stream", "state": "thinking", "content": ""}
 6. 受信: {"msg_type": "stream", "state": "speaking", "content": "Hello!"}
 7. 受信: {"msg_type": "stream", "state": "done", "content": ""}

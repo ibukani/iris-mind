@@ -31,6 +31,7 @@ class GateVerdict:
     - go_signal: 直接路の活性度（行動を起こす積極性。0.0=消極的, 1.0=積極的）
     - reason: 抑制の原因となった因子名
     """
+
     suppressed: bool
     score: float
     reason: str
@@ -65,6 +66,7 @@ class InhibitionController:
     def notify_user_activity(self) -> None:
         self._last_user_activity = time.time()
         self._ignore_recorded = False
+        logger.debug("User activity recorded: last_user_activity=%.3f", self._last_user_activity)
 
     def check_ignore(self) -> None:
         if self._last_proactive_time == 0 or self._ignore_recorded:
@@ -72,12 +74,16 @@ class InhibitionController:
         if self._last_proactive_time > self._last_user_activity:
             self._consecutive_ignores += 1
             self._ignore_recorded = True
+            logger.debug("Ignore detected: consecutive_ignores=%d", self._consecutive_ignores)
             if self._consecutive_ignores >= 2:
                 self._confirmation_mode = True
                 logger.info("Entered confirmation mode (ignores=%d)", self._consecutive_ignores)
 
     def evaluate(self, now: float) -> GateVerdict:
         if now < self._cooldown_until or self._is_sleeping:
+            logger.debug(
+                "Gate suppressed: cooldown_or_sleep (now=%.3f, cooldown_until=%.3f)", now, self._cooldown_until
+            )
             return GateVerdict(suppressed=True, score=0.0, reason="cooldown_or_sleep", go_signal=0.0)
 
         factors: list[tuple[str, float]] = []
@@ -106,6 +112,7 @@ class InhibitionController:
         reason = ", ".join(low) if low else "open"
 
         go_signal = self._compute_go_signal(now)
+        logger.debug("Gate: factors=%s score=%.3f reason=%s go_signal=%.3f", factors, score, reason, go_signal)
         return GateVerdict(suppressed=False, score=score, reason=reason, go_signal=go_signal)
 
     def _compute_go_signal(self, now: float) -> float:
@@ -130,6 +137,7 @@ class InhibitionController:
 
     def record_proactive_attempt(self) -> None:
         self._last_proactive_time = time.time()
+        logger.debug("Proactive attempt recorded: last_proactive_time=%.3f", self._last_proactive_time)
 
     def notify_positive_response(self) -> None:
         self._consecutive_ignores = 0

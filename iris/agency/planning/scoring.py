@@ -43,6 +43,15 @@ class ProactiveScoring:
             + w.get("context", 0.15) * context_score
             + w.get("mood", 0.15) * mood_score
         )
+        logger.debug(
+            "Scores: time=%.3f mem=%.3f ctx=%.3f mood=%.3f total=%.3f (threshold=%.2f)",
+            time_score,
+            memory_score,
+            context_score,
+            mood_score,
+            total,
+            self._config.speak_threshold,
+        )
         return total, {"time": time_score, "memory": memory_score, "context": context_score, "mood": mood_score}
 
     def _compute_time_score(self, now: float, last_proactive_time: float, last_user_activity: float) -> float:

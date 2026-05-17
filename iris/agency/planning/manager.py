@@ -33,6 +33,7 @@ class PlanningManager:
         gate = self._inhibition.evaluate(time.time())
 
         if context.get("from_timer"):
+            logger.debug("Timer-triggered input: gate_suppressed=%s score=%.3f", gate.suppressed, gate.score)
             if gate.suppressed:
                 return
             total, scores = self._scoring.compute(
@@ -42,6 +43,7 @@ class PlanningManager:
                 negative_mood_score=self._inhibition.negative_mood_score,
             )
             if total < self._cfg.speak_threshold:
+                logger.debug("Below speak_threshold: total=%.3f < threshold=%.2f", total, self._cfg.speak_threshold)
                 return
             self._inhibition.record_proactive_attempt()
             context = {
@@ -50,6 +52,7 @@ class PlanningManager:
                 "scores": scores,
                 "context_hint": self._build_context_hint(scores),
             }
+            logger.debug("Proactive plan published: total=%.3f scores=%s", total, scores)
         else:
             self._inhibition.notify_user_activity()
 
@@ -89,6 +92,9 @@ class PlanningManager:
             }
 
         abbreviated = gate.suppressed or gate.score < self._cfg.abbreviated_threshold
+        logger.debug(
+            "Plan built: abbreviated=%s suppressed=%s gate_score=%.3f", abbreviated, gate.suppressed, gate.score
+        )
         return {
             "content": content,
             "abbreviated": abbreviated,

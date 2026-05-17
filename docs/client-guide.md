@@ -216,14 +216,4 @@ flowchart LR
     EX -->|OutputRequest| EB
     EB -->|OutputRequest| IO
     IO -->|TCP| C
-```
-
----
-
-## 7. 参考ドキュメント
-
-| ドキュメント | 内容 |
-|-------------|------|
-| [`ipc-spec.md`](./ipc-spec.md) | ワイヤー形式・メッセージ構造・認証プロトコル・実装例 |
-| [`architecture.md`](./architecture.md) | 内部アーキテクチャ（層分割・イベント駆動） |
-| [`config.md`](./config.md) | 全設定項目 |
+```git

@@ -4,7 +4,6 @@ import logging
 from dataclasses import dataclass
 
 from iris.agency.bus import InternalBus
-from iris.agency.execution.context import ContextManager
 from iris.agency.execution.inhibition import InhibitionController
 from iris.agency.execution.manager import ExecutionManager
 from iris.agency.execution.monitor import OutputMonitor
@@ -18,6 +17,7 @@ from iris.io.session.manager import SessionConfig, SessionManager
 from iris.io.transport.tcp_listener import TcpListener
 from iris.kernel.commands.handler import CommandHandler
 from iris.llm.capability_checker import CapabilityChecker
+from iris.llm.context_window import LLMContextWindowManager
 from iris.llm.llm_bridge import LLMBridge, create_provider
 from iris.memory.hippocampal.manager import HippocampalManager
 from iris.memory.hippocampal.reflexion import Reflexion
@@ -83,16 +83,15 @@ class KernelFactory:
         registry, tool_exec = KernelFactory._build_capabilities()
 
         # ============================================================
-        # Phase 4.5: プロアクティブ機構 (PFC評価 + 基底核抑制)
+        # Phase 4.5: 基底核抑制
         # ============================================================
         inhibition = InhibitionController()
-        scoring = ProactiveScoring(config=config.proactive, memory=memory_mgr)
-        memory_mgr.set_proactive_scoring(scoring, config.proactive)
 
         # ============================================================
-        # Phase 5: Agency 層 (planning + execution)
+        # Phase 5: Agency 層 (PFC planning + 基底核 execution)
         # ============================================================
         internal_bus = InternalBus()
+        scoring = ProactiveScoring(config=config.proactive, memory=memory_mgr)
         agency = KernelFactory._build_agency(
             config,
             event_bus,
@@ -102,6 +101,7 @@ class KernelFactory:
             tool_exec,
             session_mgr,
             inhibition=inhibition,
+            scoring=scoring,
         )
 
         # ============================================================
@@ -142,12 +142,13 @@ class KernelFactory:
             max_entries=cfg.semantic_max_entries,
             vector_db_path=cfg.vector_db_path,
         )
-        vector = VectorStore(path=cfg.vector_db_path)
+        vector_store = VectorStore(path=cfg.vector_db_path)
         mem = MemoryManager(
             event_bus=event_bus,
             episodic=episodic,
             semantic=semantic,
-            vector_store=vector,
+            vector_store=vector_store,
+            proactive_config=config.proactive,
         )
         buf = InputBuffer(session_id="0" * 16)
         readiness = ReadinessEvaluator(
@@ -190,6 +191,7 @@ class KernelFactory:
         tool_exec: ToolExecutionEngine,
         session_mgr: SessionManager,
         inhibition: InhibitionController | None = None,
+        scoring: ProactiveScoring | None = None,
     ) -> AgencyManager:
         personality = Personality(name=config.personality.name, prompt_file=config.personality.prompt_file)
         capability_checker = CapabilityChecker(config=config.model)
@@ -222,16 +224,17 @@ class KernelFactory:
             internal_bus=internal_bus,
             event_bus=event_bus,
             inhibition=inhibition,
+            scoring=scoring,
             config=config,
         )
 
         monitor = OutputMonitor(internal_bus=internal_bus)
-        context_mgr = ContextManager(llm=llm, compact_model=config.model.get_model("default"))
+        context_window_mgr = LLMContextWindowManager(llm=llm, compact_model=config.model.get_model("default"))
         execution = ExecutionManager(
             internal_bus=internal_bus,
             event_bus=event_bus,
             llm_pipeline=pipeline,
-            context_manager=context_mgr,
+            context_window_mgr=context_window_mgr,
             context_window=config.model.context_window,
             hippocampal=hippocampal,
             monitor=monitor,

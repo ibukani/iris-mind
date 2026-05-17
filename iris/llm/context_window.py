@@ -24,7 +24,17 @@ def estimate_messages_tokens(messages: list[dict]) -> int:
     return sum(estimate_tokens(m.get("content", "")) for m in messages)
 
 
-class ContextManager:
+class LLMContextWindowManager:
+    """LLM の context window 制限を超えた会話履歴を自動圧縮する。
+
+    LLM にはトークン上限（context_window）が存在する。
+    このクラスは会話履歴のトークン数を監視し、閾値を超えた場合に
+    LLM 要約を用いて古い履歴を圧縮する。
+
+    純粋な工学的必要性への対応であり、脳科学上の対応構造は持たない。
+    LLM の直近で動作するユーティリティとして llm 層に配置している。
+    """
+
     def __init__(self, llm=None, compact_model: str | None = None) -> None:
         self._llm = llm
         self._compact_model = compact_model

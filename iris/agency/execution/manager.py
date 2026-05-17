@@ -4,11 +4,11 @@ import logging
 from collections.abc import Callable
 
 from iris.agency.bus import InternalBus, PlanDecided
-from iris.agency.execution.context import ContextManager
 from iris.agency.execution.monitor import OutputMonitor
 from iris.agency.execution.pipeline import LLMPipeline
 from iris.event.event_bus import EventBus
 from iris.event.event_types import OutputRequest
+from iris.llm.context_window import LLMContextWindowManager
 from iris.memory.hippocampal.manager import HippocampalManager
 
 logger = logging.getLogger(__name__)
@@ -20,7 +20,7 @@ class ExecutionManager:
         internal_bus: InternalBus,
         event_bus: EventBus,
         llm_pipeline: LLMPipeline,
-        context_manager: ContextManager | None = None,
+        context_window_mgr: LLMContextWindowManager | None = None,
         context_window: int = 0,
         hippocampal: HippocampalManager | None = None,
         monitor: OutputMonitor | None = None,
@@ -29,7 +29,7 @@ class ExecutionManager:
         self._bus = internal_bus
         self._event_bus = event_bus
         self._pipeline = llm_pipeline
-        self._context_mgr = context_manager
+        self._context_window_mgr = context_window_mgr
         self._context_window = context_window
         self._hippocampal = hippocampal
         self._monitor = monitor
@@ -39,21 +39,17 @@ class ExecutionManager:
         self._bus.subscribe("PlanDecided", self._on_plan)
 
     def _on_plan(self, event: PlanDecided) -> None:
-        plan = event.plan
-        action = plan.get("action")
-        if action in ("respond", "proactive"):
-            self._execute_general(plan)
+        self._execute_general(event.plan)
 
     def _execute_general(self, plan: dict) -> None:
         session_id = plan.get("session_id", "")
-        action = plan.get("action", "respond")
-        abbreviated = plan.get("abbreviated", action == "proactive")
+        content = plan.get("content", "")
+        abbreviated = plan.get("abbreviated", False)
         streaming = plan.get("streaming", not abbreviated)
         show_thinking = plan.get("show_thinking", not abbreviated)
         run_reflexion = plan.get("run_reflexion", not abbreviated)
         run_compression = plan.get("run_compression", not abbreviated)
         record_history = plan.get("record_history", True)
-        content = plan.get("content", "")
 
         if record_history and content:
             self._messages.append({"role": "user", "content": content})
@@ -106,8 +102,8 @@ class ExecutionManager:
                 self._msg_count_since_reflect,
             )
 
-        if run_compression and self._context_mgr:
-            self._context_mgr.check_and_summarize(self._messages, self._context_window)
+        if run_compression and self._context_window_mgr:
+            self._context_window_mgr.check_and_summarize(self._messages, self._context_window)
 
         if self._monitor:
             self._monitor.record_output()
@@ -125,17 +121,17 @@ class ExecutionManager:
         self._event_bus.publish(
             OutputRequest(
                 session_id=session_id,
-                message_type=action,
+                message_type="response",
                 content=response_text,
             )
         )
 
     def compact_context(self) -> str:
-        if self._context_mgr is None:
+        if self._context_window_mgr is None:
             return "Context manager not available"
         if len(self._messages) < 2:
             return "Not enough messages to compact"
-        summary = self._context_mgr.compact(self._messages)
+        summary = self._context_window_mgr.compact(self._messages)
         keep = 6
         self._messages = [{"role": "system", "content": f"## Session Summary\n{summary}"}] + self._messages[-keep:]
         return f"Compacted: {len(summary)} chars summary, kept last {keep} messages"

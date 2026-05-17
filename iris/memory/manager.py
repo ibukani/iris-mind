@@ -7,7 +7,6 @@ from typing import Any
 from iris.event.event_bus import EventBus
 from iris.event.event_types import InputReady, InputReceived, TimerTick
 from iris.kernel.config import ProactiveConfig
-from iris.memory.scoring import ProactiveScoring
 from iris.memory.sensory.buffer import InputBuffer
 from iris.memory.stores import EpisodicStore, SemanticStore
 from iris.memory.vector_store import VectorStore
@@ -24,52 +23,25 @@ class MemoryManager:
         episodic: EpisodicStore,
         semantic: SemanticStore | None = None,
         vector_store: VectorStore | None = None,
+        proactive_config: ProactiveConfig | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._episodic = episodic
         self._semantic = semantic
         self._vector_store = vector_store
         self._sensory_buffer: InputBuffer | None = None
-        self._proactive_scoring: ProactiveScoring | None = None
-        self._proactive_config: ProactiveConfig | None = None
         self._last_proactive_check: float = 0.0
+        self._proactive_config = proactive_config
 
         self._event_bus.subscribe("InputReceived", self._on_input_received)
+        if proactive_config and proactive_config.enabled:
+            self._event_bus.subscribe("TimerTick", self._on_timer_tick)
 
     def set_sensory_buffer(self, buffer: InputBuffer) -> None:
         self._sensory_buffer = buffer
         self._sensory_buffer.set_flush_callback(self._on_sensory_flush)
 
-    def set_proactive_scoring(self, scoring: ProactiveScoring, config: ProactiveConfig) -> None:
-        self._proactive_scoring = scoring
-        self._proactive_config = config
-        if config.enabled:
-            self._event_bus.subscribe("TimerTick", self._on_timer_tick)
-
-    def _compute_salience(self) -> tuple[float, dict[str, float]]:
-        if self._proactive_scoring is None:
-            return 0.0, {}
-        try:
-            return self._proactive_scoring.compute_salience()
-        except Exception:
-            logger.exception("Salience computation failed")
-            return 0.0, {}
-
-    def _make_proactive_context(self, total: float, scores: dict[str, float]) -> dict:
-        return {
-            "is_proactive": True,
-            "salience": total,
-            "scores": scores,
-        }
-
-    def _make_user_context(self, total: float, scores: dict[str, float]) -> dict:
-        return {
-            "is_proactive": False,
-            "salience": total,
-            "scores": scores,
-        }
-
-    # === TimerTick handler (proactive trigger) ===
+    # === TimerTick handler (rate-limit → forward) ===
 
     def _on_timer_tick(self, _event: TimerTick) -> None:
         cfg = self._proactive_config
@@ -79,18 +51,13 @@ class MemoryManager:
         if now - self._last_proactive_check < cfg.check_interval_sec:
             return
         self._last_proactive_check = now
-
-        total, scores = self._compute_salience()
-        if total < cfg.speak_threshold:
-            return
-
         self._event_bus.publish(
             InputReady(
                 timestamp=None,
                 source="memory",
                 session_id="",
                 content="",
-                context=self._make_proactive_context(total, scores),
+                context={"from_timer": True},
             )
         )
 
@@ -98,7 +65,6 @@ class MemoryManager:
 
     def _on_input_received(self, event: InputReceived) -> None:
         buf = self._sensory_buffer
-        total, scores = self._compute_salience()
         if buf is not None:
             buf.session_id = event.session_id
             buf.add_fragment(event.content, event.is_final)
@@ -110,12 +76,10 @@ class MemoryManager:
                     source="memory",
                     session_id=event.session_id,
                     content=event.content,
-                    context=self._make_user_context(total, scores),
                 )
             )
 
     def _on_sensory_flush(self, session_id: str, content: str) -> None:
-        total, scores = self._compute_salience()
         if content:
             self._episodic.add(f"[user_input] {content}")
         self._event_bus.publish(
@@ -124,7 +88,6 @@ class MemoryManager:
                 source="memory",
                 session_id=session_id,
                 content=content,
-                context=self._make_user_context(total, scores),
             )
         )
 

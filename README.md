@@ -69,6 +69,30 @@ TCP 経由でも `/shutdown` コマンドを送信可能。
 
 詳細な設計は [`docs/`](./docs/README.md) を参照。
 
+## 外部開発者向け（Client接続）
+
+Iris に TCP 接続して会話するクライアントを開発する場合:
+
+1. **[Client Guide](./docs/client-guide.md)** — 応答パターン・自発発話・コマンド・期待される動作
+2. **[IPC Protocol Spec](./docs/ipc-spec.md)** — ワイヤー形式・認証・メッセージ構造・実装例
+3. 実装例: [Python (生ソケット)](./docs/ipc-spec.md#91-最小クライアントpython--生ソケット版) / [C#](./docs/ipc-spec.md#93-c--net) / [Rust](./docs/ipc-spec.md#94-rust) / [Node.js](./docs/ipc-spec.md#95-nodejs)
+
+```mermaid
+flowchart LR
+    subgraph Ext["外部クライアント"]
+        CLI["CLI / Web / 他言語"]
+    end
+    subgraph Iris["Iris Kernel"]
+        TCP["TcpListener :9876"]
+        IO["IOManager"]
+        EV["EventBus"]
+    end
+    CLI <-->|TCP| TCP
+    TCP --> IO
+    IO --> EV
+    EV --> IO --> TCP --> CLI
+```
+
 ## 機能
 
 - **LLM 会話** — Ollama / OpenRouter 経由でローカルまたはクラウド LLM と会話

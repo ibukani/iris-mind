@@ -86,37 +86,46 @@ class LLMPipeline:
             interrupt_token=interrupt_token,
         )
 
-    def generate_proactive(self, context_hint: str = "") -> str:
+    def generate(self, plan: dict, messages: list[dict], on_token: Callable[[str], None] | None = None) -> str:
+        if plan.get("tools_allowed", True):
+            return self._generate_with_tools(messages, on_token=on_token)
+        max_tokens = plan.get("max_tokens", 80) or None
+        temperature = plan.get("temperature", 0.5)
+        return self._generate_without_tools(plan, max_tokens, temperature)
+
+    def _generate_without_tools(self, plan: dict, max_tokens: int | None, temperature: float) -> str:
         system_prompt = self._build_system_prompt()
-        tier_prompt = (
+        extra_prompt = plan.get(
+            "short_prompt",
             "あなたはIrisです。ユーザーに自然に声をかけてください。\n\n"
             "■ ルール:\n"
             "- 短く（40文字以内）で友好的\n"
             "- ユーザーのことを推測せず、確実にわかることだけ\n"
             "- 質問形式より気遣い・報告形式を優先\n"
-            "- 発話内容のみ出力\n\n"
-            "■ コンテキスト:\n"
-            f"{context_hint}"
+            "- 発話内容のみ出力",
         )
+        context_hint = plan.get("context_hint", "")
+        tier_prompt = f"{extra_prompt}\n\n■ コンテキスト:\n{context_hint}" if context_hint else extra_prompt
+        user_msg = plan.get("short_user_message", "短く自然な一言を生成してください。")
         msgs = [
             {"role": "system", "content": system_prompt + "\n\n" + tier_prompt},
-            {"role": "user", "content": "短く自然な一言を生成してください。"},
+            {"role": "user", "content": user_msg},
         ]
         try:
             resp = self._llm.chat(
                 messages=msgs,
                 model=self._model_config.get_model("default"),
-                max_tokens=80,
-                temperature=0.5,
+                max_tokens=max_tokens or 80,
+                temperature=temperature,
             )
             text = (resp.get("message", {}) or {}).get("content", "").strip().strip('"')
             if text and len(text) < 120:
                 return text
         except Exception as e:
-            logger.debug("Proactive speech generation failed: %s", e)
+            logger.debug("Short generation failed: %s", e)
         return "お疲れさまです！何かお手伝いしましょうか？"
 
-    def iterate_with_tools(
+    def _generate_with_tools(
         self,
         messages: list[dict],
         on_token: Callable[[str], None] | None = None,

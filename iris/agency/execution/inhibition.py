@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +18,13 @@ _NEGATIVE_RESPONSES = frozenset(
         "shut up",
     }
 )
+
+
+@dataclass
+class GateVerdict:
+    suppressed: bool
+    score: float
+    reason: str
 
 
 class InhibitionController:
@@ -43,6 +51,36 @@ class InhibitionController:
             if self._consecutive_ignores >= 2:
                 self._confirmation_mode = True
                 logger.info("Entered confirmation mode (ignores=%d)", self._consecutive_ignores)
+
+    def evaluate(self, now: float) -> GateVerdict:
+        if now < self._cooldown_until or self._is_sleeping:
+            return GateVerdict(suppressed=True, score=0.0, reason="cooldown_or_sleep")
+
+        factors: list[tuple[str, float]] = []
+
+        mood_ok = 1.0 - self._negative_mood_score
+        factors.append(("mood", max(0.0, mood_ok)))
+
+        if self._confirmation_mode:
+            factors.append(("confirmation", 0.3))
+        else:
+            factors.append(("confirmation", 1.0))
+
+        if self._last_user_activity > 0:
+            elapsed = now - self._last_user_activity
+            if elapsed < 10:
+                factors.append(("recent_activity", 1.0))
+            elif elapsed < 60:
+                factors.append(("recent_activity", 0.8))
+            else:
+                factors.append(("recent_activity", 0.5))
+        else:
+            factors.append(("recent_activity", 0.5))
+
+        score = min(f[1] for f in factors)
+        low = [f[0] for f in factors if f[1] < 0.5]
+        reason = ", ".join(low) if low else "open"
+        return GateVerdict(suppressed=False, score=score, reason=reason)
 
     def is_suppressed(self, now: float) -> bool:
         return now < self._cooldown_until or self._is_sleeping
@@ -80,7 +118,6 @@ class InhibitionController:
             "confirmation_mode": self._confirmation_mode,
         }
 
-    # Properties for Scoring consumption
     @property
     def last_proactive_time(self) -> float:
         return self._last_proactive_time

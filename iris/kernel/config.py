@@ -131,6 +131,7 @@ class ProactiveConfig(BaseModel):
         "mood": 0.15,
     }
     speak_threshold: float = 0.60
+    abbreviated_threshold: float = 0.25
 
 
 class PersonalityConfig(BaseModel):

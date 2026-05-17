@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import logging
+import time
 from typing import Any
 
 from iris.event.event_bus import EventBus
-from iris.event.event_types import InputReady, InputReceived
+from iris.event.event_types import InputReady, InputReceived, TimerTick
+from iris.kernel.config import ProactiveConfig
+from iris.memory.scoring import ProactiveScoring
 from iris.memory.sensory.buffer import InputBuffer
 from iris.memory.stores import EpisodicStore, SemanticStore
 from iris.memory.vector_store import VectorStore
@@ -27,12 +30,103 @@ class MemoryManager:
         self._semantic = semantic
         self._vector_store = vector_store
         self._sensory_buffer: InputBuffer | None = None
+        self._proactive_scoring: ProactiveScoring | None = None
+        self._proactive_config: ProactiveConfig | None = None
+        self._last_proactive_check: float = 0.0
 
         self._event_bus.subscribe("InputReceived", self._on_input_received)
 
     def set_sensory_buffer(self, buffer: InputBuffer) -> None:
         self._sensory_buffer = buffer
         self._sensory_buffer.set_flush_callback(self._on_sensory_flush)
+
+    def set_proactive_scoring(self, scoring: ProactiveScoring, config: ProactiveConfig) -> None:
+        self._proactive_scoring = scoring
+        self._proactive_config = config
+        if config.enabled:
+            self._event_bus.subscribe("TimerTick", self._on_timer_tick)
+
+    def _compute_salience(self) -> tuple[float, dict[str, float]]:
+        if self._proactive_scoring is None:
+            return 0.0, {}
+        try:
+            return self._proactive_scoring.compute_salience()
+        except Exception:
+            logger.exception("Salience computation failed")
+            return 0.0, {}
+
+    def _make_proactive_context(self, total: float, scores: dict[str, float]) -> dict:
+        return {
+            "is_proactive": True,
+            "salience": total,
+            "scores": scores,
+        }
+
+    def _make_user_context(self, total: float, scores: dict[str, float]) -> dict:
+        return {
+            "is_proactive": False,
+            "salience": total,
+            "scores": scores,
+        }
+
+    # === TimerTick handler (proactive trigger) ===
+
+    def _on_timer_tick(self, _event: TimerTick) -> None:
+        cfg = self._proactive_config
+        if not cfg or not cfg.enabled:
+            return
+        now = time.time()
+        if now - self._last_proactive_check < cfg.check_interval_sec:
+            return
+        self._last_proactive_check = now
+
+        total, scores = self._compute_salience()
+        if total < cfg.speak_threshold:
+            return
+
+        self._event_bus.publish(
+            InputReady(
+                timestamp=None,
+                source="memory",
+                session_id="",
+                content="",
+                context=self._make_proactive_context(total, scores),
+            )
+        )
+
+    # === EventBus handlers ===
+
+    def _on_input_received(self, event: InputReceived) -> None:
+        buf = self._sensory_buffer
+        total, scores = self._compute_salience()
+        if buf is not None:
+            buf.session_id = event.session_id
+            buf.add_fragment(event.content, event.is_final)
+        else:
+            self._episodic.add(f"[{event.msg_type}] {event.content}")
+            self._event_bus.publish(
+                InputReady(
+                    timestamp=event.timestamp,
+                    source="memory",
+                    session_id=event.session_id,
+                    content=event.content,
+                    context=self._make_user_context(total, scores),
+                )
+            )
+
+    def _on_sensory_flush(self, session_id: str, content: str) -> None:
+        total, scores = self._compute_salience()
+        if content:
+            self._episodic.add(f"[user_input] {content}")
+        self._event_bus.publish(
+            InputReady(
+                timestamp=None,
+                source="memory",
+                session_id=session_id,
+                content=content,
+                context=self._make_user_context(total, scores),
+            )
+        )
 
     # === Generic API ===
 
@@ -70,7 +164,7 @@ class MemoryManager:
                 }
                 for r in results
             ]
-        if self._vector_store and not results:
+        if self._vector_store:
             results = self._vector_store.search(query=query, max_results=kwargs.get("max_results", 3))
             return [
                 {
@@ -112,33 +206,3 @@ class MemoryManager:
 
     def search_semantic(self, query: str, max_results: int = 3) -> list[dict[str, Any]]:
         return self.search(query, stream="semantic", max_results=max_results)
-
-    # === EventBus handlers ===
-
-    def _on_input_received(self, event: InputReceived) -> None:
-        buf = self._sensory_buffer
-        if buf is not None:
-            buf.session_id = event.session_id
-            buf.add_fragment(event.content, event.is_final)
-        else:
-            self._episodic.add(f"[{event.msg_type}] {event.content}")
-            self._event_bus.publish(
-                InputReady(
-                    timestamp=event.timestamp,
-                    source="memory",
-                    session_id=event.session_id,
-                    content=event.content,
-                )
-            )
-
-    def _on_sensory_flush(self, session_id: str, content: str) -> None:
-        if content:
-            self._episodic.add(f"[user_input] {content}")
-        self._event_bus.publish(
-            InputReady(
-                timestamp=None,
-                source="memory",
-                session_id=session_id,
-                content=content,
-            )
-        )

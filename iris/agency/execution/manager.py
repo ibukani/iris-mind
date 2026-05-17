@@ -41,73 +41,91 @@ class ExecutionManager:
     def _on_plan(self, event: PlanDecided) -> None:
         plan = event.plan
         action = plan.get("action")
-        if action == "respond":
-            self._execute_respond(plan)
-        elif action == "proactive":
-            self._execute_proactive(plan)
-        else:
-            logger.debug("ExecutionManager: unhandled action=%s", action)
+        if action in ("respond", "proactive"):
+            self._execute_general(plan)
 
-    def _execute_respond(self, plan: dict) -> None:
+    def _execute_general(self, plan: dict) -> None:
         session_id = plan.get("session_id", "")
+        action = plan.get("action", "respond")
+        abbreviated = plan.get("abbreviated", action == "proactive")
+        streaming = plan.get("streaming", not abbreviated)
+        show_thinking = plan.get("show_thinking", not abbreviated)
+        run_reflexion = plan.get("run_reflexion", not abbreviated)
+        run_compression = plan.get("run_compression", not abbreviated)
+        record_history = plan.get("record_history", True)
         content = plan.get("content", "")
 
-        self._messages.append({"role": "user", "content": content})
+        if record_history and content:
+            self._messages.append({"role": "user", "content": content})
 
-        if self._session_roles_getter:
+        if show_thinking:
+            self._event_bus.publish(
+                OutputRequest(
+                    session_id=session_id,
+                    message_type="stream",
+                    content="",
+                    state="thinking",
+                )
+            )
+
+        if self._session_roles_getter and not abbreviated:
             self._pipeline.set_session_roles_summary(self._session_roles_getter())
 
-        self._event_bus.publish(
-            OutputRequest(
-                session_id=session_id,
-                message_type="stream",
-                content="",
-                state="thinking",
-            )
-        )
+        on_token: Callable[[str], None] | None = None
+        if streaming:
 
-        try:
-            response_text = self._pipeline.iterate_with_tools(
-                self._messages,
-                on_token=lambda delta: self._event_bus.publish(
+            def _on_token(delta: str) -> None:
+                self._event_bus.publish(
                     OutputRequest(
                         session_id=session_id,
                         message_type="stream",
                         content=delta,
                         state="speaking",
                     )
-                ),
+                )
+
+            on_token = _on_token
+
+        try:
+            response_text = self._pipeline.generate(
+                plan=plan,
+                messages=self._messages,
+                on_token=on_token,
             )
         except Exception as e:
             response_text = f"[Error: {e}]"
             logger.exception("LLM call failed")
 
-        self._messages.append({"role": "assistant", "content": response_text})
-        self._msg_count_since_reflect += 1
-        self._msg_count_since_reflect = (
-            self._hippocampal.maybe_run(self._messages, self._msg_count_since_reflect)
-            if self._hippocampal
-            else self._msg_count_since_reflect
-        )
+        if record_history:
+            self._messages.append({"role": "assistant", "content": response_text})
+            self._msg_count_since_reflect += 1
 
-        if self._context_mgr:
+        if run_reflexion and self._hippocampal:
+            self._msg_count_since_reflect = self._hippocampal.maybe_run(
+                self._messages,
+                self._msg_count_since_reflect,
+            )
+
+        if run_compression and self._context_mgr:
             self._context_mgr.check_and_summarize(self._messages, self._context_window)
 
         if self._monitor:
             self._monitor.record_output()
 
-        self._event_bus.publish(
-            OutputRequest(
-                session_id=session_id,
-                message_type="stream",
-                content="",
-                state="done",
+        if show_thinking:
+            self._event_bus.publish(
+                OutputRequest(
+                    session_id=session_id,
+                    message_type="stream",
+                    content="",
+                    state="done",
+                )
             )
-        )
+
         self._event_bus.publish(
             OutputRequest(
                 session_id=session_id,
-                message_type="response",
+                message_type=action,
                 content=response_text,
             )
         )
@@ -121,20 +139,3 @@ class ExecutionManager:
         keep = 6
         self._messages = [{"role": "system", "content": f"## Session Summary\n{summary}"}] + self._messages[-keep:]
         return f"Compacted: {len(summary)} chars summary, kept last {keep} messages"
-
-    def _execute_proactive(self, plan: dict) -> None:
-        context_hint = plan.get("context_hint", "")
-        content = self._pipeline.generate_proactive(context_hint=context_hint)
-
-        self._event_bus.publish(
-            OutputRequest(
-                session_id="",
-                message_type="proactive",
-                content=content,
-            )
-        )
-
-        if self._monitor:
-            self._monitor.record_output()
-
-        logger.info("Proactive speech: %s", content)

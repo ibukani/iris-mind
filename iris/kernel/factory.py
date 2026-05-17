@@ -12,8 +12,6 @@ from iris.agency.execution.pipeline import LLMPipeline
 from iris.agency.execution.tool_executor import ToolExecutionEngine
 from iris.agency.manager import AgencyManager
 from iris.agency.planning.manager import PlanningManager
-from iris.agency.planning.scoring import ProactiveScoring
-from iris.agency.planning.timer_gate import TimerGate
 from iris.event.event_bus import EventBus
 from iris.io.manager import IOManager
 from iris.io.session.manager import SessionConfig, SessionManager
@@ -27,6 +25,7 @@ from iris.memory.manager import MemoryManager
 from iris.memory.personality.persona_data import PersonaData
 from iris.memory.personality.persona_profile import PersonaProfile
 from iris.memory.personality.personality import Personality
+from iris.memory.scoring import ProactiveScoring
 from iris.memory.sensory.buffer import InputBuffer
 from iris.memory.sensory.readiness import ReadinessEvaluator
 from iris.memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
@@ -84,16 +83,11 @@ class KernelFactory:
         registry, tool_exec = KernelFactory._build_capabilities()
 
         # ============================================================
-        # Phase 4.5: プロアクティブ機構 (PFC評価 + 基底核抑制 + タイミングゲート)
+        # Phase 4.5: プロアクティブ機構 (PFC評価 + 基底核抑制)
         # ============================================================
         inhibition = InhibitionController()
         scoring = ProactiveScoring(config=config.proactive, memory=memory_mgr)
-        timer_gate = TimerGate(
-            config=config.proactive,
-            event_bus=event_bus,
-            scoring=scoring,
-            inhibition=inhibition,
-        )
+        memory_mgr.set_proactive_scoring(scoring, config.proactive)
 
         # ============================================================
         # Phase 5: Agency 層 (planning + execution)
@@ -107,7 +101,6 @@ class KernelFactory:
             memory_mgr,
             tool_exec,
             session_mgr,
-            timer_gate=timer_gate,
             inhibition=inhibition,
         )
 
@@ -184,7 +177,6 @@ class KernelFactory:
     def _build_capabilities() -> tuple[ToolRegistry, ToolExecutionEngine]:
         registry = ToolRegistry()
         registry.discover_modules()
-
         tool_exec = ToolExecutionEngine(registry=registry)
         return registry, tool_exec
 
@@ -197,7 +189,6 @@ class KernelFactory:
         memory: MemoryManager,
         tool_exec: ToolExecutionEngine,
         session_mgr: SessionManager,
-        timer_gate: TimerGate | None = None,
         inhibition: InhibitionController | None = None,
     ) -> AgencyManager:
         personality = Personality(name=config.personality.name, prompt_file=config.personality.prompt_file)
@@ -226,7 +217,14 @@ class KernelFactory:
             tool_executor=tool_exec,
             capability_checker=capability_checker,
         )
-        planning = PlanningManager(internal_bus=internal_bus)
+
+        planning = PlanningManager(
+            internal_bus=internal_bus,
+            event_bus=event_bus,
+            inhibition=inhibition,
+            config=config,
+        )
+
         monitor = OutputMonitor(internal_bus=internal_bus)
         context_mgr = ContextManager(llm=llm, compact_model=config.model.get_model("default"))
         execution = ExecutionManager(
@@ -239,11 +237,9 @@ class KernelFactory:
             monitor=monitor,
             session_roles_getter=session_mgr.get_roles_summary,
         )
+
         return AgencyManager(
-            event_bus=event_bus,
-            internal_bus=internal_bus,
             planning=planning,
             execution=execution,
-            timer_gate=timer_gate,
             inhibition=inhibition,
         )

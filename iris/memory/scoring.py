@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from iris.kernel.config import ProactiveConfig
-from iris.memory.manager import MemoryManager
+
+if TYPE_CHECKING:
+    from iris.memory.manager import MemoryManager  # noqa: F811
 
 logger = logging.getLogger(__name__)
 
@@ -12,6 +15,18 @@ class ProactiveScoring:
     def __init__(self, config: ProactiveConfig, memory: MemoryManager) -> None:
         self._config = config
         self._memory = memory
+
+    def compute_salience(self) -> tuple[float, dict[str, float]]:
+        memory_score = self._compute_memory_score()
+        context_score = self._compute_context_score()
+        w = self._config.trigger_weights
+        mem_w = w.get("memory", 0.45)
+        ctx_w = w.get("context", 0.15)
+        total = mem_w * memory_score + ctx_w * context_score
+        divider = mem_w + ctx_w
+        if divider > 0:
+            total = total / divider
+        return total, {"memory": memory_score, "context": context_score}
 
     def compute(
         self,

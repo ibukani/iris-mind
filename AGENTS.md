@@ -31,7 +31,7 @@ debug_tools/                      ← デバッグ用ツール
 iris/                             ← アプリケーションコア
 ├── kernel/                       ← 脳幹: プロセス管理 + DI + コマンド処理
 │   ├── manager.py                ← KernelManager（全体状態集約）
-│   ├── process.py                ← KernelProcess（起動・停止）
+│   ├── process.py                ← KernelProcess（起動・停止, TimerTick発行）
 │   ├── supervisor.py             ← Supervisor（シグナル管理）
 │   ├── factory.py                ← DIコンテナ（全層構築）
 │   └── commands/                 ← CommandHandler（/shutdown 等）
@@ -46,21 +46,31 @@ iris/                             ← アプリケーションコア
 │   └── event_types.py            ← イベント型定義
 ├── memory/                       ← 記憶系: 感覚野+海馬+皮質
 │   ├── manager.py                ← MemoryManager（汎用 store/retrieve/search）
+│   ├── stores.py                 ← EpisodicStore + SemanticStore
+│   ├── vector_store.py           ← VectorStore（ONNX埋め込み）
 │   ├── sensory/                  ← InputBuffer（断片的入力保持）
-│   ├── episodic/                 ← EpisodicStore（JSONL）
-│   ├── semantic/                 ← SemanticStore（ChromaDB+BM25）
-│   ├── hippocampal/              ← Reflexion + ContextManager（海馬: 整理・圧縮）
-│   ├── personality/              ← 人格: 性格特性・話し方（記憶から形成）
-│   └── vector/                   ← VectorStore（ONNX埋め込み）
+│   ├── hippocampal/              ← Reflexion（海馬: 記憶整理）
+│   └── personality/              ← 人格: 性格特性・話し方（記憶から形成）
 ├── agency/                       ← 高度認知: PFC+基底核+運動野
-│   ├── manager.py                ← AgencyManager（global↔internal橋渡し）
-│   ├── bus.py                    ← 内部 EventBus（planning↔execution）
-│   ├── planning/                 ← 前頭前野: 意思決定
-│   │   └── manager.py            ← PlanningManager
-│   └── execution/                ← 基底核+運動野: 行動実行
-│       ├── manager.py            ← ExecutionManager
-│       └── pipeline.py           ← LLMPipeline（LLM+ツールループ）
-├── llm/                          ← LLM通信（変更なし）
+│   ├── manager.py                ← AgencyManager（compact_context中継）
+│   ├── bus.py                    ← 内部 EventBus（planning→execution）
+│   ├── planning/                 ← 前頭前野: 意思決定 + PFCスコアリング
+│   │   ├── manager.py            ← PlanningManager
+│   │   └── scoring.py            ← ProactiveScoring
+│   └── execution/                ← 基底核+運動野: 行動実行 + 抑制制御
+│       ├── manager.py            ← ExecutionManager（action分岐なし）
+│       ├── pipeline.py           ← LLMPipeline（LLM+ツールループ）
+│       ├── inhibition.py         ← InhibitionController（基底核抑制）
+│       ├── monitor.py            ← OutputMonitor
+│       ├── tool_executor.py      ← ToolExecutionEngine
+│       └── interrupt_token.py    ← InterruptToken
+├── llm/                          ← LLM基盤 + ContextWindow管理
+│   ├── llm_bridge.py
+│   ├── provider.py
+│   ├── ollama_provider.py
+│   ├── openrouter_provider.py
+│   ├── capability_checker.py
+│   └── context_window.py         ← LLMContextWindowManager（会話履歴圧縮）
 └── tools/                        ← @tool, ToolRegistry, ビルトイン実装
 
 docs/                             ← 設計ドキュメント

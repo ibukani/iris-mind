@@ -80,7 +80,7 @@ class KernelFactory:
         # ============================================================
         # Phase 4: ケイパビリティ (ツール)
         # ============================================================
-        registry, tool_exec = KernelFactory._build_capabilities()
+        registry, tool_exec = KernelFactory._build_tools()
 
         # ============================================================
         # Phase 4.5: 基底核抑制
@@ -175,7 +175,7 @@ class KernelFactory:
         return LLMBridge(provider=provider)
 
     @staticmethod
-    def _build_capabilities() -> tuple[ToolRegistry, ToolExecutionEngine]:
+    def _build_tools() -> tuple[ToolRegistry, ToolExecutionEngine]:
         registry = ToolRegistry()
         registry.discover_modules()
         tool_exec = ToolExecutionEngine(registry=registry)

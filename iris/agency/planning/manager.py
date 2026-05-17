@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import UTC, datetime
 
 from iris.agency.bus import InternalBus, PlanDecided
 from iris.agency.execution.inhibition import GateVerdict, InhibitionController
@@ -87,11 +88,13 @@ class PlanningManager:
             }
 
         abbreviated = gate.suppressed or gate.score < self._cfg.abbreviated_threshold
+        context_hint = self._build_user_context_hint(content)
         logger.debug(
             "Plan built: abbreviated=%s suppressed=%s gate_score=%.3f", abbreviated, gate.suppressed, gate.score
         )
         return {
             "content": content,
+            "context_hint": context_hint,
             "abbreviated": abbreviated,
             "tools_allowed": not abbreviated,
             "streaming": not abbreviated,
@@ -103,6 +106,25 @@ class PlanningManager:
             "record_history": True,
         }
 
+    @staticmethod
+    def _format_age(ts: str) -> str:
+        if not ts:
+            return ""
+        try:
+            dt = datetime.fromisoformat(ts)
+            diff = datetime.now(UTC) - dt
+            secs = int(diff.total_seconds())
+            if secs < 60:
+                return "たった今"
+            if secs < 3600:
+                return f"{secs // 60}分前"
+            if secs < 86400:
+                return f"{secs // 3600}時間前"
+            days = secs // 86400
+            return f"{days}日前" if days > 1 else "昨日"
+        except Exception:
+            return ""
+
     def _build_context_hint(self, scores: dict[str, float]) -> str:
         now = time.localtime()
         hour = now.tm_hour
@@ -113,14 +135,45 @@ class PlanningManager:
         if self._memory:
             try:
                 recent = self._memory.get_recent(3)
-                topics = [item.get("summary", "") for item in recent if item.get("summary")]
+                topics = [
+                    f"{e['summary'][:60]}（{self._format_age(e.get('timestamp', ''))}）"
+                    for e in recent
+                    if e.get("summary")
+                ]
                 if topics:
-                    joined = " | ".join(topics)
-                    parts.append(f"直近の話題: {joined[:100]}")
+                    parts.append("直近の話題: " + " | ".join(topics))
                 prefs = self._memory.get_user_preferences()
                 if prefs:
                     parts.append(f"ユーザーの関心: {prefs[0].get('content', '')[:80]}")
             except Exception:
                 logger.debug("Memory hint failed", exc_info=True)
 
+        return " / ".join(parts)
+
+    def _build_user_context_hint(self, content: str) -> str:
+        if not self._memory or not content:
+            return ""
+        parts: list[str] = []
+        try:
+            recent = self._memory.get_recent(3)
+            for e in reversed(recent):
+                s = e.get("summary", "")
+                ts = self._format_age(e.get("timestamp", ""))
+                if s:
+                    label = "直前の話題" if ts == "たった今" else "過去の話題"
+                    text = f"{label}: {s[:60]}（{ts}）" if ts else f"話題: {s[:60]}"
+                    parts.append(text)
+                    break
+
+            results = self._memory.search_semantic(content, max_results=2)
+            if results:
+                best = max(results, key=lambda r: r.get("score", 0))
+                if best.get("score", 0) > 0.5:
+                    ts = self._format_age(best.get("timestamp", ""))
+                    label = f"関連記憶: {best.get('content', '')[:60]}"
+                    if ts:
+                        label += f"（{ts}）"
+                    parts.append(label)
+        except Exception:
+            logger.debug("User context hint failed", exc_info=True)
         return " / ".join(parts)

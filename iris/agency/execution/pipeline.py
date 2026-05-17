@@ -16,10 +16,7 @@ from iris.memory.stores import AgentsMdStore
 logger = logging.getLogger(__name__)
 
 _SITUATION_INSTRUCTIONS: dict[str, str] = {
-    "proactive": (
-        "## 状況: 自発的な一声\n"
-        "時間帯や会話の流れに合わせて、自然に声をかけてください。"
-    ),
+    "proactive": ("## 状況: 自発的な一声\n時間帯や会話の流れに合わせて、自然に声をかけてください。"),
 }
 
 _SITUATION_USER_MESSAGES: dict[str, str] = {
@@ -55,7 +52,7 @@ class LLMPipeline:
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
 
-    def _build_system_prompt(self) -> str:
+    def _build_system_prompt(self, context_hint: str = "") -> str:
         agents_md = self._agents_md_store.load() if self._agents_md_store else ""
         speech_style = self._persona_profile.get_speech_style() if self._persona_profile else ""
         traits = self._persona_profile.get_traits() if self._persona_profile else ""
@@ -64,7 +61,7 @@ class LLMPipeline:
         governance = self._governance_principles or ""
         session_roles = self._session_roles_summary or "（なし）"
 
-        return self._personality.build_system_prompt(
+        prompt = self._personality.build_system_prompt(
             agents_md_content=agents_md,
             speech_style=speech_style,
             personality_traits=traits,
@@ -72,6 +69,10 @@ class LLMPipeline:
             governance_principles=governance,
             session_roles=session_roles,
         )
+
+        if context_hint:
+            prompt += f"\n\n## 会話コンテキスト\n{context_hint}"
+        return prompt
 
     def _get_tools(self) -> list[dict] | None:
         if self._tool_executor is None:
@@ -84,8 +85,9 @@ class LLMPipeline:
         tools: list[dict] | None = None,
         on_token: Callable[[str], None] | None = None,
         interrupt_token: InterruptToken | None = None,
+        context_hint: str = "",
     ) -> dict:
-        system_prompt = self._build_system_prompt()
+        system_prompt = self._build_system_prompt(context_hint=context_hint)
         msgs: list[dict] = [{"role": "system", "content": system_prompt}, *messages]
 
         return self._llm.chat(
@@ -98,22 +100,21 @@ class LLMPipeline:
         )
 
     def generate(self, plan: dict, messages: list[dict], on_token: Callable[[str], None] | None = None) -> str:
+        context_hint = plan.get("context_hint", "")
         if plan.get("tools_allowed", True):
-            return self._generate_with_tools(messages, on_token=on_token)
+            return self._generate_with_tools(messages, context_hint=context_hint, on_token=on_token)
         max_tokens = plan.get("max_tokens", 80) or None
         temperature = plan.get("temperature", 0.5)
         return self._generate_without_tools(plan, max_tokens, temperature)
 
     def _generate_without_tools(self, plan: dict, max_tokens: int | None, temperature: float) -> str:
-        system_prompt = self._build_system_prompt()
-        situation = plan.get("situation", "")
         context_hint = plan.get("context_hint", "")
+        system_prompt = self._build_system_prompt(context_hint=context_hint)
+        situation = plan.get("situation", "")
 
         parts = [system_prompt]
         if situation in _SITUATION_INSTRUCTIONS:
             parts.append(_SITUATION_INSTRUCTIONS[situation])
-        if context_hint:
-            parts.append(f"## コンテキスト\n{context_hint}")
 
         user_msg = _SITUATION_USER_MESSAGES.get(situation, "")
         msgs = [
@@ -139,6 +140,7 @@ class LLMPipeline:
         messages: list[dict],
         on_token: Callable[[str], None] | None = None,
         interrupt_token: InterruptToken | None = None,
+        context_hint: str = "",
     ) -> str:
         tools = self._get_tools()
         if tools and self._capability_checker and not self._capability_checker.supports_tools("default"):
@@ -153,7 +155,9 @@ class LLMPipeline:
                 break
 
             iteration += 1
-            resp = self.call(messages, tools=tools, on_token=on_token, interrupt_token=interrupt_token)
+            resp = self.call(
+                messages, tools=tools, on_token=on_token, interrupt_token=interrupt_token, context_hint=context_hint
+            )
             msg = resp.get("message", {})
 
             if msg.get("tool_calls") and self._tool_executor is not None:

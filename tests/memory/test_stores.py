@@ -38,7 +38,9 @@ def test_episodic_store_add_and_get() -> None:
     store = EpisodicStore(path=path, max_entries=30)
     store.add("hello world")
     recent = store.get_recent(1)
-    assert recent == ["hello world"]
+    assert len(recent) == 1
+    assert recent[0]["summary"] == "hello world"
+    assert "timestamp" in recent[0]
     os.unlink(path)
 
 
@@ -50,7 +52,7 @@ def test_episodic_store_max_entries() -> None:
         store.add(f"entry {i}")
     recent = store.get_recent(10)
     assert len(recent) == 3
-    assert recent[-1] == "entry 4"
+    assert recent[-1]["summary"] == "entry 4"
     os.unlink(path)
 
 

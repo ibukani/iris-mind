@@ -82,7 +82,7 @@ flowchart LR
     subgraph Ext["外部クライアント"]
         CLI["CLI / Web / 他言語"]
     end
-    subgraph Iris["Iris Kernel"]
+    subgraph Iris["Iris Mind"]
         TCP["TcpListener :9876"]
         IO["IOManager"]
         EV["EventBus"]
@@ -116,8 +116,8 @@ flowchart LR
 
 ```powershell
 # リポジトリをクローン
-git clone https://github.com/your-org/iris-kernel.git
-cd iris-kernel
+git clone https://github.com/your-org/iris-mind.git
+cd iris-mind
 
 # 仮想環境を作成
 python -m venv .venv
@@ -161,7 +161,7 @@ python main.py --verbose                # 診断ログを stderr に出力
 ## プロジェクト構成
 
 ```
-iris-kernel/
+iris-mind/
 ├── .agents/                     # コーディングエージェント用導線・Skills
 ├── .iris/                       # 設定・データ
 │   ├── config/

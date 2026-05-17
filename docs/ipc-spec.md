@@ -1,8 +1,8 @@
-# Iris Kernel 通信プロトコル仕様 v4.0
+# Iris Mind 通信プロトコル仕様 v4.0
 
 ## 1. 概要
 
-Iris Kernel は TCP 経由で外部プロセスと通信する。このドキュメントは**言語非依存**のプロトコル仕様を定義する。任意のプログラミング言語から実装可能。
+Iris Mind は TCP 経由で外部プロセスと通信する。このドキュメントは**言語非依存**のプロトコル仕様を定義する。任意のプログラミング言語から実装可能。
 
 ### 設計原則
 
@@ -78,7 +78,7 @@ config:
 sequenceDiagram
     autonumber
     participant Client as クライアント
-    participant Kernel as Iris Kernel
+    participant Kernel as Iris Mind
 
     Client->>+Kernel: TCP connect (127.0.0.1:9876)
     Client->>+Kernel: AuthMessage (msg_type: auth, mode: bidirectional)
@@ -127,7 +127,7 @@ config:
 sequenceDiagram
     autonumber
     participant Client as クライアント
-    participant Kernel as Iris Kernel
+    participant Kernel as Iris Mind
 
     rect rgb(232, 240, 254)
         Note over Client,Kernel: 認証

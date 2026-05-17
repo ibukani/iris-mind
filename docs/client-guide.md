@@ -1,6 +1,6 @@
 # Iris Client Guide
 
-このドキュメントは Iris Kernel に TCP 接続するクライアント開発者向けに、**Iris の動作**と**期待される入出力**を説明する。
+このドキュメントは Iris Mind に TCP 接続するクライアント開発者向けに、**Iris の動作**と**期待される入出力**を説明する。
 
 ワイヤー形式・メッセージ構造などは [`ipc-spec.md`](./ipc-spec.md) を参照。
 
@@ -13,7 +13,7 @@
 ```mermaid
 sequenceDiagram
     participant C as Client
-    participant K as Iris Kernel
+    participant K as Iris Mind
 
     C->>K: auth
     K-->>C: auth_success

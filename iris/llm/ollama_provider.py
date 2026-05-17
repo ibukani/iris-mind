@@ -7,6 +7,7 @@ ollama.Client をラップし、ストリーミング・thinking モード・ツ
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import re
 import subprocess
@@ -15,9 +16,14 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+import httpx
 from ollama import Client
 
 from iris.kernel.config import ModelConfig
+
+logger = logging.getLogger(__name__)
+_MAX_RETRIES = 3
+_RETRY_BACKOFF_SECONDS = 0.5
 
 
 class OllamaProvider:
@@ -74,9 +80,21 @@ class OllamaProvider:
         if on_token is not None:
             return self._stream_chat(**call_kwargs, on_token=on_token, interrupt_token=interrupt_token)
 
-        resp = self.client.chat(**call_kwargs)
+        resp = self._chat_with_retries(call_kwargs)
         resp["message"] = _process_message(resp["message"])
         return resp
+
+    def _chat_with_retries(self, kwargs: dict) -> dict:
+        for attempt in range(_MAX_RETRIES):
+            try:
+                return self.client.chat(**kwargs)
+            except httpx.TransportError:
+                if attempt == _MAX_RETRIES - 1:
+                    raise
+                _log_retry(attempt)
+                time.sleep(_retry_delay(attempt))
+
+        raise RuntimeError("Ollama request retry loop exited unexpectedly")
 
     def _stream_chat(
         self,
@@ -84,22 +102,48 @@ class OllamaProvider:
         interrupt_token: Any = None,
         **kwargs: Any,
     ) -> dict:
-        stream = self.client.chat(**kwargs)
+        for attempt in range(_MAX_RETRIES):
+            try:
+                return self._stream_chat_once(
+                    on_token=on_token,
+                    interrupt_token=interrupt_token,
+                    **kwargs,
+                )
+            except httpx.TransportError:
+                if attempt == _MAX_RETRIES - 1:
+                    raise
+                _log_retry(attempt)
+                time.sleep(_retry_delay(attempt))
+
+        raise RuntimeError("Ollama stream retry loop exited unexpectedly")
+
+    def _stream_chat_once(
+        self,
+        on_token: Callable[[str], None],
+        interrupt_token: Any = None,
+        **kwargs: Any,
+    ) -> dict:
         content_parts: list[str] = []
         tool_calls = None
         final = None
-        for chunk in stream:
-            if interrupt_token is not None and getattr(interrupt_token, "is_cancelled", False):
-                break
-            if chunk.get("done"):
-                final = dict(chunk)
-                break
-            msg = chunk.get("message", {})
-            if msg.get("content"):
-                content_parts.append(msg["content"])
-                on_token(msg["content"])
-            if msg.get("tool_calls"):
-                tool_calls = msg["tool_calls"]
+        try:
+            stream = self.client.chat(**kwargs)
+            for chunk in stream:
+                if interrupt_token is not None and getattr(interrupt_token, "is_cancelled", False):
+                    break
+                if chunk.get("done"):
+                    final = dict(chunk)
+                    break
+                msg = chunk.get("message", {})
+                if msg.get("content"):
+                    content_parts.append(msg["content"])
+                    on_token(msg["content"])
+                if msg.get("tool_calls"):
+                    tool_calls = msg["tool_calls"]
+        except httpx.TransportError:
+            if content_parts:
+                raise RuntimeError("Ollama stream disconnected after partial response") from None
+            raise
 
         if final is None:
             final = {"message": {"role": "assistant", "content": ""}}
@@ -143,6 +187,14 @@ def _process_message(msg: dict) -> dict:
     if msg.get("content"):
         msg["content"] = msg["content"].strip()
     return msg
+
+
+def _retry_delay(attempt: int) -> float:
+    return _RETRY_BACKOFF_SECONDS * (2**attempt)
+
+
+def _log_retry(attempt: int) -> None:
+    logger.warning("Ollama connection failed; retrying (%d/%d)", attempt + 1, _MAX_RETRIES)
 
 
 def _get_available_models() -> set[str]:

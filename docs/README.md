@@ -36,6 +36,3 @@ Iris は脳科学・神経科学の構造を参考にした層分割アーキテ
 4. **Internal Bus** — Agency 層内の planning↔execution 通信は内部 EventBus を使用
 5. **DI コンテナ** — Factory (`kernel/factory.py`) のみ全層のインスタンス生成を行う
 
-### Architecture Decision Records
-
-設計上の重要な決定は `docs/adr/` に記録する。

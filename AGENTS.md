@@ -171,7 +171,7 @@ pytest tests/memory/ -q              # memoryテストのみ
 - **マルチモード**（`models` が2つ以上）: `get_model(role)` で role ベースのモデル選択
   - 未知の role が指定された場合は `models[0]` にフォールバック
 - `config.yaml` の `model.provider` で Ollama / OpenRouter を切り替え可能
-- 会話履歴は `context_window`（トークン数）を超えた場合、`compaction_threshold` に基づき自動要約（ContextManager → `memory/hippocampal/`）
+- 会話履歴は `context_window`（トークン数）を超えた場合、`compaction_threshold` に基づき自動要約（LLMContextWindowManager → `iris/llm/context_window.py`）
 - 要約は `## Session Summary` としてシステムプロンプトに注入。`/compact` コマンドで手動トリガー可能
 - 要約時のモデルは `ModelConfig.get_model("default")` を使用（単一モデルも複数モデルも同じインターフェース）
 

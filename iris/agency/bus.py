@@ -13,21 +13,6 @@ class PlanDecided:
     plan: dict
 
 
-@dataclass
-class ExecutionResult:
-    session_id: str
-    success: bool
-    summary: str
-    messages: list[dict]
-
-
-@dataclass
-class ExecutionFeedback:
-    session_id: str
-    query: str
-    context: dict
-
-
 class InternalBus:
     def __init__(self) -> None:
         self._subscribers: dict[str, list[Callable]] = defaultdict(list)

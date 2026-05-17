@@ -52,28 +52,8 @@ flowchart TD
         I_TOOLS["tools/"]
     end
 
-    subgraph Agency["agency/ 前頭前野+大脳基底核+運動野"]
-        A_Bus["bus/ 内部EventBus"]
-        A_Manager["AgencyManager<br/>橋渡し"]
-
-        subgraph Planning["planning/ 前頭前野"]
-            P_Manager["PlanningManager<br/>意思決定"]
-        end
-
-        subgraph Execution["execution/ 基底核+運動野"]
-            E_Manager["ExecutionManager<br/>行動実行"]
-            E_LLM["LLMPipeline<br/>LLM呼出+ツールループ"]
-        end
-    end
-
     subgraph Event["event/ 神経路"]
         EB["Global EventBus"]
-    end
-
-    subgraph Infra["LLM / Tools / Personality"]
-        I_LLM["llm/"]
-        I_TOOLS["tools/"]
-        I_PERS["personality/"]
     end
 
     EB ---|全層を結合| Kernel

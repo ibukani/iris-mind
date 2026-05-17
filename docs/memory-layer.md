@@ -112,7 +112,7 @@ class HippocampalManager:
 ### personality/
 
 **脳科学対応**: 前頭前野・連合野 — 人格は記憶の蓄積から形成される。
-現在 `iris/personality/` にあるが、v2 では `iris/memory/personality/` に移動する。
+`iris/memory/personality/` に配置されている。
 
 ```python
 class Personality:

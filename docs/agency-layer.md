@@ -11,7 +11,6 @@
 - PFC スコアリング（ProactiveScoring）: 自発発話の価値を時間・記憶・文脈・感情の4因子で評価
 - 基底核抑制（InhibitionController）: 行動の抑制を mood / confirmation / cooldown で制御
 - 行動実行（execution）: 決定された計画を LLM・Tool を用いて実行する
-- 実行結果のフィードバックは現在未実装（ExecutionResult イベントは定義済みだが未購読）
 
 ## Internal Bus
 

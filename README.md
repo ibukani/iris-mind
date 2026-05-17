@@ -235,7 +235,6 @@ pytest tests/                         # 全テスト実行
 | [memory-layer.md](./docs/memory-layer.md) | Memory 層 — 感覚野+海馬+皮質記憶 |
 | [config.md](./docs/config.md) | Config 設定一覧 |
 | [ipc-spec.md](./docs/ipc-spec.md) | IPC プロトコル仕様 (TCP) |
-| [adr/002-agency-layer-architecture.md](./docs/adr/002-agency-layer-architecture.md) | Agency層分割の決定記録 |
 
 ## 技術スタック
 

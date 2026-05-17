@@ -74,6 +74,30 @@ class AgentAnomalyEvent(Event):
     detail: str
 
 
+@dataclass
+class InputReceived(Event):
+    session_id: str = ""
+    content: str = ""
+    msg_type: str = "dispatch_text"
+    is_final: bool = True
+
+
+@dataclass
+class InputReady(Event):
+    session_id: str = ""
+    content: str = ""
+    context: dict | None = None
+
+
+@dataclass
+class OutputRequest(Event):
+    session_id: str = ""
+    message_type: str = ""
+    content: str = ""
+    state: str | None = None
+    correlation_id: str | None = None
+
+
 def new_trace_id() -> str:
     return _uuid.uuid4().hex[:12]
 
@@ -84,5 +108,8 @@ __all__ = [
     "AgentStateChangeEvent",
     "MemoryUpdateEvent",
     "AgentAnomalyEvent",
+    "InputReceived",
+    "InputReady",
+    "OutputRequest",
     "new_trace_id",
 ]

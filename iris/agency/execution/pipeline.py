@@ -9,11 +9,10 @@ from iris.memory.persona_profile import PersonaProfile
 from iris.memory.stores import AgentsMdStore
 from iris.personality.personality import Personality
 
-from ..config import ModelConfig
-from .context import ContextManager
-from .interrupt_token import InterruptToken
-from .memory_manager import MemoryManager
-from .tool_executor import ToolExecutionEngine
+from iris.kernel.config import ModelConfig
+from iris.memory.manager import MemoryManager
+from iris.agency.execution.tool_executor import ToolExecutionEngine
+from iris.agency.execution.interrupt_token import InterruptToken
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +28,6 @@ class LLMPipeline:
         memory: MemoryManager | None = None,
         tool_executor: ToolExecutionEngine | None = None,
         capability_checker: CapabilityChecker | None = None,
-        context_manager: ContextManager | None = None,
         governance_principles: str = "",
     ) -> None:
         self._llm = llm
@@ -40,7 +38,6 @@ class LLMPipeline:
         self._memory = memory
         self._tool_executor = tool_executor
         self._capability_checker = capability_checker
-        self._context_manager = context_manager
         self._governance_principles = governance_principles
         self._session_roles_summary: str = ""
         self._max_tool_iterations: int = 3
@@ -79,13 +76,7 @@ class LLMPipeline:
         interrupt_token: InterruptToken | None = None,
     ) -> dict:
         system_prompt = self._build_system_prompt()
-
-        ctx_mgr = self._context_manager
-        if ctx_mgr is not None and ctx_mgr.has_summary:
-            msgs: list[dict] = [{"role": "system", "content": system_prompt}]
-            msgs += ctx_mgr.build_compact_messages(messages)
-        else:
-            msgs = [{"role": "system", "content": system_prompt}, *messages]
+        msgs: list[dict] = [{"role": "system", "content": system_prompt}, *messages]
 
         return self._llm.chat(
             messages=msgs,

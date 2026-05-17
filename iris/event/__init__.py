@@ -2,7 +2,10 @@ from iris.event.event import (
     AgentAnomalyEvent,
     AgentStateChangeEvent,
     Event,
+    InputReceived,
+    InputReady,
     MemoryUpdateEvent,
+    OutputRequest,
     TimerTick,
     new_trace_id,
 )
@@ -16,5 +19,8 @@ __all__ = [
     "AgentStateChangeEvent",
     "MemoryUpdateEvent",
     "AgentAnomalyEvent",
+    "InputReceived",
+    "InputReady",
+    "OutputRequest",
     "new_trace_id",
 ]

@@ -4,29 +4,36 @@ import logging
 import threading
 from collections import defaultdict
 from collections.abc import Callable
+from dataclasses import dataclass
 from contextlib import suppress
-from typing import Protocol, runtime_checkable
-
-from iris.event.event import Event, new_trace_id
 
 
-@runtime_checkable
-class EventBusProtocol(Protocol):
-    def publish(self, event: Event) -> None: ...
-
-    def subscribe(self, event_type: str, handler: Callable) -> None: ...
-
-    def unsubscribe(self, event_type: str, handler: Callable) -> None: ...
+@dataclass
+class PlanDecided:
+    plan: dict
 
 
-class EventBus:
+@dataclass
+class ExecutionResult:
+    session_id: str
+    success: bool
+    summary: str
+    messages: list[dict]
+
+
+@dataclass
+class ExecutionFeedback:
+    session_id: str
+    query: str
+    context: dict
+
+
+class InternalBus:
     def __init__(self) -> None:
         self._subscribers: dict[str, list[Callable]] = defaultdict(list)
         self._lock: threading.Lock = threading.Lock()
 
-    def publish(self, event: Event) -> None:
-        if not event.trace_id:
-            event.trace_id = new_trace_id()
+    def publish(self, event: object) -> None:
         event_type = type(event).__name__
         with self._lock:
             handlers = list(self._subscribers.get(event_type, []))
@@ -35,7 +42,7 @@ class EventBus:
                 handler(event)
             except Exception:
                 logging.getLogger(__name__).exception(
-                    "EventBus handler error in %s for %s",
+                    "InternalBus handler error in %s for %s",
                     handler.__qualname__,
                     event_type,
                 )

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import logging
 from typing import Protocol
 
@@ -34,7 +33,7 @@ class KernelProcess:
 
         host = self._config.session.host
         port = self._config.session.port
-        self._ctx.tcp_listener.start(host=host, port=port)
+        self._ctx.io.start(host=host, port=port)
 
         logger.info("KernelProcess: started")
 
@@ -46,9 +45,6 @@ class KernelProcess:
             logger.info("KernelProcess: shutdown complete (was not started)")
             return
 
-        ctx.tcp_listener.stop()
-        with contextlib.suppress(Exception):
-            ctx.conversation.session_reflect()
-        ctx.kernel.shutdown()
+        ctx.io.stop()
 
         logger.info("KernelProcess: shutdown complete")

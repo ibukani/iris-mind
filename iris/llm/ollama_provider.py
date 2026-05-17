@@ -12,6 +12,7 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Callable
 from typing import Any
@@ -40,6 +41,7 @@ class OllamaProvider:
         self.num_gpu = num_gpu
         self.num_ctx = num_ctx
         self.client = Client(host=base_url)
+        self._chat_lock = threading.Lock()
 
     def chat(
         self,
@@ -77,12 +79,13 @@ class OllamaProvider:
         interrupt_token = kwargs.pop("interrupt_token", None)
         call_kwargs.update(kwargs)
 
-        if on_token is not None:
-            return self._stream_chat(**call_kwargs, on_token=on_token, interrupt_token=interrupt_token)
+        with self._chat_lock:
+            if on_token is not None:
+                return self._stream_chat(**call_kwargs, on_token=on_token, interrupt_token=interrupt_token)
 
-        resp = self._chat_with_retries(call_kwargs)
-        resp["message"] = _process_message(resp["message"])
-        return resp
+            resp = self._chat_with_retries(call_kwargs)
+            resp["message"] = _process_message(resp["message"])
+            return resp
 
     def _chat_with_retries(self, kwargs: dict) -> dict:
         for attempt in range(_MAX_RETRIES):

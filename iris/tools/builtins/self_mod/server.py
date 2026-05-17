@@ -7,8 +7,8 @@ from iris.tools.decorator import tool
 
 @tool(allowed_roles={"smart"})
 def generate_capability(name: str, code: str) -> str:
-    """新しいcapabilityコードを生成し、指定されたパスに保存します"""
-    dest = Path("iris/capabilities") / name / "server.py"
+    """新しいcapabilityコードを生成し、tools/builtins に保存します"""
+    dest = Path("iris/tools/builtins") / name / "server.py"
     if dest.exists():
         return f"Error: already exists: {dest}"
     dest.parent.mkdir(parents=True, exist_ok=True)

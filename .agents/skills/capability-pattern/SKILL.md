@@ -17,8 +17,8 @@ metadata:
 
 1. 配置を決める
 
-- 通常: `iris/capabilities/<name>/server.py`
-- built-in: `iris/tools/builtins/` に実装し、`iris/kernel/core/factory.py` で明示登録
+- 通常: `iris/tools/builtins/<name>/server.py`
+- 自動発見: `discover_modules()` が `iris/tools/builtins/` 配下の `server.py` を探して自動登録
 
 2. `@tool()` で定義する
 
@@ -70,7 +70,7 @@ git commit -m "feat: <ツール名> capability を追加"
 
 ## Rules
 
-- 新規追加は `@tool()` を使う。旧 `register_func()` は既存互換用。
+- 新規追加は `@tool()` を使う。
 - `__init__.py` を必要なパッケージに置く。
 - 戻り値は基本 `str`。
 - `allowed_roles` を指定しない場合は全ロール利用可。

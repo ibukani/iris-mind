@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from iris.capabilities.registry import CapabilityRegistry
+from iris.tools.registry import ToolRegistry
 
 
 class ToolExecutionEngine:
-    def __init__(self, registry: CapabilityRegistry) -> None:
+    def __init__(self, registry: ToolRegistry) -> None:
         self.registry = registry
 
     def execute_all(self, ctx: list[dict]) -> list[tuple[str, str, bool]]:

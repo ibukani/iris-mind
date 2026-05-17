@@ -60,8 +60,7 @@ iris/                             ← アプリケーションコア
 │       ├── manager.py            ← ExecutionManager
 │       └── pipeline.py           ← LLMPipeline（LLM+ツールループ）
 ├── llm/                          ← LLM通信（変更なし）
-├── capabilities/                 ← ツール実装（変更なし）
-└── tools/                        ← @tool, ToolRegistry（変更なし）
+└── tools/                        ← @tool, ToolRegistry, ビルトイン実装
 
 docs/                             ← 設計ドキュメント
 ├── adr/                          ← Architecture Decision Records
@@ -91,7 +90,7 @@ iris/llm/     ──→ EventBus     (LLM provider ファサード)
 
 ## v2 アーキテクチャ（神経科学ベース）
 
-脳科学・神経科学の構造を参考にした層分割。詳細は `docs/v2/architecture.md` を参照。
+脳科学・神経科学の構造を参考にした層分割。詳細は `docs/architecture.md` を参照。
 
 | 層 | 脳科学対応 | 責務 |
 |----|-----------|------|
@@ -108,10 +107,9 @@ iris/llm/     ──→ EventBus     (LLM provider ファサード)
 - VectorStore: ONNXMiniLM_L6_V2 埋め込み、cosine類似度、統合スコア = vector*0.6 + bm25*0.4
 
 ## capability の追加ルール
-1. `iris/capabilities/<name>/server.py` に配置（既存互換）または `iris/tools/builtins/`（ビルトイン）
+1. `iris/tools/builtins/<name>/server.py` に配置
 2. `@tool()` デコレータでツール定義（型ヒント→JSON Schema 自動生成）
-3. 旧 `register_func()` も当面動作可、新規追加は `@tool()` を推奨
-4. `register(registry)` 関数で `registry.register_decorated(fn)` をエクスポート（`discover_modules()` 用）
+3. `register(registry)` 関数で `registry.register_decorated(fn)` をエクスポート（`discover_modules()` 用）
 5. `allowed_roles` パラメータで利用可能なモデルロールを制限（デフォルトは全てのロールで利用可）
 6. `side_effect=True` で作用系ツール（結果を会話に戻さず短絡）
 7. 新しいcapabilityを追加したら `.iris/data/iris_profile.md` の「My Capabilities」セクションも更新する

@@ -3,8 +3,8 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from iris.capabilities.registry import CapabilityRegistry
 from iris.commands.handler import CommandHandler
+from iris.tools.registry import ToolRegistry
 from iris.llm.capability_checker import CapabilityChecker
 from iris.llm.llm_bridge import LLMBridge, create_provider
 from iris.memory.persona_data import PersonaData
@@ -168,8 +168,8 @@ class KernelFactory:
         return LLMBridge(provider=provider)
 
     @staticmethod
-    def _build_capabilities() -> tuple[CapabilityRegistry, ToolExecutionEngine]:
-        registry = CapabilityRegistry()
+    def _build_capabilities() -> tuple[ToolRegistry, ToolExecutionEngine]:
+        registry = ToolRegistry()
         registry.discover_modules()
 
         from iris.tools.builtins.output import output_to

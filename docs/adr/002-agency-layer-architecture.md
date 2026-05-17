@@ -39,8 +39,7 @@ v0.3 の `iris/kernel/` は以下をすべて内包している:
 | `iris/agency/` | 前頭前野 + 大脳基底核 + 運動野 | 意思決定（planning）と行動実行（execution） |
 | `iris/event/` | 神経路（白質） | 層をまたぐグローバルイベントバス（kernel から分離） |
 | `iris/llm/` | — | LLM インフラ（変更なし） |
-| `iris/capabilities/` | — | ツール実装（変更なし） |
-| `iris/tools/` | — | @tool, ToolRegistry（変更なし） |
+| `iris/tools/` | — | @tool, ToolRegistry, ビルトイン実装 |
 
 ### イベント一覧（グローバル EventBus）
 
@@ -101,8 +100,8 @@ Phase 2 では以下を**一時的に削除**:
 
 ## 参考
 
-- docs/v2/architecture.md（層別詳細設計）
-- docs/v2/memory-layer.md
-- docs/v2/agency-layer.md
-- docs/v2/kernel-layer.md
-- docs/v2/io-layer.md
+- docs/architecture.md（層別詳細設計）
+- docs/memory-layer.md
+- docs/agency-layer.md
+- docs/kernel-layer.md
+- docs/io-layer.md

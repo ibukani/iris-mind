@@ -1,7 +1,7 @@
 # Iris Project Brief
 
 このファイルは `AGENTS.md` を読んだ後に、Iris 固有の責務境界だけを素早く確認するための補助メモです。
-詳細な構成、コマンド、ルールは `AGENTS.md`、設計判断は `docs/v2/architecture.md` と `docs/adr/` を一次情報にします。
+詳細な構成、コマンド、ルールは `AGENTS.md`、設計判断は `docs/architecture.md` と `docs/adr/` を一次情報にします。
 
 ## Scope
 
@@ -13,12 +13,12 @@
 ## Boundaries
 
 - `iris/kernel/` はドメイン層。外部サービス実装を直接持ち込まない。
-- `iris/llm/`, `iris/capabilities/` は kernel へ注入されるインフラ層。
+- `iris/llm/`, `iris/tools/` は kernel へ注入されるインフラ層。
 - `iris/memory/` は記憶系層。過去のインフラ層から昇格。
 - `iris/io/`, `iris/agency/`, `iris/event/` は kernel から分離された独立層。
 - 全層は EventBus (`iris/event/`) を介して疎結合。
 - `debug_tools/` は `iris/` に依存してよいが、`iris/` から `debug_tools/` へ依存しない。
-- IPC とプロセス設計の詳細は `docs/v2/architecture.md` と `docs/adr/` を読む。
+- IPC とプロセス設計の詳細は `docs/architecture.md` と `docs/adr/` を読む。
 
 ## Workflows
 

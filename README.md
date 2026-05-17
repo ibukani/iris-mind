@@ -1,6 +1,6 @@
 # Iris — Autonomous AI Assistant
 
-Iris は自律的に行動・進化できるAIアシスタントです。Python 製で Ollama または OpenRouter 上で動作し、Reflexion ループによる自己改善、Capability Registry による動的機能拡張、3層ガバナンスによる自律発話を特徴とします。
+Iris は自律的に行動・進化できるAIアシスタントです。Python 製で Ollama または OpenRouter 上で動作し、Reflexion ループによる自己改善、ツール基盤による動的機能拡張、3層ガバナンスによる自律発話を特徴とします。
 
 ## アーキテクチャ
 
@@ -38,7 +38,7 @@ TCP 経由でも `/shutdown` コマンドを送信可能。
 - **LLM 会話** — Ollama / OpenRouter 経由でローカルまたはクラウド LLM と会話
 - **自律発話 (ProactiveEngine)** — 3層ガバナンス (Tier1 自動 / Tier2 LLM自己判断 / Tier3 AgentKernel介入)
 - **Reflexion 自己改善** — 会話後に自己反省し、行動を改善
-- **動的 Capability 拡張** — 実行時にツールを追加可能
+- **動的ツール拡張** — 実行時にツールを追加可能
 - **記憶システム** — エピソード記憶 (JSONL)、意味記憶 (ChromaDB + BM25 ハイブリッド検索)、動的パーソナリティ
 - **会話履歴圧縮** — ContextManager が token window 超過時に自動要約
 - **スラッシュコマンド** — `/help`, `/sleep`, `/wakeup`, `/compact`, `/clear`, `/status`, `/reflect`
@@ -116,8 +116,7 @@ iris-kernel/
 │   │   └── services/            # Conversation, Proactive, LLMPipeline, Reflexion, etc.
 │   ├── llm/                     # LLM通信 (LLMBridge, OllamaProvider, OpenRouterProvider)
 │   ├── memory/                  # 記憶管理 (stores, vector_store, persona)
-│   ├── capabilities/            # ツール実装 (file_ops, code_exec, etc.)
-│   ├── tools/                   # 型安全ツール基盤 (@tool, ToolRegistry)
+│   ├── tools/                   # @tool, ToolRegistry, ビルトイン実装
 │   ├── commands/                # スラッシュコマンド処理
 │   └── personality/             # プロンプト管理
 ├── tests/                       # テストスイート (249 tests, ~8秒)
@@ -138,7 +137,7 @@ pytest tests/                         # 全テスト実行
 
 ### Capability 追加
 
-1. `iris/capabilities/<name>/server.py` に配置
+1. `iris/tools/builtins/<name>/server.py` に配置
 2. `@tool()` デコレータでツール定義（型ヒント→JSON Schema 自動生成）
 3. `register(registry)` 関数で `registry.register_decorated(fn)` をエクスポート
 4. `.iris/data/iris_profile.md` の `My Capabilities` を更新
@@ -151,12 +150,13 @@ pytest tests/                         # 全テスト実行
 
 | ドキュメント | 内容 |
 |---|---|
-| [architecture.md](./docs/architecture.md) | 全体アーキテクチャ — v0.3 1ポート統合 |
-| [event-bus.md](./docs/event-bus.md) | EventBus インターフェース仕様 |
-| [ipc-spec.md](./docs/ipc-spec.md) | IPC プロトコル仕様 (TCP, 1ポート多重) |
-| [agent-state.md](./docs/agent-state.md) | AgentState 状態遷移 |
-| [proactive-engine.md](./docs/proactive-engine.md) | ProactiveEngine 自律発話 |
-| [memory-manager.md](./docs/memory-manager.md) | 記憶システム |
+| [architecture.md](./docs/architecture.md) | v2 全体アーキテクチャ — 脳科学ベース層分割 |
+| [agency-layer.md](./docs/agency-layer.md) | Agency 層 — 意思決定と行動実行 |
+| [io-layer.md](./docs/io-layer.md) | IO 層 — TCP入出力・セッション管理 |
+| [kernel-layer.md](./docs/kernel-layer.md) | Kernel 層 — プロセス管理・DI |
+| [memory-layer.md](./docs/memory-layer.md) | Memory 層 — 感覚野+海馬+皮質記憶 |
+| [config.md](./docs/config.md) | Config 設定一覧 |
+| [ipc-spec.md](./docs/ipc-spec.md) | IPC プロトコル仕様 (TCP) |
 | [adr/001-3-process-architecture.md](./docs/adr/001-3-process-architecture.md) | 3-Process分解の決定記録 |
 
 ## 技術スタック

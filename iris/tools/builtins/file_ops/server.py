@@ -5,7 +5,6 @@ from iris.tools.decorator import tool
 
 @tool(allowed_roles={"base", "smart"})
 def read_file(path: str) -> str:
-    """指定されたファイルの内容を読み込みます"""
     p = Path(path)
     if not p.exists():
         return f"Error: file not found: {path}"
@@ -14,7 +13,6 @@ def read_file(path: str) -> str:
 
 @tool(allowed_roles={"base", "smart"})
 def write_file(path: str, content: str) -> str:
-    """指定されたファイルに内容を書き込みます（既存ファイルは上書き）"""
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content, encoding="utf-8")
@@ -23,7 +21,6 @@ def write_file(path: str, content: str) -> str:
 
 @tool(allowed_roles={"base", "smart"})
 def list_files(path: str = ".") -> str:
-    """指定されたディレクトリ内のファイル一覧を返します"""
     p = Path(path)
     if not p.is_dir():
         return f"Error: not a directory: {path}"

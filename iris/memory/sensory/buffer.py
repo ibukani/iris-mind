@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import logging
 import threading
-import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
+
+from iris.memory.sensory.readiness import ReadinessEvaluator
 
 logger = logging.getLogger(__name__)
 
@@ -20,9 +21,13 @@ class InputBuffer:
     _lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     _flush_callback: Callable[[str, str], None] | None = field(default=None, repr=False)
     _closed: bool = field(default=False, repr=False)
+    _readiness: ReadinessEvaluator | None = field(default=None, repr=False)
 
     def set_flush_callback(self, callback: Callable[[str, str], None]) -> None:
         self._flush_callback = callback
+
+    def set_readiness_evaluator(self, evaluator: ReadinessEvaluator) -> None:
+        self._readiness = evaluator
 
     def add_fragment(self, content: str, is_final: bool) -> None:
         if self._closed:
@@ -34,10 +39,16 @@ class InputBuffer:
                 self._flush_locked()
                 return
 
-        if is_final:
-            self.flush()
-        else:
-            self._reset_timer()
+            if is_final:
+                self._flush_locked()
+                return
+
+            readiness = self._readiness
+            if readiness is not None and readiness.evaluate(self._fragments, is_final=False):
+                self._flush_locked()
+                return
+
+        self._reset_timer()
 
     def flush(self) -> None:
         with self._lock:

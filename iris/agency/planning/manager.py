@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import time
 
 from iris.agency.bus import InternalBus, PlanDecided
 
@@ -17,8 +18,28 @@ class PlanningManager:
         plan["session_id"] = session_id
         self._bus.publish(PlanDecided(plan=plan))
 
+    def handle_proactive(self, scores: dict[str, float], total: float, trigger_type: str) -> None:
+        context_hint = self._build_context_hint(scores)
+        plan = {
+            "action": "proactive",
+            "scores": scores,
+            "total_score": total,
+            "trigger_type": trigger_type,
+            "context_hint": context_hint,
+        }
+        self._bus.publish(PlanDecided(plan=plan))
+        logger.info("Proactive plan: trigger=%s score=%.2f", trigger_type, total)
+
     def _decide(self, content: str, context: dict) -> dict:
         return {"action": "respond", "content": content}
 
     def _on_result(self, event: object) -> None:
         pass
+
+    @staticmethod
+    def _build_context_hint(scores: dict[str, float]) -> str:
+        now = time.localtime()
+        hour = now.tm_hour
+        time_str = "午前" if hour < 12 else "午後" if hour < 17 else "夕方以降"
+        trigger = max(scores, key=lambda k: scores[k])
+        return f"時間帯: {time_str} / トリガー: {trigger}"

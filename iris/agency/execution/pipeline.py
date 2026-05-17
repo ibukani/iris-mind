@@ -87,6 +87,36 @@ class LLMPipeline:
             interrupt_token=interrupt_token,
         )
 
+    def generate_proactive(self, context_hint: str = "") -> str:
+        system_prompt = self._build_system_prompt()
+        tier_prompt = (
+            "あなたはIrisです。ユーザーに自然に声をかけてください。\n\n"
+            "■ ルール:\n"
+            "- 短く（40文字以内）で友好的\n"
+            "- ユーザーのことを推測せず、確実にわかることだけ\n"
+            "- 質問形式より気遣い・報告形式を優先\n"
+            "- 発話内容のみ出力\n\n"
+            "■ コンテキスト:\n"
+            f"{context_hint}"
+        )
+        msgs = [
+            {"role": "system", "content": system_prompt + "\n\n" + tier_prompt},
+            {"role": "user", "content": "短く自然な一言を生成してください。"},
+        ]
+        try:
+            resp = self._llm.chat(
+                messages=msgs,
+                model=self._model_config.get_model("default"),
+                max_tokens=80,
+                temperature=0.5,
+            )
+            text = (resp.get("message", {}) or {}).get("content", "").strip().strip('"')
+            if text and len(text) < 120:
+                return text
+        except Exception as e:
+            logger.debug("Proactive speech generation failed: %s", e)
+        return "お疲れさまです！何かお手伝いしましょうか？"
+
     def iterate_with_tools(
         self,
         messages: list[dict],

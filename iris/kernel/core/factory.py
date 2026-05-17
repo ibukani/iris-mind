@@ -11,7 +11,7 @@ from iris.memory.persona_data import PersonaData
 from iris.memory.persona_profile import PersonaProfile
 from iris.memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
 from iris.memory.vector_store import VectorStore
-from iris.personality.personality import Personality
+from iris.memory.personality.personality import Personality
 
 from ..config import Config
 from iris.event.event_bus import EventBus

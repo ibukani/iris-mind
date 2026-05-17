@@ -6,7 +6,6 @@ from typing import Any
 
 import pytest
 
-from iris.kernel.agent_state import AgentStateManager
 from iris.kernel.config import Config, ModelConfig, ProactiveConfig
 from iris.event import EventBus
 from iris.io.models import ConnectionMode, OutputMessage
@@ -423,8 +422,6 @@ def event_bus() -> EventBus:
 
 
 @pytest.fixture
-def state_manager(event_bus: EventBus) -> AgentStateManager:
-    return AgentStateManager(event_bus=event_bus)
 
 
 @pytest.fixture

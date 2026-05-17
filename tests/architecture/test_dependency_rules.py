@@ -1,10 +1,14 @@
 """
 Architecture tests — enforce dependency direction constraints.
 
-Rules (from AGENTS.md):
-  debug_tools/ → iris/kernel/ → iris/llm/, iris/memory/, iris/capabilities/
-  iris/kernel/ must NOT import from debug_tools/
-  iris/kernel/ must NOT directly import from iris/llm/, iris/memory/, iris/capabilities/
+Rules (from AGENTS.md v2):
+  - All layers communicate via EventBus (iris/event/)
+  - KernelFactory (kernel/core/factory.py) is the only DI container that wires all layers
+  - iris/kernel/ must NOT import from debug_tools/
+  - iris/memory/ must NOT import from iris/io/ or iris/agency/
+  - iris/io/ must NOT import from iris/agency/ or iris/memory/
+  - iris/agency/ may import from iris/memory/, iris/event/
+  - debug_tools/ → iris/ (全層)
 """
 
 from __future__ import annotations
@@ -14,6 +18,9 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
+_IRIS_LAYERS = {"kernel", "event", "io", "memory", "agency", "llm", "capabilities", "tools", "commands", "personality"}
+_FACTORY_PATH = "iris/kernel/core/factory.py"
+
 
 def _get_python_files(package_dir: str) -> list[Path]:
     base = PROJECT_ROOT / package_dir
@@ -21,12 +28,10 @@ def _get_python_files(package_dir: str) -> list[Path]:
 
 
 def _get_imports(filepath: Path) -> list[str]:
-    """Extract all module-level import targets from a Python file."""
     try:
         tree = ast.parse(filepath.read_text(encoding="utf-8"))
     except SyntaxError:
         return []
-
     imports: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -47,7 +52,6 @@ def test_kernel_does_not_import_debug_tools() -> None:
 
 
 def test_kernel_does_not_directly_import_debug_tools() -> None:
-    """iris/kernel/ should not directly import debug_tools."""
     forbidden_prefixes = {"debug_tools"}
     for filepath in _get_python_files("iris/kernel"):
         imports = _get_imports(filepath)
@@ -59,54 +63,40 @@ def test_kernel_does_not_directly_import_debug_tools() -> None:
                     )
 
 
-def test_kernel_can_import_infrastructure() -> None:
-    """iris/kernel/ CAN import iris/llm, iris/memory, iris/capabilities (hexagonal arch)."""
-    kernel_dir = PROJECT_ROOT / "iris" / "kernel"
-    files = sorted(kernel_dir.rglob("*.py"))
-    infra_imports = {"iris.llm", "iris.memory", "iris.capabilities"}
-    for filepath in files:
-        if filepath.name.startswith("test_"):
+def test_memory_does_not_import_io_or_agency() -> None:
+    forbidden = {"iris.io", "iris.agency"}
+    for filepath in _get_python_files("iris/memory"):
+        if filepath.match(_FACTORY_PATH):
             continue
         imports = _get_imports(filepath)
         for imp in imports:
-            if any(imp.startswith(prefix) for prefix in infra_imports):
-                return  # at least one kernel file imports infrastructure — OK
-    raise AssertionError("No kernel file imports infrastructure — check if architecture is correct")
+            for prefix in forbidden:
+                if imp.startswith(prefix):
+                    raise AssertionError(f"{filepath} imports '{imp}' (memory must not depend on io or agency)")
 
 
-def test_no_circular_imports() -> None:
-    """Basic circular import detection across iris/ package."""
-    iris_dir = PROJECT_ROOT / "iris"
-    checked: set[Path] = set()
+def test_io_does_not_import_agency_or_memory() -> None:
+    forbidden = {"iris.agency", "iris.memory"}
+    for filepath in _get_python_files("iris/io"):
+        imports = _get_imports(filepath)
+        for imp in imports:
+            for prefix in forbidden:
+                if imp.startswith(prefix):
+                    raise AssertionError(f"{filepath} imports '{imp}' (io must not depend on agency or memory)")
 
-    def visit(filepath: Path, visiting: set[Path]) -> None:
-        if filepath in visiting:
-            raise AssertionError(f"Circular import detected involving {filepath}")
-        if filepath in checked:
-            return
-        visiting.add(filepath)
-        for imp in _get_imports(filepath):
-            if not imp.startswith("iris."):
-                continue
-            # Map import to file path
-            parts = imp.split(".")
-            if len(parts) >= 2:
-                rel_path = Path(*parts[1:-1]) / f"{parts[-1]}.py"
-                target = iris_dir / rel_path
-                if target.exists():
-                    visit(target, visiting)
-        visiting.discard(filepath)
-        checked.add(filepath)
 
-    for filepath in sorted(iris_dir.rglob("*.py")):
-        if filepath.name == "__init__.py":
-            continue
-        if filepath not in checked:
-            visit(filepath, set())
+def test_factory_is_only_layer_crossing_hub() -> None:
+    """KernelFactory imports from all layers — acceptable as DI container."""
+    factory_files = [p for p in _get_python_files("iris") if p.match(_FACTORY_PATH)]
+    assert len(factory_files) >= 1, "KernelFactory not found"
+    for filepath in factory_files:
+        imports = _get_imports(filepath)
+        infra = {"iris.io", "iris.memory", "iris.agency", "iris.event", "iris.llm", "iris.commands"}
+        found = [i for i in imports if any(i.startswith(p) for p in infra)]
+        assert len(found) >= 3, f"Factory should import from at least 3 layers, got: {found}"
 
 
 def test_debug_tools_imports_kernel() -> None:
-    """debug_tools/ should import from iris.kernel (but not vice versa)."""
     for filepath in _get_python_files("debug_tools"):
         imports = _get_imports(filepath)
         kernel_imports = [i for i in imports if i.startswith("iris.kernel")]

@@ -7,7 +7,7 @@ from iris.llm.capability_checker import CapabilityChecker
 from iris.llm.llm_bridge import LLMBridge
 from iris.memory.persona_profile import PersonaProfile
 from iris.memory.stores import AgentsMdStore
-from iris.personality.personality import Personality
+from iris.memory.personality.personality import Personality
 
 from iris.kernel.config import ModelConfig
 from iris.memory.manager import MemoryManager

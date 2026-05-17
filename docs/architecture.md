@@ -25,8 +25,29 @@ flowchart TD
         M_Sensory["sensory/<br/>入力バッファリング"]
         M_Episodic["episodic/<br/>エピソード記憶"]
         M_Semantic["semantic/<br/>意味記憶"]
-        M_Hippocampal["hippocampal/<br/>Reflexion+圧縮"]
+        M_Hippocampal["hippocampal/<br/>Reflexion"]
         M_Vector["vector/<br/>埋め込み検索"]
+    end
+
+    subgraph Agency["agency/ 前頭前野+大脳基底核+運動野"]
+        A_Bus["bus/ 内部EventBus"]
+
+        subgraph Planning["planning/ 前頭前野"]
+            P_Manager["PlanningManager<br/>意思決定"]
+            P_Scoring["ProactiveScoring<br/>PFCスコアリング"]
+        end
+
+        subgraph Execution["execution/ 基底核+運動野"]
+            INH["InhibitionController<br/>基底核抑制"]
+            E_Manager["ExecutionManager<br/>行動実行"]
+            E_LLM["LLMPipeline<br/>LLM呼出+ツールループ"]
+        end
+    end
+
+    subgraph Infra["LLM / Tools / ContextWindow"]
+        I_LLM["llm/"]
+        I_CW["LLMContextWindowManager<br/>会話履歴圧縮"]
+        I_TOOLS["tools/"]
     end
 
     subgraph Agency["agency/ 前頭前野+大脳基底核+運動野"]
@@ -77,16 +98,22 @@ sequenceDiagram
     TCP->>IO: InputMessage
     IO->>EB: InputReceived(msg)
     EB->>MEM: InputReceived
-    MEM->>MEM: sensory buffer
+    MEM->>MEM: sensory buffer → flush
     MEM->>EB: InputReady(content)
-    EB->>AG: InputReady
-    AG->>AG: planning → execution
+    EB->>AG: InputReady (PlanningManager直購読)
+    AG->>AG: _build_plan → PlanDecided
+    AG->>AG: _execute_general(plan)
     AG->>EB: OutputRequest(output)
     EB->>IO: OutputRequest
     IO->>TCP: OutputMessage
-    AG->>EB: Completed(session_id)
-    EB->>MEM: Completed
-    MEM->>MEM: 海馬: エピソード保存 / 振り返り判断
+    AG->>AG: 実行後: reflexion / compression
+
+    KRN->>EB: TimerTick (5秒間隔)
+    EB->>MEM: TimerTick (subscribe)
+    MEM->>MEM: rate-limit check
+    MEM->>EB: InputReady(from_timer=True)
+    EB->>AG: InputReady
+    AG->>AG: scoring + threshold + gate → PlanDecided
 ```
 
 ## 3. ディレクトリ構成
@@ -98,7 +125,7 @@ iris/
 ├── kernel/                    # 脳幹: プロセス管理 + DI + コマンド
 │   ├── __init__.py
 │   ├── manager.py             KernelManager（lifecycle, health, state）
-│   ├── process.py             KernelProcess（起動・停止）
+│   ├── process.py             KernelProcess（起動・停止, TimerTick発行）
 │   ├── supervisor.py          Supervisor（シグナル・コンソール）
 │   ├── factory.py             DIコンテナ（全層の構築）
 │   └── commands/
@@ -122,105 +149,96 @@ iris/
 ├── event/                     # 神経路: グローバルEventBus
 │   ├── __init__.py
 │   ├── bus.py                 EventBus
-│   └── events.py              イベント型定義
+│   └── event_types.py         イベント型定義
 │
 ├── memory/                    # 記憶系: 感覚野 + 海馬 + 皮質
 │   ├── __init__.py
-│   ├── manager.py             MemoryManager（EventBus連携 + plugin呼出）
+│   ├── manager.py             MemoryManager（EventBus連携, TimerTick rate-limit）
+│   ├── stores.py              EpisodicStore + SemanticStore（統合）
+│   ├── vector_store.py        VectorStore（ONNX埋め込み）
 │   ├── sensory/
 │   │   ├── __init__.py
-│   │   └── buffer.py          InputBuffer（断片的入力保持）
-│   ├── episodic/
-│   │   ├── __init__.py
-│   │   └── store.py           EpisodicStore（JSONL）
-│   ├── semantic/
-│   │   ├── __init__.py
-│   │   └── store.py           SemanticStore（JSONL + ChromaDB）
+│   │   ├── buffer.py          InputBuffer（断片的入力保持）
+│   │   └── readiness.py       ReadinessEvaluator
 │   ├── hippocampal/
 │   │   ├── __init__.py
-│   │   ├── reflexion.py       Reflexion（LLM分析）
-│   │   └── compression.py     ContextManager（会話要約）
-│   ├── personality/            # 人格: 性格特性・話し方（記憶から形成）
-│   │   ├── __init__.py
-│   │   ├── personality.py     Personality（システムプロンプト構築）
-│   │   ├── persona_data.py    PersonaData（動的管理）
-│   │   └── persona_profile.py PersonaProfile（話し方・性格）
-│   └── vector/
+│   │   └── reflexion.py       Reflexion, HippocampalManager
+│   └── personality/            # 人格: 性格特性・話し方（記憶から形成）
 │       ├── __init__.py
-│       └── store.py           VectorStore（ONNX埋め込み）
+│       ├── personality.py     Personality（システムプロンプト構築）
+│       ├── persona_data.py    PersonaData（動的管理）
+│       └── persona_profile.py PersonaProfile（話し方・性格）
 │
 ├── agency/                    # 高度認知: PFC + 基底核 + 運動野
 │   ├── __init__.py
-│   ├── manager.py             AgencyManager（global↔internal橋渡し）
+│   ├── manager.py             AgencyManager（compact_contextの中継のみ）
 │   ├── bus.py                 Internal EventBus
 │   ├── planning/
 │   │   ├── __init__.py
-│   │   └── manager.py         PlanningManager（意思決定）
+│   │   ├── manager.py         PlanningManager（意思決定, InputReady購読）
+│   │   └── scoring.py         ProactiveScoring（PFCスコアリング）
 │   └── execution/
 │       ├── __init__.py
-│       ├── manager.py         ExecutionManager（行動実行）
-│       └── pipeline.py        LLMPipeline（LLM呼出 + ツールループ）
+│       ├── manager.py         ExecutionManager（行動実行, _execute_general統一）
+│       ├── pipeline.py        LLMPipeline（generate + ツールループ）
+│       ├── inhibition.py      InhibitionController（基底核抑制, GateVerdict）
+│       ├── monitor.py         OutputMonitor（発話頻度監視）
+│       ├── tool_executor.py   ToolExecutionEngine
+│       └── interrupt_token.py InterruptToken
 │
-├── llm/                       # LLM インフラ（変更なし）
+├── llm/                       # LLM 基盤
 │   ├── __init__.py
 │   ├── llm_bridge.py
 │   ├── provider.py
 │   ├── ollama_provider.py
 │   ├── openrouter_provider.py
-│   └── capability_checker.py
+│   ├── capability_checker.py
+│   └── context_window.py      LLMContextWindowManager（会話履歴圧縮）
 │
-├── tools/                     # @tool, ToolRegistry, ビルトイン
-    │   ├── __init__.py
-    │   ├── decorator.py
-    │   ├── models.py
-    │   ├── registry.py
-    │   └── builtins/              # ツール実装
-    │       ├── file_ops/
-    │       ├── code_exec/
-    │       └── self_mod/
-    │
-    └── commands/                  # 削除（kernel/commands/ に移動）
+└── tools/                     # @tool, ToolRegistry, ビルトイン
+    ├── __init__.py
+    ├── decorator.py
+    ├── models.py
+    ├── registry.py
+    └── builtins/              # ツール実装
+        ├── file_ops/
+        ├── code_exec/
+        ├── output/
+        └── self_mod/
 ```
 
 ## 4. グローバル EventBus 定義
 
 ```python
-# iris/event/events.py
+# iris/event/event_types.py
 
 @dataclass
 class InputReceived:
-    message: InputMessage
+    timestamp: float | None
+    source: str
+    session_id: str
+    content: str
+    msg_type: str
+    is_final: bool
 
 @dataclass
 class InputReady:
+    timestamp: float | None
+    source: str
     session_id: str
     content: str
-    context: dict
+    context: dict | None
 
 @dataclass
 class OutputRequest:
     session_id: str
-    message: OutputMessage
-
-@dataclass
-class OutputSent:
-    session_id: str
-    message_id: str
-
-@dataclass
-class Completed:
-    session_id: str
-    summary: str
+    message_type: str     # "stream" | "response"
+    content: str
+    state: str | None     # "thinking" | "speaking" | "done"
 
 @dataclass
 class TimerTick:
-    timestamp: datetime
-
-@dataclass
-class CommandRequest:
-    command: str
-    args: str
-    session_id: str
+    timestamp: float
 ```
 
 ## 5. 状態管理（統合）
@@ -288,8 +306,10 @@ flowchart LR
 | kernel/event/ | kernel 内 | iris/event/ に分離 |
 | kernel/io/ | kernel 内 | iris/io/ に分離 |
 | ConversationService | 中央集権 | planning + execution に分散 |
-| ProactiveEngine | 単一サービス | planning + execution に分割予定 |
+| ProactiveEngine | 単一サービス | 解体: Memory(rate-limit) + Planning(scoring+threshold) + Execution(inhibition) |
 | Reflexion | kernel/services/ | memory/hippocampal/ |
-| ContextManager | kernel/services/ | memory/hippocampal/ |
+| ContextManager | kernel/services/ | → memory/hippocampal/ → iris/llm/context_window.py |
+| TimerGate | agency/planning/ | 削除（責務分散完了） |
+| ProactiveScoring | agency/planning/ | → memory/scoring.py → agency/planning/scoring.py |
 | InputBuffer | kernel/io/ | memory/sensory/ |
 | CommandHandler | iris/commands/ | kernel/commands/ |

@@ -4,73 +4,66 @@
 
 ## 責務
 
-- グローバル EventBus と内部 Bus の橋渡し
-- 意思決定（planning）: 入力に対して何を行うか決定する
+- **PlanningManager** がグローバル EventBus から `InputReady` を直接購読（AgencyManager は中継しない）
+- 意思決定（planning）: PFC が入力に対して何を行うか決定する
+- PFC スコアリング（ProactiveScoring）: 自発発話の価値を時間・記憶・文脈・感情の4因子で評価
+- 基底核抑制（InhibitionController）: 行動の抑制を mood / confirmation / cooldown で制御
 - 行動実行（execution）: 決定された計画を LLM・Tool を用いて実行する
-- 実行結果のフィードバック: execution → planning に結果を戻す
+- 実行結果のフィードバックは現在未実装（ExecutionResult イベントは定義済みだが未購読）
 
 ## Internal Bus
 
-`iris/agency/bus.py` で planning ↔ execution 間の専用 EventBus を提供する。
+`iris/agency/bus.py` で planning → execution 間の専用 EventBus を提供する。
 
 ```python
 # iris/agency/bus.py
 
 @dataclass
 class PlanDecided:
-    plan: Plan
-
-@dataclass
-class ExecutionResult:
-    session_id: str
-    success: bool
-    summary: str
-    messages: list[dict]
-
-@dataclass
-class ExecutionFeedback:
-    session_id: str
-    query: str
-    context: dict
+    plan: dict          # plan は dict で、action フィールドは持たない
 ```
 
-## AgencyManager（橋渡し）
+## AgencyManager
 
 ```python
 class AgencyManager:
-    """グローバル EventBus と内部 Bus の橋渡し。
-    層間イベントの受付と、planning/execution へのディスパッチのみ行う。
+    """Agency 層の外から呼ばれる操作を中継する。
+    現在は compact_context の中継のみ。InputReady は PlanningManager が直接購読する。
     """
-
-    # subscribe: InputReady (global)
-    #   → PlanningManager.handle(content)
-
-    # internal subscribe: ExecutionResult
-    #   → 必要なら PlanningManager にフィードバック
-    #   → publish: Completed (global) → Memory
 ```
+
+AgencyManager は現在最小限の役割のみ持つ。global EventBus の `InputReady` は PlanningManager が直接購読するため、AgencyManager を経由しない。
+
+## 処理フロー（統合後）
 
 ```mermaid
 sequenceDiagram
     participant EB as Global EventBus
-    participant MGR as AgencyManager
-    participant IB as Internal Bus
     participant PL as PlanningManager
+    participant IB as Internal Bus
     participant EX as ExecutionManager
 
-    EB-->>MGR: InputReady(content)
-    MGR->>PL: handle(content)
+    alt ユーザー入力
+        EB-->>PL: InputReady(content, from_timer=False)
+        PL->>PL: _inhibition.evaluate(now)
+        PL->>PL: notify_user_activity()
+        PL->>PL: _build_plan(content, context, gate)
+    else 自発発話トリガー
+        EB-->>PL: InputReady(content="", from_timer=True)
+        PL->>PL: _inhibition.evaluate(now)
+        PL->>PL: suppressed? → abort
+        PL->>PL: ProactiveScoring.compute()
+        PL->>PL: threshold? → abort
+        PL->>PL: record_proactive_attempt()
+        PL->>PL: _build_plan(content="", context, gate)
+    end
 
-    PL->>PL: decide()
     PL->>IB: PlanDecided(plan)
     IB-->>EX: PlanDecided
 
-    EX->>EX: execute()
-    EX->>EB: OutputRequest(output)
-    EX->>IB: ExecutionResult(result)
-    IB-->>MGR: ExecutionResult
-
-    MGR->>EB: Completed(session_id)
+    EX->>EX: _execute_general(plan)  # action分岐なし
+    EX->>EB: OutputRequest(stream)
+    EX->>EB: OutputRequest(response)
 ```
 
 ## PlanningManager
@@ -78,39 +71,62 @@ sequenceDiagram
 ```python
 class PlanningManager:
     """前頭前野（PFC）: 意思決定。
-    InputReady を受け取り「何をするか」を決定する。
+    グローバル EventBus の InputReady を直接購読し、「何をするか」を決定する。
+    ProactiveScoring と InhibitionController を統合して plan を生成する。
     """
 
-    # subscribe: InputReady (via AgencyManager)
-    # subscribe: ExecutionFeedback (internal bus)
+    # subscribe: InputReady (global EventBus を直接購読)
 
-    def handle(self, content: str, context: dict) -> None
-        # 1. memory から関連記憶を取得
-        # 2. 行動を決定（respond / reflect / wait / ...）
-        # 3. Plan を作成して internal bus に publish
+    def _on_input_ready(self, event: InputReady) -> None
+        # 1. gate = inhibition.evaluate(now)
+        # 2. from_timer → scoring + threshold → abort or plan
+        # 3. !from_timer → notify_user_activity()
+        # 4. _build_plan(content, context, gate) → PlanDecided
+```
 
-    # 抑制制御: ProactiveEngine の「発話するか」判断はここに統合予定
+### ProactiveScoring（PFC スコアリング）
+
+`agency/planning/scoring.py` — PFC が自発発話の価値を評価する。
+
+```python
+class ProactiveScoring:
+    """4因子を重み付け統合:
+    - time: 前回の行動からの経過時間
+    - memory: 長期記憶との関連性
+    - context: 直近会話の文脈的一貫性
+    - mood: 感情状態
+    """
+    def compute(self, now, last_proactive_time, last_user_activity, negative_mood_score) -> tuple[float, dict]:
+        # 重み付き統合スコア ＋ 各因子の内訳
 ```
 
 ### Plan 定義
 
-```python
-@dataclass
-class Plan:
-    action: str          # "respond" | "reflect" | "wait" | "proactive"
-    session_id: str
-    content: str         # 入力内容
-    context: dict        # Memory から取得したコンテキスト
-    metadata: dict       # 拡張用
-```
+plan は dict で表現され、`action` フィールドを持たない。動作の振り分けは以下の属性で制御する:
+
+| 属性 | 型 | 意味 |
+|------|-----|------|
+| `content` | str | ユーザー入力内容（proactive時は空文字） |
+| `abbreviated` | bool | 抑制時・閾値未満 → 短縮応答 |
+| `tools_allowed` | bool | ツール利用の可否 |
+| `streaming` | bool | ストリーミング出力の有無 |
+| `short_prompt` | str | 短縮応答時用 system prompt（proactive用） |
+| `short_user_message` | str | 短縮応答時用 user message（proactive用） |
+| `run_reflexion` | bool | 実行後のReflexionの有無 |
+| `run_compression` | bool | 実行後のContextWindow圧縮の有無 |
+| `record_history` | bool | 会話履歴への保存の有無 |
+| `max_tokens` | int | 最大出力トークン数 |
+| `temperature` | float | 生成温度 |
 
 ```mermaid
 flowchart LR
-    INPUT["InputReady(content)"] --> DECIDE{"decide()"}
-    DECIDE -->|ユーザー入力あり| RESPOND["Plan(action='respond')"]
-    DECIDE -->|自発発話トリガー| PROACTIVE["Plan(action='proactive')"]
-    DECIDE -->|情報不足| WAIT["Plan(action='wait')"]
-    DECIDE -->|内部処理| REFLECT["Plan(action='reflect')"]
+    INPUT["InputReady(content)"] --> GATE{"gate.evaluate()"}
+    GATE --> |from_timer| SCORE["ProactiveScoring.compute()"]
+    SCORE --> |閾値未満| ABORT["abort"]
+    SCORE --> |閾値以上| PROACTIVE["plan(content='', <br/>abbreviated=False, <br/>tools_allowed=False)"]
+    GATE --> |respond| RESPOND{"gate.suppressed<br/>or score < threshold?"}
+    RESPOND -->|No| FULL["plan(abbreviated=False, <br/>tools_allowed=True, <br/>streaming=True)"]
+    RESPOND -->|Yes| SHORT["plan(abbreviated=True, <br/>tools_allowed=False, <br/>streaming=False)"]
 ```
 
 ## ExecutionManager
@@ -118,30 +134,30 @@ flowchart LR
 ```python
 class ExecutionManager:
     """大脳基底核 + 運動野: 行動実行。
-    PlanDecided を受け取り、実際の行動を実行する。
+    PlanDecided を受け取り、action の種別に関わらず _execute_general(plan) を実行する。
     """
 
     # subscribe: PlanDecided (internal bus)
 
-    def execute(self, plan: Plan) -> None
-        # 1. action に応じた実行ルートを選択
-        # 2. respond → LLMPipeline.call / iterate_with_tools
-        # 3. ストリーミング出力 → OutputRequest
-        # 4. 実行結果を ExecutionResult として publish
-        # 5. 完了後、OutputRequest(state="done") + publish Completed
+    def _on_plan(self, event: PlanDecided) -> None
+        self._execute_general(event.plan)  # action 分岐なし
 
-    # SubAgent: 複雑タスク分割（将来）
-    # 大脳基底核の並列/逐次行動シーケンス制御に相当
+    def _execute_general(self, plan: dict) -> None
+        # 1. plan 属性（abbreviated / tools_allowed / streaming / ...）を取得
+        # 2. pipeline.generate(plan, messages, on_token) を呼ぶ
+        # 3. ストリーミング出力 → OutputRequest(stream)
+        # 4. 出力完了 → OutputRequest(stream, state="done")
+        # 5. 応答 → OutputRequest(response, text)
+        # 6. 必要に応じて reflexion / context compression
 ```
 
 ### 実行ルート
 
-| action | 実行内容 |
-|--------|----------|
-| `respond` | LLMPipeline: system prompt 構築 → LLM呼出 → ツールループ → 出力 |
-| `reflect` | (Memory層の hippocampal に委譲。Agency では Plan 作成まで) |
-| `proactive` | 自発発話内容生成 → 出力（将来実装） |
-| `wait` | 何もしない（スキップ） |
+| 条件 | 実行内容 |
+|------|----------|
+| plan.abbreviated=False | LLMPipeline.generate: 通常 system prompt + ツールループ有効 |
+| plan.abbreviated=True | LLMPipeline.generate: plan.short_prompt 使用、ツールループ無効、streaming無効 |
+| plan.from_timer=True | 同上（abbreviated=False固定、tools_allowed=False） |
 
 ```mermaid
 sequenceDiagram
@@ -152,31 +168,39 @@ sequenceDiagram
 
     IB-->>EX: PlanDecided(plan)
 
-    alt action == "respond"
-        EX->>LLM: iterate_with_tools(messages)
-        LLM-->>EX: delta (stream token)
-        EX->>EB: OutputRequest(stream, delta)
-        LLM-->>EX: response_text
-        EX->>EB: OutputRequest(stream, state="done")
-        EX->>EB: OutputRequest(response, text)
-    else action == "wait"
-        EX->>EX: skip
+    Note over EX,LLM: action 分岐なし、plan属性で制御
+    EX->>EX: _execute_general(plan)
+    EX->>LLM: generate(plan, messages, on_token)
+
+    alt streaming=True
+        loop トークン生成
+            LLM-->>EX: delta token
+            EX->>EB: OutputRequest(stream, delta)
+        end
     end
 
-    EX->>IB: ExecutionResult(result)
-    EX->>EB: Completed(session_id)
+    EX->>EB: OutputRequest(stream, state="done")
+    EX->>EB: OutputRequest(response, text)
+
+    alt run_reflexion=True
+        EX->>EX: hippocampal.maybe_run()
+    end
+    alt run_compression=True
+        EX->>EX: context_window_mgr.check_and_summarize()
+    end
 ```
 
-## v0.3 からの変更点
+## v0.3 / 経緯 からの変更点
 
-| v0.3 | v2 |
-|------|----|
+| 項目 | 移行先 |
+|------|--------|
 | ConversationService | 解体 → PlanningManager + ExecutionManager |
 | LLMPipeline (services/) | execution/pipeline.py に移動 |
-| ProactiveEngine（一部） | "発話するか"判断 → planning/ |
-| ProactiveEngine（一部） | "発話内容生成" → execution/（将来） |
+| ProactiveEngine | 解体: Memory(rate-limit) + Planning(scoring+threshold) + Execution(inhibition) |
+| TimerGate | 削除（rate-limit→Memory, scoring+threshold→Planning） |
+| ProactiveScoring | → memory/scoring.py → agency/planning/scoring.py（PFC所属に確定） |
+| ContextManager | → memory/hippocampal/compression.py → iris/llm/context_window.py |
 | ToolExecutionEngine (services/) | execution/ 配下に移動 |
-| -- (新規) | Internal Bus (agency/bus.py) |
-| -- (新規) | AgencyManager（橋渡し） |
 | ReflexionManager (services/) | memory/hippocampal/ に移動 |
-| ContextManager (services/) | memory/hippocampal/ に移動 |
+| Internal Bus | agency/bus.py |
+| AgencyManager | 橋渡し → 現在は compact_context のみ中継 |

@@ -8,7 +8,6 @@
 - エピソード記憶の保存と検索
 - 意味記憶の保存と検索（ChromaDB + BM25 ハイブリッド）
 - **海馬による記憶整理**: エピソード完了後に Reflexion（自己反省）を実行し、意味記憶へ統合
-- **海馬による圧縮**: 会話履歴のトークン数超過時の自動要約（ContextManager）
 - 全層からのクエリ受付
 
 ## Manager 定義
@@ -17,47 +16,27 @@
 class MemoryManager:
     """EventBus と接続し、記憶 plugin を orchestrate する。
     自ら記憶を持たず、各 plugin に委譲する。
-    公開 I/F は汎用的な store / retrieve / search に統一し、
-    個別用途は plugin 内部の責務とする。
+    公開 I/F は汎用的な store / retrieve / search に統一。
     """
 
     # === EventBus subscribers ===
     # subscribe: InputReceived → sensory.buffer → (on flush) publish InputReady
-    # subscribe: Completed      → episodic.store → hippocampal.maybe_reflect()
-    # subscribe: TimerTick      → hippocampal.maybe_compact()
-    #                          → hippocampal.maybe_consolidate()
+    # subscribe: TimerTick     → rate-limit check → publish InputReady(from_timer=True)
 
     # === 公開 I/F（汎用） ===
 
     def store(self, stream: MemoryStream, data: dict) -> None
-        """任意の stream にデータを書き込む。
-        stream は plugin 名でルーティングされる。
-        例: "episodic", "semantic", "sensory"
-        """
+        """任意の stream にデータを書き込む。"""
         # stream に応じて対応 plugin に委譲
 
     def retrieve(self, stream: MemoryStream, **filters) -> list[dict]
-        """任意の stream からデータを取得する。
-        filters は plugin ごとに解釈が異なる。
-        例: retrieve("episodic", n=5) → 直近5件
-            retrieve("sensory")        → 現在のバッファ内容
-        """
+        """任意の stream からデータを取得する。"""
 
     def search(self, query: str, stream: MemoryStream | None = None, **kwargs) -> list[dict]
-        """cross-stream 検索。
-        stream 指定がない場合は全 stream から検索する。
-        例: search("ユーザーの好み") → semantic + episodic から検索
-            search("好み", stream="semantic", max_results=3)
-        """
+        """cross-stream 検索。"""
 
     def clear(self, stream: MemoryStream | None = None) -> None
-        """stream 指定があればその stream をクリア。
-        指定がなければ全 memory をクリア。
-        """
-
-    # 用途に応じて随時メソッド追加可能。
-    # ただし検索性が下がらないよう、追加は各 plugin の責務が
-    # Manager I/F に漏れ出したタイミングに限定する。
+        """stream 指定があればその stream をクリア。"""
 ```
 
 `MemoryStream` は以下のいずれかのリテラル:
@@ -114,27 +93,21 @@ class SemanticStore:
 ```python
 class Reflexion:
     """海馬による記憶整理。
-    完了した会話を分析し、教訓・好み・改善点を抽出 → 意味記憶へ格納。
+    完了した会話を分析し、話し方・性格・教訓・好みを抽出 → 意味記憶へ格納。
     """
     def reflect(self, conversation_history: list[dict]) -> dict
     def quick_reflect(self, conversation_slice: list[dict]) -> dict
 
-class ReflexionManager:
+class HippocampalManager:
     """Reflexion のスケジューリングと結果の永続化。
-    TimerTick / Completed をトリガーに、適切なタイミングで reflexion を実行する。
+    ExecutionManager 発話後カウンタに応じて quick_reflect を実行。
     """
     def maybe_run(self, messages: list[dict], counter: int) -> int
     def run_session(self, messages: list[dict]) -> None
-
-class ContextManager:
-    """会話履歴のトークン数超過時の自動要約（海馬の圧縮機能）。
-    会話が context_window を超えた場合、古い部分を要約 ## Session Summary として保持。
-    """
-    def check_and_summarize(self, messages: list[dict], context_window: int) -> None
-    def force_summarize(self, messages: list[dict]) -> None
-    def build_compact_messages(self, messages: list[dict]) -> list[dict]
-    def clear(self) -> None
 ```
+
+注意: ContextManager は会話履歴圧縮の工学的ユーティリティとして
+`iris/llm/context_window.py` に移動した。脳科学マッピング対象外。
 
 ### personality/
 
@@ -181,21 +154,18 @@ sequenceDiagram
     participant MGR as MemoryManager
     participant SEN as sensory
     participant EP as episodic
-    participant HIP as hippocampal
 
-    EB-->>MGR: InputReceived(msg)
-    MGR->>SEN: add_fragment(msg.content, msg.is_final)
-    SEN-->>MGR: flush → complete_content
-    MGR->>EB: InputReady(content)
-
-    EB-->>MGR: Completed(session_id)
-    MGR->>EP: add_episode(content, "assistant")
-    MGR->>HIP: maybe_reflect()
-    HIP->>HIP: LLM分析→結果をsemanticに保存
-
-    EB-->>MGR: TimerTick
-    MGR->>HIP: maybe_compact()
-    MGR->>HIP: maybe_consolidate()
+    alt ユーザー入力
+        EB-->>MGR: InputReceived(msg)
+        MGR->>SEN: add_fragment(msg.content, msg.is_final)
+        SEN-->>MGR: flush → complete_content
+        MGR->>EB: publish InputReady(content)
+        MGR->>EP: add_episode(content)
+    else 自発発話トリガー
+        EB-->>MGR: TimerTick
+        MGR->>MGR: rate-limit check
+        MGR->>EB: publish InputReady(from_timer=True)
+    end
 ```
 
 ## MemoryManager が購読する EventBus イベント
@@ -203,5 +173,8 @@ sequenceDiagram
 | イベント | ハンドラ | 処理 |
 |----------|----------|------|
 | `InputReceived` | `_on_input_received` | sensory buffer → flush → InputReady |
-| `Completed` | `_on_completed` | episodic store → hippocampal maybe_reflect |
-| `TimerTick` | `_on_timer` | hippocampal maybe_compact / maybe_consolidate |
+| `TimerTick` | `_on_timer_tick` | rate-limit check → InputReady(from_timer=True) |
+
+MemoryManager は **Completed イベントを購読しない**。
+Reflexion は ExecutionManager が応答後に直接 HippocampalManager.maybe_run() を呼ぶ。
+ContextWindow 圧縮は LLMContextWindowManager（iris/llm/context_window.py）が担当する。

@@ -13,7 +13,7 @@
 
 | ファイル | 内容 |
 |---|--->|
-| [`architecture.md`](./architecture.md) | **v2 全体アーキテクチャ設計書** — 脳科学ベース層分割、C4図、イベントフロー、状態管理 |
+| [`architecture.md`](./architecture.md) | **全体アーキテクチャ設計書** — 脳科学ベース層分割、C4図、イベントフロー、状態管理 |
 | [`agency-layer.md`](./agency-layer.md) | **Agency 層（前頭前野+基底核+運動野）** — 意思決定(planning) と行動実行(execution) |
 | [`io-layer.md`](./io-layer.md) | **IO 層（視床）** — TCP入出力、セッション管理、認証、EventBusマッピング |
 | [`kernel-layer.md`](./kernel-layer.md) | **Kernel 層（脳幹+視床下部）** — プロセス管理、DI、CommandHandler、TimerTick |
@@ -23,7 +23,7 @@
 
 ## 設計背景
 
-Iris v2 は脳科学・神経科学の構造を参考にした層分割アーキテクチャを採用する（参考マッピングの正確性については各層設計書の注記を参照）。
+Iris は脳科学・神経科学の構造を参考にした層分割アーキテクチャを採用する（参考マッピングの正確性については各層設計書の注記を参照）。
 
 各層は独立した責務を持ち、`iris/event/`（神経路）のグローバル EventBus を介して疎結合する。
 詳細は [`architecture.md`](./architecture.md) および各層ドキュメントを参照。

@@ -1,4 +1,4 @@
-# Iris v2 Memory 層
+# Iris Memory 層
 
 **脳科学対応**: 感覚野 + 海馬 + 皮質記憶系
 

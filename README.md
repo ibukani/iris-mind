@@ -228,7 +228,7 @@ pytest tests/                         # 全テスト実行
 
 | ドキュメント | 内容 |
 |---|---|
-| [architecture.md](./docs/architecture.md) | v2 全体アーキテクチャ — 脳科学ベース層分割 |
+| [architecture.md](./docs/architecture.md) | 全体アーキテクチャ — 脳科学ベース層分割 |
 | [agency-layer.md](./docs/agency-layer.md) | Agency 層 — 意思決定と行動実行 |
 | [io-layer.md](./docs/io-layer.md) | IO 層 — TCP入出力・セッション管理 |
 | [kernel-layer.md](./docs/kernel-layer.md) | Kernel 層 — プロセス管理・DI |

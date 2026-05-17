@@ -18,7 +18,8 @@ class PlanningManager:
         plan["session_id"] = session_id
         self._bus.publish(PlanDecided(plan=plan))
 
-    def handle_proactive(self, scores: dict[str, float], total: float, trigger_type: str) -> None:
+    def handle_proactive(self, scores: dict[str, float], total: float) -> None:
+        trigger_type = max(scores, key=lambda k: scores[k])
         context_hint = self._build_context_hint(scores)
         plan = {
             "action": "proactive",
@@ -30,7 +31,7 @@ class PlanningManager:
         self._bus.publish(PlanDecided(plan=plan))
         logger.info("Proactive plan: trigger=%s score=%.2f", trigger_type, total)
 
-    def _decide(self, content: str, context: dict) -> dict:
+    def _decide(self, content: str, _context: dict) -> dict:
         return {"action": "respond", "content": content}
 
     def _on_result(self, event: object) -> None:

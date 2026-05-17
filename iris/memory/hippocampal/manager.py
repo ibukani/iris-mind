@@ -4,7 +4,7 @@ import logging
 
 from iris.memory.hippocampal.reflexion import Reflexion
 from iris.memory.manager import MemoryManager
-from iris.memory.persona_profile import PersonaProfile
+from iris.memory.personality.persona_profile import PersonaProfile
 
 logger = logging.getLogger(__name__)
 

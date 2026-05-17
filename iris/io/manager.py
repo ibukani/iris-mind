@@ -4,7 +4,7 @@ import logging
 from collections.abc import Callable
 
 from iris.event.event_bus import EventBus
-from iris.event.event import InputReceived, OutputRequest
+from iris.event.event_types import InputReceived, OutputRequest
 from iris.io.models import InputMessage, OutputMessage
 from iris.io.session.manager import SessionManager
 from iris.io.transport.tcp_listener import TcpListener
@@ -52,14 +52,16 @@ class IOManager:
             self._handle_command(msg)
             return
 
-        self._event_bus.publish(InputReceived(
-            timestamp=None,
-            source="io",
-            session_id=msg.session_id,
-            content=msg.content,
-            msg_type=msg.msg_type,
-            is_final=msg.is_final,
-        ))
+        self._event_bus.publish(
+            InputReceived(
+                timestamp=None,
+                source="io",
+                session_id=msg.session_id,
+                content=msg.content,
+                msg_type=msg.msg_type,
+                is_final=msg.is_final,
+            )
+        )
 
     def _handle_command(self, msg: InputMessage) -> None:
         content = msg.content

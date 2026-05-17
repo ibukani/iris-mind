@@ -42,7 +42,8 @@ iris/                             ← アプリケーションコア
 │   ├── session/                  ← SessionManager
 │   └── auth/                     ← Authenticator
 ├── event/                        ← 神経路: Global EventBus
-│   └── bus.py                    ← EventBus（kernel から分離）
+│   ├── bus.py                    ← EventBus（kernel から分離）
+│   └── event_types.py            ← イベント型定義
 ├── memory/                       ← 記憶系: 感覚野+海馬+皮質
 │   ├── manager.py                ← MemoryManager（汎用 store/retrieve/search）
 │   ├── sensory/                  ← InputBuffer（断片的入力保持）
@@ -110,7 +111,7 @@ iris/llm/     ──→ EventBus     (LLM provider ファサード)
 1. `iris/tools/builtins/<name>/server.py` に配置
 2. `@tool()` デコレータでツール定義（型ヒント→JSON Schema 自動生成）
 3. `register(registry)` 関数で `registry.register_decorated(fn)` をエクスポート（`discover_modules()` 用）
-5. `allowed_roles` パラメータで利用可能なモデルロールを制限（デフォルトは全てのロールで利用可）
+4. `allowed_roles` パラメータで利用可能なモデルロールを制限（デフォルトは全てのロールで利用可）
 6. `side_effect=True` で作用系ツール（結果を会話に戻さず短絡）
 7. 新しいcapabilityを追加したら `.iris/data/iris_profile.md` の「My Capabilities」セクションも更新する
 8. テンプレート化されたワークフローは `.agents/skills/capability-pattern/SKILL.md` を参照（`skill` ツールでロード可能）

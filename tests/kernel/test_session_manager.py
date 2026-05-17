@@ -170,7 +170,9 @@ class TestSessionManager:
 
     def test_authenticate_stores_identity_and_description(self, manager: SessionManager) -> None:
         conn = MagicMock()
-        msg = AuthMessage(mode=ConnectionMode.BIDIRECTIONAL, identity="debug-console", description="Debug console on Mac mini")
+        msg = AuthMessage(
+            mode=ConnectionMode.BIDIRECTIONAL, identity="debug-console", description="Debug console on Mac mini"
+        )
         response = manager.authenticate(conn, msg)
         assert response.session_id is not None
 
@@ -183,9 +185,13 @@ class TestSessionManager:
 
     def test_get_roles_summary_includes_active_sessions(self, manager: SessionManager) -> None:
         conn = MagicMock()
-        manager.authenticate(conn, AuthMessage(
-            mode=ConnectionMode.BIDIRECTIONAL, roles=[SessionRole.CONVERSATION_OUTPUT, SessionRole.LOG],
-        ))
+        manager.authenticate(
+            conn,
+            AuthMessage(
+                mode=ConnectionMode.BIDIRECTIONAL,
+                roles=[SessionRole.CONVERSATION_OUTPUT, SessionRole.LOG],
+            ),
+        )
         summary = manager.get_roles_summary()
         assert "conversation_output" in summary
         assert "log" in summary

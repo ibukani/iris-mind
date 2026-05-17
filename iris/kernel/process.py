@@ -4,9 +4,9 @@ import logging
 import threading
 from typing import Protocol
 
-from iris.event.event import TimerTick
+from iris.event.event_types import TimerTick
 
-from ..config import Config
+from .config import Config
 from .factory import KernelContext, KernelFactory
 
 logger = logging.getLogger(__name__)
@@ -64,11 +64,13 @@ class KernelProcess:
 
         def _loop() -> None:
             while not ctx.shutdown_requested:
-                ctx.event_bus.publish(TimerTick(
-                    timestamp=None,
-                    source="kernel",
-                    tick_count=tick_count[0],
-                ))
+                ctx.event_bus.publish(
+                    TimerTick(
+                        timestamp=None,
+                        source="kernel",
+                        tick_count=tick_count[0],
+                    )
+                )
                 tick_count[0] += 1
                 threading.Event().wait(interval)
 

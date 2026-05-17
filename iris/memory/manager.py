@@ -3,11 +3,11 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from iris.event.event_bus import EventBus
+from iris.event.event_types import InputReady, InputReceived
+from iris.memory.sensory.buffer import InputBuffer
 from iris.memory.stores import EpisodicStore, SemanticStore
 from iris.memory.vector_store import VectorStore
-from iris.memory.sensory.buffer import InputBuffer
-from iris.event.event_bus import EventBus
-from iris.event.event import InputReceived, InputReady
 
 MemoryStream = str
 
@@ -122,19 +122,23 @@ class MemoryManager:
             buf.add_fragment(event.content, event.is_final)
         else:
             self._episodic.add(f"[{event.msg_type}] {event.content}")
-            self._event_bus.publish(InputReady(
-                timestamp=event.timestamp,
-                source="memory",
-                session_id=event.session_id,
-                content=event.content,
-            ))
+            self._event_bus.publish(
+                InputReady(
+                    timestamp=event.timestamp,
+                    source="memory",
+                    session_id=event.session_id,
+                    content=event.content,
+                )
+            )
 
     def _on_sensory_flush(self, session_id: str, content: str) -> None:
         if content:
             self._episodic.add(f"[user_input] {content}")
-        self._event_bus.publish(InputReady(
-            timestamp=None,
-            source="memory",
-            session_id=session_id,
-            content=content,
-        ))
+        self._event_bus.publish(
+            InputReady(
+                timestamp=None,
+                source="memory",
+                session_id=session_id,
+                content=content,
+            )
+        )

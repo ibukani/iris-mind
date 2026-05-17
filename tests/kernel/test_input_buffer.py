@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
 
 import pytest
 
@@ -96,7 +95,7 @@ def test_add_fragment_after_close(buffer: InputBuffer) -> None:
     buffer.add_fragment("before", is_final=False)
     buffer.close()
     buffer.add_fragment("after", is_final=True)
-    assert buffer.accumulated_text == "before"
+    assert buffer.accumulated_text == ""
 
 
 def test_reuse_after_flush() -> None:

@@ -6,9 +6,9 @@ from typing import Any
 
 import pytest
 
-from iris.kernel.config import Config, ModelConfig, ProactiveConfig
 from iris.event import EventBus
 from iris.io.models import ConnectionMode, OutputMessage
+from iris.kernel.config import Config, ModelConfig, ProactiveConfig
 
 # ── Fake LLM Provider ─────────────────────────────────────────
 
@@ -419,9 +419,6 @@ class FakePersonality:
 @pytest.fixture
 def event_bus() -> EventBus:
     return EventBus()
-
-
-@pytest.fixture
 
 
 @pytest.fixture

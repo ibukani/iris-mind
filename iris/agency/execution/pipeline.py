@@ -3,16 +3,15 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
+from iris.agency.execution.interrupt_token import InterruptToken
+from iris.agency.execution.tool_executor import ToolExecutionEngine
+from iris.kernel.config import ModelConfig
 from iris.llm.capability_checker import CapabilityChecker
 from iris.llm.llm_bridge import LLMBridge
-from iris.memory.persona_profile import PersonaProfile
-from iris.memory.stores import AgentsMdStore
-from iris.memory.personality.personality import Personality
-
-from iris.kernel.config import ModelConfig
 from iris.memory.manager import MemoryManager
-from iris.agency.execution.tool_executor import ToolExecutionEngine
-from iris.agency.execution.interrupt_token import InterruptToken
+from iris.memory.personality.persona_profile import PersonaProfile
+from iris.memory.personality.personality import Personality
+from iris.memory.stores import AgentsMdStore
 
 logger = logging.getLogger(__name__)
 

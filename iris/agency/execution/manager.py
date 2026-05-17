@@ -3,12 +3,12 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
-from iris.event.event_bus import EventBus
-from iris.event.event import OutputRequest
 from iris.agency.bus import InternalBus, PlanDecided
-from iris.agency.execution.pipeline import LLMPipeline
+from iris.agency.execution.context import ContextManager
 from iris.agency.execution.monitor import OutputMonitor
-from iris.memory.hippocampal.context import ContextManager, estimate_messages_tokens
+from iris.agency.execution.pipeline import LLMPipeline
+from iris.event.event_bus import EventBus
+from iris.event.event_types import OutputRequest
 from iris.memory.hippocampal.manager import HippocampalManager
 
 logger = logging.getLogger(__name__)
@@ -57,22 +57,26 @@ class ExecutionManager:
         if self._session_roles_getter:
             self._pipeline.set_session_roles_summary(self._session_roles_getter())
 
-        self._event_bus.publish(OutputRequest(
-            session_id=session_id,
-            message_type="stream",
-            content="",
-            state="thinking",
-        ))
+        self._event_bus.publish(
+            OutputRequest(
+                session_id=session_id,
+                message_type="stream",
+                content="",
+                state="thinking",
+            )
+        )
 
         try:
             response_text = self._pipeline.iterate_with_tools(
                 self._messages,
-                on_token=lambda delta: self._event_bus.publish(OutputRequest(
-                    session_id=session_id,
-                    message_type="stream",
-                    content=delta,
-                    state="speaking",
-                )),
+                on_token=lambda delta: self._event_bus.publish(
+                    OutputRequest(
+                        session_id=session_id,
+                        message_type="stream",
+                        content=delta,
+                        state="speaking",
+                    )
+                ),
             )
         except Exception as e:
             response_text = f"[Error: {e}]"
@@ -80,9 +84,11 @@ class ExecutionManager:
 
         self._messages.append({"role": "assistant", "content": response_text})
         self._msg_count_since_reflect += 1
-        self._msg_count_since_reflect = self._hippocampal.maybe_run(
-            self._messages, self._msg_count_since_reflect
-        ) if self._hippocampal else self._msg_count_since_reflect
+        self._msg_count_since_reflect = (
+            self._hippocampal.maybe_run(self._messages, self._msg_count_since_reflect)
+            if self._hippocampal
+            else self._msg_count_since_reflect
+        )
 
         if self._context_mgr:
             self._context_mgr.check_and_summarize(self._messages, self._context_window)
@@ -90,17 +96,21 @@ class ExecutionManager:
         if self._monitor:
             self._monitor.record_output()
 
-        self._event_bus.publish(OutputRequest(
-            session_id=session_id,
-            message_type="stream",
-            content="",
-            state="done",
-        ))
-        self._event_bus.publish(OutputRequest(
-            session_id=session_id,
-            message_type="response",
-            content=response_text,
-        ))
+        self._event_bus.publish(
+            OutputRequest(
+                session_id=session_id,
+                message_type="stream",
+                content="",
+                state="done",
+            )
+        )
+        self._event_bus.publish(
+            OutputRequest(
+                session_id=session_id,
+                message_type="response",
+                content=response_text,
+            )
+        )
 
     def compact_context(self) -> str:
         if self._context_mgr is None:
@@ -109,21 +119,20 @@ class ExecutionManager:
             return "Not enough messages to compact"
         summary = self._context_mgr.compact(self._messages)
         keep = 6
-        self._messages = (
-            [{"role": "system", "content": f"## Session Summary\n{summary}"}]
-            + self._messages[-keep:]
-        )
+        self._messages = [{"role": "system", "content": f"## Session Summary\n{summary}"}] + self._messages[-keep:]
         return f"Compacted: {len(summary)} chars summary, kept last {keep} messages"
 
     def _execute_proactive(self, plan: dict) -> None:
         context_hint = plan.get("context_hint", "")
         content = self._pipeline.generate_proactive(context_hint=context_hint)
 
-        self._event_bus.publish(OutputRequest(
-            session_id="",
-            message_type="proactive",
-            content=content,
-        ))
+        self._event_bus.publish(
+            OutputRequest(
+                session_id="",
+                message_type="proactive",
+                content=content,
+            )
+        )
 
         if self._monitor:
             self._monitor.record_output()

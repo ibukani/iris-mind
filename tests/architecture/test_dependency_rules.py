@@ -19,7 +19,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 _IRIS_LAYERS = {"kernel", "event", "io", "memory", "agency", "llm", "capabilities", "tools", "commands", "personality"}
-_FACTORY_PATH = "iris/kernel/core/factory.py"
+_FACTORY_PATH = "iris/kernel/factory.py"
 
 
 def _get_python_files(package_dir: str) -> list[Path]:
@@ -91,7 +91,7 @@ def test_factory_is_only_layer_crossing_hub() -> None:
     assert len(factory_files) >= 1, "KernelFactory not found"
     for filepath in factory_files:
         imports = _get_imports(filepath)
-        infra = {"iris.io", "iris.memory", "iris.agency", "iris.event", "iris.llm", "iris.commands"}
+        infra = {"iris.io", "iris.memory", "iris.agency", "iris.event", "iris.llm", "iris.kernel.commands"}
         found = [i for i in imports if any(i.startswith(p) for p in infra)]
         assert len(found) >= 3, f"Factory should import from at least 3 layers, got: {found}"
 

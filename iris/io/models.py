@@ -37,7 +37,12 @@ class AuthMessage(BaseModel):
     msg_type: str = "auth"
     access_token: str | None = None
     mode: ConnectionMode = ConnectionMode.BIDIRECTIONAL
-    roles: list[SessionRole] = [SessionRole.CONVERSATION_INPUT, SessionRole.CONVERSATION_OUTPUT, SessionRole.COMMAND_INPUT, SessionRole.COMMAND_OUTPUT]
+    roles: list[SessionRole] = [
+        SessionRole.CONVERSATION_INPUT,
+        SessionRole.CONVERSATION_OUTPUT,
+        SessionRole.COMMAND_INPUT,
+        SessionRole.COMMAND_OUTPUT,
+    ]
     identity: str = ""
     description: str = ""
 
@@ -72,6 +77,8 @@ class OutputMessage(BaseModel):
 class InterruptMessage(BaseModel):
     msg_type: str = "interrupt"
     session_id: str
+
+
 class PingMessage(BaseModel):
     msg_type: str = "ping"
 

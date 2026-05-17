@@ -4,8 +4,8 @@ import logging
 import threading
 from collections import defaultdict
 from collections.abc import Callable
-from dataclasses import dataclass
 from contextlib import suppress
+from dataclasses import dataclass
 
 
 @dataclass

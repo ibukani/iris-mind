@@ -1,4 +1,3 @@
-from iris.kernel.config import Config, ProactiveConfig
 from iris.event import (
     AgentAnomalyEvent,
     AgentStateChangeEvent,
@@ -7,6 +6,7 @@ from iris.event import (
     MemoryUpdateEvent,
     TimerTick,
 )
+from iris.kernel.config import Config, ProactiveConfig
 
 __all__ = [
     "Config",

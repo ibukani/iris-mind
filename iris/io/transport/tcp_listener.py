@@ -8,7 +8,6 @@ from multiprocessing.connection import Connection, Listener
 from typing import Any
 
 from iris.io.models import INPUT_MSG_TYPES, TCP_HOST, TCP_PORT, InputMessage, InterruptMessage
-
 from iris.io.session.manager import SessionManager
 
 logger = logging.getLogger(__name__)

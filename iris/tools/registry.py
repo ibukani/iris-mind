@@ -19,7 +19,7 @@ class ToolRegistry:
     def register_decorated(self, fn: object) -> None:
         td = get_tool_def(fn)
         if td is None:
-            raise ValueError(f"Function has no _tool_def. Use @tool decorator.")
+            raise ValueError("Function has no _tool_def. Use @tool decorator.")
         self.register(td)
 
     def get(self, name: str) -> ToolDef | None:

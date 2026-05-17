@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import logging
 
-from iris.event.event_bus import EventBus
-from iris.event.event import InputReady
 from iris.agency.bus import InternalBus
-from iris.agency.planning.manager import PlanningManager
-from iris.agency.planning.proactive_scorer import ProactiveScorer
+from iris.agency.execution.inhibition import InhibitionController
 from iris.agency.execution.manager import ExecutionManager
+from iris.agency.planning.manager import PlanningManager
+from iris.agency.planning.timer_gate import TimerGate
+from iris.event.event_bus import EventBus
+from iris.event.event_types import InputReady
 
 logger = logging.getLogger(__name__)
 
@@ -19,25 +20,27 @@ class AgencyManager:
         internal_bus: InternalBus,
         planning: PlanningManager,
         execution: ExecutionManager,
-        proactive_scorer: ProactiveScorer | None = None,
+        timer_gate: TimerGate | None = None,
+        inhibition: InhibitionController | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._bus = internal_bus
         self._planning = planning
         self._execution = execution
-        self._proactive = proactive_scorer
+        self._timer_gate = timer_gate
+        self._inhibition = inhibition
 
         self._event_bus.subscribe("InputReady", self._on_input_ready)
 
-        if self._proactive is not None:
-            self._proactive.set_on_speak(self._on_proactive_trigger)
+        if self._timer_gate is not None:
+            self._timer_gate.set_on_speak(self._on_proactive_trigger)
 
     def compact_context(self) -> str:
         return self._execution.compact_context()
 
     def _on_input_ready(self, event: InputReady) -> None:
-        if self._proactive is not None:
-            self._proactive.notify_user_activity()
+        if self._inhibition is not None:
+            self._inhibition.notify_user_activity()
 
         self._planning.handle(
             content=event.content,
@@ -45,5 +48,5 @@ class AgencyManager:
             context=event.context,
         )
 
-    def _on_proactive_trigger(self, scores: dict[str, float], total: float, trigger_type: str) -> None:
-        self._planning.handle_proactive(scores, total, trigger_type)
+    def _on_proactive_trigger(self, scores: dict[str, float], total: float) -> None:
+        self._planning.handle_proactive(scores, total)

@@ -4,8 +4,8 @@ import os
 import tempfile
 from pathlib import Path
 
-from iris.memory.persona_data import PersonaData
-from iris.memory.persona_profile import PersonaProfile
+from iris.memory.personality.persona_data import PersonaData
+from iris.memory.personality.persona_profile import PersonaProfile
 
 
 def _make_profile() -> tuple[PersonaProfile, str]:

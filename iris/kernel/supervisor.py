@@ -7,7 +7,7 @@ import threading
 import time
 
 from iris.kernel.config import Config
-from iris.kernel.core import KernelProcessProtocol
+from iris.kernel.process import KernelProcessProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ class Supervisor:
         self.wait()
 
     def start(self) -> None:
-        from iris.kernel.core import KernelProcess
+        from iris.kernel.process import KernelProcess
 
         self._kernel = KernelProcess(self._config)
         self._kernel.start()

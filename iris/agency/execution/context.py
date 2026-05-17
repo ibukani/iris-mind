@@ -57,7 +57,8 @@ class ContextManager:
         self._summary = summary
         logger.info(
             "Context compacted: summary_len=%d, kept=%d messages",
-            len(summary), preserve_last,
+            len(summary),
+            preserve_last,
         )
         return summary
 
@@ -65,10 +66,7 @@ class ContextManager:
         if self._llm is None or not messages:
             return self._summary
 
-        text = "\n".join(
-            f"{m.get('role', '?')}: {str(m.get('content', ''))[:300]}"
-            for m in messages[-6:]
-        )
+        text = "\n".join(f"{m.get('role', '?')}: {str(m.get('content', ''))[:300]}" for m in messages[-6:])
         try:
             resp = self._llm.chat(
                 messages=[

@@ -26,3 +26,7 @@ def output_to(destination: str, content: str) -> str:
     elif destination != "cli":
         logger.warning("output_to: unknown destination '%s'", destination)
     return f"sent to {destination}"
+
+
+def register(registry):
+    registry.register_decorated(output_to)

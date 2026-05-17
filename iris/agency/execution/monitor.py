@@ -35,18 +35,21 @@ class OutputMonitor:
             self._alert_count += 1
             logger.warning(
                 "OutputMonitor: frequency exceeded (%d in 5min, alert #%d)",
-                len(self._window), self._alert_count,
+                len(self._window),
+                self._alert_count,
             )
         return flags
 
     def check_health(self) -> list[dict]:
         issues: list[dict] = []
         if self._alert_count > 0:
-            issues.append({
-                "type": "output_monitor",
-                "alert_count": self._alert_count,
-                "output_5min": self.output_count_5min,
-            })
+            issues.append(
+                {
+                    "type": "output_monitor",
+                    "alert_count": self._alert_count,
+                    "output_5min": self.output_count_5min,
+                }
+            )
         return issues
 
     @property

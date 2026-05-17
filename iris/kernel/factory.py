@@ -3,36 +3,38 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 
-from iris.commands.handler import CommandHandler
-from iris.tools.registry import ToolRegistry
-from iris.llm.capability_checker import CapabilityChecker
-from iris.llm.llm_bridge import LLMBridge, create_provider
-from iris.memory.persona_data import PersonaData
-from iris.memory.persona_profile import PersonaProfile
-from iris.memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
-from iris.memory.vector_store import VectorStore
-from iris.memory.personality.personality import Personality
-
-from ..config import Config
-from iris.event.event_bus import EventBus
-from iris.memory.sensory.buffer import InputBuffer
-from iris.memory.sensory.readiness import ReadinessEvaluator
-from iris.io.session.manager import SessionConfig, SessionManager
-from iris.io.transport.tcp_listener import TcpListener
-from iris.io.manager import IOManager
-from iris.memory.manager import MemoryManager
-from iris.memory.hippocampal.context import ContextManager
-from iris.memory.hippocampal.manager import HippocampalManager
-from iris.memory.hippocampal.reflexion import Reflexion
 from iris.agency.bus import InternalBus
-from iris.agency.planning.proactive_scorer import ProactiveScorer
-from iris.agency.manager import AgencyManager
-from iris.agency.planning.manager import PlanningManager
+from iris.agency.execution.context import ContextManager
+from iris.agency.execution.inhibition import InhibitionController
 from iris.agency.execution.manager import ExecutionManager
 from iris.agency.execution.monitor import OutputMonitor
 from iris.agency.execution.pipeline import LLMPipeline
 from iris.agency.execution.tool_executor import ToolExecutionEngine
-from ..manager import KernelManager
+from iris.agency.manager import AgencyManager
+from iris.agency.planning.manager import PlanningManager
+from iris.agency.planning.scoring import ProactiveScoring
+from iris.agency.planning.timer_gate import TimerGate
+from iris.event.event_bus import EventBus
+from iris.io.manager import IOManager
+from iris.io.session.manager import SessionConfig, SessionManager
+from iris.io.transport.tcp_listener import TcpListener
+from iris.kernel.commands.handler import CommandHandler
+from iris.llm.capability_checker import CapabilityChecker
+from iris.llm.llm_bridge import LLMBridge, create_provider
+from iris.memory.hippocampal.manager import HippocampalManager
+from iris.memory.hippocampal.reflexion import Reflexion
+from iris.memory.manager import MemoryManager
+from iris.memory.personality.persona_data import PersonaData
+from iris.memory.personality.persona_profile import PersonaProfile
+from iris.memory.personality.personality import Personality
+from iris.memory.sensory.buffer import InputBuffer
+from iris.memory.sensory.readiness import ReadinessEvaluator
+from iris.memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
+from iris.memory.vector_store import VectorStore
+from iris.tools.registry import ToolRegistry
+
+from .config import Config
+from .manager import KernelManager
 
 logger = logging.getLogger(__name__)
 
@@ -82,12 +84,15 @@ class KernelFactory:
         registry, tool_exec = KernelFactory._build_capabilities()
 
         # ============================================================
-        # Phase 4.5: プロアクティブスコアラー
+        # Phase 4.5: プロアクティブ機構 (PFC評価 + 基底核抑制 + タイミングゲート)
         # ============================================================
-        proactive_scorer = ProactiveScorer(
+        inhibition = InhibitionController()
+        scoring = ProactiveScoring(config=config.proactive, memory=memory_mgr)
+        timer_gate = TimerGate(
             config=config.proactive,
             event_bus=event_bus,
-            memory=memory_mgr,
+            scoring=scoring,
+            inhibition=inhibition,
         )
 
         # ============================================================
@@ -95,7 +100,15 @@ class KernelFactory:
         # ============================================================
         internal_bus = InternalBus()
         agency = KernelFactory._build_agency(
-            config, event_bus, internal_bus, llm, memory_mgr, tool_exec, session_mgr, proactive_scorer,
+            config,
+            event_bus,
+            internal_bus,
+            llm,
+            memory_mgr,
+            tool_exec,
+            session_mgr,
+            timer_gate=timer_gate,
+            inhibition=inhibition,
         )
 
         # ============================================================
@@ -172,10 +185,6 @@ class KernelFactory:
         registry = ToolRegistry()
         registry.discover_modules()
 
-        from iris.tools.builtins.output import output_to
-
-        registry.register_decorated(output_to)
-
         tool_exec = ToolExecutionEngine(registry=registry)
         return registry, tool_exec
 
@@ -188,7 +197,8 @@ class KernelFactory:
         memory: MemoryManager,
         tool_exec: ToolExecutionEngine,
         session_mgr: SessionManager,
-        proactive_scorer: ProactiveScorer | None = None,
+        timer_gate: TimerGate | None = None,
+        inhibition: InhibitionController | None = None,
     ) -> AgencyManager:
         personality = Personality(name=config.personality.name, prompt_file=config.personality.prompt_file)
         capability_checker = CapabilityChecker(config=config.model)
@@ -234,5 +244,6 @@ class KernelFactory:
             internal_bus=internal_bus,
             planning=planning,
             execution=execution,
-            proactive_scorer=proactive_scorer,
+            timer_gate=timer_gate,
+            inhibition=inhibition,
         )

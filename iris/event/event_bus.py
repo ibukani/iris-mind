@@ -7,7 +7,7 @@ from collections.abc import Callable
 from contextlib import suppress
 from typing import Protocol, runtime_checkable
 
-from iris.event.event import Event, new_trace_id
+from iris.event.event_types import Event, new_trace_id
 
 
 @runtime_checkable

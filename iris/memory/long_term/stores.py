@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 from typing import Protocol
 
-from iris.memory.vector_store import VectorStore
+from iris.memory.long_term.vector_store import VectorStore
 
 
 class AgentsMdStoreProtocol(Protocol):

@@ -25,6 +25,8 @@ from iris.llm.llm_bridge import LLMBridge, create_provider
 from iris.memory.hippocampal.manager import HippocampalManager
 from iris.memory.hippocampal.reflexion import Reflexion
 from iris.memory.long_term.manager import LongTermMemoryManager
+from iris.memory.long_term.stores import AgentsMdStore, EpisodicStore, SemanticStore
+from iris.memory.long_term.vector_store import VectorStore
 from iris.memory.manager import MemoryManager
 from iris.memory.personality.big_five import BigFiveProfile
 from iris.memory.personality.persona_data import PersonaData
@@ -33,8 +35,6 @@ from iris.memory.personality.personality import Personality
 from iris.memory.sensory.manager import SensoryMemoryManager
 from iris.memory.sensory.readiness import ReadinessEvaluator
 from iris.memory.short_term.manager import ShortTermMemoryManager
-from iris.memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
-from iris.memory.vector_store import VectorStore
 from iris.tools.registry import ToolRegistry
 
 from .config import Config

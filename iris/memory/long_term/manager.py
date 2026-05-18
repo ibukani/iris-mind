@@ -9,8 +9,8 @@ if TYPE_CHECKING:
 
     from iris.limbic.models import EmotionState
 
-from iris.memory.stores import EpisodicStore, SemanticStore
-from iris.memory.vector_store import VectorStore
+from iris.memory.long_term.stores import EpisodicStore, SemanticStore
+from iris.memory.long_term.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 

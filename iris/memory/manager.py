@@ -9,10 +9,10 @@ if TYPE_CHECKING:
 
 from iris.event.event_types import InputReady, InputReceived, TimerTick
 from iris.memory.long_term.manager import LongTermMemoryManager
+from iris.memory.long_term.stores import EpisodicStore, SemanticStore
+from iris.memory.long_term.vector_store import VectorStore
 from iris.memory.sensory.manager import SensoryMemoryManager
 from iris.memory.short_term.manager import ShortTermMemoryManager
-from iris.memory.stores import EpisodicStore, SemanticStore
-from iris.memory.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +158,8 @@ class MemoryManager:
         max_results = kwargs.get("max_results", 3)
         if not isinstance(max_results, int):
             max_results = 3
+        if stream == "short_term":
+            return self.short_term.search(query, max_results=max_results)
         if stream == "semantic" or stream is None:
             return self.long_term.search_semantic(query, max_results=max_results)
         return []

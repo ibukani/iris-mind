@@ -9,10 +9,10 @@ from iris.agency.execution.tool_executor import ToolExecutionEngine
 from iris.kernel.config import ModelConfig
 from iris.llm.capability_checker import CapabilityChecker
 from iris.llm.llm_bridge import LLMBridge
+from iris.memory.long_term.stores import AgentsMdStore
 from iris.memory.manager import MemoryManager
 from iris.memory.personality.persona_profile import PersonaProfile
 from iris.memory.personality.personality import Personality
-from iris.memory.stores import AgentsMdStore
 
 if TYPE_CHECKING:
     from iris.limbic.manager import LimbicManager

@@ -179,11 +179,11 @@ class PlanningManager:
         except Exception:
             return ""
 
-    def _build_working_context(self) -> str:
+    def _build_working_context(self, query: str | None = None) -> str:
         if self._memory is None:
             return ""
         try:
-            wm = self._memory.short_term.render_context()
+            wm = self._memory.short_term.render_context(query=query)
             if wm:
                 return wm
             recent = self._memory.get_recent(3)
@@ -222,7 +222,7 @@ class PlanningManager:
             return ""
         parts: list[str] = []
         try:
-            wc = self._build_working_context()
+            wc = self._build_working_context(query=content)
             if wc:
                 parts.append(wc)
             else:

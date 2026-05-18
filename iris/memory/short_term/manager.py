@@ -12,18 +12,6 @@ _MAX_CONTEXT_CHARS = 600
 
 
 class ShortTermMemoryManager:
-    """短期記憶 / ワーキングメモリ。
-    現在処理中の会話内容（ターン・話題・参照エンティティ）を保持し、
-    長期記憶への転送（consolidation）を担う。
-
-    書き込みタイミング:
-    - add_turn("user", content): LLM応答生成直前 (ExecutionManager)
-    - add_turn("assistant", content): LLM応答生成直後 (ExecutionManager)
-
-    脳科学対応: 前頭前野 (PFC) のワーキングメモリ。
-    現在の処理に必要な情報を一時的に保持し、不要になれば破棄または長期記憶へ転送。
-    """
-
     def __init__(self, max_turns: int = 10, max_topics: int = 5):
         self._turns: list[dict[str, Any]] = []
         self._current_topics: list[str] = []
@@ -40,6 +28,7 @@ class ShortTermMemoryManager:
             "content": truncated,
             "timestamp": datetime.now(UTC).isoformat(),
             "consolidated": False,
+            "importance": self._compute_importance(truncated),
         }
         self._turns.append(entry)
         if len(self._turns) > self._max_turns:
@@ -47,11 +36,22 @@ class ShortTermMemoryManager:
         self._extract_from_content(truncated)
         logger.debug("ShortTerm: added %s turn, total=%d", role, len(self._turns))
 
+    def _compute_importance(self, content: str) -> int:
+        score = 0
+        lower = content.lower()
+        if any(w in lower for w in ["important", "大事", "覚えて", "remember", "注意", "critical", "urgent"]):
+            score += 3
+        if any(w in lower for w in ["please", "お願い", "help", "assist", "question", "質問"]):
+            score += 1
+        if re.search(r"[A-Z]{3,}", content):
+            score += 1
+        if content.count("!") >= 2:
+            score += 1
+        return min(score, 5)
+
     def _extract_from_content(self, content: str) -> None:
-        words = re.findall(r"[A-Z][a-z]+(?:[A-Z][a-z]+)*", content)
-        for w in words:
-            if len(w) > 2:
-                self._active_references.add(w)
+        for entity in self._extract_entities(content):
+            self._active_references.add(entity)
         sentences = re.split(r"[。！？\.\!\?]", content)
         for s in sentences[:2]:
             s = s.strip()
@@ -60,25 +60,85 @@ class ShortTermMemoryManager:
         if len(self._current_topics) > self._max_topics:
             self._current_topics = self._current_topics[-self._max_topics :]
 
-    def render_context(self, max_chars: int = _MAX_CONTEXT_CHARS) -> str:
+    def _extract_entities(self, content: str) -> list[str]:
+        entities: list[str] = []
+        entities.extend(re.findall(r"https?://[^\s]+", content))
+        entities.extend(re.findall(r"(?:/[^\s/]+)+(?:/?)", content))
+        entities.extend(re.findall(r"#\w+", content))
+        entities.extend(re.findall(r"@\w+", content))
+        entities.extend(re.findall(r"「([^」]+)」", content))
+        entities.extend(re.findall(r'"([^"]{3,})"', content))
+        entities.extend(re.findall(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)*\b", content))
+        return list({e for e in entities if len(e) > 2})
+
+    def _compute_relevance(self, query: str, turn: dict[str, Any]) -> float:
+        if not query or not turn.get("content"):
+            return 0.0
+        q_words = set(re.findall(r"\w+", query.lower()))
+        t_words = set(re.findall(r"\w+", turn["content"].lower()))
+        if not q_words or not t_words:
+            return 0.0
+        overlap = len(q_words & t_words)
+        return overlap / len(q_words)
+
+    def search(self, query: str, max_results: int = 5) -> list[dict[str, Any]]:
+        scored: list[tuple[float, int, dict[str, Any]]] = []
+        for i, turn in enumerate(self._turns):
+            relevance = self._compute_relevance(query, turn)
+            if relevance > 0 or (query and query.lower() in turn.get("content", "").lower()):
+                if relevance == 0:
+                    relevance = 0.01
+                scored.append((relevance, turn.get("importance", 0), dict(turn)))
+                scored[-1][2]["relevance"] = relevance
+                scored[-1][2]["index"] = i
+        scored.sort(key=lambda x: (-x[0], -x[1]))
+        return [s[2] for s in scored[:max_results]]
+
+    def search_entities(self, entity_name: str) -> list[dict[str, Any]]:
+        entity_lower = entity_name.lower().strip()
+        results: list[dict[str, Any]] = []
+        for i, turn in enumerate(self._turns):
+            if entity_lower in turn.get("content", "").lower():
+                turn_copy = dict(turn)
+                turn_copy["index"] = i
+                results.append(turn_copy)
+        return results[-5:]
+
+    def render_context(self, max_chars: int = _MAX_CONTEXT_CHARS, query: str | None = None) -> str:
         if not self._turns:
             return ""
-        parts: list[str] = []
-        parts.append("### 直近の会話")
-        for t in self._turns[-4:]:
-            label = "User" if t["role"] == "user" else "Iris"
-            content = t["content"][:100]
-            parts.append(f"- {label}: 「{content}」")
+        parts: list[str] = ["### 直近の会話"]
+
+        if query:
+            relevant = self.search(query, max_results=3)
+            shown_indices: set[int] = set()
+            for r in relevant:
+                shown_indices.add(r.get("index", -1))
+                label = "User" if r["role"] == "user" else "Iris"
+                parts.append(f"- {label}: 「{r['content'][:100]}」(関連度 {r.get('relevance', 0):.2f})")
+            for t in reversed(self._turns[-4:]):
+                idx = self._turns.index(t)
+                if idx in shown_indices:
+                    continue
+                shown_indices.add(idx)
+                label = "User" if t["role"] == "user" else "Iris"
+                parts.append(f"- {label}: 「{t['content'][:100]}」")
+        else:
+            for t in self._turns[-4:]:
+                label = "User" if t["role"] == "user" else "Iris"
+                parts.append(f"- {label}: 「{t['content'][:100]}」")
+
         if self._current_topics:
             parts.append("### 現在の話題")
             parts.extend(f"- {topic}" for topic in self._current_topics[-3:])
         if self._active_references:
-            refs = list(self._active_references)[-5:]
+            refs = sorted(self._active_references, key=len, reverse=True)[:5]
             parts.append("### 参照エンティティ")
             parts.append(", ".join(refs))
+
         text = "\n".join(parts)
         if len(text) > max_chars:
-            text = text[:max_chars] + "..."
+            text = text[: max_chars - 3] + "..."
         return text
 
     def get_recent_turns(self, n: int = 4) -> list[dict[str, Any]]:

@@ -190,8 +190,8 @@ class KernelFactory:
         memory: MemoryManager,
         tool_exec: ToolExecutionEngine,
         session_mgr: SessionManager,
-        inhibition: InhibitionController | None = None,
-        scoring: ProactiveScoring | None = None,
+        inhibition: InhibitionController,
+        scoring: ProactiveScoring,
     ) -> AgencyManager:
         personality = Personality(name=config.personality.name, prompt_file=config.personality.prompt_file)
         capability_checker = CapabilityChecker(config=config.model)

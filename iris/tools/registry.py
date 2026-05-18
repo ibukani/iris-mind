@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
 
 from iris.tools.decorator import get_tool_def
@@ -16,7 +17,7 @@ class ToolRegistry:
     def register(self, tool_def: ToolDef) -> None:
         self._tools[tool_def.name] = tool_def
 
-    def register_decorated(self, fn: object) -> None:
+    def register_decorated(self, fn: Callable) -> None:
         td = get_tool_def(fn)
         if td is None:
             raise ValueError("Function has no _tool_def. Use @tool decorator.")

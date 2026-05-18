@@ -223,8 +223,7 @@ class FakeSessionManager:
         self._session_info = info
 
     def route_output(self, session_id: str, message: OutputMessage) -> None:
-        message.session_id = session_id
-        self.sent.append(message)
+        self.sent.append(message.model_copy(update={"metadata": {**message.metadata, "session_id": session_id}}))
 
     def is_session_active(self, session_id: str) -> bool:
         return bool(session_id)

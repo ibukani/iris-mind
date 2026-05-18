@@ -50,6 +50,8 @@ class ReadinessEvaluator:
         return min(score, 1.0)
 
     def _tier2_check(self, fragments: list[str]) -> bool:
+        if self._llm is None:
+            return False
         text = " ".join(fragments)
         prompt = (
             "You are evaluating a conversation fragment.\n"

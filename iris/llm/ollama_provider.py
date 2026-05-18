@@ -44,7 +44,7 @@ class OllamaProvider:
         max_tokens: int = 4096,
         tools: list[dict] | None = None,
         on_token: Callable[[str], None] | None = None,
-        keep_alive: str | None = None,
+        interrupt_token: object | None = None,
         **kwargs: Any,
     ) -> dict:
         """LLM にチャットリクエストを送信する。"""
@@ -65,11 +65,10 @@ class OllamaProvider:
         if tools:
             call_kwargs["tools"] = tools
         call_kwargs["think"] = enable_thinking
-        if keep_alive is not None:
-            call_kwargs["keep_alive"] = keep_alive
-
-        interrupt_token = kwargs.pop("interrupt_token", None)
-        call_kwargs.update(kwargs)
+        if kwargs.get("keep_alive") is not None:
+            call_kwargs["keep_alive"] = kwargs.pop("keep_alive")
+        if interrupt_token is not None:
+            call_kwargs["interrupt_token"] = interrupt_token
 
         if on_token is not None:
             return self._stream_chat(**call_kwargs, on_token=on_token, interrupt_token=interrupt_token)

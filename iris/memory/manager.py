@@ -116,6 +116,7 @@ class MemoryManager:
 
     def search(self, query: str, stream: MemoryStream | None = None, **kwargs) -> list[dict]:
         if stream == "semantic" or (stream is None and self._semantic):
+            assert self._semantic is not None
             results = self._semantic.search(query=query, max_results=kwargs.get("max_results", 3))
             return [
                 {
@@ -144,9 +145,8 @@ class MemoryManager:
     def clear(self, stream: MemoryStream | None = None) -> None:
         if stream == "episodic" or stream is None:
             self._episodic.clear()
-        if stream == "semantic" or stream is None:
-            if self._semantic:
-                self._semantic.clear()
+        if (stream == "semantic" or stream is None) and self._semantic:
+            self._semantic.clear()
         if stream == "sensory" and self._sensory_buffer:
             self._sensory_buffer.close()
 
@@ -155,7 +155,7 @@ class MemoryManager:
     def get_user_preferences(self) -> list[dict[str, Any]]:
         return self.search("ユーザーの好み 興味 趣味", stream="semantic", max_results=2)
 
-    def add_episodic(self, content: str, kind: str = "", metadata: dict | None = None) -> None:
+    def add_episodic(self, content: str, kind: str = "", _metadata: dict | None = None) -> None:
         self.store("episodic", {"content": content, "kind": kind})
 
     def get_recent(self, n: int = 3) -> list[dict[str, Any]]:

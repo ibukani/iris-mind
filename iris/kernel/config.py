@@ -12,9 +12,23 @@ from pathlib import Path
 
 import yaml
 from dotenv import load_dotenv
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 _ENV_REF_RE = re.compile(r"\$\{([^}]+)\}")
+_VALID_PERFORMANCE_TIERS = {"fast", "balanced", "capable"}
+
+
+def _default_models() -> list[ModelEntry]:
+    return [ModelEntry(name="qwen3.5:9b", roles=["default"], max_tokens=1024)]
+
+
+def _default_trigger_weights() -> dict[str, float]:
+    return {
+        "time": 0.25,
+        "memory": 0.45,
+        "context": 0.15,
+        "mood": 0.15,
+    }
 
 
 def _resolve_env_refs(raw: object) -> object:
@@ -34,7 +48,7 @@ def _resolve_env_refs(raw: object) -> object:
 
 class ModelEntry(BaseModel):
     name: str
-    roles: list[str] = ["default"]
+    roles: list[str] = Field(default_factory=lambda: ["default"])
     max_tokens: int = 512
     temperature: float | None = None
     num_ctx: int | None = None
@@ -54,16 +68,13 @@ class ModelEntry(BaseModel):
     @field_validator("performance_tier")
     @classmethod
     def _validate_tier(cls, v: str) -> str:
-        allowed = {"fast", "balanced", "capable"}
-        if v not in allowed:
-            raise ValueError(f"performance_tier must be one of {allowed}, got '{v}'")
+        if v not in _VALID_PERFORMANCE_TIERS:
+            raise ValueError(f"performance_tier must be one of {_VALID_PERFORMANCE_TIERS}, got '{v}'")
         return v
 
 
 class ModelConfig(BaseModel):
-    models: list[ModelEntry] = [
-        ModelEntry(name="qwen3.5:9b", roles=["default"], max_tokens=1024),
-    ]
+    models: list[ModelEntry] = Field(default_factory=_default_models)
     provider: str = "ollama"
     base_url: str = "http://localhost:11434"
     api_key: str = ""
@@ -124,12 +135,7 @@ class ProactiveConfig(BaseModel):
     tier2_cooldown_sec: float = 60.0
     max_proactive_tokens: int = 256
     user_cooldown_on_ignore: float = 300.0
-    trigger_weights: dict[str, float] = {
-        "time": 0.25,
-        "memory": 0.45,
-        "context": 0.15,
-        "mood": 0.15,
-    }
+    trigger_weights: dict[str, float] = Field(default_factory=_default_trigger_weights)
     speak_threshold: float = 0.60
     abbreviated_threshold: float = 0.25
 
@@ -164,7 +170,7 @@ class QuasiSyncConfig(BaseModel):
     enabled: bool = True
     input_timeout_ms: int = 800
     max_buffer_fragments: int = 10
-    response_readiness: ResponseReadinessConfig = ResponseReadinessConfig()
+    response_readiness: ResponseReadinessConfig = Field(default_factory=ResponseReadinessConfig)
 
 
 class SessionConfig(BaseModel):
@@ -179,18 +185,18 @@ class LoggingConfig(BaseModel):
     dir: str = "logs"
     max_bytes: int = 5_242_880
     backup_count: int = 14
-    loggers: dict[str, str] = {}
+    loggers: dict[str, str] = Field(default_factory=dict)
     console_format: str = ""
 
 
 class Config(BaseModel):
-    model: ModelConfig = ModelConfig()
-    personality: PersonalityConfig = PersonalityConfig()
-    memory: MemoryConfig = MemoryConfig()
-    proactive: ProactiveConfig = ProactiveConfig()
-    session: SessionConfig = SessionConfig()
-    quasi_sync: QuasiSyncConfig = QuasiSyncConfig()
-    logging: LoggingConfig = LoggingConfig()
+    model: ModelConfig = Field(default_factory=ModelConfig)
+    personality: PersonalityConfig = Field(default_factory=PersonalityConfig)
+    memory: MemoryConfig = Field(default_factory=MemoryConfig)
+    proactive: ProactiveConfig = Field(default_factory=ProactiveConfig)
+    session: SessionConfig = Field(default_factory=SessionConfig)
+    quasi_sync: QuasiSyncConfig = Field(default_factory=QuasiSyncConfig)
+    logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
     @classmethod
     def load(cls, path: str = "config.yaml") -> Config:

@@ -113,7 +113,7 @@ class ProactiveScoring:
             dominance = limbic_mood.get("dominance", 0.0)
 
             mood_valence = max(0.0, valence)
-            mood_arousal = 0.3 if arousal > 0.6 else (0.6 if arousal < 0.15 else 0.4)
+            mood_arousal = 0.6 if arousal > 0.6 else (0.3 if arousal < 0.15 else 0.4)
             mood_dominance = dominance * 0.4
 
             return min(1.0, mood_valence * 0.5 + mood_arousal + mood_dominance)

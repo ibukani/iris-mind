@@ -44,9 +44,6 @@ class PlanningManager:
         if self._limbic:
             emotion = self._limbic.current_emotion()
             self._inhibition.apply_limbic_modulation(emotion)
-            base_mood = self._inhibition.negative_mood_score
-            modulated = self._limbic.modulate_inhibition(base_mood)
-            self._inhibition.set_mood(modulated)
             limbic_mood = emotion.to_dict()
         else:
             limbic_mood = None

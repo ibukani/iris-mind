@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import logging
+import math
 import threading
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from iris.limbic.models import EmotionState
+
+from collections.abc import Mapping
 
 from iris.event.event_types import InputReady, InputReceived, TimerTick
 from iris.memory.sensory.buffer import InputBuffer
@@ -179,3 +185,52 @@ class MemoryManager:
 
     def search_semantic(self, query: str, max_results: int = 3) -> list[dict[str, Any]]:
         return self.search(query, stream="semantic", max_results=max_results)
+
+    def search_emotional(
+        self,
+        current_emotion: EmotionState | None = None,
+        max_results: int = 5,
+    ) -> list[dict[str, Any]]:
+        """感情タグが付いたエピソード記憶を取得（感情強度順）。
+
+        現在の感情状態が指定された場合は感情類似度で再ランクする。
+        """
+        if not self._episodic:
+            return []
+
+        all_entries = self._episodic.get_recent(self._episodic.max_entries)
+        emotion_entries = [e for e in all_entries if e.get("metadata", {}).get("type") == "emotion_tag"]
+
+        if not emotion_entries:
+            return []
+
+        if current_emotion is not None:
+            scored: list[tuple[float, dict]] = []
+            for e in emotion_entries:
+                meta = e.get("metadata", {})
+                meta_emotion = meta.get("emotion", {})
+                distance = _pad_distance(current_emotion, meta_emotion)
+                intensity = meta.get("intensity", 0)
+                score = intensity / max(distance, 0.01)
+                scored.append((score, e))
+            scored.sort(key=lambda x: x[0], reverse=True)
+            return [e for _, e in scored[:max_results]]
+
+        return sorted(
+            emotion_entries,
+            key=lambda e: e.get("metadata", {}).get("intensity", 0),
+            reverse=True,
+        )[:max_results]
+
+
+def _pad_distance(
+    a: EmotionState,
+    b: Mapping[str, Any],
+) -> float:
+    a_val = a.valence
+    a_aro = a.arousal
+    a_dom = a.dominance
+    b_val = float(b.get("valence", 0))
+    b_aro = float(b.get("arousal", 0))
+    b_dom = float(b.get("dominance", 0))
+    return math.sqrt((a_val - b_val) ** 2 + (a_aro - b_aro) ** 2 + (a_dom - b_dom) ** 2)

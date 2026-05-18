@@ -181,6 +181,10 @@ class LimbicManager:
 
         return max(0.0, min(1.0, base_score))
 
+    def search_by_emotion(self, max_results: int = 5) -> list[dict[str, Any]]:
+        """現在の感情状態に近い記憶を検索する。"""
+        return self._emotional_memory.search_by_emotion(self.current_emotion(), max_results)
+
     def get_emotion_report(self) -> dict[str, Any]:
         """感情状態のレポートを返す（デバッグ/ステータス用）。"""
         e = self.current_emotion()

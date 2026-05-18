@@ -17,6 +17,7 @@ from iris.io.manager import IOManager
 from iris.io.session.manager import SessionConfig, SessionManager
 from iris.io.transport.tcp_listener import TcpListener
 from iris.kernel.commands.handler import CommandHandler
+from iris.limbic.emotional_memory import EmotionalMemory
 from iris.limbic.manager import LimbicManager
 from iris.llm.capability_checker import CapabilityChecker
 from iris.llm.context_window import LLMContextWindowManager
@@ -91,15 +92,33 @@ class KernelFactory:
         )
 
         # ============================================================
-        # Phase 2: 記憶レイヤー
+        # Phase 2: 記憶ストア構築（MemoryManager / EmotionalMemory で共用）
         # ============================================================
-        memory_mgr = KernelFactory._build_memory(event_bus, config)
+        mem_cfg = config.memory
+        episodic = EpisodicStore(path=mem_cfg.episodic_path, max_entries=mem_cfg.episodic_max_entries)
+        semantic = SemanticStore(
+            path=mem_cfg.semantic_path,
+            max_entries=mem_cfg.semantic_max_entries,
+            vector_db_path=mem_cfg.vector_db_path,
+        )
+        memory_mgr = KernelFactory._build_memory(
+            event_bus,
+            config,
+            episodic=episodic,
+            semantic=semantic,
+        )
 
         # ============================================================
         # Phase 3: 大脳辺縁系 (感情エンジン)
         # ============================================================
         big_five = BigFiveProfile.load()
-        limbic = LimbicManager(event_bus=event_bus)
+        limbic = LimbicManager(
+            event_bus=event_bus,
+            emotional_memory=EmotionalMemory(
+                episodic_store=episodic,
+                semantic_store=semantic,
+            ),
+        )
         limbic.set_big_five(big_five)
 
         # ============================================================
@@ -167,14 +186,21 @@ class KernelFactory:
         return ctx
 
     @staticmethod
-    def _build_memory(event_bus: EventBus, config: Config) -> MemoryManager:
+    def _build_memory(
+        event_bus: EventBus,
+        config: Config,
+        episodic: EpisodicStore | None = None,
+        semantic: SemanticStore | None = None,
+    ) -> MemoryManager:
         cfg = config.memory
-        episodic = EpisodicStore(path=cfg.episodic_path, max_entries=cfg.episodic_max_entries)
-        semantic = SemanticStore(
-            path=cfg.semantic_path,
-            max_entries=cfg.semantic_max_entries,
-            vector_db_path=cfg.vector_db_path,
-        )
+        if episodic is None:
+            episodic = EpisodicStore(path=cfg.episodic_path, max_entries=cfg.episodic_max_entries)
+        if semantic is None:
+            semantic = SemanticStore(
+                path=cfg.semantic_path,
+                max_entries=cfg.semantic_max_entries,
+                vector_db_path=cfg.vector_db_path,
+            )
         vector_store = VectorStore(path=cfg.vector_db_path)
         mem = MemoryManager(
             event_bus=event_bus,

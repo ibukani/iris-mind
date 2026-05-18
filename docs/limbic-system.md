@@ -326,10 +326,10 @@ EpisodicStore に記録し、システムプロンプトに反映する。
 - Reflexion 連携による性格推定・更新 (quick_reflect/reflect + HippocampalManager)
 - 性格×感情の相互作用 (ACC Neuroticism/Agreeableness/Extraversion変調)
 
-### Phase 3: 感情記憶
-- `EmotionalMemory` による EpisodicStore タグ付け
-- 感情ベース記憶検索
-- 感情強度による想起バイアス
+### Phase 3: 感情記憶 ✅ 完了
+- `EmotionalMemory` による EpisodicStore タグ付け（intensity閾値超で永続化）
+- 感情ベース記憶検索（`search_by_emotion()` / `search_emotional()`）
+- 感情強度による想起バイアス（PAD距離×強度で再ランク）
 
 ### Phase 4: 会話多様化
 - 感情に基づく応答スタイル変更

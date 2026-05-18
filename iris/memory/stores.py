@@ -64,9 +64,12 @@ class EpisodicStore:
         if self.path.exists():
             self.path.unlink()
 
-    def add(self, summary: str) -> None:
+    def add(self, summary: str, metadata: dict | None = None) -> None:
         entries = self._load_all()
-        entries.append({"summary": summary, "timestamp": datetime.now(UTC).isoformat()})
+        entry: dict[str, object] = {"summary": summary, "timestamp": datetime.now(UTC).isoformat()}
+        if metadata:
+            entry["metadata"] = metadata
+        entries.append(entry)
         if len(entries) > self.max_entries:
             entries = entries[-self.max_entries :]
         self.path.write_text(

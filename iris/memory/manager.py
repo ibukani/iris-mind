@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import logging
+import threading
 from typing import Any
 
+from iris.event.event_types import InputReady, InputReceived, TimerTick
 from iris.memory.sensory.buffer import InputBuffer
 from iris.memory.stores import EpisodicStore, SemanticStore
 from iris.memory.vector_store import VectorStore
@@ -26,9 +28,65 @@ class MemoryManager:
         self._vector_store = vector_store
         self._proactive_config = proactive_config
         self._sensory_buffer: InputBuffer | None = None
+        self._pending_input: dict[str, str] = {}
+        self._pending_lock: threading.Lock = threading.Lock()
+
+        if event_bus is not None:
+            event_bus.subscribe("InputReceived", self._on_input_received)
+            event_bus.subscribe("TimerTick", self._on_timer_tick)
 
     def set_sensory_buffer(self, buf: InputBuffer) -> None:
         self._sensory_buffer = buf
+
+    def _on_input_received(self, event: InputReceived) -> None:
+        if not event.content:
+            return
+        with self._pending_lock:
+            self._pending_input[event.session_id] = event.content
+        logger.debug(
+            "MemoryManager: input pending session=%s content=%.80s",
+            event.session_id,
+            event.content,
+        )
+
+    def _on_timer_tick(self, event: TimerTick) -> None:
+        session_id = ""
+        content = ""
+        with self._pending_lock:
+            if self._pending_input:
+                session_id, content = self._pending_input.popitem()
+
+        if content and session_id:
+            self._event_bus.publish(
+                InputReady(
+                    timestamp=None,
+                    source="memory",
+                    session_id=session_id,
+                    content=content,
+                    context={},
+                )
+            )
+            return
+
+        proactive = self._proactive_config
+        do_proactive = True
+        if proactive is None:
+            do_proactive = False
+        elif isinstance(proactive, dict):
+            do_proactive = proactive.get("enabled", True)
+        else:
+            do_proactive = getattr(proactive, "enabled", True)
+
+        if do_proactive:
+            self._event_bus.publish(
+                InputReady(
+                    timestamp=None,
+                    source="memory",
+                    session_id="",
+                    content="",
+                    context={"from_timer": True},
+                )
+            )
 
     def store(self, stream: str, data: Any) -> None:
         if stream == "sensory" and self._sensory_buffer:

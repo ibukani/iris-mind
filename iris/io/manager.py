@@ -68,6 +68,12 @@ class IOManager:
             self._handle_command(msg)
             return
 
+        if msg.msg_type == "converse_text":
+            self._session_mgr.route_output(
+                msg.session_id,
+                OutputMessage(msg_type="ack", content="received"),
+            )
+
         self._event_bus.publish(
             InputReceived(
                 timestamp=None,

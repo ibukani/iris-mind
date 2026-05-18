@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 import json
 import logging
-import threading
-from collections.abc import Callable
 from multiprocessing.connection import Connection, Listener
+import threading
 from typing import Any
 
 from iris.io.models import INPUT_MSG_TYPES, TCP_HOST, TCP_PORT, InputMessage, InterruptMessage

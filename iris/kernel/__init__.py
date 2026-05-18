@@ -5,10 +5,10 @@ from iris.kernel.manager import KernelManager
 
 __all__ = [
     "Config",
-    "ProactiveConfig",
-    "KernelManager",
     "EventBus",
     "InputMessage",
     "InterruptMessage",
+    "KernelManager",
     "OutputMessage",
+    "ProactiveConfig",
 ]

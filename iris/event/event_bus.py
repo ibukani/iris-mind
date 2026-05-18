@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import logging
-import threading
 from collections import defaultdict
 from collections.abc import Callable
 from contextlib import suppress
 from datetime import UTC, datetime
+import logging
+import threading
 from typing import Protocol, runtime_checkable
 
 from iris.event.event_types import Event, new_trace_id

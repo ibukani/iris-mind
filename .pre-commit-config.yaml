@@ -9,8 +9,9 @@ repos:
     rev: v2.1.0
     hooks:
       - id: mypy
-        args: [--no-strict-optional, --ignore-missing-imports]
+        args: [--ignore-missing-imports, iris/]
         additional_dependencies: [types-PyYAML]
+        pass_filenames: false
   - repo: local
     hooks:
       - id: pyright

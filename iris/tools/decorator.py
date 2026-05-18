@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import inspect
 from collections.abc import Callable
+import inspect
 from typing import Any, get_args, get_origin, get_type_hints
 
 from iris.tools.models import ToolDef

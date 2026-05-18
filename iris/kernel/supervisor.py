@@ -82,7 +82,7 @@ class Supervisor:
                 if name == "shutdown":
                     self._cmd_shutdown()
                     break
-                elif name == "status":
+                if name == "status":
                     self._cmd_status()
                 elif name == "help":
                     self._cmd_help()

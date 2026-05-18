@@ -12,12 +12,12 @@ Kernel 診断ログ設定。
 
 from __future__ import annotations
 
-import logging
-import re
-import sys
 from datetime import datetime
+import logging
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+import re
+import sys
 
 from .config import LoggingConfig
 

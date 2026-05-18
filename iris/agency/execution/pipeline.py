@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
+import logging
 
 from iris.agency.execution.interrupt_token import InterruptToken
 from iris.agency.execution.tool_executor import ToolExecutionEngine
@@ -163,7 +163,7 @@ class LLMPipeline:
             )
             text = (resp.get("message", {}) or {}).get("content", "").strip().strip('"')
             if text and len(text) < 120:
-                return text
+                return text  # type: ignore[no-any-return]
         except Exception as e:
             logger.debug("Short generation failed: %s", e)
         return "お疲れさまです！何かお手伝いしましょうか？"

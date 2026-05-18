@@ -33,37 +33,25 @@ class IrisConfigError(IrisException):
     モデル名の不正値などが対象。
     """
 
-    pass
-
 
 class IrisRuntimeError(IrisException):
     """実行時エラー。実行中の予期しない状態遷移など。"""
-
-    pass
 
 
 class IrisConnectionError(IrisException):
     """外部接続エラー。LLM プロバイダへの接続失敗など。"""
 
-    pass
-
 
 class IrisMemoryError(IrisException):
     """記憶レイヤーのエラー（ファイル操作失敗、パース失敗など）。"""
-
-    pass
 
 
 class IrisToolError(IrisException):
     """ツール（capability）実行エラー。ツール未発見、実行失敗など。"""
 
-    pass
-
 
 class IrisSessionError(IrisException):
     """セッション管理エラー。セッション重複、無効な session_id など。"""
-
-    pass
 
 
 class IrisLLMError(IrisConnectionError):
@@ -73,16 +61,10 @@ class IrisLLMError(IrisConnectionError):
     レート制限など。
     """
 
-    pass
-
 
 class IrisLLMUnavailableError(IrisLLMError):
     """LLM プロバイダが利用不可（起動していない、キーなし等）。"""
 
-    pass
-
 
 class IrisCapabilityError(IrisToolError):
     """Capability（ツール）が利用不可またはサポート外。"""
-
-    pass

@@ -4,10 +4,10 @@ from iris.tools.registry import ToolRegistry
 
 __all__ = [
     "ToolDef",
-    "ToolResult",
     "ToolRegistry",
-    "tool",
+    "ToolResult",
     "get_tool_def",
     "register_decorated_tools",
     "register_tools",
+    "tool",
 ]

@@ -3,6 +3,7 @@ import subprocess
 import sys
 
 from iris.tools.decorator import register_tools, tool
+from iris.tools.registry import ToolRegistry
 
 _BLOCKED_COMMANDS = [
     "rm -rf /",
@@ -97,5 +98,5 @@ def run_shell(command: str, timeout: int = 15) -> str:
         return f"Error: {e}"
 
 
-def register(registry):
+def register(registry: ToolRegistry) -> None:
     register_tools(registry, run_python, run_shell)

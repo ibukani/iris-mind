@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
 import logging
 import time
-from datetime import UTC, datetime
 
 from iris.agency.bus import InternalBus, PlanDecided
 from iris.agency.execution.inhibition import GateVerdict, InhibitionController

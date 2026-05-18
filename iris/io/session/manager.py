@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import contextlib
-import logging
-import threading
 from dataclasses import dataclass
 from datetime import datetime
+import logging
 from multiprocessing.connection import Connection
+import threading
 from uuid import uuid4
 
 from iris.io.auth.authenticator import Authenticator

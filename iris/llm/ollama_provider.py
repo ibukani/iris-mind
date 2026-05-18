@@ -6,6 +6,7 @@ ollama.Client をラップし、ストリーミング・thinking モード・ツ
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import contextlib
 import logging
 import os
@@ -14,7 +15,6 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable
 from typing import Any
 
 import httpx
@@ -216,7 +216,7 @@ def _process_message(msg: dict) -> dict:
 
 
 def _retry_delay(attempt: int) -> float:
-    return _RETRY_BACKOFF_SECONDS * (2**attempt)
+    return _RETRY_BACKOFF_SECONDS * (2**attempt)  # type: ignore[no-any-return]
 
 
 def _log_retry(attempt: int) -> None:
@@ -273,7 +273,7 @@ def _ensure_model_pulled(model_name: str) -> bool:
     return False
 
 
-def _restart_ollama():
+def _restart_ollama() -> None:
     """既存 Ollama プロセスを終了し、GPU 向け設定で再起動する。"""
     with contextlib.suppress(Exception):
         subprocess.run(["taskkill", "/F", "/IM", "ollama.exe"], capture_output=True, timeout=5)
@@ -288,7 +288,7 @@ def _restart_ollama():
     time.sleep(5)
 
 
-def _stop_config_models(model_names: list[str]):
+def _stop_config_models(model_names: list[str]) -> None:
     """指定されたモデルを停止する。"""
     for name in model_names:
         with contextlib.suppress(Exception):

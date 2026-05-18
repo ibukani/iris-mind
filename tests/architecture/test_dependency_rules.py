@@ -36,7 +36,7 @@ def _get_imports(filepath: Path) -> list[str]:
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             for alias in node.names:
-                imports.append(alias.name)
+                imports.append(alias.name)  # noqa: PERF401
         elif isinstance(node, ast.ImportFrom) and node.module:
             imports.append(node.module)
     return imports

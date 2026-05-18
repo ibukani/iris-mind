@@ -12,15 +12,15 @@ from iris.event.event_types import (
 )
 
 __all__ = [
+    "AgentAnomalyEvent",
+    "AgentStateChangeEvent",
     "Event",
     "EventBus",
     "EventBusProtocol",
-    "TimerTick",
-    "AgentStateChangeEvent",
-    "MemoryUpdateEvent",
-    "AgentAnomalyEvent",
-    "InputReceived",
     "InputReady",
+    "InputReceived",
+    "MemoryUpdateEvent",
     "OutputRequest",
+    "TimerTick",
     "new_trace_id",
 ]

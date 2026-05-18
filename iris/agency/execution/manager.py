@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
+import logging
 
 from iris.agency.bus import InternalBus, PlanDecided
 from iris.agency.execution.monitor import OutputMonitor
@@ -141,5 +141,5 @@ class ExecutionManager:
             return "Not enough messages to compact"
         summary = self._context_window_mgr.compact(self._messages)
         keep = 6
-        self._messages = [{"role": "system", "content": f"## Session Summary\n{summary}"}] + self._messages[-keep:]
+        self._messages = [{"role": "system", "content": f"## Session Summary\n{summary}"}, *self._messages[-keep:]]
         return f"Compacted: {len(summary)} chars summary, kept last {keep} messages"

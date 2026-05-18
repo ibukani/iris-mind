@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime
+import json
 from pathlib import Path
 
 _DEFAULT_PATH = ".iris/data/persona_data.json"
@@ -26,7 +26,7 @@ class PersonaData:
     def _load(self) -> dict[str, list]:
         if self.path.exists():
             try:
-                return json.loads(self.path.read_text(encoding="utf-8"))
+                return json.loads(self.path.read_text(encoding="utf-8"))  # type: ignore[no-any-return]
             except (json.JSONDecodeError, Exception):
                 pass
         return {"speech_styles": [], "personality_traits": []}

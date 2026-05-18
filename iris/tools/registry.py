@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
+import logging
 from pathlib import Path
 
 from iris.tools.decorator import get_tool_def, register_decorated_tools

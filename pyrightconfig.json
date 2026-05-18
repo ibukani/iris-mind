@@ -1,35 +1,60 @@
 {
   "pythonVersion": "3.13",
-  "pythonPlatform": "Linux",
-  "typeCheckingMode": "strict",
-  "reportMissingImports": true,
-  "reportMissingTypeStubs": true,
-  "reportMissingModuleSource": true,
-  "reportUnusedImport": true,
-  "reportUnusedClass": true,
-  "reportUnusedFunction": true,
-  "reportUnusedVariable": true,
-  "reportDuplicateImport": true,
-  "reportIncompatibleMethodOverride": true,
-  "reportIncompatibleVariableOverride": true,
-  "reportInconsistentConstructor": true,
-  "reportPropertyTypeMismatch": true,
-  "reportInvalidStringEscapeSequence": true,
-  "reportInvalidTypeForm": true,
-  "reportUnnecessaryComparison": true,
-  "reportUnnecessaryIsInstance": true,
-  "reportUnnecessaryCast": true,
-  "reportImplicitStringConcatenation": true,
-  "reportImplicitOverride": true,
-  "reportShadowedImports": true,
-  "include": ["iris", "tests"],
-  "exclude": [
-    "**/node_modules",
-    "**/__pycache__",
-    "**/.*",
-    "build",
-    "dist"
-  ],
+  "include": ["iris"],
+  "exclude": ["**/node_modules", "**/__pycache__", "**/.*", "build", "dist", "venv", ".venv", "tests"],
   "venvPath": ".",
-  "venv": ".venv"
+  "venv": "venv",
+
+  /* ==================================================================
+   * 型チェックレベル（段階的に上げる）
+   * ==================================================================
+   * Level 1 (basic)    — 今ここ。nullability の基本チェックのみ。
+   * Level 2 (standard) — オプショナルアクセスなど中間チェック追加。
+   * Level 3 (strict)   — 全チェック有効。report 個別制御で緩和可能。
+   *
+   * 上げ方: typeCheckingMode のコメントアウトを切り替える
+   * ===============================================================*/
+
+  /* ---- Level 1: basic ---- */
+  // "typeCheckingMode": "basic",
+
+  /* ---- Level 2: standard (current) ---- */
+  "typeCheckingMode": "standard",
+
+  /* ---- Level 3: strict (コメントを外す) ---- */
+  // "typeCheckingMode": "strict",
+
+  /* ==================================================================
+   * Level 到達後に個別に有効化する report（コメントを外す）
+   * ==================================================================
+   * standard 以上で自動チェックされる項目もあるため、
+   * 下位レベルの report を書いても効果がない場合がある。
+   * ===============================================================*/
+
+  /* --- Level 1+α: オプショナル安全性 (basic でも safe) --- */
+  // "reportOptionalMemberAccess": "error",
+  // "reportOptionalCall": "error",
+  // "reportOptionalOperand": "error",
+  // "reportOptionalIterable": "error",
+
+  /* --- Level 2+α: コード品質 (standard + 実験プロジェクト推奨 α) --- */
+  "reportUnnecessaryIsInstance": "error",
+  "reportUnusedVariable": "error",
+  "reportIncompatibleVariableOverride": "error",
+  "reportUnnecessaryCast": "error",
+
+  /* --- Level 3+α: 厳格モード (strict 推奨) --- */
+  // "reportUnknownParameterType": "error",
+  // "reportMissingTypeStubs": "warning",
+  // "reportMissingImports": "error",
+  // "reportUnusedClass": "error",
+  // "reportUnusedFunction": "error",
+  // "reportUntypedBaseClass": "error",
+  // "reportAbstractUsage": "error",
+
+  /* ==================================================================
+   * 恒久的に false にするレポート（必要性が低い or 外部起因）
+   * ==================================================================*/
+  "reportMissingImports": false,
+  "reportMissingTypeStubs": false
 }

@@ -36,58 +36,96 @@ target-version = "py313"
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "ARG", "PTH", "D", "PERF", "PIE", "RUF", "S"]
-# docstring ルール: 重要なpublic関数のみ（Pythonではすべてのクラス/関数に必須ではない）
-# D100: モジュールトップの docstring → 不要
-# D101: public class → 型ヒント + クラス名で十分
-# D102: public method → trivialなメソッドが多すぎるため除外
-# D103: public function → パッケージ内の小さな関数も多いため除外
-# D104: パッケージ __init__ の docstring → 不要
-# D105: __dunder_method__ → __init__ は別、其他は不要
-# D107: __init__ の docstring → 型ヒントで十分
-# D415: First line should end with period → 日本語docstringが多いため除外
-ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D107", "D415", "S101"]
+# 既存プロジェクト向けの現実的なルールセット
+# E, F, W: 標準的なエラー・構文チェック
+# I: importのソート
+# B: バグの温床になりやすいコードの検知 (Bugbear)
+# UP: Python3.13向けのモダンな構文への自動アップグレード
+select = ["E", "F", "W", "I", "B", "UP", "RUF", "C4", "SIM", "RET", "PERF", "PIE", "FA", "ISC"]
+
+# ▼ 除外したルール（将来的に余裕があれば追加）
+# "N" (pep8-naming): 関数名や変数名の命名規則。既存のキャメルケース等に大量反応する
+# "PTH" (flake8-use-pathlib): os.path を pathlib に書き換えろと大量に怒られる
+# "ARG" (flake8-unused-arguments): インターフェースやコールバックの未使用引数で怒られる
+# "S" (flake8-bandit): セキュリティチェック。「subprocessを使ってはいけない」等でうるさい
+# "D" (pydocstyle): Docstringの改行位置やピリオドの有無など、細かすぎるフォーマット警察
+
+ignore = [
+    "E501", # 行の長さ制限はフォーマッターに任せるため無視
+    "B008", # 関数のデフォルト引数での関数呼び出しを許容（FastAPIやTyperでよく使うため）
+    "RUF001", # 日本語docstringに多数ヒットするambiguous-characters
+    "RUF002", # 同上
+    "RUF003", # 同上
+]
 
 [tool.ruff.lint.isort]
 force-single-line = false
 force-sort-within-sections = true
 known-first-party = ["iris", "tests"]
 
-[tool.ruff.lint.per-file-ignores]
-"tests/**" = ["ARG002", "S101", "D"]
-"iris/tools/builtins/**" = ["D100", "D101"]
-
-[tool.ruff.lint.pydocstyle]
-convention = "google"
-
 [tool.ruff.format]
 quote-style = "double"
 docstring-code-format = true
 
+# ==========================================
+# Mypy 設定（段階的レベルアップ対応）
+# ==========================================
+# レベル上げ方は各フラグの値を false → true に書き換える。
+#    Level 1 (今): 全フラグ false、一部モジュール ignore_errors
+#    Level 2:      check_untyped_defs = true
+#    Level 3:      disallow_incomplete_defs = true
+#    Level 4:      disallow_untyped_defs = true
+#    Level 5:      no_implicit_optional = true
+#    Level 6:      overrides の ignore_errors を削除（モジュール単位で対応）
+# ==========================================
 [tool.mypy]
 python_version = "3.13"
 warn_unused_configs = true
 warn_redundant_casts = true
-warn_unused_ignores = true
 strict_equality = true
-ignore_missing_imports = false
-check_untyped_defs = true
-disallow_incomplete_defs = true
-disallow_untyped_defs = true
-no_implicit_optional = true
-warn_no_return = true
 warn_return_any = true
-implicit_reexport = false
-no_implicit_reexport = true
+warn_unreachable = true
 
-[[tool.mypy.overrides]]
-module = [
-  "iris.llm.llm_bridge",
-  "iris.llm.ollama_provider",
-  "iris.memory.vector_store",
-]
-ignore_errors = true
+# ----- Level 1: 未型定義関数の内部までチェックしない -----
+# check_untyped_defs = false
+# ----- Level 2 (current): 未型定義関数の内部もチェック -----
+check_untyped_defs = true
 
+# ----- Level 1: 不完全な型定義を許容 -----
+# disallow_incomplete_defs = false
+# ----- Level 3 (current): 関数シグネチャには型必須 -----
+disallow_incomplete_defs = true
+
+# ----- Level 1: 無型関数を許容 -----
+# disallow_untyped_defs = false
+# ----- Level 4 (current): 全関数に型注釈必須 -----
+disallow_untyped_defs = true
+
+# ----- Level 1: Optional 明示不要 -----
+# no_implicit_optional = false
+# ----- Level 5 (current): Optional は明示必須 -----
+no_implicit_optional = true
+
+# ==========================================
+# overrides: モジュール単位の緩和（段階的に削除）
+# ==========================================
+# Level 1 ではエラーが多いモジュールを丸ごとスキップ。
+# Level 6 で ignore_errors を削除し、必要なら個別抑制に置き換える。
+# ==========================================
+
+# ---- Level 1 (過去): 全面許可 → Level 6 で削除 ----
+# 対象モジュールは型注釈完備につき ignore_errors 不要
+# [[tool.mypy.overrides]]
+# module = [
+#   "iris.llm.llm_bridge",
+#   "iris.llm.ollama_provider",
+#   "iris.memory.vector_store",
+# ]
+# ignore_errors = true
+# ---- Level 6: 消す（段階的にモジュールをリストから外す） ----
+# 例: module = ["iris.llm.ollama_provider"]  # 1個ずつ減らす
+
+# ---- 外部ライブラリの型スタブ不足 ----
 [[tool.mypy.overrides]]
 module = "chromadb.*"
 ignore_missing_imports = true
@@ -96,19 +134,10 @@ ignore_missing_imports = true
 module = ["ollama", "httpx", "prompt_toolkit", "rich"]
 ignore_missing_imports = true
 
+# ---- テストは常に緩め ----
 [[tool.mypy.overrides]]
 module = "tests.*"
-disable_error_code = [
-  "arg-type",
-  "list-item",
-  "comparison-overlap",
-  "attr-defined",
-  "misc",
-  "call-overload",
-  "index",
-  "untyped-def",
-  "any-unimported",
-]
+ignore_errors = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

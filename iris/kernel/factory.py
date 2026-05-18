@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
+import logging
 
 from iris.agency.bus import InternalBus
 from iris.agency.execution.inhibition import InhibitionController
@@ -100,7 +100,7 @@ class KernelFactory:
         # ============================================================
         # Phase 4: ケイパビリティ (ツール)
         # ============================================================
-        registry, tool_exec = KernelFactory._build_tools()
+        _registry, tool_exec = KernelFactory._build_tools()
 
         # ============================================================
         # Phase 4.5: 基底核抑制

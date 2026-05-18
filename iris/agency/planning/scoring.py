@@ -76,7 +76,7 @@ class ProactiveScoring:
                 return 0.0
             results = self._memory.search_semantic(topic, max_results=3)
             if results:
-                return max(r.get("score", 0.0) for r in results)
+                return max(r.get("score", 0.0) for r in results)  # type: ignore[no-any-return]
         except Exception as e:
             logger.debug("Memory score failed: %s", e)
         return 0.0

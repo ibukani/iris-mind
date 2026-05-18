@@ -14,16 +14,27 @@ class PersonaProfile:
         self.persona_data = persona_data
 
     def get_speech_style(self) -> str:
-        entries = self.persona_data.get_top("speech_style", 1)
+        entries = self.persona_data.get_top("speech_style", 3)
         if not entries:
             return ""
         return "\n".join(f"- {e['text']}" for e in entries)
 
     def get_traits(self) -> str:
-        entries = self.persona_data.get_top("personality_traits", 1)
+        entries = self.persona_data.get_top("personality_traits", 3)
         if not entries:
             return ""
         return "\n".join(f"- {e['text']}" for e in entries)
+
+    def get_dynamic_personality(self) -> str:
+        """Reflexionで蓄積した性格特性をまとめた文字列。"""
+        traits = self.get_traits()
+        styles = self.get_speech_style()
+        parts = []
+        if traits:
+            parts.append(f"## 蓄積された性格特性\n{traits}")
+        if styles:
+            parts.append(f"## 話し方の特徴\n{styles}")
+        return "\n\n".join(parts)
 
     def get_preferences_summary(self) -> str:
         return ""

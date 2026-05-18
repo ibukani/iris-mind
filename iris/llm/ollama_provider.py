@@ -111,16 +111,10 @@ class OllamaProvider:
         return call_kwargs
 
     def _chat_with_retries(self, kwargs: dict) -> dict:
-        for attempt in range(_MAX_RETRIES):
-            try:
-                return self.client.chat(**kwargs)
-            except httpx.TransportError:
-                if attempt == _MAX_RETRIES - 1:
-                    raise
-                _log_retry(attempt)
-                time.sleep(_retry_delay(attempt))
-
-        raise RuntimeError("Ollama request retry loop exited unexpectedly")
+        return self._retry_transport_call(
+            lambda: self.client.chat(**kwargs),
+            "Ollama request retry loop exited unexpectedly",
+        )
 
     def _stream_chat(
         self,
@@ -128,20 +122,14 @@ class OllamaProvider:
         interrupt_token: Any = None,
         **kwargs: Any,
     ) -> dict:
-        for attempt in range(_MAX_RETRIES):
-            try:
-                return self._stream_chat_once(
-                    on_token=on_token,
-                    interrupt_token=interrupt_token,
-                    **kwargs,
-                )
-            except httpx.TransportError:
-                if attempt == _MAX_RETRIES - 1:
-                    raise
-                _log_retry(attempt)
-                time.sleep(_retry_delay(attempt))
-
-        raise RuntimeError("Ollama stream retry loop exited unexpectedly")
+        return self._retry_transport_call(
+            lambda: self._stream_chat_once(
+                on_token=on_token,
+                interrupt_token=interrupt_token,
+                **kwargs,
+            ),
+            "Ollama stream retry loop exited unexpectedly",
+        )
 
     def _stream_chat_once(
         self,
@@ -179,6 +167,18 @@ class OllamaProvider:
             final["message"]["tool_calls"] = tool_calls
         final["message"] = _process_message(final["message"])
         return final
+
+    def _retry_transport_call(self, operation: Callable[[], dict], error_message: str) -> dict:
+        for attempt in range(_MAX_RETRIES):
+            try:
+                return operation()
+            except httpx.TransportError:
+                if attempt == _MAX_RETRIES - 1:
+                    raise
+                _log_retry(attempt)
+                time.sleep(_retry_delay(attempt))
+
+        raise RuntimeError(error_message)
 
     def unload_model(self, model_name: str) -> None:
         """指定モデルを VRAM から解放する。"""

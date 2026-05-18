@@ -151,7 +151,7 @@ proactive:
 |------|------|------|
 | 接続がすぐ閉じられる | 認証失敗 | `access_token` が正しいか確認 |
 | 応答が返ってこない | session_id が無効 | 再接続して再認証 |
-| メッセージが無視される | 不正な msg_type | 入力は `dispatch_text` / `converse_text` / `system`、コマンドは `command` |
+| メッセージが無視される | 不正な msg_type | `msg_type` を `dispatch_text` / `converse_text` / `command` / `system` のいずれかに |
 | `msg_type` が `text` になっている | 外部向けに公開されていない内部形式 | `dispatch_text` または `converse_text` に変更 |
 
 ### 5.2 セッション管理

@@ -10,7 +10,7 @@
 - Global EventBus からの出力要求を TCP で外部に送出する
 - セッション管理（接続単位の識別・状態管理）
 - 認証（access_token 検証）
-- コマンド入力の検出と処理（CommandInput → CommandHandler → CommandOutput）
+- コマンド入力の検出（`/shutdown`, `/status` など）→ CommandRequest に変換
 
 ## 構成
 
@@ -18,10 +18,10 @@
 iris/io/
 ├── __init__.py
 ├── manager.py         IOManager
-├── models.py          InputMessage, OutputMessage, CommandInput, CommandOutput
+├── models.py          InputMessage, OutputMessage など
 ├── transport/
 │   ├── __init__.py
-│   └── tcp_listener.py   ← 通常入力とコマンドを別コールバックで分岐
+│   └── tcp_listener.py
 ├── session/
 │   ├── __init__.py
 │   └── manager.py     SessionManager
@@ -41,8 +41,8 @@ class IOManager:
       → session_manager.route_output → transport で送出
 
     transport からの受信:
-      → 通常入力: InputMessage → InputReceived を Global EventBus に publish
-      → コマンド入力: CommandInput → CommandHandler で処理 → CommandOutput
+      → session_manager で認証・セッション確認
+      → CommandRequest or InputReceived を Global EventBus に publish
     """
 
     def start(self) -> None
@@ -51,8 +51,8 @@ class IOManager:
     def stop(self) -> None
         # transport 停止
 
-    def set_command_handler(self, handler) -> None
-        # CommandHandler を注入
+    def send_output(self, session_id: str, message: OutputMessage) -> None
+        # subscribe: OutputRequest → 実際の送出
 ```
 
 ```mermaid
@@ -63,9 +63,8 @@ sequenceDiagram
     participant SESS as session/SessionManager
     participant AUTH as auth/Authenticator
     participant EB as Global EventBus
-    participant CMD as CommandHandler
 
-    Note over TCP,EB: 通常入力経路
+    Note over TCP,EB: 入力経路
 
     TCP->>TRANS: TCP接続 + AuthMessage
     TRANS->>SESS: authenticate()
@@ -74,21 +73,15 @@ sequenceDiagram
     SESS-->>TRANS: auth_success
     TRANS-->>TCP: auth_success
 
-    TCP->>TRANS: InputMessage (msg_type: dispatch_text)
+    TCP->>TRANS: InputMessage
     TRANS->>SESS: session確認
     SESS-->>TRANS: ok
-    TRANS->>IO: on_input(msg)
-    IO->>EB: InputReceived(message)
 
-    Note over TCP,CMD: コマンド入力経路
-
-    TCP->>TRANS: CommandInput (msg_type: command)
-    TRANS->>SESS: session確認
-    SESS-->>TRANS: ok
-    TRANS->>IO: on_command(msg)
-    IO->>CMD: cmd_handler.handle(name, args)
-    CMD-->>IO: result
-    IO->>SESS: route_output(session_id, CommandOutput)
+    alt msg_type == "command"
+        TRANS->>EB: CommandRequest(cmd, args, session_id)
+    else
+        TRANS->>EB: InputReceived(message)
+    end
 
     Note over TCP,EB: 出力経路
 
@@ -102,8 +95,7 @@ sequenceDiagram
 ## models.py
 
 ```python
-INPUT_MSG_TYPES = frozenset({"dispatch_text", "converse_text", "system"})  # command は分離
-COMMAND_MSG_TYPES = frozenset({"command"})
+INPUT_MSG_TYPES = frozenset({"dispatch_text", "converse_text", "command", "system"})
 OUTPUT_STREAM_STATES = frozenset({"thinking", "speaking", "done", "interrupted"})
 
 class ConnectionMode(Enum): INPUT_ONLY / OUTPUT_ONLY / BIDIRECTIONAL
@@ -112,11 +104,9 @@ class SessionRole(Enum): CONVERSATION_INPUT / COMMAND_INPUT / CONVERSATION_OUTPU
 
 class AuthMessage(BaseModel)
 class ControlMessage(BaseModel)
-class InputMessage(BaseModel)    # 通常入力（会話）
-class CommandInput(BaseModel)     # システムコマンド入力
-class OutputMessage(BaseModel)    # 通常出力（会話応答・ストリーム）
-class CommandOutput(BaseModel)    # コマンド応答
+class InputMessage(BaseModel)
 class InterruptMessage(BaseModel)
+class OutputMessage(BaseModel)
 class SessionInfo(BaseModel)
 ```
 
@@ -130,14 +120,12 @@ class SessionInfo(BaseModel)
 class TcpListener:
     """TCP 接続の待受とメッセージの送受信。
     1ポートで全接続を受け付け、認証・入力・出力を多重化する。
-    msg_type に応じて on_input (通常) / on_command (コマンド) を振り分ける。
     """
 
-    def __init__(self, session_manager, on_input, on_command, on_interrupt)
-    def set_on_input(self, on_input: Callable[[InputMessage], None]) -> None
-    def set_on_command(self, on_command: Callable[[CommandInput], None]) -> None
     def start(self, host: str, port: int) -> None
     def stop(self) -> None
+    def send(self, session_id: str, message: OutputMessage) -> None
+        # SessionManager 経由で対象セッションに送出
 ```
 
 ## session/
@@ -151,7 +139,7 @@ class SessionManager:
     """
 
     def authenticate(self, conn, msg: AuthMessage) -> ControlMessage
-    def route_output(self, session_id: str, message: OutputMessage | CommandOutput) -> None
+    def route_output(self, session_id: str, message: OutputMessage) -> None
     def get_session_info(self, session_id: str) -> SessionInfo | None
     def get_session_mode(self, session_id: str) -> ConnectionMode | None
     def get_roles_summary(self) -> str
@@ -173,12 +161,11 @@ class Authenticator:
 
 ## Event I/O マッピング
 
-| 方向 | 通信相手 | Event／型 | 説明 |
+| 方向 | 通信相手 | Event 種別 | 説明 |
 |------|----------|-----------|------|
-| Inbound | TCP → IO | `InputReceived(msg)` via EventBus | テキスト入力（`dispatch_text`, `converse_text`, `system`） |
-| Inbound | TCP → IO | `CommandInput` → CommandHandler | コマンド入力（`command`）、EventBus を経由せず直接処理 |
+| Inbound | TCP → IO | `InputReceived(msg)` | テキスト入力（全種別） |
+| Inbound | TCP → IO | `CommandRequest(cmd, args)` | コマンド入力（`/` 始まり） |
 | Outbound | IO ← EventBus | `OutputRequest(session_id, msg)` | 出力要求 |
 | Outbound | IO → EventBus | `OutputSent(session_id, msg_id)` | 出力完了通知 |
-| Outbound | IO → TCP | `CommandOutput` | コマンド応答、EventBus を経由せず直接送出 |
 
 

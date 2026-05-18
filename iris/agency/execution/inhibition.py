@@ -175,24 +175,39 @@ class InhibitionController:
         - valence < -0.3 → 負の感情が抑制を強める
         - arousal > 0.6  → 興奮は Go 信号を強化 (抑制弱める)
         - dominance < 0.3 → 無力感は抑制を強める
+
+        全ての次元が中立の場合、現在の負の感情スコアを指数減衰させる。
         """
         mood = 0.0
+        triggered = False
+
         if emotion.valence < -0.3:
             mood += abs(emotion.valence) * 0.4
+            triggered = True
         elif emotion.valence > 0.3:
             mood -= emotion.valence * 0.1
+            triggered = True
 
         if emotion.arousal > 0.6:
             mood -= emotion.arousal * 0.1
+            triggered = True
         elif emotion.arousal < 0.2:
             mood += 0.1
+            triggered = True
 
         if emotion.dominance < 0.3:
             mood += (0.3 - emotion.dominance) * 0.3
+            triggered = True
         elif emotion.dominance > 0.7:
             mood -= emotion.dominance * 0.05
+            triggered = True
 
         current = self._negative_mood_score
+
+        if not triggered and current > 0:
+            decay = max(current * 0.1, 0.02)
+            current = max(0.0, current - decay)
+
         self._negative_mood_score = max(0.0, min(1.0, current + mood))
 
     def reset(self) -> None:

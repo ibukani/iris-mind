@@ -107,7 +107,7 @@ iris/llm/     ──→ EventBus     (LLM provider ファサード)
 - Factory (kernel/factory.py) のみ全層のインスタンス生成を行う
 - LimbicManager は以下のインターフェースで他層と統合:
   - `build_mood_description()` → LLMPipeline（システムプロンプト注入）
-  - `modulate_inhibition()` → InhibitionController（感情による抑制変調）
+  - `apply_limbic_modulation(emotion)` → InhibitionController（感情による抑制変調）
   - `current_emotion()` → ProactiveScoring（自発発話スコアリング）
 - `debug_tools/` は `iris/` に依存してよいが、逆方向は物理禁止
 

@@ -97,11 +97,6 @@ class LimbicManager:
         """島皮質相当: 現在の感情状態から自然言語での気分説明を生成。
         例: 「穏やかな気分です」「少しイライラしています」"""
 
-    def modulate_inhibition(self, base_score: float) -> float
-        """ACC による抑制制御の変調。
-        Valence が低い（機嫌が悪い）→ 抑制が弱まる（衝動的になる）。
-        Arousal が高い → 抑制が強まる（慎重になる）。"""
-
     def tag_recent_memory(self, conversation: list[dict]) -> None
         """直近の会話エピソードに感情タグを付与。"""
 
@@ -235,11 +230,9 @@ sequenceDiagram
 # agency/execution/inhibition.py 内での利用イメージ
 class InhibitionController:
     def evaluate(self, now: float, limbic: LimbicManager | None) -> GateVerdict:
-        base = self._base_score(now)
         if limbic:
-            modulated = limbic.modulate_inhibition(base)
-            # valence < 0 (機嫌悪い) → 抑制弱まる = 衝動的
-            # arousal high → 抑制強まる = 慎重
+            emotion = limbic.current_emotion()
+            self.apply_limbic_modulation(emotion)
         ...
 ```
 

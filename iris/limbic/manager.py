@@ -149,38 +149,6 @@ class LimbicManager:
                 return entry["short"] if style == "short" else entry["text"]
         return ""
 
-    def modulate_inhibition(self, base_score: float) -> float:
-        """ACC による抑制制御の変調。
-
-        機嫌が悪い (valence < 0) → 抑制が弱まる (衝動的)
-        覚醒度が高い (arousal high) → 抑制が強まる (慎重)
-        支配性が高い (dominance high) → Go 信号強化
-
-        Args:
-            base_score: InhibitionController が算出した基本スコア
-
-        Returns:
-            感情で変調されたスコア
-        """
-        e = self.current_emotion()
-
-        if e.valence < -0.3:
-            base_score += abs(e.valence) * 0.2
-        elif e.valence > 0.3:
-            base_score -= e.valence * 0.05
-
-        if e.arousal > 0.6:
-            base_score += e.arousal * 0.15
-        elif e.arousal < 0.2:
-            base_score -= 0.1
-
-        if e.dominance > 0.6:
-            base_score -= e.dominance * 0.1
-        elif e.dominance < 0.3:
-            base_score += (1.0 - e.dominance) * 0.1
-
-        return max(0.0, min(1.0, base_score))
-
     def build_response_style(self) -> str:
         """感情状態に基づく応答スタイル指示を生成する (Phase 4)。
 

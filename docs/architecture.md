@@ -307,7 +307,7 @@ flowchart LR
 - IO 層は TCP への依存を持つが、`io/transport/` に閉じる
 - Limbic 層は以下のインターフェースで他層と統合する:
   - `build_mood_description()` → LLMPipeline がシステムプロンプトに注入
-  - `modulate_inhibition(base_score)` → InhibitionController が感情による抑制変調に利用
+  - `apply_limbic_modulation(emotion)` → InhibitionController が感情による抑制変調に利用 (inhibition.py)
   - `tag_recent_memory()` → EmotionalMemory が EpisodicStore に感情タグを付与
   - `current_emotion()` → ProactiveScoring が自発発話スコアリングの mood 因子として利用
 

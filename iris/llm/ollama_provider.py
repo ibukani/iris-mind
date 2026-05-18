@@ -57,39 +57,58 @@ class OllamaProvider:
         **kwargs: Any,
     ) -> dict:
         """LLM にチャットリクエストを送信する。"""
-        effective_model = model or self.model_name
-        options = {
-            "temperature": temperature,
-            "num_predict": max_tokens,
-            "num_ctx": self.num_ctx,
-            "num_gpu": self.num_gpu,
-            "repeat_penalty": 1.1,
-        }
-        call_kwargs: dict = {
-            "model": effective_model,
-            "messages": messages,
-            "options": options,
-            "stream": on_token is not None,
-        }
-        if tools:
-            call_kwargs["tools"] = tools
-        call_kwargs["think"] = enable_thinking
-        if kwargs.get("keep_alive") is not None:
-            call_kwargs["keep_alive"] = kwargs.pop("keep_alive")
-        if interrupt_token is not None:
-            call_kwargs["interrupt_token"] = interrupt_token
-
         with self._chat_lock:
-            if on_token is not None:
-                return self._stream_chat(**call_kwargs, on_token=on_token, interrupt_token=interrupt_token)
+            call_kwargs = self._build_chat_kwargs(
+                messages=messages,
+                model=model,
+                enable_thinking=enable_thinking,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                tools=tools,
+                interrupt_token=interrupt_token,
+                stream=on_token is not None,
+                kwargs=kwargs,
+            )
 
-        with self._chat_lock:
             if on_token is not None:
                 return self._stream_chat(**call_kwargs, on_token=on_token, interrupt_token=interrupt_token)
 
             resp = self._chat_with_retries(call_kwargs)
             resp["message"] = _process_message(resp["message"])
             return resp
+
+    def _build_chat_kwargs(
+        self,
+        messages: list[dict],
+        model: str | None,
+        enable_thinking: bool,
+        temperature: float,
+        max_tokens: int,
+        tools: list[dict] | None,
+        interrupt_token: object | None,
+        stream: bool,
+        kwargs: dict[str, Any],
+    ) -> dict[str, Any]:
+        call_kwargs: dict[str, Any] = {
+            "model": model or self.model_name,
+            "messages": messages,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens,
+                "num_ctx": self.num_ctx,
+                "num_gpu": self.num_gpu,
+                "repeat_penalty": 1.1,
+            },
+            "stream": stream,
+            "think": enable_thinking,
+        }
+        if tools:
+            call_kwargs["tools"] = tools
+        if kwargs.get("keep_alive") is not None:
+            call_kwargs["keep_alive"] = kwargs.pop("keep_alive")
+        if interrupt_token is not None:
+            call_kwargs["interrupt_token"] = interrupt_token
+        return call_kwargs
 
     def _chat_with_retries(self, kwargs: dict) -> dict:
         for attempt in range(_MAX_RETRIES):

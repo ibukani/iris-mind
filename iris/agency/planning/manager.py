@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import logging
 import time
+from typing import TYPE_CHECKING
 
 from iris.agency.bus import InternalBus, PlanDecided
 from iris.agency.execution.inhibition import GateVerdict, InhibitionController
@@ -11,6 +12,9 @@ from iris.event.event_bus import EventBus
 from iris.event.event_types import InputReady
 from iris.kernel.config import Config
 from iris.memory.manager import MemoryManager
+
+if TYPE_CHECKING:
+    from iris.limbic.manager import LimbicManager
 
 logger = logging.getLogger(__name__)
 
@@ -24,16 +28,24 @@ class PlanningManager:
         scoring: ProactiveScoring,
         config: Config,
         memory: MemoryManager | None = None,
+        limbic: LimbicManager | None = None,
     ) -> None:
         self._bus = internal_bus
         self._inhibition = inhibition
         self._scoring = scoring
         self._memory = memory
+        self._limbic = limbic
         self._cfg = config.proactive
         event_bus.subscribe("InputReady", self._on_input_ready)
 
     def _on_input_ready(self, event: InputReady) -> None:
         context = event.context or {}
+
+        if self._limbic:
+            base_mood = self._inhibition.negative_mood_score
+            modulated = self._limbic.modulate_inhibition(base_mood)
+            self._inhibition.set_mood(modulated)
+
         gate = self._inhibition.evaluate(time.time())
 
         if context.get("from_timer"):

@@ -22,6 +22,13 @@ flowchart TD
         IO_Auth["auth/<br/>Authenticator"]
     end
 
+    subgraph Limbic["limbic/ 大脳辺縁系 (NEW)"]
+        L_Manager["LimbicManager<br/>感情状態管理"]
+        L_Amygdala["扁桃体<br/>感情評価"]
+        L_ACC["前帯状皮質<br/>感情制御"]
+        L_EM["感情記憶<br/>感情タグ付け"]
+    end
+
     subgraph Memory["memory/ 感覚野+海馬+皮質"]
         M_Manager["MemoryManager<br/>記憶オーケストレーション"]
         M_Sensory["sensory/<br/>入力バッファリング"]
@@ -29,6 +36,7 @@ flowchart TD
         M_Semantic["semantic/<br/>意味記憶"]
         M_Hippocampal["hippocampal/<br/>Reflexion"]
         M_Vector["vector/<br/>埋め込み検索"]
+        M_BigFive["personality/<br/>BigFive+性格進化"]
     end
 
     subgraph Agency["agency/ 前頭前野+大脳基底核+運動野"]
@@ -58,12 +66,17 @@ flowchart TD
 
     EB ---|全層を結合| Kernel
     EB --- IO
+    EB --- Limbic
     EB --- Memory
     EB --- Agency
     EB --- Infra
 
     A_Bus --- Planning
     A_Bus --- Execution
+
+    Limbic -.->|感情タグ| Memory
+    Limbic -.->|ムード変調| Agency
+    Memory -.->|性格×感情| Limbic
 ```
 
 ## 2. 層間イベントフロー（基本ループ）
@@ -133,6 +146,14 @@ iris/
 │   ├── bus.py                 EventBus
 │   └── event_types.py         イベント型定義
 │
+├── limbic/                    # 大脳辺縁系: 感情処理 (NEW)
+│   ├── __init__.py
+│   ├── manager.py             LimbicManager（感情状態管理, EventBus連携）
+│   ├── models.py              EmotionState（PAD 3次元モデル）
+│   ├── amygdala.py            扁桃体（感情評価・価値判断）
+│   ├── acc.py                 前帯状皮質（感情制御・葛藤調整）
+│   └── emotional_memory.py    扁桃体-海馬相互作用（感情タグ付け）
+│
 ├── memory/                    # 記憶系: 感覚野 + 海馬 + 皮質
 │   ├── __init__.py
 │   ├── manager.py             MemoryManager（EventBus連携, TimerTick rate-limit）
@@ -149,7 +170,8 @@ iris/
 │       ├── __init__.py
 │       ├── personality.py     Personality（システムプロンプト構築）
 │       ├── persona_data.py    PersonaData（動的管理）
-│       └── persona_profile.py PersonaProfile（話し方・性格）
+│       ├── persona_profile.py PersonaProfile（話し方・性格）
+│       └── big_five.py        BigFiveProfile + 性格進化 (NEW)
 │
 ├── agency/                    # 高度認知: PFC + 基底核 + 運動野
 │   ├── __init__.py
@@ -259,6 +281,9 @@ flowchart LR
 flowchart LR
     Kernel --> Event
     Kernel --> IO
+    Limbic --> Event
+    Limbic --> Memory
+    Limbic --> Agency
     Agency --> Event
     Agency --> Memory
     Agency --> LLM
@@ -269,6 +294,7 @@ flowchart LR
 
     subgraph All["全層"]
         IO
+        Limbic
         Memory
         Agency
         Kernel
@@ -279,5 +305,10 @@ flowchart LR
 - ただし Factory（DI コンテナ）は全層のインスタンスを生成するため、kernel/factory.py に集約
 - Agency の planning → execution は内部 EventBus を介する
 - IO 層は TCP への依存を持つが、`io/transport/` に閉じる
+- Limbic 層は以下のインターフェースで他層と統合する:
+  - `build_mood_description()` → LLMPipeline がシステムプロンプトに注入
+  - `modulate_inhibition(base_score)` → InhibitionController が感情による抑制変調に利用
+  - `tag_recent_memory()` → EmotionalMemory が EpisodicStore に感情タグを付与
+  - `current_emotion()` → ProactiveScoring が自発発話スコアリングの mood 因子として利用
 
 

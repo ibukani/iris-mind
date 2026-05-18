@@ -44,6 +44,12 @@ iris/                             ← アプリケーションコア
 ├── event/                        ← 神経路: Global EventBus
 │   ├── bus.py                    ← EventBus（kernel から分離）
 │   └── event_types.py            ← イベント型定義
+├── limbic/                       ← 大脳辺縁系: 感情処理 (NEW)
+│   ├── manager.py                ← LimbicManager（感情状態管理, EventBus連携）
+│   ├── models.py                 ← EmotionState（PAD 3次元モデル）
+│   ├── amygdala.py               ← 扁桃体（感情評価・価値判断）
+│   ├── acc.py                    ← 前帯状皮質（感情制御・葛藤調整）
+│   └── emotional_memory.py       ← 扁桃体-海馬相互作用（感情タグ付け）
 ├── memory/                       ← 記憶系: 感覚野+海馬+皮質
 │   ├── manager.py                ← MemoryManager（汎用 store/retrieve/search）
 │   ├── stores.py                 ← EpisodicStore + SemanticStore
@@ -51,6 +57,7 @@ iris/                             ← アプリケーションコア
 │   ├── sensory/                  ← InputBuffer（断片的入力保持）
 │   ├── hippocampal/              ← Reflexion（海馬: 記憶整理）
 │   └── personality/              ← 人格: 性格特性・話し方（記憶から形成）
+│       └── big_five.py           ← BigFiveProfile + 性格進化 (NEW)
 ├── agency/                       ← 高度認知: PFC+基底核+運動野
 │   ├── manager.py                ← AgencyManager（compact_context中継）
 │   ├── bus.py                    ← 内部 EventBus（planning→execution）
@@ -91,12 +98,17 @@ iris/event/ (神経路: グローバルEventBus)
     │
 iris/kernel/  ──→ EventBus
 iris/io/      ──→ EventBus     (io/transport/ → TCP)
+iris/limbic/  ──→ EventBus     (感情評価, 記憶タグ)
 iris/memory/  ──→ EventBus
 iris/agency/  ──→ EventBus     (agency/bus/ → 内部通信)
 iris/llm/     ──→ EventBus     (LLM provider ファサード)
 ```
 - 全層は EventBus を介して疎結合。直接の依存を持たない
 - Factory (kernel/factory.py) のみ全層のインスタンス生成を行う
+- LimbicManager は以下のインターフェースで他層と統合:
+  - `build_mood_description()` → LLMPipeline（システムプロンプト注入）
+  - `modulate_inhibition()` → InhibitionController（感情による抑制変調）
+  - `current_emotion()` → ProactiveScoring（自発発話スコアリング）
 - `debug_tools/` は `iris/` に依存してよいが、逆方向は物理禁止
 
 ## v2 アーキテクチャ（神経科学ベース）
@@ -108,6 +120,7 @@ iris/llm/     ──→ EventBus     (LLM provider ファサード)
 | `kernel/` | 脳幹+視床下部 | プロセス管理、状態集約、Command、DI |
 | `io/` | 視床 | 入出力中継（TCP、セッション、認証） |
 | `event/` | 神経路 | グローバル EventBus（全層間通信） |
+| `limbic/` | 大脳辺縁系 | 感情評価、感情状態管理、感情制御、感情タグ付け |
 | `memory/` | 感覚野+海馬+皮質 | 感覚バッファ、エピソード/意味記憶、Reflexion、圧縮、人格 |
 | `agency/` | PFC+基底核+運動野 | 意思決定（planning）と行動実行（execution） |
 

@@ -17,6 +17,7 @@ from iris.io.manager import IOManager
 from iris.io.session.manager import SessionConfig, SessionManager
 from iris.io.transport.tcp_listener import TcpListener
 from iris.kernel.commands.handler import CommandHandler
+from iris.limbic.manager import LimbicManager
 from iris.llm.capability_checker import CapabilityChecker
 from iris.llm.context_window import LLMContextWindowManager
 from iris.llm.llm_bridge import LLMBridge, create_provider
@@ -43,6 +44,7 @@ class KernelContext:
     event_bus: EventBus
     kernel: KernelManager
     io: IOManager
+    limbic: LimbicManager
     memory: MemoryManager
     agency: AgencyManager
     cmd_handler: CommandHandler
@@ -93,7 +95,12 @@ class KernelFactory:
         memory_mgr = KernelFactory._build_memory(event_bus, config)
 
         # ============================================================
-        # Phase 3: LLM・パーソナリティ
+        # Phase 3: 大脳辺縁系 (感情エンジン)
+        # ============================================================
+        limbic = LimbicManager(event_bus=event_bus)
+
+        # ============================================================
+        # Phase 4: LLM・パーソナリティ
         # ============================================================
         llm = KernelFactory._build_llm(config)
 
@@ -122,6 +129,7 @@ class KernelFactory:
             session_mgr,
             inhibition=inhibition,
             scoring=scoring,
+            limbic=limbic,
         )
 
         # ============================================================
@@ -137,6 +145,7 @@ class KernelFactory:
             event_bus=event_bus,
             kernel=kernel_mgr,
             io=io_mgr,
+            limbic=limbic,
             memory=memory_mgr,
             agency=agency,
             cmd_handler=cmd_handler,
@@ -212,6 +221,7 @@ class KernelFactory:
         session_mgr: SessionManager,
         inhibition: InhibitionController,
         scoring: ProactiveScoring,
+        limbic: LimbicManager | None = None,
     ) -> AgencyManager:
         personality = Personality(name=config.personality.name, prompt_file=config.personality.prompt_file)
         capability_checker = CapabilityChecker(config=config.model)
@@ -236,6 +246,7 @@ class KernelFactory:
             agents_md_store=agents_md_store,
             persona_profile=persona_profile,
             memory=memory,
+            limbic=limbic,
             tool_executor=tool_exec,
             capability_checker=capability_checker,
         )
@@ -247,6 +258,7 @@ class KernelFactory:
             scoring=scoring,
             config=config,
             memory=memory,
+            limbic=limbic,
         )
 
         monitor = OutputMonitor(internal_bus=internal_bus)

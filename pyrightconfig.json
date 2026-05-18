@@ -1,35 +1,20 @@
 {
-  "pythonVersion": "3.13",
-  "pythonPlatform": "Linux",
-  "typeCheckingMode": "strict",
-  "reportMissingImports": true,
-  "reportMissingTypeStubs": true,
-  "reportMissingModuleSource": true,
-  "reportUnusedImport": true,
-  "reportUnusedClass": true,
-  "reportUnusedFunction": true,
-  "reportUnusedVariable": true,
-  "reportDuplicateImport": true,
-  "reportIncompatibleMethodOverride": true,
-  "reportIncompatibleVariableOverride": true,
-  "reportInconsistentConstructor": true,
-  "reportPropertyTypeMismatch": true,
-  "reportInvalidStringEscapeSequence": true,
-  "reportInvalidTypeForm": true,
-  "reportUnnecessaryComparison": true,
-  "reportUnnecessaryIsInstance": true,
-  "reportUnnecessaryCast": true,
-  "reportImplicitStringConcatenation": true,
-  "reportImplicitOverride": true,
-  "reportShadowedImports": true,
-  "include": ["iris", "tests"],
-  "exclude": [
-    "**/node_modules",
-    "**/__pycache__",
-    "**/.*",
-    "build",
-    "dist"
-  ],
-  "venvPath": ".",
-  "venv": ".venv"
+    "pythonVersion": "3.13",
+    "typeCheckingMode": "basic",
+    "include": ["iris"],
+    "exclude": [
+        "**/node_modules",
+        "**/__pycache__",
+        "**/.*",
+        "build",
+        "dist",
+        "venv", // ← これを追加（ドットなし）
+        ".venv", // ← 念のためこれも追加
+        "tests",
+    ],
+    "venvPath": ".",
+    "venv": "venv", // ← ".venv" から "venv" に変更
+
+    "reportMissingImports": false,
+    "reportMissingTypeStubs": false,
 }

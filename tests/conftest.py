@@ -499,8 +499,6 @@ def proactive_config() -> ProactiveConfig:
         min_interval_sec=60.0,
         max_interval_sec=600.0,
         speak_threshold=0.3,
-        tier1_auto_approve=True,
-        tier2_confidence_threshold=0.7,
     )
 
 

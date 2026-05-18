@@ -153,9 +153,7 @@ def test_default_values() -> None:
     assert config.model.num_gpu == 99
     assert config.model.num_ctx == 8192
     assert config.model.context_window == 0
-    assert config.model.compaction_threshold == 0.85
     assert config.personality.name == "Iris"
-    assert config.personality.thinking_mode_default is False
 
 
 def test_proactive_config_defaults() -> None:
@@ -164,8 +162,6 @@ def test_proactive_config_defaults() -> None:
     assert config.check_interval_sec == 5.0
     assert config.min_interval_sec == 30.0
     assert config.speak_threshold == 0.6
-    assert config.tier1_auto_approve is True
-    assert config.tier2_confidence_threshold == 0.75
     assert config.trigger_weights["time"] == 0.25
 
 
@@ -175,11 +171,9 @@ def test_config_mutable_defaults_are_independent() -> None:
 
     first.proactive.trigger_weights["time"] = 0.99
     first.logging.loggers["iris"] = "DEBUG"
-    first.quasi_sync.response_readiness.enabled = False
 
     assert second.proactive.trigger_weights["time"] == 0.25
     assert second.logging.loggers == {}
-    assert second.quasi_sync.response_readiness.enabled is True
 
 
 # ── Step 1: Per-model parameters ──────────────────────────────
@@ -190,7 +184,6 @@ def test_model_entry_defaults() -> None:
     assert entry.max_tokens == 512
     assert entry.temperature is None
     assert entry.num_ctx is None
-    assert entry.context_window is None
     assert entry.capabilities is None
     assert entry.performance_tier == "balanced"
 

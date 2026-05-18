@@ -12,6 +12,7 @@ Config
 ├── personality: PersonalityConfig — 人格・プロンプト
 ├── memory: MemoryConfig        — 記憶管理
 ├── proactive: ProactiveConfig  — 自発発話
+├── quasi_sync: QuasiSyncConfig — 準同期入力制御
 ├── session: SessionConfig      — セッション・通信
 └── logging: LoggingConfig      — ログ出力
 ```
@@ -28,7 +29,6 @@ Config
 | num_gpu | int | 99 | GPUレイヤー数（99=全レイヤー、Ollamaのみ） |
 | num_ctx | int | 8192 | コンテキスト長 |
 | context_window | int | 0 | 会話ウィンドウサイズ（0=無制限） |
-| compaction_threshold | float | 0.85 | 要約発動閾値（比率） |
 
 **ModelEntry**:
 
@@ -39,7 +39,6 @@ Config
 | max_tokens | int | 512 | 最大出力トークン数 |
 | temperature | float \| None | None | モデル個別の温度設定（上書き用） |
 | num_ctx | int \| None | None | モデル個別のコンテキスト長（上書き用） |
-| context_window | int \| None | None | モデル個別の会話ウィンドウ（上書き用） |
 | capabilities | list[str] \| None | None | モデルの機能ラベル（例: ["vision", "tools"]） |
 | performance_tier | str | "balanced" | 性能区分（"fast" / "balanced" / "capable"） |
 
@@ -67,13 +66,9 @@ Config
 | check_interval_sec | float | 5.0 | TimerTick 間隔（秒） |
 | min_interval_sec | float | 30.0 | 自発発話の最小間隔 |
 | max_interval_sec | float | 300.0 | 自発発話の最大間隔（時間スコア飽和） |
-| tier1_auto_approve | bool | True | Tier1 自動許可の有効/無効 |
-| tier2_confidence_threshold | float | 0.75 | Tier2 信頼度閾値 |
-| tier2_cooldown_sec | float | 60.0 | Tier2 発話後のクールダウン |
-| max_proactive_tokens | int | 256 | 発話最大トークン数 |
-| user_cooldown_on_ignore | float | 300.0 | 無視時のクールダウン（秒） |
 | trigger_weights | dict | see below | トリガー重み |
 | speak_threshold | float | 0.60 | 発話開始閾値 |
+| abbreviated_threshold | float | 0.25 | 短縮発話のスコア閾値 |
 
 **trigger_weights デフォルト**:
 ```yaml
@@ -89,8 +84,6 @@ trigger_weights:
 | フィールド | 型 | デフォルト | 説明 |
 |-----------|-----|-----------|------|
 | name | str | "Iris" | AIの名前 |
-| thinking_mode_default | bool | False | デフォルト思考モード |
-| mode_default | str | "auto" | 動作モード（auto/manual） |
 | prompt_file | str | ".iris/config/personality_default.md" | システムプロンプトファイル |
 
 ## MemoryConfig
@@ -102,9 +95,25 @@ trigger_weights:
 | vector_db_path | str | ".iris/data/chroma_db" | ChromaDBディレクトリ |
 | episodic_max_entries | int | 30 | エピソード記憶上限 |
 | semantic_max_entries | int | 100 | 意味記憶上限 |
-| rag_max_results | int | 3 | RAG検索最大件数 |
 | agents_md_path | str | ".iris/data/iris_profile.md" | 構造記憶ファイル |
 | agents_md_max_bytes | int | 2048 | 構造記憶最大サイズ |
+
+## QuasiSyncConfig
+
+準同期入力（キー入力の断片が連続して届く状態）を制御する。
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| response_readiness | ResponseReadinessConfig | default | 応答準備判定の設定 |
+
+### ResponseReadinessConfig
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| tier1_min_fragments | int | 2 | Tier1発火に必要な最小断片数 |
+| tier1_question_detect | bool | True | 疑問文検出の有効/無効 |
+| confidence_threshold | float | 0.6 | 応答準備完了の信頼度閾値 |
+| llm_model_role | str | "fast" | 応答準備判定に使うモデルロール |
 
 ## SessionConfig
 

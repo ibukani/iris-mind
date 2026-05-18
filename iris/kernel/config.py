@@ -52,7 +52,6 @@ class ModelEntry(BaseModel):
     max_tokens: int = 512
     temperature: float | None = None
     num_ctx: int | None = None
-    context_window: int | None = None
     capabilities: list[str] | None = None
     performance_tier: str = "balanced"
 
@@ -82,7 +81,6 @@ class ModelConfig(BaseModel):
     num_gpu: int = 99
     num_ctx: int = 8192
     context_window: int = 0
-    compaction_threshold: float = 0.85
 
     @property
     def model_names(self) -> list[str]:
@@ -130,11 +128,6 @@ class ProactiveConfig(BaseModel):
     check_interval_sec: float = 5.0
     min_interval_sec: float = 30.0
     max_interval_sec: float = 300.0
-    tier1_auto_approve: bool = True
-    tier2_confidence_threshold: float = 0.75
-    tier2_cooldown_sec: float = 60.0
-    max_proactive_tokens: int = 256
-    user_cooldown_on_ignore: float = 300.0
     trigger_weights: dict[str, float] = Field(default_factory=_default_trigger_weights)
     speak_threshold: float = 0.60
     abbreviated_threshold: float = 0.25
@@ -142,8 +135,6 @@ class ProactiveConfig(BaseModel):
 
 class PersonalityConfig(BaseModel):
     name: str = "Iris"
-    thinking_mode_default: bool = False
-    mode_default: str = "auto"
     prompt_file: str = ".iris/config/personality_default.md"
 
 
@@ -153,13 +144,11 @@ class MemoryConfig(BaseModel):
     vector_db_path: str = ".iris/data/chroma_db"
     episodic_max_entries: int = 30
     semantic_max_entries: int = 100
-    rag_max_results: int = 3
     agents_md_path: str = ".iris/data/iris_profile.md"
     agents_md_max_bytes: int = 2048
 
 
 class ResponseReadinessConfig(BaseModel):
-    enabled: bool = True
     tier1_min_fragments: int = 2
     tier1_question_detect: bool = True
     confidence_threshold: float = 0.6
@@ -167,9 +156,6 @@ class ResponseReadinessConfig(BaseModel):
 
 
 class QuasiSyncConfig(BaseModel):
-    enabled: bool = True
-    input_timeout_ms: int = 800
-    max_buffer_fragments: int = 10
     response_readiness: ResponseReadinessConfig = Field(default_factory=ResponseReadinessConfig)
 
 

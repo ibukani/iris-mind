@@ -3,15 +3,12 @@
 # AIの動作に関する設定
 personality:
     name: Iris
-    thinking_mode_default: false
-    mode_default: auto
     prompt_file: .iris/config/personality_default.md
 memory:
     agents_md_max_bytes: 2048
     agents_md_path: .iris/data/iris_profile.md
     episodic_max_entries: 30
     episodic_path: .iris/data/episodes.jsonl
-    rag_max_results: 3
     semantic_max_entries: 100
     semantic_path: .iris/data/semantic.jsonl
     vector_db_path: .iris/data/chroma_db
@@ -20,11 +17,6 @@ proactive:
     check_interval_sec: 5.0
     min_interval_sec: 30.0
     max_interval_sec: 300.0
-    tier1_auto_approve: true
-    tier2_confidence_threshold: 0.75
-    tier2_cooldown_sec: 60.0
-    max_proactive_tokens: 256
-    user_cooldown_on_ignore: 300.0
     trigger_weights:
         time: 0.40
         memory: 0.35
@@ -35,7 +27,6 @@ model:
     provider: ollama # "ollama" or "openrouter"
     base_url: http://localhost:11434 # Ollama: http://localhost:11434, OpenRouter: https://openrouter.ai/api/v1
     api_key: ${OPENROUTER_API_KEY} # .env または環境変数で設定
-    compaction_threshold: 0.85
     context_window: 8192
     models:
         - name: qwen3.5:9b

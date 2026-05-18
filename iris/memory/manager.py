@@ -8,10 +8,9 @@ if TYPE_CHECKING:
     from iris.limbic.models import EmotionState
 
 from iris.event.event_types import InputReady, InputReceived, TimerTick
-from iris.memory.long_term_memory import LongTermMemoryManager
-from iris.memory.sensory.buffer import InputBuffer
-from iris.memory.sensory_memory import SensoryMemoryManager
-from iris.memory.short_term_manager import ShortTermMemoryManager
+from iris.memory.long_term.manager import LongTermMemoryManager
+from iris.memory.sensory.manager import SensoryMemoryManager
+from iris.memory.short_term.manager import ShortTermMemoryManager
 from iris.memory.stores import EpisodicStore, SemanticStore
 from iris.memory.vector_store import VectorStore
 
@@ -22,9 +21,9 @@ class MemoryManager:
     """記憶マネージャー — 各記憶種別の管理クラスへのディスパッチャ。
 
     脳科学に基づく3層構造:
-    - SensoryMemoryManager   (感覚記憶): InputBuffer による生入力の一時保持
+    - SensoryMemoryManager   (感覚記憶): 生入力の一時保持
     - ShortTermMemoryManager (短期記憶): 現在の会話内容（ワーキングメモリ）
-    - LongTermMemoryManager  (長期記憶): EpisodicStore + SemanticStore による永続記憶
+    - LongTermMemoryManager  (長期記憶): エピソード記憶 + 意味記憶
 
     このクラスは以下を責務とする:
     1. イベント処理 (pending / timer / InputReady)
@@ -44,7 +43,6 @@ class MemoryManager:
         long_term: LongTermMemoryManager | None = None,
         proactive_config: Any = None,
     ) -> None:
-        # === サブマネージャー ===
         self.sensory: SensoryMemoryManager = sensory or SensoryMemoryManager()
         self.short_term: ShortTermMemoryManager = short_term or ShortTermMemoryManager()
         self.long_term: LongTermMemoryManager = long_term or LongTermMemoryManager(
@@ -62,8 +60,8 @@ class MemoryManager:
             event_bus.subscribe("InputReceived", self._on_input_received)
             event_bus.subscribe("TimerTick", self._on_timer_tick)
 
-    def set_sensory_buffer(self, buf: InputBuffer) -> None:
-        self.sensory.set_buffer(buf)
+    def set_sensory_buffer(self, buf: SensoryMemoryManager) -> None:
+        self.sensory = buf
 
     def _on_input_received(self, event: InputReceived) -> None:
         if not event.content:
@@ -116,7 +114,7 @@ class MemoryManager:
             if isinstance(data, dict) and data.get("raw"):
                 self.sensory.store_raw(data["raw"])
             else:
-                self.sensory.store_fragment(data)
+                self.sensory.add_fragment(str(data), is_final=True)
         elif stream == "short_term":
             if isinstance(data, str):
                 self.short_term.add_turn("system", data)
@@ -175,7 +173,7 @@ class MemoryManager:
             self.long_term.clear_semantic()
 
     # ============================================================
-    # 後方互換 API (LLMPipeline, PlanningManager, HippocampalManager 等)
+    # 後方互換 API
     # ============================================================
 
     def get_user_preferences(self) -> list[dict[str, Any]]:

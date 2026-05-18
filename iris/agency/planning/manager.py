@@ -82,20 +82,6 @@ class PlanningManager:
     def _build_plan(
         self, content: str, context: dict, gate: GateVerdict, limbic_mood: dict[str, float] | None = None
     ) -> dict:
-        """ユーザー入力またはタイマートリガーに基づいて実行計画を構築する。
-
-        計画は LLMPipeline で処理される際に、状況（situation）やコンテキスト、
-        抑制制御（gate）の情報を含む。
-
-        Args:
-            content: ユーザー入力コンテンツ。タイマートリガーの場合は空文字。
-            context: 背景情報。from_timer, salience, scores, context_hint など。
-            gate: 基底核抑制制御の評決（suppressed, score）。
-
-        Returns:
-            計画辞書。session_id 以外のキーは content, situation, context_hint,
-            abbreviated, max_tokens, temperature, tools_allowed など。
-        """
         from_timer = context.get("from_timer", False)
 
         if from_timer:
@@ -145,15 +131,6 @@ class PlanningManager:
 
     @staticmethod
     def _apply_emotion_to_plan(plan: dict, limbic_mood: dict[str, float]) -> None:
-        """感情状態に応じて計画パラメータを調整する (Phase 4)。
-
-        感情によって応答スタイルを変化させる:
-        - 不機嫌 (valence < -0.3): 短文、高温度 (ぶっきらぼう)
-        - 覚醒低 (arousal < 0.15): 高温度 (のんびり)
-        - 覚醒高 (arousal > 0.6): 低温度、短文 (興奮・早口)
-        - 支配性低 (dominance < 0.3): abbreviated 傾向
-        - 支配性高 (dominance > 0.6): 低温度 (自信あり)
-        """
         v = limbic_mood.get("valence", 0.0)
         a = limbic_mood.get("arousal", 0.0)
         d = limbic_mood.get("dominance", 0.5)
@@ -202,6 +179,23 @@ class PlanningManager:
         except Exception:
             return ""
 
+    def _build_working_context(self) -> str:
+        if self._memory is None:
+            return ""
+        try:
+            wm = self._memory.short_term.render_context()
+            if wm:
+                return wm
+            recent = self._memory.get_recent(3)
+            topics = [
+                f"{e['summary'][:60]}（{self._format_age(e.get('timestamp', ''))}）" for e in recent if e.get("summary")
+            ]
+            if topics:
+                return "直近の話題: " + " | ".join(topics)
+        except Exception:
+            logger.debug("Working context failed", exc_info=True)
+        return ""
+
     def _build_context_hint(self, scores: dict[str, float]) -> str:
         now = time.localtime()
         hour = now.tm_hour
@@ -209,20 +203,12 @@ class PlanningManager:
         trigger = max(scores, key=lambda k: scores[k])
         parts = [f"時間帯: {time_str}", f"トリガー: {trigger}"]
 
+        wc = self._build_working_context()
+        if wc:
+            parts.append("ワーキングメモリ:\n" + wc)
+
         if self._memory:
             try:
-                wm = self._memory.short_term.render_context()
-                if wm:
-                    parts.append("ワーキングメモリ:\n" + wm)
-                else:
-                    recent = self._memory.get_recent(3)
-                    topics = [
-                        f"{e['summary'][:60]}（{self._format_age(e.get('timestamp', ''))}）"
-                        for e in recent
-                        if e.get("summary")
-                    ]
-                    if topics:
-                        parts.append("直近の話題: " + " | ".join(topics))
                 prefs = self._memory.get_user_preferences()
                 if prefs:
                     parts.append(f"ユーザーの関心: {prefs[0].get('content', '')[:80]}")
@@ -236,15 +222,10 @@ class PlanningManager:
             return ""
         parts: list[str] = []
         try:
-            turns = self._memory.short_term.get_recent_turns(2)
-            for t in reversed(turns):
-                role = "User" if t.get("role") == "user" else "Iris"
-                label = "直前の会話" if t.get("role") == "user" else "直前の返答"
-                text = t.get("content", "")[:80]
-                if text:
-                    parts.append(f"{label}（{role}）: 「{text}」")
-
-            if not parts:
+            wc = self._build_working_context()
+            if wc:
+                parts.append(wc)
+            else:
                 recent = self._memory.get_recent(3)
                 for e in reversed(recent):
                     s = e.get("summary", "")

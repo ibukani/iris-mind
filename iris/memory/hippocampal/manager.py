@@ -73,6 +73,8 @@ class HippocampalManager:
                     except (json.JSONDecodeError, TypeError):
                         logger.debug("Could not parse big_five_estimate: %s", bf_raw)
 
+            self._maybe_consolidate_short_term()
+
             logger.info(
                 "Quick reflect stored: speech_style=%s traits=%s reaction=%s",
                 bool(result.get("speech_style")),
@@ -83,6 +85,29 @@ class HippocampalManager:
             logger.exception("Quick reflect failed: %s", e)
 
         return 0
+
+    def _maybe_consolidate_short_term(self) -> None:
+        if self._memory is None:
+            return
+        stm = self._memory.short_term
+        if not stm.should_consolidate():
+            return
+        unconsolidated = stm.get_unconsolidated_turns()
+        if not unconsolidated:
+            return
+        user_turns = [t for t in unconsolidated if t.get("role") == "user"]
+        if user_turns:
+            combined = " | ".join(t["content"][:100] for t in user_turns[-3:])
+            self._memory.long_term.store_episodic(
+                {"content": f"[conversation] {combined}", "kind": "conversation"},
+            )
+        topics = stm.current_topics
+        for topic in topics:
+            self._memory.long_term.store_semantic(
+                {"content": topic, "type": "topic", "tags": ["short_term_topic"]},
+            )
+        stm.mark_consolidated()
+        logger.info("Hippocampal: consolidated %d turns, %d topics", len(unconsolidated), len(topics))
 
     def run_session(self, messages: list[dict], memory: MemoryManager | None = None) -> None:
         if self._reflexion is None:

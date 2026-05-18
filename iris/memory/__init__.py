@@ -1,7 +1,6 @@
-from iris.memory.long_term_memory import LongTermMemoryManager
-from iris.memory.sensory_memory import SensoryMemoryManager
-from iris.memory.short_term_manager import ShortTermMemoryManager
-from iris.memory.short_term_memory import ShortTermMemory
+from iris.memory.long_term.manager import LongTermMemoryManager
+from iris.memory.sensory.manager import SensoryMemoryManager
+from iris.memory.short_term.manager import ShortTermMemoryManager
 from iris.memory.stores import (
     AgentsMdStore,
     AgentsMdStoreProtocol,
@@ -20,6 +19,5 @@ __all__ = [
     "SemanticStore",
     "SemanticStoreProtocol",
     "SensoryMemoryManager",
-    "ShortTermMemory",
     "ShortTermMemoryManager",
 ]

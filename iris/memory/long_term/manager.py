@@ -21,6 +21,9 @@ class LongTermMemoryManager:
 
     エピソード記憶: 具体的な出来事・会話セッションの要約（JSONL）
     意味記憶: 知識・教訓・嗜好・性格特性（JSONL + ChromaDB ベクトル検索）
+
+    脳科学対応: 海馬体 (hippocampal formation) と大脳皮質連合野。
+    エピソード記憶は海馬、意味記憶は側頭葉・前頭葉が担う。
     """
 
     def __init__(
@@ -148,6 +151,10 @@ class LongTermMemoryManager:
     @property
     def episodic(self) -> EpisodicStore | None:
         return self._episodic
+
+    @property
+    def semantic(self) -> SemanticStore | None:
+        return self._semantic
 
 
 def _pad_distance(

@@ -24,16 +24,15 @@ from iris.llm.context_window import LLMContextWindowManager
 from iris.llm.llm_bridge import LLMBridge, create_provider
 from iris.memory.hippocampal.manager import HippocampalManager
 from iris.memory.hippocampal.reflexion import Reflexion
-from iris.memory.long_term_memory import LongTermMemoryManager
+from iris.memory.long_term.manager import LongTermMemoryManager
 from iris.memory.manager import MemoryManager
 from iris.memory.personality.big_five import BigFiveProfile
 from iris.memory.personality.persona_data import PersonaData
 from iris.memory.personality.persona_profile import PersonaProfile
 from iris.memory.personality.personality import Personality
-from iris.memory.sensory.buffer import InputBuffer
+from iris.memory.sensory.manager import SensoryMemoryManager
 from iris.memory.sensory.readiness import ReadinessEvaluator
-from iris.memory.sensory_memory import SensoryMemoryManager
-from iris.memory.short_term_manager import ShortTermMemoryManager
+from iris.memory.short_term.manager import ShortTermMemoryManager
 from iris.memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
 from iris.memory.vector_store import VectorStore
 from iris.tools.registry import ToolRegistry
@@ -227,7 +226,6 @@ class KernelFactory:
             long_term=long_term,
             proactive_config=config.proactive,
         )
-        buf = InputBuffer(session_id="0" * 16)
         readiness = ReadinessEvaluator(
             min_fragments=config.quasi_sync.response_readiness.tier1_min_fragments,
             question_detect=config.quasi_sync.response_readiness.tier1_question_detect,
@@ -235,8 +233,7 @@ class KernelFactory:
             llm=None,
             llm_model_role=config.quasi_sync.response_readiness.llm_model_role,
         )
-        buf.set_readiness_evaluator(readiness)
-        mem.set_sensory_buffer(buf)
+        sensory.set_readiness_evaluator(readiness)
         return mem
 
     @staticmethod

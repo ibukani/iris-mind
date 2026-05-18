@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from textwrap import dedent
+
 from iris.tools.decorator import _generate_schema, get_tool_def, register_tools, tool
 from iris.tools.models import ToolDef
 from iris.tools.registry import ToolRegistry
@@ -184,3 +186,30 @@ def test_register_tools_helper() -> None:
 
     assert r.get("first") is not None
     assert r.get("second") is not None
+
+
+def test_discover_modules_registers_decorated_tools(tmp_path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.syspath_prepend(str(tmp_path))
+
+    package_dir = tmp_path / "fake_tools" / "sample"
+    package_dir.mkdir(parents=True)
+    (tmp_path / "fake_tools" / "__init__.py").touch()
+    (package_dir / "__init__.py").touch()
+    (package_dir / "server.py").write_text(
+        dedent(
+            """
+            from iris.tools.decorator import tool
+
+            @tool()
+            def hello() -> str:
+                return 'hi'
+            """
+        ).lstrip(),
+        encoding="utf-8",
+    )
+
+    registry = ToolRegistry()
+    registry.discover_modules(["fake_tools"])
+
+    assert registry.get("hello") is not None

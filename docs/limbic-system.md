@@ -321,10 +321,10 @@ EpisodicStore に記録し、システムプロンプトに反映する。
 - `LimbicManager` EventBus 連携
 - `build_mood_description()` 実装
 
-### Phase 2: Big Five + 性格進化
-- `BigFiveProfile` モデル + 永続化
-- Reflexion 連携による性格推定・更新
-- 性格×感情の相互作用
+### Phase 2: Big Five + 性格進化 ✅ 完了
+- `BigFiveProfile` モデル + 永続化 (`iris/memory/personality/big_five.py`)
+- Reflexion 連携による性格推定・更新 (quick_reflect/reflect + HippocampalManager)
+- 性格×感情の相互作用 (ACC Neuroticism/Agreeableness/Extraversion変調)
 
 ### Phase 3: 感情記憶
 - `EmotionalMemory` による EpisodicStore タグ付け

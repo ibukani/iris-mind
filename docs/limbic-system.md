@@ -311,24 +311,3 @@ EpisodicStore に記録し、システムプロンプトに反映する。
 |----------|------|
 | `.iris/data/emotion_state.json` | 現在の感情状態スナップショット（任意） |
 | `.iris/data/big_five.json` | Big Five スコアと進化履歴 |
-
-## 実装ステータス
-
-全4フェーズ完了。`iris/limbic/` の全コンポーネントが動作し、EventBus / BigFive / agency (InhibitionController, ProactiveScoring, PlanningManager) と統合済み。
-
-### 実装済み機能一覧
-
-| 機能 | ファイル | Phase |
-|------|----------|-------|
-| PAD感情モデル (EmotionState, EmotionDelta) | `models.py` | 1 |
-| キーワードベース感情評価 | `amygdala.py` | 1 |
-| ACC感情制御 (BigFive変調含む) | `acc.py` | 1 |
-| EventBus連携 + 気分説明生成 | `manager.py` | 1 |
-| 感情タグ付け + 検索 (EmotionalMemory) | `emotional_memory.py` | 3 |
-| BigFive性格プロファイル (PEM進化) | `memory/personality/big_five.py` | 2 |
-| Reflexion性格推定連携 | `memory/hippocampal/` | 2 |
-| 感情→応答スタイル指示 | `manager.py::build_response_style()` | 4 |
-| 抑制制御への感情変調 | `inhibition.py::apply_limbic_modulation()` | 4 |
-| ProactiveScoring 感情因子 | `scoring.py` | 4 |
-| Planパラメータ動的調整 | `planning/manager.py::_apply_emotion_to_plan()` | 4 |
-| システムプロンプトへの感情注入 | `pipeline.py` | 4 |

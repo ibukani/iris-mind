@@ -6,12 +6,13 @@ import threading
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from iris.limbic.models import EmotionState
+    from collections.abc import Mapping
 
-from collections.abc import Mapping
+    from iris.limbic.models import EmotionState
 
 from iris.event.event_types import InputReady, InputReceived, TimerTick
 from iris.memory.sensory.buffer import InputBuffer
+from iris.memory.short_term_memory import ShortTermMemory
 from iris.memory.stores import EpisodicStore, SemanticStore
 from iris.memory.vector_store import VectorStore
 
@@ -19,6 +20,14 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryManager:
+    """記憶マネージャー。
+
+    脳科学に基づく3層構造:
+    - SensoryMemory (感覚記憶): InputBuffer による raw 入力の一時保持
+    - ShortTermMemory (短期記憶): 処理中の情報（ワーキングメモリ）
+    - LongTermMemory (長期記憶): EpisodicStore + SemanticStore による永続記憶
+    """
+
     def __init__(
         self,
         *,
@@ -26,14 +35,22 @@ class MemoryManager:
         episodic: EpisodicStore | None = None,
         semantic: SemanticStore | None = None,
         vector_store: VectorStore | None = None,
+        short_term: ShortTermMemory | None = None,
         proactive_config: Any = None,
     ) -> None:
-        self._event_bus = event_bus
+        # === 感覚記憶 (Sensory Memory) ===
+        self._sensory_buffer: InputBuffer | None = None
+
+        # === 短期記憶 (Short-Term Memory / Working Memory) ===
+        self._short_term: ShortTermMemory = short_term or ShortTermMemory()
+
+        # === 長期記憶 (Long-Term Memory) ===
         self._episodic = episodic
         self._semantic = semantic
         self._vector_store = vector_store
+
+        self._event_bus = event_bus
         self._proactive_config = proactive_config
-        self._sensory_buffer: InputBuffer | None = None
         self._pending_input: dict[str, str] = {}
         self._pending_lock: threading.Lock = threading.Lock()
 
@@ -91,6 +108,16 @@ class MemoryManager:
                 self._sensory_buffer.add_fragment(data, is_final=True)
             elif isinstance(data, dict) and "text" in data:
                 self._sensory_buffer.add_fragment(data["text"], is_final=True)
+
+        elif stream == "short_term":
+            if isinstance(data, str):
+                self._short_term.add(data)
+            elif isinstance(data, dict):
+                self._short_term.add(
+                    data.get("content") or data.get("summary") or str(data),
+                    metadata=data.get("metadata"),
+                )
+
         elif stream == "episodic" and self._episodic:
             summary = ""
             kind = ""
@@ -103,19 +130,32 @@ class MemoryManager:
             if kind:
                 summary = f"[{kind}] {summary}"
             self._episodic.add(summary)
+            self._short_term.add(summary, metadata={"type": "episodic", "kind": kind})
+
         elif stream == "semantic" and self._semantic:
             self._semantic.add(data)
+            content = data.get("content") if isinstance(data, dict) else str(data)
+            self._short_term.add(content, metadata={"type": "semantic"})
+
         else:
             logger.warning("MemoryManager: unknown stream=%s", stream)
 
     def retrieve(self, stream: str, **filters: Any) -> list[dict]:
+        if stream == "sensory" and self._sensory_buffer:
+            return [{"text": self._sensory_buffer.accumulated_text}]
+
+        if stream == "short_term":
+            n = filters.get("n", 5)
+            if not isinstance(n, int):
+                n = 5
+            return self._short_term.get_recent(n)
+
         if stream == "episodic" and self._episodic:
             n = filters.get("n", 5)
             if not isinstance(n, int):
                 n = 5
             return self._episodic.get_recent(n)
-        if stream == "sensory" and self._sensory_buffer:
-            return [{"text": self._sensory_buffer.accumulated_text}]
+
         return []
 
     def search(self, query: str, stream: str | None = None, **kwargs: Any) -> list[dict]:
@@ -150,12 +190,17 @@ class MemoryManager:
         return []
 
     def clear(self, stream: str | None = None) -> None:
-        if (stream == "episodic" or stream is None) and self._episodic:
-            self._episodic.clear()
-        if (stream == "semantic" or stream is None) and self._semantic:
-            self._semantic.clear()
         if stream == "sensory" and self._sensory_buffer:
             self._sensory_buffer.close()
+
+        if stream == "short_term" or stream is None:
+            self._short_term.clear()
+
+        if (stream == "episodic" or stream is None) and self._episodic:
+            self._episodic.clear()
+
+        if (stream == "semantic" or stream is None) and self._semantic:
+            self._semantic.clear()
 
     # === Backward compat API (for LLMPipeline) ===
 

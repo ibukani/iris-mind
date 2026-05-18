@@ -1,3 +1,4 @@
+from iris.memory.short_term_memory import ShortTermMemory
 from iris.memory.stores import (
     AgentsMdStore,
     AgentsMdStoreProtocol,
@@ -14,4 +15,5 @@ __all__ = [
     "EpisodicStoreProtocol",
     "SemanticStore",
     "SemanticStoreProtocol",
+    "ShortTermMemory",
 ]

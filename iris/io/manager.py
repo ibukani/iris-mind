@@ -5,7 +5,7 @@ import logging
 
 from iris.event.event_bus import EventBus
 from iris.event.event_types import InputReceived, OutputRequest
-from iris.io.models import InputMessage, OutputMessage
+from iris.io.models import CommandInput, CommandOutput, InputMessage, OutputMessage
 from iris.io.session.manager import SessionManager
 from iris.io.transport.tcp_listener import TcpListener
 
@@ -27,6 +27,7 @@ class IOManager:
 
         self._event_bus.subscribe("OutputRequest", self._on_output_request)
         self._tcp_listener.set_on_input(self._on_tcp_input)
+        self._tcp_listener.set_on_command(self._on_tcp_command)
         self._tcp_listener.set_on_interrupt(self._on_tcp_interrupt)
 
     def set_command_handler(self, handler: Callable[[str, str], str]) -> None:
@@ -64,16 +65,6 @@ class IOManager:
             truncated,
         )
 
-        if msg.msg_type == "command":
-            self._handle_command(msg)
-            return
-
-        if msg.msg_type == "converse_text":
-            self._session_mgr.route_output(
-                msg.session_id,
-                OutputMessage(msg_type="ack", content="received"),
-            )
-
         self._event_bus.publish(
             InputReceived(
                 timestamp=None,
@@ -85,14 +76,14 @@ class IOManager:
             )
         )
 
-    def _handle_command(self, msg: InputMessage) -> None:
+    def _on_tcp_command(self, msg: CommandInput) -> None:
         content = msg.content
         if not content.startswith("/"):
             result = "Commands start with /"
             logger.debug("IOManager: command missing slash session=%s", msg.session_id)
             self._session_mgr.route_output(
                 msg.session_id,
-                OutputMessage(msg_type="command", content=result),
+                CommandOutput(content=result, session_id=msg.session_id),
             )
             return
 
@@ -107,7 +98,7 @@ class IOManager:
         logger.debug("IOManager: command result session=%s result=%.100s", msg.session_id, result)
         self._session_mgr.route_output(
             msg.session_id,
-            OutputMessage(msg_type="command", content=result),
+            CommandOutput(content=result, session_id=msg.session_id),
         )
 
     def _on_tcp_interrupt(self, session_id: str) -> None:

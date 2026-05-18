@@ -106,17 +106,15 @@ class Supervisor:
 # iris/kernel/commands/handler.py
 
 class CommandHandler:
-    """Global EventBus から CommandRequest を受け取り、対応する処理を実行する。
-    通常の感覚入力（InputReceived）とは別経路。
+    """IOManager から直接呼び出されるコマンド処理。
+    通常の感覚入力（InputReceived via EventBus）とは別経路。
     """
 
-    def handle(self, command: str, args: str, session_id: str) -> str
+    def handle(self, name: str, args: str) -> str
         # /status   → KernelManager.state
         # /shutdown → KernelProcess.shutdown
         # /help     → コマンド一覧
-        # /compact  → MemoryManager に委譲 (EventBus)
-
-    # subscribe: CommandRequest (global)
+        # /compact  → AgencyManager.compact_context
 ```
 
 ```mermaid
@@ -128,9 +126,9 @@ sequenceDiagram
     participant CMD as CommandHandler
     participant PROC as KernelProcess
 
-    TCP->>IO: InputMessage(msg_type="command", content="/shutdown")
-    IO->>EB: CommandRequest("shutdown", "", session_id)
-    EB-->>CMD: CommandRequest
+    TCP->>IO: CommandInput(content="/shutdown")
+    IO->>CMD: cmd_handler.handle("shutdown", "")
+    CMD->>CMD: shutdown()
 
     CMD->>PROC: shutdown()
     PROC->>PROC: 全層シャットダウン

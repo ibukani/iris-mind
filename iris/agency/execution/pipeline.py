@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
+import logging
 
 from iris.agency.execution.interrupt_token import InterruptToken
 from iris.agency.execution.tool_executor import ToolExecutionEngine

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import logging
 from collections.abc import Callable
+import logging
 
 from iris.agency.bus import InternalBus, PlanDecided
 from iris.agency.execution.monitor import OutputMonitor

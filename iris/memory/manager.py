@@ -1,48 +1,42 @@
+from __future__ import annotations
+
 import logging
 from typing import Any
 
-from iris.kernel.config import Config
-from iris.memory.episodic import EpisodicMemory
-from iris.memory.semantic import SemanticStore
-from iris.memory.sensory import SensoryBuffer
-from iris.memory.types import MemoryStream
-from iris.memory.vector import VectorStore
+from iris.memory.sensory.buffer import InputBuffer
+from iris.memory.stores import EpisodicStore, SemanticStore
+from iris.memory.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
 
 
 class MemoryManager:
-    """
-    複数ストリーム (Sensory, Episodic, Semantic) を一括管理するクラス。
-    """
+    def __init__(
+        self,
+        *,
+        event_bus: Any = None,
+        episodic: EpisodicStore | None = None,
+        semantic: SemanticStore | None = None,
+        vector_store: VectorStore | None = None,
+        proactive_config: Any = None,
+    ) -> None:
+        self._event_bus = event_bus
+        self._episodic = episodic
+        self._semantic = semantic
+        self._vector_store = vector_store
+        self._proactive_config = proactive_config
+        self._sensory_buffer: InputBuffer | None = None
 
-    def __init__(self, config: Config) -> None:
-        self.config = config
-        self._episodic = EpisodicMemory(config.memory.episodic_capacity)
-        self._semantic: SemanticStore | None = None
-        self._vector_store: VectorStore | None = None
-        if config.memory.semantic_enabled:
-            self._semantic = SemanticStore(config.memory.semantic_db_path)
-            self._vector_store = VectorStore(config.memory.vector_db_path)
+    def set_sensory_buffer(self, buf: InputBuffer) -> None:
+        self._sensory_buffer = buf
 
-        self._sensory_buffer: SensoryBuffer | None = None
-
-    def open_sensory_stream(self) -> None:
-        if not self._sensory_buffer:
-            self._sensory_buffer = SensoryBuffer()
-
-    def close_sensory_stream(self) -> None:
-        if self._sensory_buffer:
-            self._sensory_buffer.close()
-            self._sensory_buffer = None
-
-    def store(self, stream: MemoryStream, data: Any) -> None:
+    def store(self, stream: str, data: Any) -> None:
         if stream == "sensory" and self._sensory_buffer:
             if isinstance(data, str):
-                self._sensory_buffer.add_text(data)
+                self._sensory_buffer.add_fragment(data, is_final=True)
             elif isinstance(data, dict) and "text" in data:
-                self._sensory_buffer.add_text(data["text"])
-        elif stream == "episodic":
+                self._sensory_buffer.add_fragment(data["text"], is_final=True)
+        elif stream == "episodic" and self._episodic:
             summary = ""
             kind = ""
             if isinstance(data, str):
@@ -59,17 +53,17 @@ class MemoryManager:
         else:
             logger.warning("MemoryManager: unknown stream=%s", stream)
 
-    def retrieve(self, stream: MemoryStream, **filters: Any) -> list[dict]:
-        if stream == "episodic":
+    def retrieve(self, stream: str, **filters: Any) -> list[dict]:
+        if stream == "episodic" and self._episodic:
             n = filters.get("n", 5)
             if not isinstance(n, int):
                 n = 5
             return self._episodic.get_recent(n)
-        elif stream == "sensory" and self._sensory_buffer:
+        if stream == "sensory" and self._sensory_buffer:
             return [{"text": self._sensory_buffer.accumulated_text}]
         return []
 
-    def search(self, query: str, stream: MemoryStream | None = None, **kwargs: Any) -> list[dict]:
+    def search(self, query: str, stream: str | None = None, **kwargs: Any) -> list[dict]:
         max_results = kwargs.get("max_results", 3)
         if not isinstance(max_results, int):
             max_results = 3
@@ -101,8 +95,8 @@ class MemoryManager:
             ]
         return []
 
-    def clear(self, stream: MemoryStream | None = None) -> None:
-        if stream == "episodic" or stream is None:
+    def clear(self, stream: str | None = None) -> None:
+        if (stream == "episodic" or stream is None) and self._episodic:
             self._episodic.clear()
         if (stream == "semantic" or stream is None) and self._semantic:
             self._semantic.clear()

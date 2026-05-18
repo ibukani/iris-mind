@@ -6,6 +6,7 @@ ollama.Client をラップし、ストリーミング・thinking モード・ツ
 
 from __future__ import annotations
 
+from collections.abc import Callable
 import contextlib
 import logging
 import os
@@ -14,7 +15,6 @@ import subprocess
 import sys
 import threading
 import time
-from collections.abc import Callable
 from typing import Any
 
 import httpx

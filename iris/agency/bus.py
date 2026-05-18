@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import logging
-import threading
 from collections import defaultdict
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
+import logging
+import threading
 
 
 @dataclass

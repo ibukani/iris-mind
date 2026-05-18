@@ -7,12 +7,12 @@ Pydantic モデルで config.yaml をバリデーションする。
 from __future__ import annotations
 
 import os
-import re
 from pathlib import Path
+import re
 
-import yaml
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator
+import yaml
 
 _ENV_REF_RE = re.compile(r"\$\{([^}]+)\}")
 _VALID_PERFORMANCE_TIERS = {"fast", "balanced", "capable"}

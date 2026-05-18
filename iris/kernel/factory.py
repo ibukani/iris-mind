@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import logging
 from dataclasses import dataclass
+import logging
 
 from iris.agency.bus import InternalBus
 from iris.agency.execution.inhibition import InhibitionController

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 from datetime import datetime
+import json
 from pathlib import Path
 
 _DEFAULT_PATH = ".iris/data/persona_data.json"

@@ -15,6 +15,7 @@ dependencies = [
     "pyyaml>=6",
     "rich>=13",
     "chromadb>=1.4",
+    "tokenizers>=0.21",
 ]
 
 [project.optional-dependencies]

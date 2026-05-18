@@ -22,6 +22,7 @@ from iris.limbic.manager import LimbicManager
 from iris.llm.capability_checker import CapabilityChecker
 from iris.llm.context_window import LLMContextWindowManager
 from iris.llm.llm_bridge import LLMBridge, create_provider
+from iris.llm.tokenizer_manager import TokenizerManager
 from iris.memory.hippocampal.manager import HippocampalManager
 from iris.memory.hippocampal.reflexion import Reflexion
 from iris.memory.long_term.manager import LongTermMemoryManager
@@ -127,6 +128,15 @@ class KernelFactory:
         # Phase 4: LLM・パーソナリティ
         # ============================================================
         llm = KernelFactory._build_llm(config)
+        tokenizers: dict[str, TokenizerManager] = {
+            entry.name: TokenizerManager(
+                repo_id=entry.tokenizer_repo_id,
+                local_path=entry.tokenizer_local_path,
+                hf_token=entry.tokenizer_hf_token,
+            )
+            for entry in config.model.models
+        }
+        default_tokenizer = tokenizers.get(config.model.get_model("default"))
 
         # ============================================================
         # Phase 4: ケイパビリティ (ツール)
@@ -155,6 +165,7 @@ class KernelFactory:
             scoring=scoring,
             limbic=limbic,
             big_five=big_five,
+            tokenizer_mgr=default_tokenizer,
         )
 
         # ============================================================
@@ -268,6 +279,7 @@ class KernelFactory:
         scoring: ProactiveScoring,
         limbic: LimbicManager | None = None,
         big_five: BigFiveProfile | None = None,
+        tokenizer_mgr: TokenizerManager | None = None,
     ) -> AgencyManager:
         personality = Personality(name=config.personality.name, prompt_file=config.personality.prompt_file)
         capability_checker = CapabilityChecker(config=config.model)
@@ -309,7 +321,9 @@ class KernelFactory:
         )
 
         monitor = OutputMonitor(internal_bus=internal_bus)
-        context_window_mgr = LLMContextWindowManager(llm=llm, compact_model=config.model.get_model("default"))
+        context_window_mgr = LLMContextWindowManager(
+            llm=llm, compact_model=config.model.get_model("default"), tokenizer_mgr=tokenizer_mgr
+        )
         execution = ExecutionManager(
             internal_bus=internal_bus,
             event_bus=event_bus,

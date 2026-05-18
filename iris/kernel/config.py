@@ -54,6 +54,9 @@ class ModelEntry(BaseModel):
     num_ctx: int | None = None
     capabilities: list[str] | None = None
     performance_tier: str = "balanced"
+    tokenizer_repo_id: str = ""
+    tokenizer_local_path: str = ""
+    tokenizer_hf_token: str = ""
 
     @field_validator("roles", mode="before")
     @classmethod

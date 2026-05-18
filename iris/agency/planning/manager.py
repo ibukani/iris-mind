@@ -42,9 +42,14 @@ class PlanningManager:
         context = event.context or {}
 
         if self._limbic:
+            emotion = self._limbic.current_emotion()
+            self._inhibition.apply_limbic_modulation(emotion)
             base_mood = self._inhibition.negative_mood_score
             modulated = self._limbic.modulate_inhibition(base_mood)
             self._inhibition.set_mood(modulated)
+            limbic_mood = emotion.to_dict()
+        else:
+            limbic_mood = None
 
         gate = self._inhibition.evaluate(time.time())
 
@@ -57,6 +62,7 @@ class PlanningManager:
                 last_proactive_time=self._inhibition.last_proactive_time,
                 last_user_activity=self._inhibition.last_user_activity,
                 negative_mood_score=self._inhibition.negative_mood_score,
+                limbic_mood=limbic_mood,
             )
             if total < self._cfg.speak_threshold:
                 logger.debug("Below speak_threshold: total=%.3f < threshold=%.2f", total, self._cfg.speak_threshold)
@@ -72,11 +78,11 @@ class PlanningManager:
         else:
             self._inhibition.notify_user_activity()
 
-        plan = self._build_plan(event.content, context, gate)
+        plan = self._build_plan(event.content, context, gate, limbic_mood)
         plan["session_id"] = event.session_id
         self._bus.publish(PlanDecided(plan=plan))
 
-    def _build_plan(self, content: str, context: dict, gate: GateVerdict) -> dict:
+    def _build_plan(self, content: str, context: dict, gate: GateVerdict, limbic_mood: dict[str, float] | None = None) -> dict:
         """ユーザー入力またはタイマートリガーに基づいて実行計画を構築する。
 
         計画は LLMPipeline で処理される際に、状況（situation）やコンテキスト、
@@ -95,7 +101,7 @@ class PlanningManager:
 
         if from_timer:
             scores = context.get("scores", {})
-            return {
+            plan: dict = {
                 "content": "",
                 "situation": "proactive",
                 "context_hint": context.get("context_hint", ""),
@@ -112,13 +118,16 @@ class PlanningManager:
                 "run_compression": False,
                 "record_history": True,
             }
+            if limbic_mood:
+                self._apply_emotion_to_plan(plan, limbic_mood)
+            return plan
 
         abbreviated = gate.suppressed or gate.score < self._cfg.abbreviated_threshold
         context_hint = self._build_user_context_hint(content)
         logger.debug(
             "Plan built: abbreviated=%s suppressed=%s gate_score=%.3f", abbreviated, gate.suppressed, gate.score
         )
-        return {
+        plan = {
             "content": content,
             "context_hint": context_hint,
             "abbreviated": abbreviated,
@@ -131,6 +140,49 @@ class PlanningManager:
             "run_compression": not abbreviated,
             "record_history": True,
         }
+        if limbic_mood:
+            self._apply_emotion_to_plan(plan, limbic_mood)
+        return plan
+
+    @staticmethod
+    def _apply_emotion_to_plan(plan: dict, limbic_mood: dict[str, float]) -> None:
+        """感情状態に応じて計画パラメータを調整する (Phase 4)。
+
+        感情によって応答スタイルを変化させる:
+        - 不機嫌 (valence < -0.3): 短文、高温度 (ぶっきらぼう)
+        - 覚醒低 (arousal < 0.15): 高温度 (のんびり)
+        - 覚醒高 (arousal > 0.6): 低温度、短文 (興奮・早口)
+        - 支配性低 (dominance < 0.3): abbreviated 傾向
+        - 支配性高 (dominance > 0.6): 低温度 (自信あり)
+        """
+        v = limbic_mood.get("valence", 0.0)
+        a = limbic_mood.get("arousal", 0.0)
+        d = limbic_mood.get("dominance", 0.5)
+
+        if v < -0.3:
+            plan["max_tokens"] = min(plan.get("max_tokens", 0) or 9999, 60)
+            if plan.get("abbreviated", False) is False:
+                plan["temperature"] = plan.get("temperature", 0.7) + 0.15
+                plan["tools_allowed"] = False
+                plan["streaming"] = False
+        elif v > 0.5:
+            plan["temperature"] = max(plan.get("temperature", 0.7) - 0.1, 0.3)
+
+        if a > 0.6:
+            plan["temperature"] = max(plan.get("temperature", 0.7) - 0.15, 0.3)
+            plan["max_tokens"] = min(plan.get("max_tokens", 0) or 9999, 100)
+        elif a < 0.15:
+            plan["temperature"] = min(plan.get("temperature", 0.7) + 0.2, 1.0)
+
+        if d < 0.3:
+            if plan.get("abbreviated", False) and plan["max_tokens"] == 80:
+                plan["max_tokens"] = 50
+            plan["temperature"] = plan.get("temperature", 0.7) + 0.05
+        elif d > 0.6:
+            plan["temperature"] = max(plan.get("temperature", 0.7) - 0.1, 0.2)
+            plan["max_tokens"] = min(plan.get("max_tokens", 0) or 9999, 150)
+
+        plan["temperature"] = max(0.2, min(1.0, plan.get("temperature", 0.7)))
 
     @staticmethod
     def _format_age(ts: str) -> str:

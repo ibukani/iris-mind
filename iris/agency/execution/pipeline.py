@@ -97,9 +97,13 @@ class LLMPipeline:
         if dynamic_personality:
             prompt += f"\n\n{dynamic_personality}"
 
-        mood_desc = self._limbic.build_mood_description() if self._limbic else ""
-        if mood_desc:
-            prompt += f"\n\n## 現在の気分\n{mood_desc}"
+        if self._limbic:
+            mood_desc = self._limbic.build_mood_description()
+            if mood_desc:
+                prompt += f"\n\n## 現在の気分\n{mood_desc}"
+            style = self._limbic.build_response_style()
+            if style:
+                prompt += f"\n\n{style}"
 
         if context_hint:
             prompt += f"\n\n## 会話コンテキスト\n{context_hint}"

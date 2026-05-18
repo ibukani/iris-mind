@@ -3,6 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 import time
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from iris.limbic.models import EmotionState
 
 logger = logging.getLogger(__name__)
 
@@ -163,6 +167,33 @@ class InhibitionController:
 
     def set_mood(self, negative_score: float) -> None:
         self._negative_mood_score = max(0.0, min(1.0, negative_score))
+
+    def apply_limbic_modulation(self, emotion: EmotionState) -> None:
+        """Limbic 系の PAD 感情状態から抑制を直接変調する。
+
+        Phase 4: 扁桃体からの感情入力を基底核抑制に直接反映。
+        - valence < -0.3 → 負の感情が抑制を強める
+        - arousal > 0.6  → 興奮は Go 信号を強化 (抑制弱める)
+        - dominance < 0.3 → 無力感は抑制を強める
+        """
+        mood = 0.0
+        if emotion.valence < -0.3:
+            mood += abs(emotion.valence) * 0.4
+        elif emotion.valence > 0.3:
+            mood -= emotion.valence * 0.1
+
+        if emotion.arousal > 0.6:
+            mood -= emotion.arousal * 0.1
+        elif emotion.arousal < 0.2:
+            mood += 0.1
+
+        if emotion.dominance < 0.3:
+            mood += (0.3 - emotion.dominance) * 0.3
+        elif emotion.dominance > 0.7:
+            mood -= emotion.dominance * 0.05
+
+        current = self._negative_mood_score
+        self._negative_mood_score = max(0.0, min(1.0, current + mood))
 
     def reset(self) -> None:
         self._last_proactive_time = 0.0

@@ -331,7 +331,8 @@ EpisodicStore に記録し、システムプロンプトに反映する。
 - 感情ベース記憶検索（`search_by_emotion()` / `search_emotional()`）
 - 感情強度による想起バイアス（PAD距離×強度で再ランク）
 
-### Phase 4: 会話多様化
-- 感情に基づく応答スタイル変更
-- InhibitionController への感情変調統合
-- ProactiveScoring への感情因子統合
+### Phase 4: 会話多様化 ✅ 完了
+- 感情に基づく応答スタイル変更: `build_response_style()` — LLMMPipelineに注入
+- InhibitionController への感情変調統合: `apply_limbic_modulation()` 直接変調
+- ProactiveScoring への感情因子統合: PAD 3次元の重み付きmood_score
+- PlanningManager の `_apply_emotion_to_plan()`: temperature/max_tokens/abbreviated 動的調整

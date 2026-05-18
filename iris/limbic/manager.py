@@ -181,6 +181,45 @@ class LimbicManager:
 
         return max(0.0, min(1.0, base_score))
 
+    def build_response_style(self) -> str:
+        """感情状態に基づく応答スタイル指示を生成する (Phase 4)。
+
+        脳: 島皮質+前頭前野が感情状態を言語化し、応答のトーンを調整。
+        この指示文はシステムプロンプトに注入される。
+
+        Returns:
+            "## 応答スタイル\n{指示}" 形式の文字列。中立時は空文字。
+        """
+        e = self.current_emotion()
+        if abs(e.valence) < 0.1 and e.arousal < 0.15 and abs(e.dominance - 0.5) < 0.1:
+            return ""
+
+        hints: list[str] = []
+
+        if e.valence > 0.5:
+            hints.append("明るく温かいトーンで応答してください")
+        elif e.valence > 0.2:
+            hints.append("穏やかで親しみやすいトーンで応答してください")
+        elif e.valence < -0.5:
+            hints.append("簡潔に、必要最低限の応答に留めてください")
+        elif e.valence < -0.2:
+            hints.append("やや控えめなトーンで応答してください")
+
+        if e.arousal > 0.6:
+            hints.append("テンポ良く、活発に応答してください")
+        elif e.arousal < 0.2:
+            hints.append("ゆったりとしたペースで応答してください")
+
+        if e.dominance > 0.6:
+            hints.append("自信を持って明確に応答してください")
+        elif e.dominance < 0.3:
+            hints.append("慎重に、確認しながら応答してください")
+
+        if not hints:
+            return ""
+
+        return "## 応答スタイル\n" + "\n".join(f"- {h}" for h in hints)
+
     def search_by_emotion(self, max_results: int = 5) -> list[dict[str, Any]]:
         """現在の感情状態に近い記憶を検索する。"""
         return self._emotional_memory.search_by_emotion(self.current_emotion(), max_results)

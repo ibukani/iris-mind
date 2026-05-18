@@ -31,12 +31,13 @@ class ProactiveScoring:
         last_proactive_time: float,
         last_user_activity: float,
         negative_mood_score: float,
+        limbic_mood: dict[str, float] | None = None,
     ) -> tuple[float, dict[str, float]]:
         w = self._config.trigger_weights
         time_score = self._compute_time_score(now, last_proactive_time, last_user_activity)
         memory_score = self._compute_memory_score()
         context_score = self._compute_context_score()
-        mood_score = self._compute_mood_score(negative_mood_score)
+        mood_score = self._compute_mood_score(negative_mood_score, limbic_mood)
         total = (
             w.get("time", 0.25) * time_score
             + w.get("memory", 0.45) * memory_score
@@ -105,7 +106,18 @@ class ProactiveScoring:
             return 0.0
 
     @staticmethod
-    def _compute_mood_score(negative_mood_score: float) -> float:
+    def _compute_mood_score(negative_mood_score: float, limbic_mood: dict[str, float] | None = None) -> float:
+        if limbic_mood:
+            valence = limbic_mood.get("valence", 0.0)
+            arousal = limbic_mood.get("arousal", 0.0)
+            dominance = limbic_mood.get("dominance", 0.0)
+
+            mood_valence = max(0.0, valence)
+            mood_arousal = 0.3 if arousal > 0.6 else (0.6 if arousal < 0.15 else 0.4)
+            mood_dominance = dominance * 0.4
+
+            return min(1.0, mood_valence * 0.5 + mood_arousal + mood_dominance)
+
         if negative_mood_score >= 0.7:
             return 0.0
         return max(0.0, 1.0 - negative_mood_score)

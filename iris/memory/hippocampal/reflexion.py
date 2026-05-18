@@ -45,7 +45,7 @@ class Reflexion:
                 ),
             },
         ]
-        resp = self._llm.chat(messages=msgs, model=self._compact_model, temperature=0.3, max_tokens=400, keep_alive="0")
+        resp = self._llm.chat(messages=msgs, model=self._compact_model, temperature=0.3, max_tokens=400)
         raw = resp.get("message", {}).get("content")
         content = raw if isinstance(raw, str) else ""
         try:
@@ -93,7 +93,7 @@ class Reflexion:
                 ),
             },
         ]
-        resp = self._llm.chat(messages=msgs, model=self._compact_model, temperature=0.3, max_tokens=200, keep_alive="0")
+        resp = self._llm.chat(messages=msgs, model=self._compact_model, temperature=0.3, max_tokens=200)
         raw = resp.get("message", {}).get("content")
         content = raw if isinstance(raw, str) else ""
         try:

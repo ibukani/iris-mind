@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
@@ -14,7 +15,7 @@ class AgentsMdStoreProtocol(Protocol):
 
 class EpisodicStoreProtocol(Protocol):
     def add(self, summary: str): ...
-    def get_recent(self, n: int = 5) -> list[str]: ...
+    def get_recent(self, n: int = 5) -> list[dict]: ...
     def clear(self): ...
 
 
@@ -65,7 +66,7 @@ class EpisodicStore:
 
     def add(self, summary: str):
         entries = self._load_all()
-        entries.append({"summary": summary})
+        entries.append({"summary": summary, "timestamp": datetime.now(UTC).isoformat()})
         if len(entries) > self.max_entries:
             entries = entries[-self.max_entries :]
         self.path.write_text(
@@ -73,9 +74,9 @@ class EpisodicStore:
             encoding="utf-8",
         )
 
-    def get_recent(self, n: int = 5) -> list[str]:
+    def get_recent(self, n: int = 5) -> list[dict]:
         entries = self._load_all()
-        return [e["summary"] for e in entries[-n:]]
+        return entries[-n:]
 
     def _load_all(self) -> list[dict]:
         if not self.path.exists():

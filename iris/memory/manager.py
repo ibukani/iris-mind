@@ -108,8 +108,7 @@ class MemoryManager:
     def retrieve(self, stream: MemoryStream, **filters) -> list[dict]:
         if stream == "episodic":
             n = filters.get("n", 5)
-            summaries = self._episodic.get_recent(n)
-            return [{"summary": s} for s in summaries]
+            return self._episodic.get_recent(n)
         elif stream == "sensory" and self._sensory_buffer:
             return [{"text": self._sensory_buffer.accumulated_text}]
         return []

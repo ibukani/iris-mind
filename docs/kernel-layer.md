@@ -111,10 +111,15 @@ class CommandHandler:
     """
 
     def handle(self, name: str, args: str) -> str
-        # /status   → KernelManager.state
-        # /shutdown → KernelProcess.shutdown
-        # /help     → コマンド一覧
-        # /compact  → AgencyManager.compact_context
+        # /status        → 設定・感情状態表示
+        # /shutdown      → KernelProcess.shutdown
+        # /help          → コマンド一覧
+        # /compact       → AgencyManager.compact_context
+        # /memory recent → MemoryManager.retrieve("episodic")
+        # /memory search → MemoryManager.search("semantic")
+        # /memory clear  → MemoryManager.clear()
+        # /emotion       → LimbicManager.get_emotion_report()
+        # /sessions      → SessionManager.get_roles_summary()
 ```
 
 ```mermaid

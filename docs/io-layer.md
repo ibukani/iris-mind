@@ -103,7 +103,6 @@ sequenceDiagram
 
 ```python
 INPUT_MSG_TYPES = frozenset({"dispatch_text", "converse_text", "system"})  # command は分離
-COMMAND_MSG_TYPES = frozenset({"command"})
 OUTPUT_STREAM_STATES = frozenset({"thinking", "speaking", "done", "interrupted"})
 
 class ConnectionMode(Enum): INPUT_ONLY / OUTPUT_ONLY / BIDIRECTIONAL

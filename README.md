@@ -218,7 +218,7 @@ pytest tests/                         # 全テスト実行
 1. `iris/tools/builtins/<name>/server.py` に配置
 2. `@tool()` デコレータでツール定義（型ヒント→JSON Schema 自動生成）
 3. `register(registry)` 関数で `registry.register_decorated(fn)` をエクスポート
-4. `.iris/data/iris_profile.md` の `My Capabilities` を更新
+4. `.iris/data/iris_profile.md` の該当セクションを更新
 
 詳細は `.agents/skills/capability-pattern/SKILL.md` を参照。
 

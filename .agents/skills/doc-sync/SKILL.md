@@ -29,10 +29,9 @@ metadata:
 | 設定変更 | `config.md` |
 | 新機能全般 | 該当する文書がない場合は新規作成を検討 |
 
-### 2. 構造記憶 `.iris/data/iris_profile.md`
+### 2. 自己プロフィール `.iris/data/iris_profile.md`
 
-- `## My Capabilities` セクション：capability の追加・削除・名称変更があった場合
-- `## Known Structure` セクション：ディレクトリ構成やコアファイル構成が変わった場合
+- 人格・口調・ルール記述の変更があった場合
 
 ### 3. AGENTS.md
 

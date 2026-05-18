@@ -11,6 +11,7 @@ build/
 
 # Data files (runtime generated)
 .iris/data/
+!.iris/data/iris_profile.md
 
 # Test artifacts
 chroma_test/

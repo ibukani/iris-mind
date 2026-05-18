@@ -19,7 +19,7 @@ Iris は自律的に行動・進化できるAIアシスタント。Python製でO
 ├── config/
 │   └── personality_default.md   ← 静的テンプレート（git追跡）
 └── data/
-    ├── iris_profile.md           ← Irisの構造記憶（自己認識用、上限2KB固定）
+    ├── iris_profile.md           ← Irisの自己プロフィール（人格テンプレート、上限2KB固定）
     ├── episodes.jsonl            ← エピソード記憶
     ├── semantic.jsonl            ← 意味記憶
     ├── persona_data.json         ← 話し方・性格（動的管理）
@@ -125,7 +125,7 @@ iris/llm/     ──→ EventBus     (LLM provider ファサード)
 | `agency/` | PFC+基底核+運動野 | 意思決定（planning）と行動実行（execution） |
 
 ## Iris の記憶体系
-- `.iris/data/iris_profile.md`: Irisの構造記憶（自己認識用、上限2KB固定）※話し方・性格は含まず、別JSONで動的管理
+- `.iris/data/iris_profile.md`: Irisの自己プロフィール（人格テンプレート、上限2KB固定）※`{name}` プレースホルダ可。話し方・性格は別JSONで動的管理
 - EpisodicStore: JSONLベースの作業記憶（上限30エントリ、古いものをマージ圧縮）
 - SemanticStore: JSONL永続化 + ChromaDB + BM25 ハイブリッド検索（上限100エントリ）
 - VectorStore: ONNXMiniLM_L6_V2 埋め込み、cosine類似度、統合スコア = vector*0.6 + bm25*0.4
@@ -136,14 +136,14 @@ iris/llm/     ──→ EventBus     (LLM provider ファサード)
 3. `register(registry)` 関数で `registry.register_decorated(fn)` をエクスポート（`discover_modules()` 用）
 4. `allowed_roles` パラメータで利用可能なモデルロールを制限（デフォルトは全てのロールで利用可）
 6. `side_effect=True` で作用系ツール（結果を会話に戻さず短絡）
-7. 新しいcapabilityを追加したら `.iris/data/iris_profile.md` の「My Capabilities」セクションも更新する
+7. 新しいcapabilityを追加したら `.iris/data/iris_profile.md` の該当セクションも更新する
 8. テンプレート化されたワークフローは `.agents/skills/capability-pattern/SKILL.md` を参照（`skill` ツールでロード可能）
 
 ## ドキュメント更新
 機能変更時のドキュメント更新手順は `.agents/skills/doc-sync/SKILL.md` を参照（`skill` ツールでロード可能）
 - 設計ドキュメント (`docs/*.md`)
 - Architecture Decision Records (`docs/adr/*.md`)
-- 構造記憶 (`.iris/data/iris_profile.md`)
+- 自己プロフィール (`.iris/data/iris_profile.md`)
 - プロジェクトルール (`AGENTS.md`)
 - エージェント導線 (`.agents/README.md`, `.agents/project.md`)
 - Skills (`.agents/skills/*/SKILL.md`)

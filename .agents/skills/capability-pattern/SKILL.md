@@ -54,7 +54,7 @@ def register(registry):
 
 5. ドキュメントと構造記憶を更新する
 
-- `.iris/data/iris_profile.md` の `## My Capabilities`
+- `.iris/data/iris_profile.md` の該当セクション
 - 必要なら `docs/` または `docs/adr/`
 - ドキュメント更新漏れ確認は `.agents/skills/doc-sync/SKILL.md`
 

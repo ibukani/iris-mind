@@ -41,7 +41,6 @@ class OpenRouterProvider:
 
     def _request(self, body: dict, headers: dict) -> httpx.Response:
         """指数バックオフ付きリトライで POST する。"""
-        resp: httpx.Response
         for attempt in range(self._max_retries):
             resp = self._client.post(
                 f"{self.base_url}/chat/completions",
@@ -62,20 +61,19 @@ class OpenRouterProvider:
             )
             time.sleep(retry_after)
 
-        error_msg = _extract_error_text(resp)
-        raise RuntimeError(f"OpenRouter API エラー (429 リトライ超過 {self._max_retries}回): {error_msg}")
+        raise RuntimeError(f"OpenRouter API エラー (429 リトライ超過 {self._max_retries}回)")
 
     def chat(
         self,
         messages: list[dict],
         model: str | None = None,
-        enable_thinking: bool = False,  # noqa: ARG002
+        enable_thinking: bool = False,
         temperature: float = 0.7,
         max_tokens: int = 4096,
         tools: list[dict] | None = None,
         on_token: Callable[[str], None] | None = None,
         interrupt_token: object | None = None,
-        **kwargs: Any,  # noqa: ARG002
+        **kwargs: Any,
     ) -> dict:
         """LLM にチャットリクエストを送信する。"""
         effective_model = model or self.default_model
@@ -197,7 +195,7 @@ class OpenRouterProvider:
         """API キーが設定されていれば利用可能とみなす。"""
         return bool(self.api_key)
 
-    def unload_model(self, model_name: str) -> None:  # noqa: ARG002
+    def unload_model(self, model_name: str) -> None:
         """OpenRouter にアンロード概念はない。"""
         return
 
@@ -245,7 +243,7 @@ def _extract_error_text(resp: httpx.Response) -> str:
         body = resp.json()
         error = body.get("error", {})
         if isinstance(error, dict):
-            return error.get("message", str(body))
+            return error.get("message", str(body))  # type: ignore[no-any-return]
         return str(error)
     except Exception:
         text = resp.text

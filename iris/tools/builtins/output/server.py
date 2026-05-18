@@ -4,6 +4,7 @@ import logging
 from pathlib import Path
 
 from iris.tools.decorator import register_tools, tool
+from iris.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
 
@@ -28,5 +29,5 @@ def output_to(destination: str, content: str) -> str:
     return f"sent to {destination}"
 
 
-def register(registry):
+def register(registry: ToolRegistry) -> None:
     register_tools(registry, output_to)

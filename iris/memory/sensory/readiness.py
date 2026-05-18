@@ -69,7 +69,7 @@ class ReadinessEvaluator:
                 max_tokens=10,
             )
             content = resp.get("message", {}).get("content", "").strip().lower()
-            return content.startswith("yes")
+            return content.startswith("yes")  # type: ignore[no-any-return]
         except Exception:
             logger.exception("Tier2 readiness evaluation failed")
             return False

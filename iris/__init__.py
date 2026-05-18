@@ -9,12 +9,12 @@ from iris.event import (
 from iris.kernel.config import Config, ProactiveConfig
 
 __all__ = [
-    "Config",
-    "ProactiveConfig",
-    "EventBus",
-    "Event",
-    "TimerTick",
-    "AgentStateChangeEvent",
     "AgentAnomalyEvent",
+    "AgentStateChangeEvent",
+    "Config",
+    "Event",
+    "EventBus",
     "MemoryUpdateEvent",
+    "ProactiveConfig",
+    "TimerTick",
 ]

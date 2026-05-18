@@ -8,10 +8,10 @@ from iris.memory.stores import (
 )
 
 __all__ = [
-    "EpisodicStore",
-    "SemanticStore",
     "AgentsMdStore",
-    "EpisodicStoreProtocol",
-    "SemanticStoreProtocol",
     "AgentsMdStoreProtocol",
+    "EpisodicStore",
+    "EpisodicStoreProtocol",
+    "SemanticStore",
+    "SemanticStoreProtocol",
 ]

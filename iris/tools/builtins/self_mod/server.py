@@ -3,6 +3,7 @@ import subprocess
 import sys
 
 from iris.tools.decorator import register_tools, tool
+from iris.tools.registry import ToolRegistry
 
 
 @tool(allowed_roles={"smart"})
@@ -54,5 +55,5 @@ def _sandbox_test(filepath: Path) -> dict:
         return {"ok": False, "error": str(e)}
 
 
-def register(registry):
+def register(registry: ToolRegistry) -> None:
     register_tools(registry, generate_capability, modify_file, sandbox_test)

@@ -30,7 +30,7 @@ class ToolDef:
         }
 
     def execute(self, **kwargs: object) -> str:
-        return self.fn(**kwargs)
+        return self.fn(**kwargs)  # type: ignore[no-any-return]
 
 
 @dataclass

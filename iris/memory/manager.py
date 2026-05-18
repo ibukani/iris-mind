@@ -68,19 +68,18 @@ class MemoryManager:
         if not isinstance(max_results, int):
             max_results = 3
 
-        if stream == "semantic" or (stream is None and self._semantic):
-            if self._semantic is not None:
-                results = self._semantic.search(query=query, max_results=max_results)
-                return [
-                    {
-                        "content": r.get("content", ""),
-                        "tags": r.get("tags", []),
-                        "type": r.get("type", "unknown"),
-                        "score": round(r.get("score", 0.0), 4),
-                        "timestamp": r.get("timestamp", ""),
-                    }
-                    for r in results
-                ]
+        if (stream == "semantic" or (stream is None and self._semantic)) and self._semantic is not None:
+            results = self._semantic.search(query=query, max_results=max_results)
+            return [
+                {
+                    "content": r.get("content", ""),
+                    "tags": r.get("tags", []),
+                    "type": r.get("type", "unknown"),
+                    "score": round(r.get("score", 0.0), 4),
+                    "timestamp": r.get("timestamp", ""),
+                }
+                for r in results
+            ]
         if self._vector_store:
             results = self._vector_store.search(query=query, max_results=max_results)
             return [

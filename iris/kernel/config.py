@@ -205,7 +205,7 @@ class Config(BaseModel):
         if p.exists():
             raw = yaml.safe_load(p.read_text(encoding="utf-8"))
             raw = _resolve_env_refs(raw)
-            return cls.model_validate(raw)
+            return cls.model_validate(raw)  # type: ignore[no-any-return]
         return cls()
 
     def save(self, path: str) -> None:

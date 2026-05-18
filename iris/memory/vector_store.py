@@ -27,7 +27,7 @@ class VectorStore:
         self._bm25_dirty = True
         self._lock = threading.Lock()
 
-    def add(self, entry: dict):
+    def add(self, entry: dict) -> None:
         with self._lock:
             eid = entry.get("id", str(hash(entry.get("content", ""))))
             content = entry.get("content", "")
@@ -43,7 +43,7 @@ class VectorStore:
             )
             self._bm25_dirty = True
 
-    def update(self, entry: dict):
+    def update(self, entry: dict) -> None:
         with self._lock:
             eid = entry.get("id", "")
             if not eid:
@@ -61,11 +61,11 @@ class VectorStore:
             )
             self._bm25_dirty = True
 
-    def delete(self, eid: str):
+    def delete(self, eid: str) -> None:
         with self._lock:
             self.collection.delete(ids=[eid])
 
-    def clear(self):
+    def clear(self) -> None:
         with self._lock:
             all_ids = self.collection.get()["ids"]
             if all_ids:
@@ -79,7 +79,7 @@ class VectorStore:
 
     def count(self) -> int:
         with self._lock:
-            return self.collection.count()
+            return self.collection.count()  # type: ignore[no-any-return]
 
     def search(self, query: str, max_results: int = 3, min_score: float = 0.2) -> list[dict]:
         with self._lock:
@@ -147,7 +147,7 @@ class VectorStore:
                 scores[eid] = scores.get(eid, 0.0) + s
         return {eid: min(score / 10.0, 1.0) for eid, score in scores.items()}
 
-    def _rebuild_bm25(self):
+    def _rebuild_bm25(self) -> None:
         if self.collection.count() == 0:
             self._all_docs = {}
             self._doc_lengths = {}

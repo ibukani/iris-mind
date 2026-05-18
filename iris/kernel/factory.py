@@ -100,7 +100,7 @@ class KernelFactory:
         # ============================================================
         # Phase 4: ケイパビリティ (ツール)
         # ============================================================
-        registry, tool_exec = KernelFactory._build_tools()
+        _registry, tool_exec = KernelFactory._build_tools()
 
         # ============================================================
         # Phase 4.5: 基底核抑制

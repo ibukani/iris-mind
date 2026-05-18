@@ -136,10 +136,19 @@ proactive:
 
 | コマンド | 説明 | 応答例 |
 |----------|------|--------|
-| `/status` | Iris の状態確認 | `Status: IDLE, uptime: 1h 23m, messages: 42, proactive: enabled` |
+| `/status` | Iris の状態確認 | `Model: ollama (qwen3.5:9b)\nEmotion: v=0.30 a=0.20 d=0.50` |
 | `/shutdown` | グレースフルシャットダウン | `Shutting down...` |
-| `/help` | コマンド一覧表示 | `Available commands: /status, /shutdown, /help, /compact` |
+| `/help` | コマンド一覧表示 | `Available commands: /status, /shutdown, /help, /compact, /memory, /emotion, /sessions, /ping, /tools, /llm, /personality` |
 | `/compact` | 会話履歴を強制圧縮 | `Compacted: 240 chars summary, kept last 6 messages` |
+| `/memory recent [n]` | 直近のエピソード記憶を表示 | `Recent 3 episodic memories:\n  1. [2026-05-18T10:00:00] ...` |
+| `/memory search <q>` | 意味記憶を検索 | `Search results for 'hello':\n  [0.85] Hello! How can I help?` |
+| `/memory clear [type]` | 記憶をクリア | `Cleared all memory` |
+| `/emotion` | 現在の感情状態を表示 | `Emotion: valence=0.30 arousal=0.20 dominance=0.50` |
+| `/sessions` | アクティブセッション一覧 | `Active sessions:\n[conversation_input, conversation_output]` |
+| `/ping` | LLM死活確認 | `LLM: OK` |
+| `/tools` | 登録ツール一覧 | `Registered tools (3):\n  - web_search: ...\n  - web_fetch: ...` |
+| `/llm` | LLM設定情報 | `Provider: ollama\nModel: qwen3.5:9b\nStatus: available` |
+| `/personality` | Big Five性格スコア | `## 性格特性 (Big Five)\n- 開放性: 50\n- 誠実性: 50\n- ...` |
 
 ---
 
@@ -151,7 +160,7 @@ proactive:
 |------|------|------|
 | 接続がすぐ閉じられる | 認証失敗 | `access_token` が正しいか確認 |
 | 応答が返ってこない | session_id が無効 | 再接続して再認証 |
-| メッセージが無視される | 不正な msg_type | `msg_type` を `dispatch_text` / `converse_text` / `command` / `system` のいずれかに |
+| メッセージが無視される | 不正な msg_type | 入力は `dispatch_text` / `converse_text` / `system`、コマンドは `command` |
 | `msg_type` が `text` になっている | 外部向けに公開されていない内部形式 | `dispatch_text` または `converse_text` に変更 |
 
 ### 5.2 セッション管理

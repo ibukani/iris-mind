@@ -181,6 +181,12 @@ class KernelFactory:
 
         cmd_handler.set_shutdown_handler(_on_shutdown)
         cmd_handler.set_compact_handler(ctx.agency.compact_context)
+        cmd_handler.set_memory(memory_mgr)
+        cmd_handler.set_limbic(limbic)
+        cmd_handler.set_session_mgr(session_mgr)
+        cmd_handler.set_llm(llm)
+        cmd_handler.set_registry(_registry)
+        cmd_handler.set_big_five(big_five)
         ctx.io.set_command_handler(cmd_handler.handle)
 
         return ctx

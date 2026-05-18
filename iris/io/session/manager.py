@@ -11,6 +11,7 @@ from uuid import uuid4
 from iris.io.auth.authenticator import Authenticator
 from iris.io.models import (
     AuthMessage,
+    CommandOutput,
     ConnectionMode,
     ControlMessage,
     OutputMessage,
@@ -62,7 +63,7 @@ class SessionManager:
             logger.info("Session created: %s (mode=%s)", session_id, msg.mode.value)
             return ControlMessage(msg_type="auth_success", session_id=session_id)
 
-    def route_output(self, session_id: str, message: OutputMessage) -> None:
+    def route_output(self, session_id: str, message: OutputMessage | CommandOutput) -> None:
         if not session_id:
             logger.debug("SessionManager: broadcast output type=%s", message.msg_type)
             self._broadcast_output(message)
@@ -100,7 +101,7 @@ class SessionManager:
             logger.warning("Output connection lost for session: %s", session_id)
             self.remove_session(session_id)
 
-    def _broadcast_output(self, message: OutputMessage) -> None:
+    def _broadcast_output(self, message: OutputMessage | CommandOutput) -> None:
         with self._lock:
             targets = list(self._sessions.items())
 

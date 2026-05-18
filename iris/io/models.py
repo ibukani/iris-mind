@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 TCP_HOST = "127.0.0.1"
 TCP_PORT = 9876
 
-INPUT_MSG_TYPES: frozenset[str] = frozenset({"dispatch_text", "converse_text", "command", "system"})
+INPUT_MSG_TYPES: frozenset[str] = frozenset({"dispatch_text", "converse_text", "system"})
 OUTPUT_STREAM_STATES: frozenset[str] = frozenset({"thinking", "speaking", "done", "interrupted"})
 
 
@@ -72,6 +72,22 @@ class OutputMessage(BaseModel):
     content_type: str = "text/plain"
     state: str | None = None
     metadata: dict = {}
+
+
+class CommandInput(BaseModel):
+    id: str = Field(default_factory=lambda: uuid4().hex[:12])
+    session_id: str = ""
+    source: str = ""
+    content: str
+
+
+class CommandOutput(BaseModel):
+    id: str = Field(default_factory=lambda: uuid4().hex[:12])
+    correlation_id: str | None = None
+    session_id: str = ""
+    msg_type: str = "command"
+    content: str
+    state: str | None = None
 
 
 class InterruptMessage(BaseModel):

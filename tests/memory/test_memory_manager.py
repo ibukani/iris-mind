@@ -167,16 +167,6 @@ class TestMemoryManagerInputPending:
         assert len(ready_events) == 1
         assert ready_events[0].content == "new"
 
-    def test_proactive_disabled_when_config_false(self, event_bus: EventBus) -> None:
-        ready_events: list[InputReady] = []
-        MemoryManager(event_bus=event_bus, proactive_config={"enabled": False})
-        event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
-
-        event_bus.publish(
-            TimerTick(timestamp=None, source="kernel", tick_count=0),
-        )
-        assert len(ready_events) == 0
-
     def test_proactive_not_triggered_without_config(self, event_bus: EventBus) -> None:
         ready_events: list[InputReady] = []
         MemoryManager(event_bus=event_bus)

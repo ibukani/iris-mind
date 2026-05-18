@@ -124,7 +124,6 @@ class ModelConfig(BaseModel):
 class ProactiveConfig(BaseModel):
     """自律的会話（自発発話）機能の設定。"""
 
-    enabled: bool = False
     check_interval_sec: float = 5.0
     min_interval_sec: float = 30.0
     max_interval_sec: float = 300.0

@@ -74,16 +74,7 @@ class MemoryManager:
             )
             return
 
-        proactive = self._proactive_config
-        do_proactive = True
-        if proactive is None:
-            do_proactive = False
-        elif isinstance(proactive, dict):
-            do_proactive = proactive.get("enabled", True)
-        else:
-            do_proactive = getattr(proactive, "enabled", True)
-
-        if do_proactive:
+        if self._proactive_config is not None:
             self._event_bus.publish(
                 InputReady(
                     timestamp=None,

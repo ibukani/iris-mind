@@ -13,7 +13,6 @@ memory:
     semantic_path: .iris/data/semantic.jsonl
     vector_db_path: .iris/data/chroma_db
 proactive:
-    enabled: true
     check_interval_sec: 5.0
     min_interval_sec: 30.0
     max_interval_sec: 300.0

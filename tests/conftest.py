@@ -494,7 +494,6 @@ def minimal_config() -> Config:
 @pytest.fixture
 def proactive_config() -> ProactiveConfig:
     return ProactiveConfig(
-        enabled=True,
         check_interval_sec=5.0,
         min_interval_sec=60.0,
         max_interval_sec=600.0,

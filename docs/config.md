@@ -62,7 +62,6 @@ Config
 
 | フィールド | 型 | デフォルト | 説明 |
 |-----------|-----|-----------|------|
-| enabled | bool | False | 自発発話機能の有効/無効 |
 | check_interval_sec | float | 5.0 | TimerTick 間隔（秒） |
 | min_interval_sec | float | 30.0 | 自発発話の最小間隔 |
 | max_interval_sec | float | 300.0 | 自発発話の最大間隔（時間スコア飽和） |
@@ -161,7 +160,6 @@ model:
 #   temperature: 0.7
 
 proactive:
-  enabled: false
   check_interval_sec: 5.0
   speak_threshold: 0.60
   trigger_weights:

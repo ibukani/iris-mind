@@ -158,7 +158,6 @@ def test_default_values() -> None:
 
 def test_proactive_config_defaults() -> None:
     config = ProactiveConfig()
-    assert config.enabled is False
     assert config.check_interval_sec == 5.0
     assert config.min_interval_sec == 30.0
     assert config.speak_threshold == 0.6

@@ -25,6 +25,7 @@ from iris.kernel.config import ModelConfig
 logger = logging.getLogger(__name__)
 _MAX_RETRIES = 3
 _RETRY_BACKOFF_SECONDS = 0.5
+_CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
 class OllamaProvider:
@@ -263,7 +264,7 @@ def _restart_ollama():
         ["ollama", "serve"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-        creationflags=subprocess.CREATE_NO_WINDOW,
+        creationflags=_CREATE_NO_WINDOW,
     )
     time.sleep(5)
 

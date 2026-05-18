@@ -1,10 +1,15 @@
 from __future__ import annotations
 
+import json
 import logging
+from typing import TYPE_CHECKING
 
 from iris.memory.hippocampal.reflexion import Reflexion
 from iris.memory.manager import MemoryManager
 from iris.memory.personality.persona_profile import PersonaProfile
+
+if TYPE_CHECKING:
+    from iris.memory.personality.big_five import BigFiveProfile
 
 logger = logging.getLogger(__name__)
 
@@ -15,11 +20,13 @@ class HippocampalManager:
         reflexion: Reflexion | None = None,
         memory: MemoryManager | None = None,
         persona_profile: PersonaProfile | None = None,
+        big_five: BigFiveProfile | None = None,
         reflect_interval: int = 3,
     ) -> None:
         self._reflexion = reflexion
         self._memory = memory
         self._persona_profile = persona_profile
+        self._big_five = big_five
         self._reflect_interval = reflect_interval
 
     def maybe_run(self, messages: list[dict], msg_count_since_reflect: int) -> int:
@@ -53,6 +60,18 @@ class HippocampalManager:
                 )
             if self._persona_profile is not None:
                 self._persona_profile.update_from_reflection(result)
+
+            if self._big_five is not None:
+                bf_raw = result.get("big_five_estimate")
+                if bf_raw and isinstance(bf_raw, str):
+                    try:
+                        estimate = json.loads(bf_raw) if isinstance(bf_raw, str) else bf_raw
+                        if isinstance(estimate, dict):
+                            changes = self._big_five.update_from_estimate(estimate)
+                            if changes:
+                                logger.info("Big Five updated: %s", changes)
+                    except (json.JSONDecodeError, TypeError):
+                        logger.debug("Could not parse big_five_estimate: %s", bf_raw)
 
             logger.info(
                 "Quick reflect stored: speech_style=%s traits=%s reaction=%s",

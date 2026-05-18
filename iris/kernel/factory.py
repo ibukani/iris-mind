@@ -24,6 +24,7 @@ from iris.llm.llm_bridge import LLMBridge, create_provider
 from iris.memory.hippocampal.manager import HippocampalManager
 from iris.memory.hippocampal.reflexion import Reflexion
 from iris.memory.manager import MemoryManager
+from iris.memory.personality.big_five import BigFiveProfile
 from iris.memory.personality.persona_data import PersonaData
 from iris.memory.personality.persona_profile import PersonaProfile
 from iris.memory.personality.personality import Personality
@@ -97,7 +98,9 @@ class KernelFactory:
         # ============================================================
         # Phase 3: 大脳辺縁系 (感情エンジン)
         # ============================================================
+        big_five = BigFiveProfile.load()
         limbic = LimbicManager(event_bus=event_bus)
+        limbic.set_big_five(big_five)
 
         # ============================================================
         # Phase 4: LLM・パーソナリティ
@@ -130,6 +133,7 @@ class KernelFactory:
             inhibition=inhibition,
             scoring=scoring,
             limbic=limbic,
+            big_five=big_five,
         )
 
         # ============================================================
@@ -222,6 +226,7 @@ class KernelFactory:
         inhibition: InhibitionController,
         scoring: ProactiveScoring,
         limbic: LimbicManager | None = None,
+        big_five: BigFiveProfile | None = None,
     ) -> AgencyManager:
         personality = Personality(name=config.personality.name, prompt_file=config.personality.prompt_file)
         capability_checker = CapabilityChecker(config=config.model)
@@ -236,6 +241,7 @@ class KernelFactory:
             reflexion=reflexion,
             memory=memory,
             persona_profile=persona_profile,
+            big_five=big_five,
             reflect_interval=3,
         )
 

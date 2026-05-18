@@ -3,7 +3,13 @@ from __future__ import annotations
 from collections.abc import Callable
 import logging
 import time
-from typing import Any, TypedDict
+from typing import Any, Protocol, TypedDict, runtime_checkable
+
+from iris.event.event_types import InputReceived, TimerTick
+from iris.limbic.acc import AnteriorCingulateCortex
+from iris.limbic.amygdala import Amygdala
+from iris.limbic.emotional_memory import EmotionalMemory
+from iris.limbic.models import EmotionState
 
 
 class _MoodEntry(TypedDict):
@@ -11,11 +17,13 @@ class _MoodEntry(TypedDict):
     text: str
     short: str
 
-from iris.event.event_types import InputReceived, TimerTick
-from iris.limbic.acc import AnteriorCingulateCortex
-from iris.limbic.amygdala import Amygdala
-from iris.limbic.emotional_memory import EmotionalMemory
-from iris.limbic.models import EmotionState
+
+@runtime_checkable
+class BigFiveProvider(Protocol):
+    """Big Five スコア提供インターフェース（循環import回避）。"""
+
+    def get_scores(self) -> dict[str, float]: ...
+
 
 logger = logging.getLogger(__name__)
 
@@ -86,7 +94,7 @@ class LimbicManager:
         self._acc = acc or AnteriorCingulateCortex()
         self._emotional_memory = emotional_memory or EmotionalMemory()
         self._emotion = EmotionState()
-        self._big_five: dict | None = None
+        self._big_five_provider: BigFiveProvider | None = None
 
         self._last_decay_time: float = time.time()
 
@@ -99,7 +107,7 @@ class LimbicManager:
             return
         self._decay()
         delta = self._amygdala.evaluate(event.content)
-        adjusted = self._acc.regulate(delta, self._emotion, self._big_five)
+        adjusted = self._acc.regulate(delta, self._emotion, self._get_big_five_scores())
         self._emotion.apply(adjusted)
         self._emotional_memory.tag(event.content[:200], self._emotion)
         logger.debug(
@@ -182,6 +190,21 @@ class LimbicManager:
             "recent_tags": self._emotional_memory.get_recent_tags(3),
         }
 
-    def set_big_five(self, big_five: dict | None) -> None:
-        """Big Five 性格スコアを設定する (Phase 2)。"""
-        self._big_five = big_five
+    def _get_big_five_scores(self) -> dict[str, float] | None:
+        if self._big_five_provider is not None:
+            return self._big_five_provider.get_scores()
+        return None
+
+    def set_big_five(self, big_five: BigFiveProvider | dict | None) -> None:
+        """Big Five 性格スコアソースを設定する (Phase 2)。"""
+        if isinstance(big_five, dict):
+
+            class _StaticProvider:
+                def get_scores(self) -> dict[str, float]:
+                    return big_five  # type: ignore[return-value]
+
+            self._big_five_provider = _StaticProvider()
+        elif isinstance(big_five, BigFiveProvider):
+            self._big_five_provider = big_five
+        else:
+            self._big_five_provider = None

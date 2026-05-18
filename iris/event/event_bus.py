@@ -21,11 +21,23 @@ class EventBusProtocol(Protocol):
 
 
 class EventBus:
+    """グローバル イベントバス。全層間の疎結合通信を実現する。
+
+    publisher は event を publish し、
+    subscriber は event_type 別に handler を登録して受信する。
+    スレッドセーフ。
+    """
+
     def __init__(self) -> None:
         self._subscribers: dict[str, list[Callable]] = defaultdict(list)
         self._lock: threading.Lock = threading.Lock()
 
     def publish(self, event: Event) -> None:
+        """イベントを全購読者に配信する。
+
+        Args:
+            event: 発行するイベント。timestamp と trace_id は自動付与される。
+        """
         if event.timestamp is None:
             event.timestamp = datetime.now(UTC)
         if not event.trace_id:
@@ -44,9 +56,21 @@ class EventBus:
                 )
 
     def subscribe(self, event_type: str, handler: Callable) -> None:
+        """イベント型に対するハンドラを登録する。
+
+        Args:
+            event_type: 購読するイベント型の名前。
+            handler: イベント発生時に呼び出される関数。
+        """
         with self._lock:
             self._subscribers[event_type].append(handler)
 
     def unsubscribe(self, event_type: str, handler: Callable) -> None:
+        """ハンドラの登録を解除する。
+
+        Args:
+            event_type: 対象のイベント型。
+            handler: 登録解除するハンドラ関数。
+        """
         with self._lock, suppress(ValueError):
             self._subscribers[event_type].remove(handler)

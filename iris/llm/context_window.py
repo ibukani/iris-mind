@@ -53,6 +53,21 @@ class LLMContextWindowManager:
         threshold: float = 0.85,
         preserve_last: int = 6,
     ) -> str:
+        """会話履歴がコンテキストウィンドウ制限に接近した場合、LLM要約で圧縮する。
+
+        古い履歴（preserve_last 以外）を LLM で要約し、summary プロパティに保存する。
+        要約文は、その後の chat() 呼び出しで session summary として
+        システムプロンプトに注入される。
+
+        Args:
+            messages: 会話履歴（role/content のリスト）。
+            context_window: LLM の context_window 上限（トークン数）。
+            threshold: 圧縮トリガー閾値（デフォルト 85% = context_window * 0.85）。
+            preserve_last: 直近 N 件のメッセージは圧縮対象外（デフォルト 6）。
+
+        Returns:
+            現在の session summary（自動更新された要約文、または前回の要約）。
+        """
         if context_window <= 0:
             return self._summary
         if len(messages) <= preserve_last:

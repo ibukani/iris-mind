@@ -259,6 +259,7 @@ class KernelFactory:
             context_window=config.model.context_window,
             hippocampal=hippocampal,
             monitor=monitor,
+            inhibition=inhibition,
             session_roles_getter=session_mgr.get_roles_summary,
         )
 

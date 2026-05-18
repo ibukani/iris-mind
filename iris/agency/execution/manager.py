@@ -4,6 +4,7 @@ from collections.abc import Callable
 import logging
 
 from iris.agency.bus import InternalBus, PlanDecided
+from iris.agency.execution.inhibition import InhibitionController
 from iris.agency.execution.monitor import OutputMonitor
 from iris.agency.execution.pipeline import LLMPipeline
 from iris.event.event_bus import EventBus
@@ -24,6 +25,7 @@ class ExecutionManager:
         context_window: int = 0,
         hippocampal: HippocampalManager | None = None,
         monitor: OutputMonitor | None = None,
+        inhibition: InhibitionController | None = None,
         session_roles_getter: Callable[[], str] | None = None,
     ) -> None:
         self._bus = internal_bus
@@ -33,13 +35,34 @@ class ExecutionManager:
         self._context_window = context_window
         self._hippocampal = hippocampal
         self._monitor = monitor
+        self._inhibition = inhibition
         self._session_roles_getter = session_roles_getter
         self._messages: list[dict] = []
         self._msg_count_since_reflect = 0
         self._bus.subscribe("PlanDecided", self._on_plan)
 
     def _on_plan(self, event: PlanDecided) -> None:
+        if self._monitor and event.plan.get("content", ""):
+            self._monitor.record_user_input()
+        self._apply_talkative_overrides(event.plan)
         self._execute_general(event.plan)
+
+    @staticmethod
+    def _apply_talkative_overrides(plan: dict) -> None:
+        degree = plan.pop("talkative_degree", 0)
+        if degree <= 0:
+            return
+        if degree >= 1:
+            plan["abbreviated"] = True
+        if degree >= 2:
+            plan["max_tokens"] = min(plan.get("max_tokens", 0) or 120, 60)
+            plan["tools_allowed"] = False
+        if degree >= 3:
+            plan["run_reflexion"] = False
+            plan["run_compression"] = False
+        if degree >= 5:
+            plan["streaming"] = False
+            plan["show_thinking"] = False
 
     def _execute_general(self, plan: dict) -> None:
         session_id = plan.get("session_id", "")
@@ -110,7 +133,8 @@ class ExecutionManager:
             self._context_window_mgr.check_and_summarize(self._messages, self._context_window)
 
         if self._monitor:
-            self._monitor.record_output()
+            flags = self._monitor.record_output()
+            self._handle_monitor_flags(flags)
 
         if show_thinking:
             self._event_bus.publish(
@@ -133,6 +157,14 @@ class ExecutionManager:
                 content=response_text,
             )
         )
+
+    def _handle_monitor_flags(self, flags: list[str]) -> None:
+        if "talkative" in flags and self._monitor and self._inhibition:
+            degree = self._monitor.talkative_degree
+            self._inhibition.apply_frequency_penalty(degree)
+            logger.debug("Applied frequency penalty: degree=%d", degree)
+        if "frequency_exceeded" in flags and self._inhibition:
+            self._inhibition.apply_frequency_penalty(1)
 
     def compact_context(self) -> str:
         if self._context_window_mgr is None:

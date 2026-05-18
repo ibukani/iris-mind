@@ -143,6 +143,20 @@ class InhibitionController:
         self._consecutive_ignores = 0
         self._confirmation_mode = False
 
+    def apply_frequency_penalty(self, degree: int) -> None:
+        if degree <= 0:
+            return
+        base_cooldown = 600.0
+        extra = base_cooldown * (2**degree - 1)
+        self._cooldown_until = time.time() + extra
+        self._negative_mood_score = min(1.0, degree * 0.15)
+        logger.info(
+            "Frequency penalty applied: degree=%d cooldown=%.0fs mood=%.2f",
+            degree,
+            extra,
+            self._negative_mood_score,
+        )
+
     def set_cooldown(self, duration_sec: float = 600.0) -> None:
         self._cooldown_until = time.time() + duration_sec
         logger.info("Proactive cooldown set for %.0f seconds", duration_sec)

@@ -9,7 +9,7 @@
 - **PlanningManager** がグローバル EventBus から `InputReady` を直接購読（AgencyManager は中継しない）
 - 意思決定（planning）: PFC が入力に対して何を行うか決定する
 - PFC スコアリング（ProactiveScoring）: 自発発話の価値を時間・記憶・文脈・感情の4因子で評価
-- 基底核抑制（InhibitionController）: 行動の抑制を mood / confirmation / cooldown で制御
+- 基底核抑制（InhibitionController）: 行動の抑制を mood / confirmation / cooldown / **limbic 変調** で制御
 - 行動実行（execution）: 決定された計画を LLM・Tool を用いて実行する
 
 ## Internal Bus
@@ -46,17 +46,19 @@ sequenceDiagram
 
     alt ユーザー入力
         EB-->>PL: InputReady(content, from_timer=False)
+        PL->>PL: limbic.apply_limbic_modulation()  (Phase 4)
         PL->>PL: _inhibition.evaluate(now)
         PL->>PL: notify_user_activity()
-        PL->>PL: _build_plan(content, context, gate)
+        PL->>PL: _build_plan(content, context, gate, limbic_mood)
     else 自発発話トリガー
         EB-->>PL: InputReady(content="", from_timer=True)
+        PL->>PL: limbic.apply_limbic_modulation()  (Phase 4)
         PL->>PL: _inhibition.evaluate(now)
         PL->>PL: suppressed? → abort
-        PL->>PL: ProactiveScoring.compute()
+        PL->>PL: ProactiveScoring.compute(limbic_mood=...)
         PL->>PL: threshold? → abort
         PL->>PL: record_proactive_attempt()
-        PL->>PL: _build_plan(content="", context, gate)
+        PL->>PL: _build_plan(content="", context, gate, limbic_mood)
     end
 
     PL->>IB: PlanDecided(plan)
@@ -79,10 +81,11 @@ class PlanningManager:
     # subscribe: InputReady (global EventBus を直接購読)
 
     def _on_input_ready(self, event: InputReady) -> None
-        # 1. gate = inhibition.evaluate(now)
-        # 2. from_timer → scoring + threshold → abort or plan
-        # 3. !from_timer → notify_user_activity()
-        # 4. _build_plan(content, context, gate) → PlanDecided
+        # 1. limbic.apply_limbic_modulation(emotion) → 感情変調 (Phase 4)
+        # 2. gate = inhibition.evaluate(now)
+        # 3. from_timer → scoring + threshold → abort or plan
+        # 4. !from_timer → notify_user_activity()
+        # 5. _build_plan(content, context, gate, limbic_mood) → PlanDecided
 ```
 
 ### ProactiveScoring（PFC スコアリング）
@@ -91,14 +94,16 @@ class PlanningManager:
 
 ```python
 class ProactiveScoring:
-    """4因子を重み付け統合:
+    """4因子を重み付け統合 (Phase 4: mood因子がPAD対応):
     - time: 前回の行動からの経過時間
     - memory: 長期記憶との関連性
     - context: 直近会話の文脈的一貫性
-    - mood: 感情状態
+    - mood: 感情状態（limbic_mood dict: valence/arousal/dominance → PAD加重スコア）
     """
-    def compute(self, now, last_proactive_time, last_user_activity, negative_mood_score) -> tuple[float, dict]:
-        # 重み付き統合スコア ＋ 各因子の内訳
+    def compute(self, now, last_proactive_time, last_user_activity, negative_mood_score,
+                limbic_mood: dict | None = None) -> tuple[float, dict]:
+        # limbic_mood あり → PAD 3次元の重み付きスコアリング
+        # limbic_mood なし → 従来の negative_mood_score ベース
 ```
 
 ### Plan 定義
@@ -118,6 +123,10 @@ plan は dict で表現され、`action` フィールドを持たない。動作
 | `record_history` | bool | 会話履歴への保存の有無 |
 | `max_tokens` | int | 最大出力トークン数 |
 | `temperature` | float | 生成温度 |
+
+**感情による動的調整 (Phase 4)**: `PlanningManager._apply_emotion_to_plan()` が
+PAD 感情状態に応じて temperature/max_tokens/abbreviated/tools_allowed を上書きする。
+例: valence < -0.3 → 短文+高温度（ぶっきらぼう）、arousal > 0.6 → 低温度+短文（興奮）。
 
 ```mermaid
 flowchart LR

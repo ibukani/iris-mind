@@ -35,6 +35,18 @@ class MemoryManager:
     def search(self, query: str, stream: MemoryStream | None = None, **kwargs) -> list[dict]
         """cross-stream 検索。"""
 
+    def search_emotional(self, emotion: dict, max_results: int = 5) -> list[dict]
+        """感情状態に近い記憶を PAD 距離×強度でランク付け (Phase 3)。"""
+
+    def get_user_preferences(self) -> list[dict]
+        """ユーザーの好み・関心事を意味記憶から検索 (Phase 2)。"""
+
+    def get_recent(self, n: int = 5) -> list[dict]
+        """直近 n 件のエピソード記憶を返す。"""
+
+    def get_status(self) -> dict
+        """デバッグ用ステータス。"""
+
     def clear(self, stream: MemoryStream | None = None) -> None
         """stream 指定があればその stream をクリア。"""
 ```
@@ -94,6 +106,7 @@ class SemanticStore:
 class Reflexion:
     """海馬による記憶整理。
     完了した会話を分析し、話し方・性格・教訓・好みを抽出 → 意味記憶へ格納。
+    quick_reflect は big_five_estimate フィールドを含む dict を返す (Phase 2)。
     """
     def reflect(self, conversation_history: list[dict]) -> dict
     def quick_reflect(self, conversation_slice: list[dict]) -> dict
@@ -101,10 +114,27 @@ class Reflexion:
 class HippocampalManager:
     """Reflexion のスケジューリングと結果の永続化。
     ExecutionManager 発話後カウンタに応じて quick_reflect を実行。
+    BigFiveProfile.update_from_estimate() を呼び、性格を動的進化させる (Phase 2)。
     """
     def maybe_run(self, messages: list[dict], counter: int) -> int
     def run_session(self, messages: list[dict]) -> None
 ```
+
+### Big Five 性格プロファイル
+
+`iris/memory/personality/big_five.py` (Phase 2) — 安定した性格特性（Big Five OCEAN 0-100）を管理。
+
+```python
+class BigFiveProfile:
+    """OCEAN 5因子 + PEM (Personality Evolution Mechanism) による動的進化。
+    .iris/data/big_five.json に永続化。
+    """
+    def get_scores(self) -> dict[str, float]       # OCEAN 各因子スコア
+    def update_from_estimate(self, estimate: dict) -> dict | None  # PEM: p_new = λ·p_old + (1-λ)·p_turn
+    def get_summary(self) -> str                    # システムプロンプト注入用
+```
+
+PEM 式: `p_new = λ · p_old + (1-λ) · p_turn` (λ=0.95)。`HippocampalManager` が Reflexion の `big_five_estimate` 結果を渡す。閾値超の変化は EpisodicStore に記録され、ACC の Neuroticism/Agreeableness/Extraversion 変調に利用される。`LimbicManager` は BigFiveProvider Protocol 経由でスコアを取得し、ACC 変調に使用する。
 
 注意: ContextManager は会話履歴圧縮の工学的ユーティリティとして
 `iris/llm/context_window.py` に移動した。脳科学マッピング対象外。
@@ -132,6 +162,23 @@ class PersonaProfile:
     def get_traits(self) -> str
     def update_from_reflection(self, result: dict) -> None
 ```
+
+### 感情タグ付け (扁桃体-海馬相互作用)
+
+`iris/limbic/emotional_memory.py` (Phase 3) — EpisodicStore/SemanticStore のエントリに PAD 感情タグを付与。
+
+```python
+class EmotionalMemory:
+    """感情強度が閾値を超えた入力を EpisodicStore/SemanticStore に自動永続化。
+    感情タグ (valence/arousal/dominance/intensity) を metadata として付与。
+    """
+    def tag(self, content: str, emotion: EmotionState) -> None      # 感情タグ付与 (intensity > 0.15 のみ保存)
+    def search_by_emotion(self, target: EmotionState, max_results: int = 5) -> list[dict]
+    def get_recent_tags(self, n: int = 3) -> list[dict]
+```
+
+`MemoryManager.search_emotional()` は感情タグ付きエントリを強度/類似度でフィルタする。
+`LimbicManager` が EventBus の `InputReceived` を購読し、入力評価後に自動タグ付けを行う。
 
 ### vector/
 

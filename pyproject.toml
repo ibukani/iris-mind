@@ -37,7 +37,16 @@ line-length = 120
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "ARG", "PTH", "D", "PERF", "PIE", "RUF", "S"]
-ignore = ["D100", "D104", "D105", "D107", "S101"]
+# docstring ルール: 重要なpublic関数のみ（Pythonではすべてのクラス/関数に必須ではない）
+# D100: モジュールトップの docstring → 不要
+# D101: public class → 型ヒント + クラス名で十分
+# D102: public method → trivialなメソッドが多すぎるため除外
+# D103: public function → パッケージ内の小さな関数も多いため除外
+# D104: パッケージ __init__ の docstring → 不要
+# D105: __dunder_method__ → __init__ は別、其他は不要
+# D107: __init__ の docstring → 型ヒントで十分
+# D415: First line should end with period → 日本語docstringが多いため除外
+ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D107", "D415", "S101"]
 
 [tool.ruff.lint.isort]
 force-single-line = false

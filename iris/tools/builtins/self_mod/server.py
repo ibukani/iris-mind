@@ -2,7 +2,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from iris.tools.decorator import tool
+from iris.tools.decorator import register_tools, tool
 
 
 @tool(allowed_roles={"smart"})
@@ -55,6 +55,4 @@ def _sandbox_test(filepath: Path) -> dict:
 
 
 def register(registry):
-    registry.register_decorated(generate_capability)
-    registry.register_decorated(modify_file)
-    registry.register_decorated(sandbox_test)
+    register_tools(registry, generate_capability, modify_file, sandbox_test)

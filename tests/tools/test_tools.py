@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from iris.tools.decorator import _generate_schema, get_tool_def, tool
+from iris.tools.decorator import _generate_schema, get_tool_def, register_tools, tool
 from iris.tools.models import ToolDef
 from iris.tools.registry import ToolRegistry
 
@@ -104,8 +104,8 @@ def test_tool_decorator_allowed_roles() -> None:
 
 
 def test_generate_schema_str_int() -> None:
-    def fn(name: str, count: int = 1) -> str:  # type: ignore[empty-body]
-        ...
+    def fn(name: str, count: int = 1) -> str:
+        return f"{name}:{count}"
 
     schema = _generate_schema(fn)
     assert schema["properties"]["name"]["type"] == "string"
@@ -114,8 +114,8 @@ def test_generate_schema_str_int() -> None:
 
 
 def test_generate_schema_descriptions() -> None:
-    def fn(x: str) -> str:  # type: ignore[empty-body]
-        ...
+    def fn(x: str) -> str:
+        return x
 
     schema = _generate_schema(fn, descriptions={"x": "The input value"})
     assert schema["properties"]["x"]["description"] == "The input value"
@@ -167,3 +167,20 @@ def test_registry_is_side_effect() -> None:
     assert r.is_side_effect("side") is True
     assert r.is_side_effect("normal") is False
     assert r.is_side_effect("unknown") is False
+
+
+def test_register_tools_helper() -> None:
+    r = ToolRegistry()
+
+    @tool()
+    def first() -> str:
+        return "first"
+
+    @tool()
+    def second() -> str:
+        return "second"
+
+    register_tools(r, first, second)
+
+    assert r.get("first") is not None
+    assert r.get("second") is not None

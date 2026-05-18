@@ -95,3 +95,8 @@ def register_decorated_tools(module: object, registry: Any) -> None:
         obj = getattr(module, _name)
         if hasattr(obj, "_tool_def"):
             registry.register_decorated(obj)
+
+
+def register_tools(registry: Any, *functions: Callable) -> None:
+    for fn in functions:
+        registry.register_decorated(fn)

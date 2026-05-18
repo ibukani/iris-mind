@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
-from iris.tools.decorator import tool
+from iris.tools.decorator import register_tools, tool
 
 logger = logging.getLogger(__name__)
 
@@ -29,4 +29,4 @@ def output_to(destination: str, content: str) -> str:
 
 
 def register(registry):
-    registry.register_decorated(output_to)
+    register_tools(registry, output_to)

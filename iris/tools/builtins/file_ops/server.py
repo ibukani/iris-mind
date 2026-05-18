@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from iris.tools.decorator import tool
+from iris.tools.decorator import register_tools, tool
 
 
 @tool(allowed_roles={"base", "smart"})
@@ -35,6 +35,4 @@ def list_files(path: str = ".") -> str:
 
 
 def register(registry):
-    registry.register_decorated(read_file)
-    registry.register_decorated(write_file)
-    registry.register_decorated(list_files)
+    register_tools(registry, read_file, write_file, list_files)

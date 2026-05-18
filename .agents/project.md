@@ -15,8 +15,10 @@
 - `iris/kernel/` はドメイン層。外部サービス実装を直接持ち込まない。
 - `iris/llm/`, `iris/tools/` は kernel へ注入されるインフラ層。
 - `iris/memory/` は記憶系層。過去のインフラ層から昇格。
+- `iris/limbic/` は感情系層（大脳辺縁系）。EventBus 経由で全層と疎結合。
 - `iris/io/`, `iris/agency/`, `iris/event/` は kernel から分離された独立層。
 - 全層は EventBus (`iris/event/`) を介して疎結合。
+- `limbic/` → `memory/`（感情タグ）, `limbic/` → `agency/`（感情変調）のインターフェースを持つ。
 - `debug_tools/` は `iris/` に依存してよいが、`iris/` から `debug_tools/` へ依存しない。
 - IPC とプロセス設計の詳細は `docs/architecture.md` と `docs/adr/` を読む。
 

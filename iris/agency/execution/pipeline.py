@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import logging
+from typing import TYPE_CHECKING
 
 from iris.agency.execution.interrupt_token import InterruptToken
 from iris.agency.execution.tool_executor import ToolExecutionEngine
@@ -12,6 +13,9 @@ from iris.memory.manager import MemoryManager
 from iris.memory.personality.persona_profile import PersonaProfile
 from iris.memory.personality.personality import Personality
 from iris.memory.stores import AgentsMdStore
+
+if TYPE_CHECKING:
+    from iris.limbic.manager import LimbicManager
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +37,7 @@ class LLMPipeline:
         agents_md_store: AgentsMdStore | None = None,
         persona_profile: PersonaProfile | None = None,
         memory: MemoryManager | None = None,
+        limbic: LimbicManager | None = None,
         tool_executor: ToolExecutionEngine | None = None,
         capability_checker: CapabilityChecker | None = None,
         governance_principles: str = "",
@@ -43,6 +48,7 @@ class LLMPipeline:
         self._agents_md_store = agents_md_store
         self._persona_profile = persona_profile
         self._memory = memory
+        self._limbic = limbic
         self._tool_executor = tool_executor
         self._capability_checker = capability_checker
         self._governance_principles = governance_principles
@@ -90,6 +96,15 @@ class LLMPipeline:
 
         if dynamic_personality:
             prompt += f"\n\n{dynamic_personality}"
+
+        if self._limbic:
+            mood_desc = self._limbic.build_mood_description()
+            if mood_desc:
+                prompt += f"\n\n## 現在の気分\n{mood_desc}"
+            style = self._limbic.build_response_style()
+            if style:
+                prompt += f"\n\n{style}"
+
         if context_hint:
             prompt += f"\n\n## 会話コンテキスト\n{context_hint}"
         return prompt

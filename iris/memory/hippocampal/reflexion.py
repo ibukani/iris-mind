@@ -13,7 +13,7 @@ class Reflexion:
         self._llm = llm
         self._compact_model = compact_model
 
-    def reflect(self, conversation_history: list[dict]) -> dict[str, str]:
+    def reflect(self, conversation_history: list[dict]) -> dict[str, str | None]:
         if len(conversation_history) < 2:
             return self._empty()
 
@@ -30,7 +30,10 @@ class Reflexion:
                     "6. speech_style: Irisの口調・話し方の特徴（日本語で、または空文字）\n"
                     "7. expressed_traits: Irisがこの会話で発現させた性格特性（日本語で、または空文字）\n"
                     "8. user_reaction: ユーザーの反応傾向（日本語で、または空文字）\n"
-                    "Respond in JSON only. All values must be in Japanese."
+                    "9. big_five_estimate: JSON object with OCEAN scores (0-100, e.g. "
+                    '{"openness":60,"conscientiousness":45,"extraversion":70,"agreeableness":55,"neuroticism":30}) '
+                    "based on Iris's personality in this conversation. "
+                    "All other values must be in Japanese."
                 ),
             },
             {
@@ -51,7 +54,7 @@ class Reflexion:
         raw = resp.get("message", {}).get("content")
         content = raw if isinstance(raw, str) else ""
         try:
-            result: dict[str, str] = json.loads(content)
+            result: dict[str, str | None] = json.loads(content)
             return result
         except (json.JSONDecodeError, TypeError):
             return {
@@ -63,11 +66,12 @@ class Reflexion:
                 "speech_style": "",
                 "expressed_traits": "",
                 "user_reaction": "",
+                "big_five_estimate": None,
             }
 
-    def quick_reflect(self, conversation_slice: list[dict]) -> dict[str, str]:
+    def quick_reflect(self, conversation_slice: list[dict]) -> dict[str, str | None]:
         if len(conversation_slice) < 2:
-            return {"speech_style": "", "expressed_traits": "", "user_reaction": ""}
+            return {"speech_style": "", "expressed_traits": "", "user_reaction": "", "big_five_estimate": None}
 
         msgs = [
             {
@@ -78,6 +82,9 @@ class Reflexion:
                     "1. speech_style: Irisの口調の特徴 (日本語、短く)\n"
                     "2. expressed_traits: Irisが発現させた性格特性 (日本語、短く)\n"
                     "3. user_reaction: ユーザーの反応傾向 (日本語、短く)\n"
+                    "4. big_five_estimate: JSON for OCEAN scores (0-100, e.g. "
+                    '{"openness":60,"conscientiousness":45,"extraversion":70,"agreeableness":55,"neuroticism":30}) '
+                    "based on Iris's personality in this snippet.\n"
                     "Respond in JSON only."
                 ),
             },
@@ -99,17 +106,17 @@ class Reflexion:
         raw = resp.get("message", {}).get("content")
         content = raw if isinstance(raw, str) else ""
         try:
-            result: dict[str, str] = json.loads(content)
+            result: dict[str, str | None] = json.loads(content)
             return result
         except (json.JSONDecodeError, TypeError):
-            return {"speech_style": "", "expressed_traits": "", "user_reaction": ""}
+            return {"speech_style": "", "expressed_traits": "", "user_reaction": "", "big_five_estimate": None}
 
     @staticmethod
-    def should_add_capability(reflection: dict[str, str]) -> bool:
+    def should_add_capability(reflection: dict[str, str | None]) -> bool:
         return bool(reflection.get("missing_capability"))
 
     @staticmethod
-    def _empty() -> dict[str, str]:
+    def _empty() -> dict[str, str | None]:
         return {
             "summary": "",
             "lesson": "",
@@ -119,4 +126,5 @@ class Reflexion:
             "speech_style": "",
             "expressed_traits": "",
             "user_reaction": "",
+            "big_five_estimate": None,
         }

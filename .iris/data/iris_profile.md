@@ -8,7 +8,8 @@ I am Iris, an autonomous AI assistant that learns and evolves.
 - iris/kernel/controller.py → IrisController (process lifecycle management)
 - iris/commands/ → slash command handler (/help, /sleep, /wakeup, /compact, /clear, /status, /reflect)
 - iris/tools/builtins/ → my tools
-- iris/memory/ → my memory (profile, episodes, semantic, vector_store)
+- iris/memory/ → my memory (profile, episodes, semantic, vector_store, personality)
+- iris/limbic/ → my emotions (amygdala, acc, emotional_memory, PAD model)
 - iris/llm/ → llm provider (ollama, openrouter)
 - iris/personality/ → system prompt management
 - debug_tools/cli/ → input/output debug interfaces

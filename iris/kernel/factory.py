@@ -17,12 +17,15 @@ from iris.io.manager import IOManager
 from iris.io.session.manager import SessionConfig, SessionManager
 from iris.io.transport.tcp_listener import TcpListener
 from iris.kernel.commands.handler import CommandHandler
+from iris.limbic.emotional_memory import EmotionalMemory
+from iris.limbic.manager import LimbicManager
 from iris.llm.capability_checker import CapabilityChecker
 from iris.llm.context_window import LLMContextWindowManager
 from iris.llm.llm_bridge import LLMBridge, create_provider
 from iris.memory.hippocampal.manager import HippocampalManager
 from iris.memory.hippocampal.reflexion import Reflexion
 from iris.memory.manager import MemoryManager
+from iris.memory.personality.big_five import BigFiveProfile
 from iris.memory.personality.persona_data import PersonaData
 from iris.memory.personality.persona_profile import PersonaProfile
 from iris.memory.personality.personality import Personality
@@ -43,6 +46,7 @@ class KernelContext:
     event_bus: EventBus
     kernel: KernelManager
     io: IOManager
+    limbic: LimbicManager
     memory: MemoryManager
     agency: AgencyManager
     cmd_handler: CommandHandler
@@ -88,12 +92,37 @@ class KernelFactory:
         )
 
         # ============================================================
-        # Phase 2: 記憶レイヤー
+        # Phase 2: 記憶ストア構築（MemoryManager / EmotionalMemory で共用）
         # ============================================================
-        memory_mgr = KernelFactory._build_memory(event_bus, config)
+        mem_cfg = config.memory
+        episodic = EpisodicStore(path=mem_cfg.episodic_path, max_entries=mem_cfg.episodic_max_entries)
+        semantic = SemanticStore(
+            path=mem_cfg.semantic_path,
+            max_entries=mem_cfg.semantic_max_entries,
+            vector_db_path=mem_cfg.vector_db_path,
+        )
+        memory_mgr = KernelFactory._build_memory(
+            event_bus,
+            config,
+            episodic=episodic,
+            semantic=semantic,
+        )
 
         # ============================================================
-        # Phase 3: LLM・パーソナリティ
+        # Phase 3: 大脳辺縁系 (感情エンジン)
+        # ============================================================
+        big_five = BigFiveProfile.load()
+        limbic = LimbicManager(
+            event_bus=event_bus,
+            emotional_memory=EmotionalMemory(
+                episodic_store=episodic,
+                semantic_store=semantic,
+            ),
+        )
+        limbic.set_big_five(big_five)
+
+        # ============================================================
+        # Phase 4: LLM・パーソナリティ
         # ============================================================
         llm = KernelFactory._build_llm(config)
 
@@ -122,6 +151,8 @@ class KernelFactory:
             session_mgr,
             inhibition=inhibition,
             scoring=scoring,
+            limbic=limbic,
+            big_five=big_five,
         )
 
         # ============================================================
@@ -137,6 +168,7 @@ class KernelFactory:
             event_bus=event_bus,
             kernel=kernel_mgr,
             io=io_mgr,
+            limbic=limbic,
             memory=memory_mgr,
             agency=agency,
             cmd_handler=cmd_handler,
@@ -154,14 +186,21 @@ class KernelFactory:
         return ctx
 
     @staticmethod
-    def _build_memory(event_bus: EventBus, config: Config) -> MemoryManager:
+    def _build_memory(
+        event_bus: EventBus,
+        config: Config,
+        episodic: EpisodicStore | None = None,
+        semantic: SemanticStore | None = None,
+    ) -> MemoryManager:
         cfg = config.memory
-        episodic = EpisodicStore(path=cfg.episodic_path, max_entries=cfg.episodic_max_entries)
-        semantic = SemanticStore(
-            path=cfg.semantic_path,
-            max_entries=cfg.semantic_max_entries,
-            vector_db_path=cfg.vector_db_path,
-        )
+        if episodic is None:
+            episodic = EpisodicStore(path=cfg.episodic_path, max_entries=cfg.episodic_max_entries)
+        if semantic is None:
+            semantic = SemanticStore(
+                path=cfg.semantic_path,
+                max_entries=cfg.semantic_max_entries,
+                vector_db_path=cfg.vector_db_path,
+            )
         vector_store = VectorStore(path=cfg.vector_db_path)
         mem = MemoryManager(
             event_bus=event_bus,
@@ -212,6 +251,8 @@ class KernelFactory:
         session_mgr: SessionManager,
         inhibition: InhibitionController,
         scoring: ProactiveScoring,
+        limbic: LimbicManager | None = None,
+        big_five: BigFiveProfile | None = None,
     ) -> AgencyManager:
         personality = Personality(name=config.personality.name, prompt_file=config.personality.prompt_file)
         capability_checker = CapabilityChecker(config=config.model)
@@ -226,6 +267,7 @@ class KernelFactory:
             reflexion=reflexion,
             memory=memory,
             persona_profile=persona_profile,
+            big_five=big_five,
             reflect_interval=3,
         )
 
@@ -236,6 +278,7 @@ class KernelFactory:
             agents_md_store=agents_md_store,
             persona_profile=persona_profile,
             memory=memory,
+            limbic=limbic,
             tool_executor=tool_exec,
             capability_checker=capability_checker,
         )
@@ -247,6 +290,7 @@ class KernelFactory:
             scoring=scoring,
             config=config,
             memory=memory,
+            limbic=limbic,
         )
 
         monitor = OutputMonitor(internal_bus=internal_bus)

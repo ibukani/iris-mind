@@ -45,7 +45,7 @@ class PersonaProfile:
     def get_all_traits(self) -> list[dict]:
         return self.persona_data.get_all("personality_traits")
 
-    def update_from_reflection(self, reflection: dict):
+    def update_from_reflection(self, reflection: dict) -> None:
         speech = reflection.get("speech_style", "").strip()
         traits = reflection.get("expressed_traits", "").strip()
         if speech:
@@ -53,11 +53,11 @@ class PersonaProfile:
         if traits:
             self.persona_data.add_entry("personality_traits", traits)
 
-    def set_speech_style(self, text: str):
+    def set_speech_style(self, text: str) -> None:
         self.persona_data.add_entry("speech_style", text, source="manual")
 
-    def set_traits(self, text: str):
+    def set_traits(self, text: str) -> None:
         self.persona_data.add_entry("personality_traits", text, source="manual")
 
-    def reset(self):
+    def reset(self) -> None:
         self.persona_data.clear()

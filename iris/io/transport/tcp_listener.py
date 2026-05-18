@@ -25,7 +25,7 @@ class TcpListener:
         self._session_manager = session_manager
         self._on_input = on_input or self._noop
         self._on_interrupt = on_interrupt
-        self._listener: Any = None
+        self._listener: Listener | None = None
         self._running = False
         self._thread: threading.Thread | None = None
 

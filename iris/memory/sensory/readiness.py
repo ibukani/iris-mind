@@ -3,6 +3,8 @@ from __future__ import annotations
 import logging
 import re
 
+from iris.llm.provider import LLMProvider
+
 logger = logging.getLogger(__name__)
 
 _QUESTION_RE = re.compile(r"[？?]$")
@@ -14,7 +16,7 @@ class ReadinessEvaluator:
         min_fragments: int = 2,
         question_detect: bool = True,
         confidence_threshold: float = 0.6,
-        llm=None,
+        llm: LLMProvider | None = None,
         llm_model_role: str = "fast",
     ) -> None:
         self._min_fragments = min_fragments

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import logging
 
+from iris.llm.provider import LLMProvider
+
 logger = logging.getLogger(__name__)
 
 _COMPACT_PROMPT = """会話履歴を要約してください。作業継続に必要な情報のみ含めてください。
@@ -35,7 +37,7 @@ class LLMContextWindowManager:
     LLM の直近で動作するユーティリティとして llm 層に配置している。
     """
 
-    def __init__(self, llm=None, compact_model: str | None = None) -> None:
+    def __init__(self, llm: LLMProvider | None = None, compact_model: str | None = None) -> None:
         self._llm = llm
         self._compact_model = compact_model
         self._summary: str = ""

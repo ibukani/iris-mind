@@ -208,7 +208,7 @@ class Config(BaseModel):
             return cls.model_validate(raw)
         return cls()
 
-    def save(self, path: str):
+    def save(self, path: str) -> None:
         p = Path(path)
         p.write_text(
             yaml.dump(self.model_dump(mode="python"), default_flow_style=False, allow_unicode=True),

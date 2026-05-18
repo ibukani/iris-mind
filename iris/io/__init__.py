@@ -1,9 +1,12 @@
 from iris.io.models import (
+    COMMAND_MSG_TYPES,
     INPUT_MSG_TYPES,
     OUTPUT_STREAM_STATES,
     TCP_HOST,
     TCP_PORT,
     AuthMessage,
+    CommandInput,
+    CommandOutput,
     ConnectionMode,
     ControlMessage,
     InputMessage,
@@ -19,11 +22,14 @@ from iris.io.session.manager import SessionManager
 from iris.io.transport.tcp_listener import TcpListener
 
 __all__ = [
+    "COMMAND_MSG_TYPES",
     "INPUT_MSG_TYPES",
     "OUTPUT_STREAM_STATES",
     "TCP_HOST",
     "TCP_PORT",
     "AuthMessage",
+    "CommandInput",
+    "CommandOutput",
     "ConnectionMode",
     "ControlMessage",
     "InputMessage",

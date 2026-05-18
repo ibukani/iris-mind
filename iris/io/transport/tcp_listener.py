@@ -7,7 +7,15 @@ from multiprocessing.connection import Connection, Listener
 import threading
 from typing import Any
 
-from iris.io.models import INPUT_MSG_TYPES, TCP_HOST, TCP_PORT, InputMessage, InterruptMessage
+from iris.io.models import (
+    INPUT_MSG_TYPES,
+    TCP_HOST,
+    TCP_PORT,
+    CommandInput,
+    InputMessage,
+    InterruptMessage,
+    OutputMessage,
+)
 from iris.io.session.manager import SessionManager
 
 logger = logging.getLogger(__name__)
@@ -20,10 +28,12 @@ class TcpListener:
         self,
         session_manager: SessionManager,
         on_input: Callable[[InputMessage], None] | None = None,
+        on_command: Callable[[CommandInput], None] | None = None,
         on_interrupt: Callable[[str], None] | None = None,
     ) -> None:
         self._session_manager = session_manager
         self._on_input = on_input or self._noop
+        self._on_command = on_command
         self._on_interrupt = on_interrupt
         self._listener: Listener | None = None
         self._running = False
@@ -31,6 +41,9 @@ class TcpListener:
 
     def set_on_input(self, on_input: Callable[[InputMessage], None]) -> None:
         self._on_input = on_input
+
+    def set_on_command(self, on_command: Callable[[CommandInput], None]) -> None:
+        self._on_command = on_command
 
     def set_on_interrupt(self, on_interrupt: Callable[[str], None]) -> None:
         self._on_interrupt = on_interrupt
@@ -110,6 +123,11 @@ class TcpListener:
                         self._on_interrupt(im.session_id)
                     continue
 
+                if mt in "command":
+                    self._session_manager.update_activity(session_id)
+                    self._handle_command(data)
+                    continue
+
                 if mt in INPUT_MSG_TYPES:
                     self._session_manager.update_activity(session_id)
                     self._handle_input(data)
@@ -155,8 +173,6 @@ class TcpListener:
                 self._session_manager.remove_session(session_id)
 
     def _handle_input(self, data: dict[str, Any]) -> None:
-        from iris.io.models import InputMessage
-
         msg = InputMessage(**data)
         session_id = msg.session_id
         if not session_id:
@@ -178,11 +194,28 @@ class TcpListener:
         self._on_input(msg)
 
         if msg.metadata.get("ack_required", False):
-            from iris.io.models import OutputMessage
-
             ack = OutputMessage(
                 msg_type="ack",
                 content=f"ack:{msg.id}",
                 correlation_id=msg.id,
             )
             self._session_manager.route_output(session_id, ack)
+
+    def _handle_command(self, data: dict[str, Any]) -> None:
+        msg = CommandInput(**data)
+        session_id = msg.session_id
+        if not session_id:
+            logger.warning("TcpListener: CommandInput without session_id")
+            return
+        if not self._session_manager.is_session_active(session_id):
+            logger.warning("TcpListener: CommandInput from inactive session: %s", session_id)
+            return
+
+        logger.debug(
+            "TcpListener: command dispatch id=%s session=%s content=%.200s",
+            msg.id,
+            session_id,
+            msg.content,
+        )
+        if self._on_command:
+            self._on_command(msg)

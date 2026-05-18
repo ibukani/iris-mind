@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from iris.event import EventBus
-from iris.io.models import ConnectionMode, OutputMessage
+from iris.io.models import CommandOutput, ConnectionMode, OutputMessage
 from iris.kernel.config import Config, ModelConfig, ProactiveConfig
 
 # ── Fake LLM Provider ─────────────────────────────────────────
@@ -216,13 +216,13 @@ class FakeSessionInfo:
 
 class FakeSessionManager:
     def __init__(self) -> None:
-        self.sent: list[OutputMessage] = []
+        self.sent: list[OutputMessage | CommandOutput] = []
         self._session_info: FakeSessionInfo | None = None
 
     def set_session_info(self, info: FakeSessionInfo) -> None:
         self._session_info = info
 
-    def route_output(self, session_id: str, message: OutputMessage) -> None:
+    def route_output(self, session_id: str, message: OutputMessage | CommandOutput) -> None:
         self.sent.append(message.model_copy(update={"metadata": {**message.metadata, "session_id": session_id}}))
 
     def is_session_active(self, session_id: str) -> bool:

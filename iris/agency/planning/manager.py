@@ -211,14 +211,18 @@ class PlanningManager:
 
         if self._memory:
             try:
-                recent = self._memory.get_recent(3)
-                topics = [
-                    f"{e['summary'][:60]}（{self._format_age(e.get('timestamp', ''))}）"
-                    for e in recent
-                    if e.get("summary")
-                ]
-                if topics:
-                    parts.append("直近の話題: " + " | ".join(topics))
+                wm = self._memory.short_term.render_context()
+                if wm:
+                    parts.append("ワーキングメモリ:\n" + wm)
+                else:
+                    recent = self._memory.get_recent(3)
+                    topics = [
+                        f"{e['summary'][:60]}（{self._format_age(e.get('timestamp', ''))}）"
+                        for e in recent
+                        if e.get("summary")
+                    ]
+                    if topics:
+                        parts.append("直近の話題: " + " | ".join(topics))
                 prefs = self._memory.get_user_preferences()
                 if prefs:
                     parts.append(f"ユーザーの関心: {prefs[0].get('content', '')[:80]}")
@@ -232,15 +236,24 @@ class PlanningManager:
             return ""
         parts: list[str] = []
         try:
-            recent = self._memory.get_recent(3)
-            for e in reversed(recent):
-                s = e.get("summary", "")
-                ts = self._format_age(e.get("timestamp", ""))
-                if s:
-                    label = "直前の話題" if ts == "たった今" else "過去の話題"
-                    text = f"{label}: {s[:60]}（{ts}）" if ts else f"話題: {s[:60]}"
-                    parts.append(text)
-                    break
+            turns = self._memory.short_term.get_recent_turns(2)
+            for t in reversed(turns):
+                role = "User" if t.get("role") == "user" else "Iris"
+                label = "直前の会話" if t.get("role") == "user" else "直前の返答"
+                text = t.get("content", "")[:80]
+                if text:
+                    parts.append(f"{label}（{role}）: 「{text}」")
+
+            if not parts:
+                recent = self._memory.get_recent(3)
+                for e in reversed(recent):
+                    s = e.get("summary", "")
+                    ts = self._format_age(e.get("timestamp", ""))
+                    if s:
+                        label = "直前の話題" if ts == "たった今" else "過去の話題"
+                        text = f"{label}: {s[:60]}（{ts}）" if ts else f"話題: {s[:60]}"
+                        parts.append(text)
+                        break
 
             results = self._memory.search_semantic(content, max_results=2)
             if results:

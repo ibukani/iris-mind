@@ -212,7 +212,7 @@ class CommandHandler:
         mood = report.get("mood_text", "")
         tags = report.get("recent_tags", [])
         lines = [
-            f"Emotion: valence={e.get('valence',0):.2f} arousal={e.get('arousal',0):.2f} dominance={e.get('dominance',0):.2f}",
+            f"Emotion: valence={e.get('valence', 0):.2f} arousal={e.get('arousal', 0):.2f} dominance={e.get('dominance', 0):.2f}",
             f"Mood: {mood or 'neutral'}",
         ]
         if tags:

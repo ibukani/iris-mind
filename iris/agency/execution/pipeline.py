@@ -107,6 +107,11 @@ class LLMPipeline:
 
         if context_hint:
             prompt += f"\n\n## 会話コンテキスト\n{context_hint}"
+
+        if self._memory:
+            wm = self._memory.short_term.render_context()
+            if wm:
+                prompt += f"\n\n## ワーキングメモリ\n{wm}"
         return prompt
 
     def _get_tools(self) -> list[dict] | None:

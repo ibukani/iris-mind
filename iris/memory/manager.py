@@ -1,18 +1,17 @@
 from __future__ import annotations
 
 import logging
-import math
 import threading
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-
     from iris.limbic.models import EmotionState
 
 from iris.event.event_types import InputReady, InputReceived, TimerTick
+from iris.memory.long_term_memory import LongTermMemoryManager
 from iris.memory.sensory.buffer import InputBuffer
-from iris.memory.short_term_memory import ShortTermMemory
+from iris.memory.sensory_memory import SensoryMemoryManager
+from iris.memory.short_term_manager import ShortTermMemoryManager
 from iris.memory.stores import EpisodicStore, SemanticStore
 from iris.memory.vector_store import VectorStore
 
@@ -20,12 +19,17 @@ logger = logging.getLogger(__name__)
 
 
 class MemoryManager:
-    """記憶マネージャー。
+    """記憶マネージャー — 各記憶種別の管理クラスへのディスパッチャ。
 
     脳科学に基づく3層構造:
-    - SensoryMemory (感覚記憶): InputBuffer による raw 入力の一時保持
-    - ShortTermMemory (短期記憶): 処理中の情報（ワーキングメモリ）
-    - LongTermMemory (長期記憶): EpisodicStore + SemanticStore による永続記憶
+    - SensoryMemoryManager   (感覚記憶): InputBuffer による生入力の一時保持
+    - ShortTermMemoryManager (短期記憶): 現在の会話内容（ワーキングメモリ）
+    - LongTermMemoryManager  (長期記憶): EpisodicStore + SemanticStore による永続記憶
+
+    このクラスは以下を責務とする:
+    1. イベント処理 (pending / timer / InputReady)
+    2. store() / retrieve() / search() / clear() のディスパッチ
+    3. 後方互換 API (add_episodic, get_recent, 等)
     """
 
     def __init__(
@@ -35,19 +39,19 @@ class MemoryManager:
         episodic: EpisodicStore | None = None,
         semantic: SemanticStore | None = None,
         vector_store: VectorStore | None = None,
-        short_term: ShortTermMemory | None = None,
+        sensory: SensoryMemoryManager | None = None,
+        short_term: ShortTermMemoryManager | None = None,
+        long_term: LongTermMemoryManager | None = None,
         proactive_config: Any = None,
     ) -> None:
-        # === 感覚記憶 (Sensory Memory) ===
-        self._sensory_buffer: InputBuffer | None = None
-
-        # === 短期記憶 (Short-Term Memory / Working Memory) ===
-        self._short_term: ShortTermMemory = short_term or ShortTermMemory()
-
-        # === 長期記憶 (Long-Term Memory) ===
-        self._episodic = episodic
-        self._semantic = semantic
-        self._vector_store = vector_store
+        # === サブマネージャー ===
+        self.sensory: SensoryMemoryManager = sensory or SensoryMemoryManager()
+        self.short_term: ShortTermMemoryManager = short_term or ShortTermMemoryManager()
+        self.long_term: LongTermMemoryManager = long_term or LongTermMemoryManager(
+            episodic=episodic,
+            semantic=semantic,
+            vector_store=vector_store,
+        )
 
         self._event_bus = event_bus
         self._proactive_config = proactive_config
@@ -59,7 +63,7 @@ class MemoryManager:
             event_bus.subscribe("TimerTick", self._on_timer_tick)
 
     def set_sensory_buffer(self, buf: InputBuffer) -> None:
-        self._sensory_buffer = buf
+        self.sensory.set_buffer(buf)
 
     def _on_input_received(self, event: InputReceived) -> None:
         if not event.content:
@@ -102,116 +106,82 @@ class MemoryManager:
                 )
             )
 
-    def store(self, stream: str, data: Any) -> None:
-        if stream == "sensory" and self._sensory_buffer:
-            if isinstance(data, str):
-                self._sensory_buffer.add_fragment(data, is_final=True)
-            elif isinstance(data, dict) and "text" in data:
-                self._sensory_buffer.add_fragment(data["text"], is_final=True)
+    # ============================================================
+    # ディスパッチャー
+    # ============================================================
 
+    def store(self, stream: str, data: Any) -> None:
+        if stream == "sensory":
+            self.sensory.store(data)
         elif stream == "short_term":
             if isinstance(data, str):
-                self._short_term.add(data)
+                self.short_term.add_turn("system", data)
             elif isinstance(data, dict):
-                self._short_term.add(
+                role = data.get("role", "system")
+                content = data.get("content") or data.get("summary") or str(data)
+                self.short_term.add_turn(role, content)
+        elif stream == "episodic":
+            self.long_term.store_episodic(data)
+            if isinstance(data, dict):
+                self.short_term.add_turn(
+                    "system",
                     data.get("content") or data.get("summary") or str(data),
-                    metadata=data.get("metadata"),
                 )
-
-        elif stream == "episodic" and self._episodic:
-            summary = ""
-            kind = ""
-            if isinstance(data, str):
-                summary = data
-            elif isinstance(data, dict):
-                summary = data.get("content") or data.get("summary") or str(data)
-                kind = data.get("kind", "")
-
-            if kind:
-                summary = f"[{kind}] {summary}"
-            self._episodic.add(summary)
-            self._short_term.add(summary, metadata={"type": "episodic", "kind": kind})
-
-        elif stream == "semantic" and self._semantic:
-            self._semantic.add(data)
-            content = data.get("content") if isinstance(data, dict) else str(data)
-            self._short_term.add(content, metadata={"type": "semantic"})
-
+        elif stream == "semantic":
+            self.long_term.store_semantic(data)
+            if isinstance(data, dict):
+                content = data.get("content", "")
+                if content:
+                    self.short_term.add_turn("system", content)
         else:
             logger.warning("MemoryManager: unknown stream=%s", stream)
 
     def retrieve(self, stream: str, **filters: Any) -> list[dict]:
-        if stream == "sensory" and self._sensory_buffer:
-            return [{"text": self._sensory_buffer.accumulated_text}]
-
+        if stream == "sensory":
+            result = self.sensory.retrieve()
+            return [result] if result else []
         if stream == "short_term":
             n = filters.get("n", 5)
             if not isinstance(n, int):
                 n = 5
-            return self._short_term.get_recent(n)
-
-        if stream == "episodic" and self._episodic:
+            return self.short_term.get_recent_turns(n)
+        if stream == "episodic":
             n = filters.get("n", 5)
             if not isinstance(n, int):
                 n = 5
-            return self._episodic.get_recent(n)
-
+            return self.long_term.get_episodic_recent(n)
         return []
 
     def search(self, query: str, stream: str | None = None, **kwargs: Any) -> list[dict]:
         max_results = kwargs.get("max_results", 3)
         if not isinstance(max_results, int):
             max_results = 3
-
-        if (stream == "semantic" or (stream is None and self._semantic)) and self._semantic is not None:
-            results = self._semantic.search(query=query, max_results=max_results)
-            return [
-                {
-                    "content": r.get("content", ""),
-                    "tags": r.get("tags", []),
-                    "type": r.get("type", "unknown"),
-                    "score": round(r.get("score", 0.0), 4),
-                    "timestamp": r.get("timestamp", ""),
-                }
-                for r in results
-            ]
-        if self._vector_store:
-            results = self._vector_store.search(query=query, max_results=max_results)
-            return [
-                {
-                    "content": r.get("content", ""),
-                    "tags": r.get("tags", []),
-                    "type": r.get("type", "unknown"),
-                    "score": round(r.get("score", 0.0), 4),
-                    "timestamp": r.get("timestamp", ""),
-                }
-                for r in results
-            ]
+        if stream == "semantic" or stream is None:
+            return self.long_term.search_semantic(query, max_results=max_results)
         return []
 
     def clear(self, stream: str | None = None) -> None:
-        if stream == "sensory" and self._sensory_buffer:
-            self._sensory_buffer.close()
-
+        if stream == "sensory" or stream is None:
+            self.sensory.clear()
         if stream == "short_term" or stream is None:
-            self._short_term.clear()
+            self.short_term.clear()
+        if stream == "episodic" or stream is None:
+            self.long_term.clear_episodic()
+        if stream == "semantic" or stream is None:
+            self.long_term.clear_semantic()
 
-        if (stream == "episodic" or stream is None) and self._episodic:
-            self._episodic.clear()
-
-        if (stream == "semantic" or stream is None) and self._semantic:
-            self._semantic.clear()
-
-    # === Backward compat API (for LLMPipeline) ===
+    # ============================================================
+    # 後方互換 API (LLMPipeline, PlanningManager, HippocampalManager 等)
+    # ============================================================
 
     def get_user_preferences(self) -> list[dict[str, Any]]:
-        return self.search("ユーザーの好み 興味 趣味", stream="semantic", max_results=2)
+        return self.long_term.search_semantic("ユーザーの好み 興味 趣味", max_results=2)
 
     def add_episodic(self, content: str, kind: str = "", _metadata: dict | None = None) -> None:
         self.store("episodic", {"content": content, "kind": kind})
 
     def get_recent(self, n: int = 3) -> list[dict[str, Any]]:
-        return self.retrieve("episodic", n=n)
+        return self.long_term.get_episodic_recent(n)
 
     def add_semantic(self, content: str, tags: list[str] | None = None) -> None:
         self.store("semantic", {"content": content, "tags": tags or []})
@@ -220,53 +190,14 @@ class MemoryManager:
         self.store("semantic", {"content": content, "type": entry_type, "tags": tags or []})
 
     def search_semantic(self, query: str, max_results: int = 3) -> list[dict[str, Any]]:
-        return self.search(query, stream="semantic", max_results=max_results)
+        return self.long_term.search_semantic(query, max_results=max_results)
 
     def search_emotional(
         self,
         current_emotion: EmotionState | None = None,
         max_results: int = 5,
     ) -> list[dict[str, Any]]:
-        """感情タグが付いたエピソード記憶を取得（感情強度順）。
-
-        現在の感情状態が指定された場合は感情類似度で再ランクする。
-        """
-        if not self._episodic:
-            return []
-
-        all_entries = self._episodic.get_recent(self._episodic.max_entries)
-        emotion_entries = [e for e in all_entries if e.get("metadata", {}).get("type") == "emotion_tag"]
-
-        if not emotion_entries:
-            return []
-
-        if current_emotion is not None:
-            scored: list[tuple[float, dict]] = []
-            for e in emotion_entries:
-                meta = e.get("metadata", {})
-                meta_emotion = meta.get("emotion", {})
-                distance = _pad_distance(current_emotion, meta_emotion)
-                intensity = meta.get("intensity", 0)
-                score = intensity / max(distance, 0.01)
-                scored.append((score, e))
-            scored.sort(key=lambda x: x[0], reverse=True)
-            return [e for _, e in scored[:max_results]]
-
-        return sorted(
-            emotion_entries,
-            key=lambda e: e.get("metadata", {}).get("intensity", 0),
-            reverse=True,
-        )[:max_results]
-
-
-def _pad_distance(
-    a: EmotionState,
-    b: Mapping[str, Any],
-) -> float:
-    a_val = a.valence
-    a_aro = a.arousal
-    a_dom = a.dominance
-    b_val = float(b.get("valence", 0))
-    b_aro = float(b.get("arousal", 0))
-    b_dom = float(b.get("dominance", 0))
-    return math.sqrt((a_val - b_val) ** 2 + (a_aro - b_aro) ** 2 + (a_dom - b_dom) ** 2)
+        return self.long_term.search_emotional(
+            current_emotion=current_emotion,
+            max_results=max_results,
+        )

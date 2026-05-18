@@ -11,6 +11,7 @@ from iris.event.event_bus import EventBus
 from iris.event.event_types import OutputRequest
 from iris.llm.context_window import LLMContextWindowManager
 from iris.memory.hippocampal.manager import HippocampalManager
+from iris.memory.manager import MemoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ class ExecutionManager:
         monitor: OutputMonitor | None = None,
         inhibition: InhibitionController | None = None,
         session_roles_getter: Callable[[], str] | None = None,
+        memory: MemoryManager | None = None,
     ) -> None:
         self._bus = internal_bus
         self._event_bus = event_bus
@@ -37,6 +39,7 @@ class ExecutionManager:
         self._monitor = monitor
         self._inhibition = inhibition
         self._session_roles_getter = session_roles_getter
+        self._memory = memory
         self._messages: list[dict] = []
         self._msg_count_since_reflect = 0
         self._bus.subscribe("PlanDecided", self._on_plan)
@@ -77,6 +80,9 @@ class ExecutionManager:
 
         if record_history and content:
             self._messages.append({"role": "user", "content": content})
+
+        if content and self._memory:
+            self._memory.short_term.add_turn("user", content)
 
         if show_thinking:
             self._event_bus.publish(
@@ -123,6 +129,9 @@ class ExecutionManager:
         if record_history:
             self._messages.append({"role": "assistant", "content": response_text})
             self._msg_count_since_reflect += 1
+
+        if response_text and self._memory:
+            self._memory.short_term.add_turn("assistant", response_text)
 
         if run_reflexion and self._hippocampal:
             self._msg_count_since_reflect = self._hippocampal.maybe_run(

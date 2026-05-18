@@ -68,6 +68,7 @@ class MemoryManager:
     def _on_input_received(self, event: InputReceived) -> None:
         if not event.content:
             return
+        self.sensory.store_raw(event.content)
         with self._pending_lock:
             self._pending_input[event.session_id] = event.content
         logger.debug(
@@ -112,7 +113,10 @@ class MemoryManager:
 
     def store(self, stream: str, data: Any) -> None:
         if stream == "sensory":
-            self.sensory.store(data)
+            if isinstance(data, dict) and data.get("raw"):
+                self.sensory.store_raw(data["raw"])
+            else:
+                self.sensory.store_fragment(data)
         elif stream == "short_term":
             if isinstance(data, str):
                 self.short_term.add_turn("system", data)

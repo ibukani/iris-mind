@@ -38,22 +38,36 @@ class ProactiveScoring:
         memory_score = self._compute_memory_score()
         context_score = self._compute_context_score()
         mood_score = self._compute_mood_score(negative_mood_score, limbic_mood)
+        sensory_score = self._compute_sensory_score()
+        stm_score = self._compute_short_term_score()
+        context_score = max(context_score, stm_score) if stm_score > 0 else context_score
         total = (
             w.get("time", 0.25) * time_score
             + w.get("memory", 0.45) * memory_score
             + w.get("context", 0.15) * context_score
             + w.get("mood", 0.15) * mood_score
         )
+        if sensory_score > 0:
+            total = max(total, sensory_score * 0.3)
         logger.debug(
-            "Scores: time=%.3f mem=%.3f ctx=%.3f mood=%.3f total=%.3f (threshold=%.2f)",
+            "Scores: time=%.3f mem=%.3f ctx=%.3f mood=%.3f sensory=%.3f stm=%.3f total=%.3f (threshold=%.2f)",
             time_score,
             memory_score,
             context_score,
             mood_score,
+            sensory_score,
+            stm_score,
             total,
             self._config.speak_threshold,
         )
-        return total, {"time": time_score, "memory": memory_score, "context": context_score, "mood": mood_score}
+        return total, {
+            "time": time_score,
+            "memory": memory_score,
+            "context": context_score,
+            "mood": mood_score,
+            "sensory": sensory_score,
+            "short_term": stm_score,
+        }
 
     def _compute_time_score(self, now: float, last_proactive_time: float, last_user_activity: float) -> float:
         last_time = max(last_proactive_time, last_user_activity)
@@ -104,6 +118,26 @@ class ProactiveScoring:
             return min(jaccard + 0.2, 1.0)
         except Exception:
             return 0.0
+
+    def _compute_sensory_score(self) -> float:
+        try:
+            sensory = self._memory.sensory.retrieve()
+            if sensory.get("raw"):
+                return 0.6
+        except Exception:
+            pass
+        return 0.0
+
+    def _compute_short_term_score(self) -> float:
+        try:
+            turns = self._memory.short_term.get_recent_turns(2)
+            if len(turns) >= 2:
+                return 0.5
+            if len(turns) == 1:
+                return 0.3
+        except Exception:
+            pass
+        return 0.0
 
     @staticmethod
     def _compute_mood_score(negative_mood_score: float, limbic_mood: dict[str, float] | None = None) -> float:

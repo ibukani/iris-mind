@@ -82,7 +82,9 @@ class PlanningManager:
         plan["session_id"] = event.session_id
         self._bus.publish(PlanDecided(plan=plan))
 
-    def _build_plan(self, content: str, context: dict, gate: GateVerdict, limbic_mood: dict[str, float] | None = None) -> dict:
+    def _build_plan(
+        self, content: str, context: dict, gate: GateVerdict, limbic_mood: dict[str, float] | None = None
+    ) -> dict:
         """ユーザー入力またはタイマートリガーに基づいて実行計画を構築する。
 
         計画は LLMPipeline で処理される際に、状況（situation）やコンテキスト、

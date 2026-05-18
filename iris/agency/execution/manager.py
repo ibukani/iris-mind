@@ -56,7 +56,6 @@ class ExecutionManager:
             plan["abbreviated"] = True
         if degree >= 2:
             plan["max_tokens"] = min(plan.get("max_tokens", 0) or 120, 60)
-            plan["tools_allowed"] = False
         if degree >= 3:
             plan["run_reflexion"] = False
             plan["run_compression"] = False
@@ -73,6 +72,8 @@ class ExecutionManager:
         run_reflexion = plan.get("run_reflexion", not abbreviated)
         run_compression = plan.get("run_compression", not abbreviated)
         record_history = plan.get("record_history", True)
+        if content:
+            plan["tools_allowed"] = True
 
         if record_history and content:
             self._messages.append({"role": "user", "content": content})
@@ -163,8 +164,6 @@ class ExecutionManager:
             degree = self._monitor.talkative_degree
             self._inhibition.apply_frequency_penalty(degree)
             logger.debug("Applied frequency penalty: degree=%d", degree)
-        if "frequency_exceeded" in flags and self._inhibition:
-            self._inhibition.apply_frequency_penalty(1)
 
     def compact_context(self) -> str:
         if self._context_window_mgr is None:

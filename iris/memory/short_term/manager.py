@@ -107,9 +107,10 @@ class ShortTermMemoryManager:
     def render_context(self, max_chars: int = _MAX_CONTEXT_CHARS, query: str | None = None) -> str:
         if not self._turns:
             return ""
-        parts: list[str] = ["### 直近の会話"]
+        parts: list[str] = []
 
         if query:
+            parts.append("### 直近の会話（関連）")
             relevant = self.search(query, max_results=3)
             shown_indices: set[int] = set()
             for r in relevant:
@@ -123,10 +124,6 @@ class ShortTermMemoryManager:
                 shown_indices.add(idx)
                 label = "User" if t["role"] == "user" else "Iris"
                 parts.append(f"- {label}: 「{t['content'][:100]}」")
-        else:
-            for t in self._turns[-4:]:
-                label = "User" if t["role"] == "user" else "Iris"
-                parts.append(f"- {label}: 「{t['content'][:100]}」")
 
         if self._current_topics:
             parts.append("### 現在の話題")
@@ -136,6 +133,8 @@ class ShortTermMemoryManager:
             parts.append("### 参照エンティティ")
             parts.append(", ".join(refs))
 
+        if not parts:
+            return ""
         text = "\n".join(parts)
         if len(text) > max_chars:
             text = text[: max_chars - 3] + "..."

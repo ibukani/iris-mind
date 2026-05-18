@@ -60,6 +60,7 @@ class PlanningManager:
                 last_user_activity=self._inhibition.last_user_activity,
                 negative_mood_score=self._inhibition.negative_mood_score,
                 limbic_mood=limbic_mood,
+                content=event.content,
             )
             if total < self._cfg.speak_threshold:
                 logger.debug("Below speak_threshold: total=%.3f < threshold=%.2f", total, self._cfg.speak_threshold)

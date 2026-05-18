@@ -54,6 +54,26 @@ class KernelContext:
 class KernelFactory:
     @staticmethod
     def build(config: Config) -> KernelContext:
+        """設定に基づいて Iris の全層を構築し、KernelContext で統合する。
+
+        ビルド順序：
+        1. InfraProvider: EventBus, IO, TCP
+        2. StorageLayer: ファイルベース記憶（Episodic, Semantic, Agents MD）
+        3. MemoryLayer: ベクトルストア、人格、感覚バッファ
+        4. LLMLayer: プロバイダ、ブリッジ、コンテキスト管理
+        5. AgencyLayer: 計画・実行エンジン（PlanningManager, ExecutionManager）
+        6. CommandHandler: シャットダウンなどのコマンド処理
+        7. KernelProcess: 全層のイベントループ管理
+
+        Args:
+            config: Config インスタンス。config.yaml から model_config, proactive, io 等を読む。
+
+        Returns:
+            KernelContext: 構築完了した全層へのアクセスポイント集約。
+
+        Raises:
+            LLMAvailabilityError: 指定プロバイダが利用不可な場合。
+        """
         # ============================================================
         # Phase 1: インフラ基盤 (EventBus, IO)
         # ============================================================

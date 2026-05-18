@@ -3,11 +3,13 @@ from __future__ import annotations
 import json
 import logging
 
+from iris.llm.provider import LLMProvider
+
 logger = logging.getLogger(__name__)
 
 
 class Reflexion:
-    def __init__(self, llm, compact_model: str | None = None) -> None:
+    def __init__(self, llm: LLMProvider, compact_model: str | None = None) -> None:
         self._llm = llm
         self._compact_model = compact_model
 

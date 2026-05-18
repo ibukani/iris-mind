@@ -23,7 +23,7 @@ class PersonaData:
         self.path = Path(path)
         self._data: dict = self._load()
 
-    def _load(self) -> dict:
+    def _load(self) -> dict[str, list]:
         if self.path.exists():
             try:
                 return json.loads(self.path.read_text(encoding="utf-8"))
@@ -31,14 +31,14 @@ class PersonaData:
                 pass
         return {"speech_styles": [], "personality_traits": []}
 
-    def _save(self):
+    def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(
             json.dumps(self._data, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
-    def add_entry(self, category: str, text: str, source: str = "reflection"):
+    def add_entry(self, category: str, text: str, source: str = "reflection") -> None:
         key = _PERSONA_CATEGORIES.get(category)
         if key is None:
             return
@@ -86,6 +86,6 @@ class PersonaData:
             reverse=True,
         )
 
-    def clear(self):
+    def clear(self) -> None:
         self._data = {"speech_styles": [], "personality_traits": []}
         self._save()

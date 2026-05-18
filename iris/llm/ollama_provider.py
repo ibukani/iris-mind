@@ -25,6 +25,7 @@ from iris.kernel.config import ModelConfig
 logger = logging.getLogger(__name__)
 _MAX_RETRIES = 3
 _RETRY_BACKOFF_SECONDS = 0.5
+_CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
 
 
 class OllamaProvider:
@@ -56,33 +57,19 @@ class OllamaProvider:
         **kwargs: Any,
     ) -> dict:
         """LLM にチャットリクエストを送信する。"""
-        effective_model = model or self.model_name
-        options = {
-            "temperature": temperature,
-            "num_predict": max_tokens,
-            "num_ctx": self.num_ctx,
-            "num_gpu": self.num_gpu,
-            "repeat_penalty": 1.1,
-        }
-        call_kwargs: dict = {
-            "model": effective_model,
-            "messages": messages,
-            "options": options,
-            "stream": on_token is not None,
-        }
-        if tools:
-            call_kwargs["tools"] = tools
-        call_kwargs["think"] = enable_thinking
-        if kwargs.get("keep_alive") is not None:
-            call_kwargs["keep_alive"] = kwargs.pop("keep_alive")
-        if interrupt_token is not None:
-            call_kwargs["interrupt_token"] = interrupt_token
-
         with self._chat_lock:
-            if on_token is not None:
-                return self._stream_chat(**call_kwargs, on_token=on_token, interrupt_token=interrupt_token)
+            call_kwargs = self._build_chat_kwargs(
+                messages=messages,
+                model=model,
+                enable_thinking=enable_thinking,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                tools=tools,
+                interrupt_token=interrupt_token,
+                stream=on_token is not None,
+                kwargs=kwargs,
+            )
 
-        with self._chat_lock:
             if on_token is not None:
                 return self._stream_chat(**call_kwargs, on_token=on_token, interrupt_token=interrupt_token)
 
@@ -90,17 +77,44 @@ class OllamaProvider:
             resp["message"] = _process_message(resp["message"])
             return resp
 
-    def _chat_with_retries(self, kwargs: dict) -> dict:
-        for attempt in range(_MAX_RETRIES):
-            try:
-                return self.client.chat(**kwargs)
-            except httpx.TransportError:
-                if attempt == _MAX_RETRIES - 1:
-                    raise
-                _log_retry(attempt)
-                time.sleep(_retry_delay(attempt))
+    def _build_chat_kwargs(
+        self,
+        messages: list[dict],
+        model: str | None,
+        enable_thinking: bool,
+        temperature: float,
+        max_tokens: int,
+        tools: list[dict] | None,
+        interrupt_token: object | None,
+        stream: bool,
+        kwargs: dict[str, Any],
+    ) -> dict[str, Any]:
+        call_kwargs: dict[str, Any] = {
+            "model": model or self.model_name,
+            "messages": messages,
+            "options": {
+                "temperature": temperature,
+                "num_predict": max_tokens,
+                "num_ctx": self.num_ctx,
+                "num_gpu": self.num_gpu,
+                "repeat_penalty": 1.1,
+            },
+            "stream": stream,
+            "think": enable_thinking,
+        }
+        if tools:
+            call_kwargs["tools"] = tools
+        if kwargs.get("keep_alive") is not None:
+            call_kwargs["keep_alive"] = kwargs.pop("keep_alive")
+        if interrupt_token is not None:
+            call_kwargs["interrupt_token"] = interrupt_token
+        return call_kwargs
 
-        raise RuntimeError("Ollama request retry loop exited unexpectedly")
+    def _chat_with_retries(self, kwargs: dict) -> dict:
+        return self._retry_transport_call(
+            lambda: self.client.chat(**kwargs),
+            "Ollama request retry loop exited unexpectedly",
+        )
 
     def _stream_chat(
         self,
@@ -108,20 +122,14 @@ class OllamaProvider:
         interrupt_token: Any = None,
         **kwargs: Any,
     ) -> dict:
-        for attempt in range(_MAX_RETRIES):
-            try:
-                return self._stream_chat_once(
-                    on_token=on_token,
-                    interrupt_token=interrupt_token,
-                    **kwargs,
-                )
-            except httpx.TransportError:
-                if attempt == _MAX_RETRIES - 1:
-                    raise
-                _log_retry(attempt)
-                time.sleep(_retry_delay(attempt))
-
-        raise RuntimeError("Ollama stream retry loop exited unexpectedly")
+        return self._retry_transport_call(
+            lambda: self._stream_chat_once(
+                on_token=on_token,
+                interrupt_token=interrupt_token,
+                **kwargs,
+            ),
+            "Ollama stream retry loop exited unexpectedly",
+        )
 
     def _stream_chat_once(
         self,
@@ -159,6 +167,18 @@ class OllamaProvider:
             final["message"]["tool_calls"] = tool_calls
         final["message"] = _process_message(final["message"])
         return final
+
+    def _retry_transport_call(self, operation: Callable[[], dict], error_message: str) -> dict:
+        for attempt in range(_MAX_RETRIES):
+            try:
+                return operation()
+            except httpx.TransportError:
+                if attempt == _MAX_RETRIES - 1:
+                    raise
+                _log_retry(attempt)
+                time.sleep(_retry_delay(attempt))
+
+        raise RuntimeError(error_message)
 
     def unload_model(self, model_name: str) -> None:
         """指定モデルを VRAM から解放する。"""
@@ -263,7 +283,7 @@ def _restart_ollama():
         ["ollama", "serve"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
-        creationflags=subprocess.CREATE_NO_WINDOW,
+        creationflags=_CREATE_NO_WINDOW,
     )
     time.sleep(5)
 

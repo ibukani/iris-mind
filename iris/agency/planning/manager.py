@@ -65,6 +65,20 @@ class PlanningManager:
         self._bus.publish(PlanDecided(plan=plan))
 
     def _build_plan(self, content: str, context: dict, gate: GateVerdict) -> dict:
+        """ユーザー入力またはタイマートリガーに基づいて実行計画を構築する。
+
+        計画は LLMPipeline で処理される際に、状況（situation）やコンテキスト、
+        抑制制御（gate）の情報を含む。
+
+        Args:
+            content: ユーザー入力コンテンツ。タイマートリガーの場合は空文字。
+            context: 背景情報。from_timer, salience, scores, context_hint など。
+            gate: 基底核抑制制御の評決（suppressed, score）。
+
+        Returns:
+            計画辞書。session_id 以外のキーは content, situation, context_hint,
+            abbreviated, max_tokens, temperature, tools_allowed など。
+        """
         from_timer = context.get("from_timer", False)
 
         if from_timer:

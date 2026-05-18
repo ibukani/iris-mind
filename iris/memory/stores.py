@@ -10,19 +10,19 @@ from iris.memory.vector_store import VectorStore
 
 class AgentsMdStoreProtocol(Protocol):
     def load(self) -> str: ...
-    def update(self, new_content: str): ...
+    def update(self, new_content: str) -> None: ...
 
 
 class EpisodicStoreProtocol(Protocol):
-    def add(self, summary: str): ...
+    def add(self, summary: str) -> None: ...
     def get_recent(self, n: int = 5) -> list[dict]: ...
-    def clear(self): ...
+    def clear(self) -> None: ...
 
 
 class SemanticStoreProtocol(Protocol):
-    def add(self, entry: dict): ...
+    def add(self, entry: dict) -> None: ...
     def search(self, query: str, max_results: int = 3) -> list[dict]: ...
-    def clear(self): ...
+    def clear(self) -> None: ...
 
 
 class AgentsMdStore:
@@ -37,7 +37,7 @@ class AgentsMdStore:
             return self.path.read_text(encoding="utf-8")
         return ""
 
-    def update(self, new_content: str):
+    def update(self, new_content: str) -> None:
         if len(new_content.encode("utf-8")) > self.max_bytes:
             new_content = self._truncate(new_content)
         self.path.write_text(new_content, encoding="utf-8")
@@ -60,11 +60,11 @@ class EpisodicStore:
         self.path = Path(path)
         self.max_entries = max_entries
 
-    def clear(self):
+    def clear(self) -> None:
         if self.path.exists():
             self.path.unlink()
 
-    def add(self, summary: str):
+    def add(self, summary: str) -> None:
         entries = self._load_all()
         entries.append({"summary": summary, "timestamp": datetime.now(UTC).isoformat()})
         if len(entries) > self.max_entries:
@@ -107,7 +107,7 @@ class SemanticStore:
             self.vector.add(e)
         self._synced_count = len(entries)
 
-    def add(self, entry: dict):
+    def add(self, entry: dict) -> None:
         entries = self._load_all()
         if self._is_duplicate(entry.get("content", ""), entries):
             return
@@ -125,7 +125,7 @@ class SemanticStore:
         self.vector.add(entry)
         self._synced_count = len(entries)
 
-    def clear(self):
+    def clear(self) -> None:
         if self.path.exists():
             self.path.unlink()
         self.vector.clear()

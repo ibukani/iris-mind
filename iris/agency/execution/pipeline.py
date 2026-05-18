@@ -53,6 +53,23 @@ class LLMPipeline:
         self._session_roles_summary = summary
 
     def _build_system_prompt(self, context_hint: str = "") -> str:
+        """Iris のシステムプロンプトを構築する。
+
+        Personality テンプレートに、以下の動的情報を注入する：
+        - AgentsMD：構造記憶（ツール・ロール情報）
+        - Speech Style：蓄積された話し方の特徴
+        - Personality Traits：蓄積された性格特性
+        - User Preferences：ユーザーの好みや興味
+        - Governance Principles：行動の方針
+        - Session Roles：現在のセッション中の役割
+        - Context Hint：会話固有のコンテキスト
+
+        Args:
+            context_hint: 会話の事前情報。例："ユーザーが新規ジョブについて質問中"
+
+        Returns:
+            完成したシステムプロンプト文字列。
+        """
         agents_md = self._agents_md_store.load() if self._agents_md_store else ""
         speech_style = self._persona_profile.get_speech_style() if self._persona_profile else ""
         traits = self._persona_profile.get_traits() if self._persona_profile else ""
@@ -103,6 +120,19 @@ class LLMPipeline:
         )
 
     def generate(self, plan: dict, messages: list[dict], on_token: Callable[[str], None] | None = None) -> str:
+        """計画に基づいて、会話メッセージからテキストを生成する（メイン公開メソッド）。
+
+        計画の tools_allowed フラグに基づいて、ツール使用の有無を判定し、
+        適切なパイプライン（ツール付き / なし）で生成する。
+
+        Args:
+            plan: PlanningManager が生成した計画辞書。
+            messages: 会話履歴。role/content のリスト。
+            on_token: トークンストリーミングコールバック（オプション）。
+
+        Returns:
+            生成されたテキスト。
+        """
         context_hint = plan.get("context_hint", "")
         if plan.get("tools_allowed", True):
             return self._generate_with_tools(messages, context_hint=context_hint, on_token=on_token)

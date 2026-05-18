@@ -169,6 +169,19 @@ def test_proactive_config_defaults() -> None:
     assert config.trigger_weights["time"] == 0.25
 
 
+def test_config_mutable_defaults_are_independent() -> None:
+    first = Config()
+    second = Config()
+
+    first.proactive.trigger_weights["time"] = 0.99
+    first.logging.loggers["iris"] = "DEBUG"
+    first.quasi_sync.response_readiness.enabled = False
+
+    assert second.proactive.trigger_weights["time"] == 0.25
+    assert second.logging.loggers == {}
+    assert second.quasi_sync.response_readiness.enabled is True
+
+
 # ── Step 1: Per-model parameters ──────────────────────────────
 
 

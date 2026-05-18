@@ -36,13 +36,33 @@ target-version = "py313"
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "ARG", "PTH207"]
+select = ["E", "F", "W", "I", "N", "UP", "B", "SIM", "ARG", "PTH", "D", "PERF", "PIE", "RUF", "S"]
+# docstring ルール: 重要なpublic関数のみ（Pythonではすべてのクラス/関数に必須ではない）
+# D100: モジュールトップの docstring → 不要
+# D101: public class → 型ヒント + クラス名で十分
+# D102: public method → trivialなメソッドが多すぎるため除外
+# D103: public function → パッケージ内の小さな関数も多いため除外
+# D104: パッケージ __init__ の docstring → 不要
+# D105: __dunder_method__ → __init__ は別、其他は不要
+# D107: __init__ の docstring → 型ヒントで十分
+# D415: First line should end with period → 日本語docstringが多いため除外
+ignore = ["D100", "D101", "D102", "D103", "D104", "D105", "D107", "D415", "S101"]
+
+[tool.ruff.lint.isort]
+force-single-line = false
+force-sort-within-sections = true
+known-first-party = ["iris", "tests"]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["ARG002"]
+"tests/**" = ["ARG002", "S101", "D"]
+"iris/tools/builtins/**" = ["D100", "D101"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
 
 [tool.ruff.format]
 quote-style = "double"
+docstring-code-format = true
 
 [tool.mypy]
 python_version = "3.13"
@@ -50,8 +70,15 @@ warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
 strict_equality = true
-ignore_missing_imports = true
+ignore_missing_imports = false
 check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+warn_no_return = true
+warn_return_any = true
+implicit_reexport = false
+no_implicit_reexport = true
 
 [[tool.mypy.overrides]]
 module = [
@@ -60,6 +87,14 @@ module = [
   "iris.memory.vector_store",
 ]
 ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "chromadb.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["ollama", "httpx", "prompt_toolkit", "rich"]
+ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = "tests.*"
@@ -71,8 +106,16 @@ disable_error_code = [
   "misc",
   "call-overload",
   "index",
+  "untyped-def",
+  "any-unimported",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+addopts = "-v --strict-markers --tb=short"
+markers = [
+  "unit: ユニットテスト",
+  "integration: 統合テスト",
+  "slow: 低速テスト",
+]

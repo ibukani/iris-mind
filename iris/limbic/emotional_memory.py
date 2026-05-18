@@ -7,7 +7,7 @@ import math
 from typing import Any
 
 from iris.limbic.models import EmotionState
-from iris.memory.stores import EpisodicStore, SemanticStore
+from iris.memory.long_term.stores import EpisodicStore, SemanticStore
 
 logger = logging.getLogger(__name__)
 

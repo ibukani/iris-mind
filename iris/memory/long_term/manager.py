@@ -1,0 +1,170 @@
+from __future__ import annotations
+
+import logging
+import math
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from iris.limbic.models import EmotionState
+
+from iris.memory.long_term.stores import EpisodicStore, SemanticStore
+from iris.memory.long_term.vector_store import VectorStore
+
+logger = logging.getLogger(__name__)
+
+
+class LongTermMemoryManager:
+    """長期記憶 (Long-Term Memory)。
+    エピソード記憶 (EpisodicStore) + 意味記憶 (SemanticStore) を統合管理する。
+
+    エピソード記憶: 具体的な出来事・会話セッションの要約（JSONL）
+    意味記憶: 知識・教訓・嗜好・性格特性（JSONL + ChromaDB ベクトル検索）
+
+    脳科学対応: 海馬体 (hippocampal formation) と大脳皮質連合野。
+    エピソード記憶は海馬、意味記憶は側頭葉・前頭葉が担う。
+    """
+
+    def __init__(
+        self,
+        episodic: EpisodicStore | None = None,
+        semantic: SemanticStore | None = None,
+        vector_store: VectorStore | None = None,
+    ):
+        self._episodic = episodic
+        self._semantic = semantic
+        self._vector_store = vector_store
+
+    # ---- エピソード記憶 ----
+
+    def store_episodic(self, data: Any, kind: str = "") -> None:
+        if self._episodic is None:
+            return
+        summary = ""
+        if isinstance(data, str):
+            summary = data
+        elif isinstance(data, dict):
+            summary = data.get("content") or data.get("summary") or str(data)
+            kind = data.get("kind", kind)
+        if kind:
+            summary = f"[{kind}] {summary}"
+        self._episodic.add(summary)
+
+    def get_episodic_recent(self, n: int = 5) -> list[dict[str, Any]]:
+        if self._episodic is None:
+            return []
+        return self._episodic.get_recent(n)
+
+    def clear_episodic(self) -> None:
+        if self._episodic is not None:
+            self._episodic.clear()
+
+    # ---- 意味記憶 ----
+
+    def store_semantic(self, data: Any) -> None:
+        if self._semantic is None:
+            return
+        if isinstance(data, dict):
+            self._semantic.add(data)
+        else:
+            self._semantic.add({"content": str(data)})
+
+    def search_semantic(self, query: str, max_results: int = 3) -> list[dict[str, Any]]:
+        if self._semantic is not None:
+            results = self._semantic.search(query=query, max_results=max_results)
+            return [
+                {
+                    "content": r.get("content", ""),
+                    "tags": r.get("tags", []),
+                    "type": r.get("type", "unknown"),
+                    "score": round(r.get("score", 0.0), 4),
+                    "timestamp": r.get("timestamp", ""),
+                }
+                for r in results
+            ]
+        if self._vector_store is not None:
+            results = self._vector_store.search(query=query, max_results=max_results)
+            return [
+                {
+                    "content": r.get("content", ""),
+                    "tags": r.get("tags", []),
+                    "type": r.get("type", "unknown"),
+                    "score": round(r.get("score", 0.0), 4),
+                    "timestamp": r.get("timestamp", ""),
+                }
+                for r in results
+            ]
+        return []
+
+    def clear_semantic(self) -> None:
+        if self._semantic is not None:
+            self._semantic.clear()
+
+    # ---- ベクトル検索 ----
+
+    def search_vector(self, query: str, max_results: int = 3) -> list[dict[str, Any]]:
+        if self._vector_store is None:
+            return []
+        results = self._vector_store.search(query=query, max_results=max_results)
+        return [
+            {
+                "content": r.get("content", ""),
+                "tags": r.get("tags", []),
+                "type": r.get("type", "unknown"),
+                "score": round(r.get("score", 0.0), 4),
+                "timestamp": r.get("timestamp", ""),
+            }
+            for r in results
+        ]
+
+    # ---- 感情タグ検索 ----
+
+    def search_emotional(
+        self,
+        current_emotion: EmotionState | None = None,
+        max_results: int = 5,
+    ) -> list[dict[str, Any]]:
+        if not self._episodic:
+            return []
+        all_entries = self._episodic.get_recent(self._episodic.max_entries)
+        emotion_entries = [e for e in all_entries if e.get("metadata", {}).get("type") == "emotion_tag"]
+        if not emotion_entries:
+            return []
+        if current_emotion is not None:
+            scored: list[tuple[float, dict]] = []
+            for e in emotion_entries:
+                meta = e.get("metadata", {})
+                meta_emotion = meta.get("emotion", {})
+                distance = _pad_distance(current_emotion, meta_emotion)
+                intensity = meta.get("intensity", 0)
+                score = intensity / max(distance, 0.01)
+                scored.append((score, e))
+            scored.sort(key=lambda x: x[0], reverse=True)
+            return [e for _, e in scored[:max_results]]
+        return sorted(
+            emotion_entries,
+            key=lambda e: e.get("metadata", {}).get("intensity", 0),
+            reverse=True,
+        )[:max_results]
+
+    @property
+    def episodic(self) -> EpisodicStore | None:
+        return self._episodic
+
+    @property
+    def semantic(self) -> SemanticStore | None:
+        return self._semantic
+
+
+def _pad_distance(
+    a: EmotionState,
+    b: Mapping[str, Any],
+) -> float:
+    a_val = a.valence
+    a_aro = a.arousal
+    a_dom = a.dominance
+    b_val = float(b.get("valence", 0))
+    b_aro = float(b.get("arousal", 0))
+    b_dom = float(b.get("dominance", 0))
+    return math.sqrt((a_val - b_val) ** 2 + (a_aro - b_aro) ** 2 + (a_dom - b_dom) ** 2)

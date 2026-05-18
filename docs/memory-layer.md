@@ -1,226 +1,225 @@
 # Iris Memory 層
 
-**脳科学対応**: 感覚野 + 海馬 + 皮質記憶系
+**脳科学対応**: 感覚野 + 海馬 + 皮質記憶系（3層構造）
 
 ## 責務
 
-- 感覚バッファリング（断片的入力の一時保持と統合）
-- エピソード記憶の保存と検索
+- 感覚バッファリング（断片的入力の一時保持と統合） — 感覚記憶
+- ワーキングメモリ（ターン・話題・エンティティの保持） — 短期記憶
+- エピソード記憶の保存と検索（JSONL）
 - 意味記憶の保存と検索（ChromaDB + BM25 ハイブリッド）
-- **海馬による記憶整理**: エピソード完了後に Reflexion（自己反省）を実行し、意味記憶へ統合
+- **海馬による記憶整理**: ShortTermMemory consolidation + Reflexion（自己反省）を実行し長期記憶へ統合
 - 全層からのクエリ受付
 
 ## Manager 定義
 
 ```python
 class MemoryManager:
-    """EventBus と接続し、記憶 plugin を orchestrate する。
-    自ら記憶を持たず、各 plugin に委譲する。
-    公開 I/F は汎用的な store / retrieve / search に統一。
+    """EventBus と接続し、3層の記憶を orchestrate するディスパッチャ。
+    公開 I/F は汎用的な store / retrieve / search / clear に統一。
     """
 
     # === EventBus subscribers ===
-    # subscribe: InputReceived → sensory.buffer → (on flush) publish InputReady
-    # subscribe: TimerTick     → rate-limit check → publish InputReady(from_timer=True)
+    # subscribe: InputReceived → sensory.store_raw() + pending dict
+    # subscribe: TimerTick     → pending pop → InputReady / proactive InputReady(from_timer=True)
 
     # === 公開 I/F（汎用） ===
+    def store(self, stream: str, data: Any) -> None
+    def retrieve(self, stream: str, **filters) -> list[dict]
+    def search(self, query: str, stream: str | None = None, **kwargs) -> list[dict]
+    def search_emotional(self, current_emotion, max_results: int = 5) -> list[dict]
+    def clear(self, stream: str | None = None) -> None
 
-    def store(self, stream: MemoryStream, data: dict) -> None
-        """任意の stream にデータを書き込む。"""
-        # stream に応じて対応 plugin に委譲
-
-    def retrieve(self, stream: MemoryStream, **filters) -> list[dict]
-        """任意の stream からデータを取得する。"""
-
-    def search(self, query: str, stream: MemoryStream | None = None, **kwargs) -> list[dict]
-        """cross-stream 検索。"""
-
-    def search_emotional(self, emotion: dict, max_results: int = 5) -> list[dict]
-        """感情状態に近い記憶を PAD 距離×強度でランク付け (Phase 3)。"""
-
+    # === 後方互換 API ===
     def get_user_preferences(self) -> list[dict]
-        """ユーザーの好み・関心事を意味記憶から検索 (Phase 2)。"""
-
-    def get_recent(self, n: int = 5) -> list[dict]
-        """直近 n 件のエピソード記憶を返す。"""
-
-    def get_status(self) -> dict
-        """デバッグ用ステータス。"""
-
-    def clear(self, stream: MemoryStream | None = None) -> None
-        """stream 指定があればその stream をクリア。"""
+    def get_recent(self, n: int = 3) -> list[dict]
+    def add_episodic(self, content: str, kind: str = "") -> None
+    def add_semantic(self, content: str, tags: list[str] | None = None) -> None
+    def add_semantic_by_type(self, entry_type: str, content: str, tags: list[str] | None = None) -> None
+    def search_semantic(self, query: str, max_results: int = 3) -> list[dict]
 ```
 
-`MemoryStream` は以下のいずれかのリテラル:
+### MemoryStream 一覧
 
-| stream | 対応 plugin | データ例 |
-|--------|-------------|----------|
-| `"sensory"` | sensory/InputBuffer | 断片的入力フラグメント |
-| `"episodic"` | episodic/EpisodicStore | 会話ターン |
-| `"semantic"` | semantic/SemanticStore | 教訓・好み・特性 |
-| `"vector"` | vector/VectorStore | 埋め込みベクトル |
+| stream | 対応機構 | データ例 |
+|--------|----------|----------|
+| `"sensory"` | SensoryMemoryManager | 断片的入力、生入力のコピー |
+| `"short_term"` | ShortTermMemoryManager | ターン（user/assistant）、話題、エンティティ |
+| `"episodic"` | LongTermMemoryManager → EpisodicStore | 会話セッション要約 |
+| `"semantic"` | LongTermMemoryManager → SemanticStore | 教訓・好み・特性 |
 
-## Plugin 構成
+## 3層構造
 
-### sensory/
+### sensory/ — 感覚記憶
 
 ```python
-class InputBuffer:
-    """断片的な入力を一時保持し、完全な発話として統合する。
-    脳科学での感覚記憶（echoic memory）に相当。
-    """
+class SensoryMemoryManager:
+    """生の入力を処理前に一時保持する。
+    2系統: 断片入力（add_fragment / timeout / flush）と確定入力（store_raw）。
+    脳科学対応: 感覚野 (sensory cortex)。"""
     def add_fragment(self, content: str, is_final: bool) -> None
-    def flush(self) -> str           # バッファ内容を結合して返す
-    def cancel(self) -> None         # バッファをクリア
-    def set_flush_callback(self, cb: Callable) -> None
+    def flush(self) -> None
+    def store_raw(self, content: str) -> None          # メインパイプライン用
+    def retrieve(self) -> dict[str, str]                # {raw, fragment, raw_timestamp}
+    def cancel(self) -> None
+    def close(self) -> None
+    def set_flush_callback(self, callback) -> None
+    def set_readiness_evaluator(self, evaluator) -> None
+    @property
+    def has_pending_raw(self) -> bool
+    @property
+    def last_raw_input(self) -> str
 ```
 
-### episodic/
+`store_raw()` は `MemoryManager._on_input_received()` から呼ばれる。確定した入力を保持し、ProactiveScoringの sensory 因子として利用される。
+
+### short_term/ — 短期記憶（ワーキングメモリ）
+
+```python
+class ShortTermMemoryManager:
+    """現在処理中の会話内容（ターン・話題・参照エンティティ）を保持。
+    長期記憶への転送（consolidation）を担う。
+    脳科学対応: 前頭前野 (PFC) のワーキングメモリ。"""
+    def add_turn(self, role: str, content: str) -> None
+    def search(self, query: str, max_results: int = 5) -> list[dict]
+    def search_entities(self, entity_name: str) -> list[dict]
+    def render_context(self, max_chars: int = 600, query: str | None = None) -> str
+    def get_recent_turns(self, n: int = 4) -> list[dict]
+    def get_unconsolidated_turns(self) -> list[dict]
+    def mark_consolidated(self, up_to_index: int | None = None) -> None
+    def should_consolidate(self) -> bool
+    def clear(self) -> None
+    @property
+    def current_topics(self) -> list[str]
+    @property
+    def turn_count(self) -> int
+```
+
+**add_turn のタイミング**:
+- `ExecutionManager._execute_general()` Plan決定後、LLM呼出直前に `add_turn("user", content)`
+- LLM応答受信直後に `add_turn("assistant", response_text)`
+- Planning段階では short_term に最新ターンは存在しない（Planの `content` フィールド経由でアクセスする）
+
+**render_context(query=None)**:
+- `query` なし: 現在の話題 + 参照エンティティのみ（生ターンは含まない → messagesと重複回避）
+- `query` あり: queryに関連するターンを優先表示 + 話題 + エンティティ（PlanningManagerのcontext_hint構築時に利用）
+
+**search**: キーワード重複スコアリングによる関連ターン検索。
+**search_entities**: エンティティ名（URL, ファイルパス, `#tag`, `@mention`, 引用, CamelCase）で該当ターン逆引き。
+
+### long_term/ — 長期記憶
+
+```python
+class LongTermMemoryManager:
+    """エピソード記憶 (EpisodicStore) + 意味記憶 (SemanticStore) を統合管理。
+    脳科学対応: 海馬体 + 大脳皮質連合野。"""
+    def store_episodic(self, data: Any, kind: str = "") -> None
+    def get_episodic_recent(self, n: int = 5) -> list[dict]
+    def clear_episodic(self) -> None
+    def store_semantic(self, data: Any) -> None
+    def search_semantic(self, query: str, max_results: int = 3) -> list[dict]
+    def clear_semantic(self) -> None
+    def search_vector(self, query: str, max_results: int = 3) -> list[dict]
+    def search_emotional(self, current_emotion, max_results: int = 5) -> list[dict]
+```
+
+### long_term/stores.py — EpisodicStore + SemanticStore + AgentsMdStore
 
 ```python
 class EpisodicStore:
-    """エピソード記憶。JSONL 永続化、上限30エントリ。
-    ワーキングメモリ／作業記憶に相当。
-    """
-    def add(self, summary: str) -> None
-    def get_recent(self, n: int = 5) -> list[str]
-    def get_all(self) -> list[dict]
+    """エピソード記憶。JSONL 永続化、上限30エントリ。"""
+    def add(self, summary: str, metadata: dict | None = None) -> None
+    def get_recent(self, n: int = 5) -> list[dict]
     def clear(self) -> None
-```
 
-### semantic/
-
-```python
 class SemanticStore:
     """意味記憶。JSONL 永続化 + ChromaDB + BM25 ハイブリッド検索。
-    長期記憶／意味記憶に相当。
-    """
+    上限100エントリ。統合スコア = vector * 0.6 + bm25 * 0.4"""
     def add(self, entry: dict) -> None
     def search(self, query: str, max_results: int = 3) -> list[dict]
     def clear(self) -> None
+    def sync(self) -> None
+
+class AgentsMdStore:
+    """構造記憶。.iris/data/iris_profile.md の読み書き（上限2KB）。"""
+    def load(self) -> str
+    def update(self, new_content: str) -> None
 ```
 
-### hippocampal/
-
-```python
-class Reflexion:
-    """海馬による記憶整理。
-    完了した会話を分析し、話し方・性格・教訓・好みを抽出 → 意味記憶へ格納。
-    quick_reflect は big_five_estimate フィールドを含む dict を返す (Phase 2)。
-    """
-    def reflect(self, conversation_history: list[dict]) -> dict
-    def quick_reflect(self, conversation_slice: list[dict]) -> dict
-
-class HippocampalManager:
-    """Reflexion のスケジューリングと結果の永続化。
-    ExecutionManager 発話後カウンタに応じて quick_reflect を実行。
-    BigFiveProfile.update_from_estimate() を呼び、性格を動的進化させる (Phase 2)。
-    """
-    def maybe_run(self, messages: list[dict], counter: int) -> int
-    def run_session(self, messages: list[dict]) -> None
-```
-
-### Big Five 性格プロファイル
-
-`iris/memory/personality/big_five.py` (Phase 2) — 安定した性格特性（Big Five OCEAN 0-100）を管理。
-
-```python
-class BigFiveProfile:
-    """OCEAN 5因子 + PEM (Personality Evolution Mechanism) による動的進化。
-    .iris/data/big_five.json に永続化。
-    """
-    def get_scores(self) -> dict[str, float]       # OCEAN 各因子スコア
-    def update_from_estimate(self, estimate: dict) -> dict | None  # PEM: p_new = λ·p_old + (1-λ)·p_turn
-    def get_summary(self) -> str                    # システムプロンプト注入用
-```
-
-PEM 式: `p_new = λ · p_old + (1-λ) · p_turn` (λ=0.95)。`HippocampalManager` が Reflexion の `big_five_estimate` 結果を渡す。閾値超の変化は EpisodicStore に記録され、ACC の Neuroticism/Agreeableness/Extraversion 変調に利用される。`LimbicManager` は BigFiveProvider Protocol 経由でスコアを取得し、ACC 変調に使用する。
-
-注意: ContextManager は会話履歴圧縮の工学的ユーティリティとして
-`iris/llm/context_window.py` に移動した。脳科学マッピング対象外。
-
-### personality/
-
-**脳科学対応**: 前頭前野・連合野 — 人格は記憶の蓄積から形成される。
-`iris/memory/personality/` に配置されている。
-
-```python
-class Personality:
-    """システムプロンプト構築。記憶層から特性・話し方・ユーザー好みを取得し、
-    LLM に注入するシステムプロンプトを組み立てる。
-    人格は記憶の一部 — Reflexion が抽出した特性が人格を更新する。
-    """
-    def build_system_prompt(self, agents_md_content, speech_style, personality_traits,
-                            user_preferences, governance_principles, session_roles) -> str
-
-class PersonaData:
-    """人格データの動的管理。JSON 永続化。"""
-
-class PersonaProfile:
-    """話し方・性格特性のプロファイル。Reflexion の結果を元に更新される。"""
-    def get_speech_style(self) -> str
-    def get_traits(self) -> str
-    def update_from_reflection(self, result: dict) -> None
-```
-
-### 感情タグ付け (扁桃体-海馬相互作用)
-
-`iris/limbic/emotional_memory.py` (Phase 3) — EpisodicStore/SemanticStore のエントリに PAD 感情タグを付与。
-
-```python
-class EmotionalMemory:
-    """感情強度が閾値を超えた入力を EpisodicStore/SemanticStore に自動永続化。
-    感情タグ (valence/arousal/dominance/intensity) を metadata として付与。
-    """
-    def tag(self, content: str, emotion: EmotionState) -> None      # 感情タグ付与 (intensity > 0.15 のみ保存)
-    def search_by_emotion(self, target: EmotionState, max_results: int = 5) -> list[dict]
-    def get_recent_tags(self, n: int = 3) -> list[dict]
-```
-
-`MemoryManager.search_emotional()` は感情タグ付きエントリを強度/類似度でフィルタする。
-`LimbicManager` が EventBus の `InputReceived` を購読し、入力評価後に自動タグ付けを行う。
-
-### vector/
+### long_term/vector_store.py — ベクトル検索
 
 ```python
 class VectorStore:
-    """ChromaDB ベースのベクトルストア。
+    """ChromaDB ベースのベクトルストア + BM25 ハイブリッド検索。
     ONNXMiniLM_L6_V2 埋め込み、cosine類似度。
-    SemanticStore から内部利用される。
-    """
+    統合スコア = vector * 0.6 + bm25 * 0.4"""
     def add(self, entry: dict) -> None
-    def search(self, query: str, max_results: int = 3) -> list[dict]
+    def update(self, entry: dict) -> None
+    def delete(self, eid: str) -> None
+    def search(self, query: str, max_results: int = 3, min_score: float = 0.2) -> list[dict]
     def clear(self) -> None
+    def count(self) -> int
 ```
 
-## Event フロー
+SemanticStore が内部で VectorStore を利用する。
+
+### hippocampal/ — 海馬による記憶整理
+
+```python
+class HippocampalManager:
+    """Reflexion のスケジューリングと結果の永続化。
+    ExecutionManager 発話後カウンタに応じて quick_reflect を実行。
+    ShortTermMemory の consolidation も担当。"""
+    def maybe_run(self, messages: list[dict], counter: int) -> int
+    def run_session(self, messages: list[dict]) -> None
+
+class Reflexion:
+    """完了した会話を分析し、話し方・性格・教訓・好みを抽出 → 意味記憶へ格納。"""
+    def reflect(self, conversation_history: list[dict]) -> dict
+    def quick_reflect(self, conversation_slice: list[dict]) -> dict
+```
+
+**consolidation フロー:**
+1. ShortTermMemory が `max_turns` に達したら `should_consolidate() == True`
+2. `_maybe_consolidate_short_term()` が未consolidateターンのuser発言を結合し EpisodicStore に保存
+3. 現在の話題を SemanticStore に保存
+4. `mark_consolidated()` で全ターンをconsolidated状態に
+
+## データフロー
 
 ```mermaid
 sequenceDiagram
     participant EB as Global EventBus
     participant MGR as MemoryManager
     participant SEN as sensory
-    participant EP as episodic
+    participant STM as short_term
+    participant LTM as long_term
 
     alt ユーザー入力
         EB-->>MGR: InputReceived(msg)
-        MGR->>SEN: add_fragment(msg.content, msg.is_final)
-        SEN-->>MGR: flush → complete_content
-        MGR->>EB: publish InputReady(content)
-        MGR->>EP: add_episode(content)
+        MGR->>SEN: store_raw(content)
+        MGR->>MGR: pending_dict[session_id] = content
+        MGR->>EB: TimerTick → InputReady(content)
+        MGR->>EB: publish InputReady
+
+        Note over EB,STM: PlanningManager が Plan 決定後に ExecutionManager が add_turn
+        EB-->>MGR: (ExecutionManager) short_term.add_turn("user", content)
     else 自発発話トリガー
-        EB-->>MGR: TimerTick
-        MGR->>MGR: rate-limit check
+        EB-->>MGR: TimerTick（pending なし）
         MGR->>EB: publish InputReady(from_timer=True)
     end
+
+    Note over STM,LTM: 応答後
+    MGR->>STM: (ExecutionManager) short_term.add_turn("assistant", response)
+    MGR->>LTM: Hippocampal consolidation（必要時）
 ```
 
-## MemoryManager が購読する EventBus イベント
+## EventBus 購読
 
 | イベント | ハンドラ | 処理 |
 |----------|----------|------|
-| `InputReceived` | `_on_input_received` | sensory buffer → flush → InputReady |
-| `TimerTick` | `_on_timer_tick` | rate-limit check → InputReady(from_timer=True) |
+| `InputReceived` | `_on_input_received` | sensory.store_raw + pending保存 |
+| `TimerTick` | `_on_timer_tick` | pending pop → InputReady または proactive InputReady |
 
 MemoryManager は **Completed イベントを購読しない**。
 Reflexion は ExecutionManager が応答後に直接 HippocampalManager.maybe_run() を呼ぶ。

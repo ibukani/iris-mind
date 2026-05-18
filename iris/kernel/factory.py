@@ -24,15 +24,17 @@ from iris.llm.context_window import LLMContextWindowManager
 from iris.llm.llm_bridge import LLMBridge, create_provider
 from iris.memory.hippocampal.manager import HippocampalManager
 from iris.memory.hippocampal.reflexion import Reflexion
+from iris.memory.long_term.manager import LongTermMemoryManager
+from iris.memory.long_term.stores import AgentsMdStore, EpisodicStore, SemanticStore
+from iris.memory.long_term.vector_store import VectorStore
 from iris.memory.manager import MemoryManager
 from iris.memory.personality.big_five import BigFiveProfile
 from iris.memory.personality.persona_data import PersonaData
 from iris.memory.personality.persona_profile import PersonaProfile
 from iris.memory.personality.personality import Personality
-from iris.memory.sensory.buffer import InputBuffer
+from iris.memory.sensory.manager import SensoryMemoryManager
 from iris.memory.sensory.readiness import ReadinessEvaluator
-from iris.memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
-from iris.memory.vector_store import VectorStore
+from iris.memory.short_term.manager import ShortTermMemoryManager
 from iris.tools.registry import ToolRegistry
 
 from .config import Config
@@ -208,14 +210,22 @@ class KernelFactory:
                 vector_db_path=cfg.vector_db_path,
             )
         vector_store = VectorStore(path=cfg.vector_db_path)
-        mem = MemoryManager(
-            event_bus=event_bus,
+
+        long_term = LongTermMemoryManager(
             episodic=episodic,
             semantic=semantic,
             vector_store=vector_store,
+        )
+        short_term = ShortTermMemoryManager()
+        sensory = SensoryMemoryManager()
+
+        mem = MemoryManager(
+            event_bus=event_bus,
+            sensory=sensory,
+            short_term=short_term,
+            long_term=long_term,
             proactive_config=config.proactive,
         )
-        buf = InputBuffer(session_id="0" * 16)
         readiness = ReadinessEvaluator(
             min_fragments=config.quasi_sync.response_readiness.tier1_min_fragments,
             question_detect=config.quasi_sync.response_readiness.tier1_question_detect,
@@ -223,8 +233,7 @@ class KernelFactory:
             llm=None,
             llm_model_role=config.quasi_sync.response_readiness.llm_model_role,
         )
-        buf.set_readiness_evaluator(readiness)
-        mem.set_sensory_buffer(buf)
+        sensory.set_readiness_evaluator(readiness)
         return mem
 
     @staticmethod
@@ -311,6 +320,7 @@ class KernelFactory:
             monitor=monitor,
             inhibition=inhibition,
             session_roles_getter=session_mgr.get_roles_summary,
+            memory=memory,
         )
 
         return AgencyManager(

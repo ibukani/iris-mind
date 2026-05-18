@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import tempfile
 
-from iris.memory.stores import AgentsMdStore, EpisodicStore, SemanticStore
+from iris.memory.long_term.stores import AgentsMdStore, EpisodicStore, SemanticStore
 
 
 def test_agents_md_store_load_missing() -> None:

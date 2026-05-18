@@ -8,7 +8,7 @@
 
 - **PlanningManager** がグローバル EventBus から `InputReady` を直接購読（AgencyManager は中継しない）
 - 意思決定（planning）: PFC が入力に対して何を行うか決定する
-- PFC スコアリング（ProactiveScoring）: 自発発話の価値を時間・記憶・文脈・感情の4因子で評価
+- PFC スコアリング（ProactiveScoring）: 自発発話の価値を時間・記憶・文脈・感情・緊急性の5因子で評価
 - 基底核抑制（InhibitionController）: 行動の抑制を mood / confirmation / cooldown / **limbic 変調** で制御
 - 行動実行（execution）: 決定された計画を LLM・Tool を用いて実行する
 
@@ -43,19 +43,20 @@ sequenceDiagram
     participant PL as PlanningManager
     participant IB as Internal Bus
     participant EX as ExecutionManager
+    participant STM as short_term
 
     alt ユーザー入力
         EB-->>PL: InputReady(content, from_timer=False)
-        PL->>PL: limbic.apply_limbic_modulation()  (Phase 4)
+        PL->>PL: limbic.apply_limbic_modulation()
         PL->>PL: _inhibition.evaluate(now)
         PL->>PL: notify_user_activity()
         PL->>PL: _build_plan(content, context, gate, limbic_mood)
     else 自発発話トリガー
         EB-->>PL: InputReady(content="", from_timer=True)
-        PL->>PL: limbic.apply_limbic_modulation()  (Phase 4)
+        PL->>PL: limbic.apply_limbic_modulation()
         PL->>PL: _inhibition.evaluate(now)
         PL->>PL: suppressed? → abort
-        PL->>PL: ProactiveScoring.compute(limbic_mood=...)
+        PL->>PL: ProactiveScoring.compute(content=event.content, ...)
         PL->>PL: threshold? → abort
         PL->>PL: record_proactive_attempt()
         PL->>PL: _build_plan(content="", context, gate, limbic_mood)
@@ -64,9 +65,12 @@ sequenceDiagram
     PL->>IB: PlanDecided(plan)
     IB-->>EX: PlanDecided
 
-    EX->>EX: _execute_general(plan)  # action分岐なし
+    EX->>EX: _execute_general(plan)
+    EX->>STM: short_term.add_turn("user", content)  # Plan決定後に追加
+    EX->>EX: pipeline.generate(plan, messages)
     EX->>EB: OutputRequest(stream)
     EX->>EB: OutputRequest(response)
+    EX->>STM: short_term.add_turn("assistant", response)
 ```
 
 ## PlanningManager
@@ -94,16 +98,20 @@ class PlanningManager:
 
 ```python
 class ProactiveScoring:
-    """4因子を重み付け統合 (Phase 4: mood因子がPAD対応):
+    """5因子を重み付け統合:
     - time: 前回の行動からの経過時間
-    - memory: 長期記憶との関連性
-    - context: 直近会話の文脈的一貫性
+    - memory: 長期記憶との関連性（最近の話題 + 意味検索）
+    - context: 直近会話の文脈的一貫性（+ short_termターン数で補正）
     - mood: 感情状態（limbic_mood dict: valence/arousal/dominance → PAD加重スコア）
+    - urgency: 入力内容の緊急性（疑問・緊急語・長文・!!）
+
+    sensory/short_termは個別に算出され、totalを上方補正する。
     """
     def compute(self, now, last_proactive_time, last_user_activity, negative_mood_score,
-                limbic_mood: dict | None = None) -> tuple[float, dict]:
+                limbic_mood: dict | None = None, content: str = "") -> tuple[float, dict]:
         # limbic_mood あり → PAD 3次元の重み付きスコアリング
         # limbic_mood なし → 従来の negative_mood_score ベース
+        # content が空以外 → content_urgency で上方補正
 ```
 
 ### Plan 定義
@@ -154,11 +162,12 @@ class ExecutionManager:
 
     def _execute_general(self, plan: dict) -> None
         # 1. plan 属性（abbreviated / tools_allowed / streaming / ...）を取得
-        # 2. pipeline.generate(plan, messages, on_token) を呼ぶ
-        # 3. ストリーミング出力 → OutputRequest(stream)
-        # 4. 出力完了 → OutputRequest(stream, state="done")
-        # 5. 応答 → OutputRequest(response, text)
-        # 6. 必要に応じて reflexion / context compression
+        # 2. short_term.add_turn("user", content) — Plan決定後に追加
+        # 3. pipeline.generate(plan, messages, on_token) を呼ぶ
+        # 4. ストリーミング出力 → OutputRequest(stream)
+        # 5. 出力完了 → OutputRequest(stream, state="done")
+        # 6. 応答 → OutputRequest(response, text) + add_turn("assistant")
+        # 7. 必要に応じて reflexion / context compression
 ```
 
 ### 実行ルート

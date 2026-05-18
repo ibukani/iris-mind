@@ -146,7 +146,7 @@ iris/
 │   ├── bus.py                 EventBus
 │   └── event_types.py         イベント型定義
 │
-├── limbic/                    # 大脳辺縁系: 感情処理 (NEW)
+├── limbic/                    # 大脳辺縁系: 感情処理
 │   ├── __init__.py
 │   ├── manager.py             LimbicManager（感情状態管理, EventBus連携）
 │   ├── models.py              EmotionState（PAD 3次元モデル）
@@ -154,24 +154,31 @@ iris/
 │   ├── acc.py                 前帯状皮質（感情制御・葛藤調整）
 │   └── emotional_memory.py    扁桃体-海馬相互作用（感情タグ付け）
 │
-├── memory/                    # 記憶系: 感覚野 + 海馬 + 皮質
+├── memory/                    # 記憶系: 感覚野 + 海馬 + 皮質（3層構造）
 │   ├── __init__.py
-│   ├── manager.py             MemoryManager（EventBus連携, TimerTick rate-limit）
-│   ├── stores.py              EpisodicStore + SemanticStore（統合）
-│   ├── vector_store.py        VectorStore（ONNX埋め込み）
-│   ├── sensory/
+│   ├── manager.py             MemoryManager（EventBus連携, TimerTick rate-limit, ディスパッチャ）
+│   ├── sensory/               # 感覚記憶: 生入力の一時保持
 │   │   ├── __init__.py
-│   │   ├── buffer.py          InputBuffer（断片的入力保持）
+│   │   ├── manager.py         SensoryMemoryManager（断片入力 + raw入力 2系統）
 │   │   └── readiness.py       ReadinessEvaluator
-│   ├── hippocampal/
+│   ├── short_term/            # 短期記憶（ワーキングメモリ）
 │   │   ├── __init__.py
-│   │   └── reflexion.py       Reflexion, HippocampalManager
-│   └── personality/            # 人格: 性格特性・話し方（記憶から形成）
+│   │   └── manager.py         ShortTermMemoryManager（ターン管理, 検索, エンティティ抽出）
+│   ├── long_term/             # 長期記憶: エピソード記憶 + 意味記憶
+│   │   ├── __init__.py
+│   │   ├── manager.py         LongTermMemoryManager（統合IF）
+│   │   ├── stores.py          EpisodicStore + SemanticStore
+│   │   └── vector_store.py    VectorStore（ChromaDB + BM25 ハイブリッド）
+│   ├── hippocampal/           # 海馬: 記憶整理
+│   │   ├── __init__.py
+│   │   ├── manager.py         HippocampalManager（Reflexionスケジューリング）
+│   │   └── reflexion.py       Reflexion（自己反省, 特性抽出）
+│   └── personality/           # 人格: 性格特性・話し方（記憶から形成）
 │       ├── __init__.py
 │       ├── personality.py     Personality（システムプロンプト構築）
 │       ├── persona_data.py    PersonaData（動的管理）
 │       ├── persona_profile.py PersonaProfile（話し方・性格）
-│       └── big_five.py        BigFiveProfile + 性格進化 (NEW)
+│       └── big_five.py        BigFiveProfile + 性格進化
 │
 ├── agency/                    # 高度認知: PFC + 基底核 + 運動野
 │   ├── __init__.py

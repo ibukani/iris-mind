@@ -50,14 +50,14 @@ iris/                             ← アプリケーションコア
 │   ├── amygdala.py               ← 扁桃体（感情評価・価値判断）
 │   ├── acc.py                    ← 前帯状皮質（感情制御・葛藤調整）
 │   └── emotional_memory.py       ← 扁桃体-海馬相互作用（感情タグ付け）
-├── memory/                       ← 記憶系: 感覚野+海馬+皮質
-│   ├── manager.py                ← MemoryManager（汎用 store/retrieve/search）
-│   ├── stores.py                 ← EpisodicStore + SemanticStore
-│   ├── vector_store.py           ← VectorStore（ONNX埋め込み）
-│   ├── sensory/                  ← InputBuffer（断片的入力保持）
-│   ├── hippocampal/              ← Reflexion（海馬: 記憶整理）
+├── memory/                       ← 記憶系: 感覚野+海馬+皮質（3層構造）
+│   ├── manager.py                ← MemoryManager（ディスパッチャ+イベント処理）
+│   ├── sensory/                  ← SensoryMemoryManager（断片+生入力 2系統）
+│   ├── short_term/               ← ShortTermMemoryManager（ワーキングメモリ）
+│   ├── long_term/                ← LongTermMemoryManager + stores + VectorStore
+│   ├── hippocampal/              ← Reflexion + HippocampalManager
 │   └── personality/              ← 人格: 性格特性・話し方（記憶から形成）
-│       └── big_five.py           ← BigFiveProfile + 性格進化 (NEW)
+│       └── big_five.py           ← BigFiveProfile + 性格進化
 ├── agency/                       ← 高度認知: PFC+基底核+運動野
 │   ├── manager.py                ← AgencyManager（compact_context中継）
 │   ├── bus.py                    ← 内部 EventBus（planning→execution）

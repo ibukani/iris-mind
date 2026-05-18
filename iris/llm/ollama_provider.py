@@ -82,6 +82,10 @@ class OllamaProvider:
             if on_token is not None:
                 return self._stream_chat(**call_kwargs, on_token=on_token, interrupt_token=interrupt_token)
 
+        with self._chat_lock:
+            if on_token is not None:
+                return self._stream_chat(**call_kwargs, on_token=on_token, interrupt_token=interrupt_token)
+
             resp = self._chat_with_retries(call_kwargs)
             resp["message"] = _process_message(resp["message"])
             return resp

@@ -138,6 +138,12 @@ class ModelConfig(BaseModel):
             return m.performance_tier
         return "balanced"
 
+    def get_effective_max_tokens(self, role: str = "default") -> int:
+        m = self._find_model(role)
+        if m is not None:
+            return m.max_tokens
+        return 4096
+
 
 class ProactiveConfig(BaseModel):
     """自律的会話（自発発話）機能の設定。"""

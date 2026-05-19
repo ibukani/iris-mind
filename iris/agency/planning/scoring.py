@@ -77,7 +77,7 @@ class ProactiveScoring:
     def _compute_time_score(self, now: float, last_proactive_time: float, last_user_activity: float) -> float:
         last_time = max(last_proactive_time, last_user_activity)
         if last_time == 0:
-            return 0.4
+            return 0.0
         elapsed = now - last_time
         if elapsed < self._config.min_interval_sec:
             return 0.0

@@ -119,7 +119,7 @@ class LLMPipeline:
             messages=msgs,
             model=self._model_config.get_model(model_role),
             temperature=self._model_config.get_effective_temperature(model_role),
-            max_tokens=max_tokens or 4096,
+            max_tokens=max_tokens or self._model_config.get_effective_max_tokens(model_role),
             tools=tools,
             on_token=on_token,
             interrupt_token=interrupt_token,
@@ -177,9 +177,9 @@ class LLMPipeline:
                 max_tokens=max_tokens or 80,
                 temperature=temperature,
             )
-            text = (resp.get("message", {}) or {}).get("content", "").strip().strip('"')
-            if text and len(text) < 120:
-                return text  # type: ignore[no-any-return]
+            text = str((resp.get("message", {}) or {}).get("content", "")).strip()
+            if text:
+                return text
         except Exception as e:
             logger.debug("Short generation failed: %s", e)
         return "お疲れさまです！何かお手伝いしましょうか？"

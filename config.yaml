@@ -36,7 +36,7 @@ model:
   models:
     - api_key: ""
       base_url: http://localhost:11434
-      max_tokens: 1024
+      max_tokens: 8192
       name: qwen3.5:9b
       performance_tier: balanced
       provider: ollama

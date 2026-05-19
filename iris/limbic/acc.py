@@ -75,7 +75,7 @@ class AnteriorCingulateCortex:
             if delta.valence > 0 and extraversion > 0.5:
                 factor *= 1.0 + (extraversion - 0.5) * 0.2
 
-        factor = max(0.05, factor)
+        factor = max(0.3, factor)
         adjusted = delta.scale(factor)
         logger.debug(
             "ACC regulate: delta=(%.3f, %.3f, %.3f) current=(%.3f, %.3f, %.3f) "

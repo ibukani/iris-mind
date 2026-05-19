@@ -131,7 +131,7 @@ module = "chromadb.*"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["ollama", "httpx", "prompt_toolkit", "rich"]
+module = ["ollama", "httpx", "rich", "tokenizers"]
 ignore_missing_imports = true
 
 # ---- テストは常に緩め ----

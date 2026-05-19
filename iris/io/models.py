@@ -56,7 +56,7 @@ class ControlMessage(BaseModel):
 
 
 class Message(BaseModel):
-    id: str = ""
+    id: str = Field(default_factory=lambda: uuid4().hex[:12])
     correlation_id: str | None = None
     session_id: str = ""
     source_role: str = ""

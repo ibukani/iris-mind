@@ -6,7 +6,6 @@ import logging
 from multiprocessing.connection import Connection, Listener
 import threading
 from typing import Any
-from uuid import uuid4
 
 from iris.io.models import (
     TCP_HOST,
@@ -159,7 +158,6 @@ class TcpListener:
 
     def _dispatch_message(self, data: dict[str, Any], session_role: str) -> None:
         msg = Message(**data)
-        msg.id = uuid4().hex[:12]
         msg.source_role = session_role
         msg.session_id = msg.session_id or ""
 

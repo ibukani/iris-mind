@@ -31,7 +31,6 @@ class SessionConfig:
 
 _MSG_PERMISSION_MAP: dict[str, Permission] = {
     "chat": Permission.RECEIVE_CHAT,
-    "proactive": Permission.RECEIVE_CHAT,
     "execute": Permission.EXECUTE_ACTION,
     "execute_result": Permission.EXECUTE_ACTION,
     "ack": Permission.RECEIVE_CHAT,

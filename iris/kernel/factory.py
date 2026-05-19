@@ -44,6 +44,19 @@ from .manager import KernelManager
 logger = logging.getLogger(__name__)
 
 
+def _ensure_access_token(config: Config) -> None:
+    if config.session.access_token:
+        return
+    import os as _os
+    if _os.environ.get("IRIS_ACCESS_TOKEN"):
+        return
+    from iris.io.auth.authenticator import Authenticator as _Auth
+    token = _Auth.generate_token()
+    config.session.access_token = token
+    config.save("config.yaml")
+    logger.info("Generated access_token and saved to config.yaml")
+
+
 @dataclass
 class KernelContext:
     event_bus: EventBus
@@ -81,6 +94,8 @@ class KernelFactory:
         Raises:
             LLMAvailabilityError: 指定プロバイダが利用不可な場合。
         """
+        _ensure_access_token(config)
+
         # ============================================================
         # Phase 1: インフラ基盤 (EventBus, IO)
         # ============================================================

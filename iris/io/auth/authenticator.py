@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import secrets
 
 from iris.io.models import AuthMessage
 
@@ -21,3 +22,13 @@ class Authenticator:
 
         logger.debug("Authenticated connection (role=%s)", msg.role)
         return True, None
+
+    def set_token(self, token: str) -> None:
+        self._access_token = token
+
+    def get_token(self) -> str:
+        return self._access_token
+
+    @staticmethod
+    def generate_token() -> str:
+        return secrets.token_urlsafe(32)

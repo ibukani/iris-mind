@@ -52,7 +52,10 @@ class KernelManager:
             layer: 層の識別子（例: "kernel", "io", "memory"）。
             state: 設定する状態（"IDLE", "SENSING", "DECIDING", "EXECUTING"）。
         """
+        old = self._layer_states.get(layer)
         self._layer_states[layer] = state
+        if old != state:
+            logger.info("KernelManager: %s state %s -> %s (global=%s)", layer, old or "NONE", state, self.global_state)
 
     @property
     def shutdown_requested(self) -> bool:
@@ -70,3 +73,4 @@ class KernelManager:
         graceful shutdown を実施する。
         """
         self._shutdown_requested = True
+        logger.info("KernelManager: shutdown requested")

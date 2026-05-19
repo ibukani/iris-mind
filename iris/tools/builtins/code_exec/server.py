@@ -1,9 +1,12 @@
+import logging
 import re
 import subprocess
 import sys
 
 from iris.tools.decorator import register_tools, tool
 from iris.tools.registry import ToolRegistry
+
+logger = logging.getLogger(__name__)
 
 _BLOCKED_COMMANDS = [
     "rm -rf /",
@@ -43,9 +46,11 @@ def _is_dangerous(command: str) -> str | None:
     cmd_lower = command.lower().strip()
     for blocked in _BLOCKED_COMMANDS:
         if blocked in cmd_lower:
+            logger.info("CodeExec: blocked command (keyword) cmd=%.100s", command)
             return f"blocked: '{blocked}' is not allowed"
     for pattern in _BLOCKED_PATTERNS:
         if re.search(pattern, cmd_lower):
+            logger.info("CodeExec: blocked command (pattern) cmd=%.100s", command)
             return f"blocked: pattern '{pattern}' matched"
     return None
 
@@ -53,6 +58,7 @@ def _is_dangerous(command: str) -> str | None:
 @tool(allowed_roles={"smart"})
 def run_python(code: str, timeout: int = 10) -> str:
     """指定されたPythonコードを隔離サブプロセスで実行します"""
+    logger.info("CodeExec: run_python (timeout=%d, code_len=%d)", timeout, len(code))
     try:
         result = subprocess.run(
             [sys.executable, "-c", code],
@@ -78,6 +84,7 @@ def run_shell(command: str, timeout: int = 15) -> str:
     blocked = _is_dangerous(command)
     if blocked:
         return f"Error: {blocked}"
+    logger.info("CodeExec: run_shell cmd=%.100s timeout=%d", command, timeout)
     try:
         result = subprocess.run(
             command,

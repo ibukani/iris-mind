@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime
 import json
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_PATH = ".iris/data/persona_data.json"
 
@@ -64,6 +67,7 @@ class PersonaData:
             }
         )
         self._save()
+        logger.info("PersonaData: added %s entry (%d total)", category, len(entries))
 
     def get_top(self, category: str, n: int = 3) -> list[dict]:
         key = _PERSONA_CATEGORIES.get(category)

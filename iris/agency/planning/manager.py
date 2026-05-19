@@ -78,6 +78,12 @@ class PlanningManager:
 
         plan = self._build_plan(event.content, context, gate, limbic_mood)
         plan["session_id"] = event.session_id
+        logger.info(
+            "PlanningManager: plan published session=%s from_timer=%s suppressed=%s",
+            event.session_id,
+            context.get("from_timer", False),
+            gate.suppressed,
+        )
         self._bus.publish(PlanDecided(plan=plan))
 
     def _build_plan(

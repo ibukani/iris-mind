@@ -112,6 +112,7 @@ class MemoryManager:
     # ============================================================
 
     def store(self, stream: str, data: Any) -> None:
+        logger.info("MemoryManager: store stream=%s", stream)
         if stream == "sensory":
             if isinstance(data, dict) and data.get("raw"):
                 self.sensory.store_raw(data["raw"])
@@ -167,6 +168,7 @@ class MemoryManager:
         return []
 
     def clear(self, stream: str | None = None) -> None:
+        logger.info("MemoryManager: clear stream=%s", stream or "all")
         if stream == "sensory" or stream is None:
             self.sensory.clear()
         if stream == "short_term" or stream is None:

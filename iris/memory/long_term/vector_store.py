@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 import math
 import threading
 from typing import cast
 
 import chromadb
 from chromadb.utils import embedding_functions as ef
+
+logger = logging.getLogger(__name__)
 
 
 class VectorStore:
@@ -42,6 +45,7 @@ class VectorStore:
                 metadatas=[metadata],
             )
             self._bm25_dirty = True
+            logger.info("VectorStore: added doc id=%s type=%s", eid, metadata["type"])
 
     def update(self, entry: dict) -> None:
         with self._lock:
@@ -76,6 +80,7 @@ class VectorStore:
             self._bm25_doc_freq = {}
             self._avgdl = 1.0
             self._bm25_dirty = True
+        logger.info("VectorStore: cleared (%d docs removed)", len(all_ids))
 
     def count(self) -> int:
         with self._lock:
@@ -178,3 +183,4 @@ class VectorStore:
                     seen.add(t)
         self._avgdl = total_terms / len(self._all_docs)
         self._bm25_dirty = False
+        logger.info("VectorStore: rebuilt BM25 index (%d docs)", len(self._all_docs))

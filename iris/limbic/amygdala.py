@@ -166,6 +166,15 @@ class Amygdala:
         n_pos = sum(1 for w in self._positive if w in lower)
         n_neg = sum(1 for w in self._negative if w in lower)
         n_arousal_markers = sum(1 for m in self._high_arousal if m in text)
+
+        if n_pos > 2 or n_neg > 2:
+            logger.info(
+                "Amygdala: significant emotional input (pos=%d neg=%d arousal=%d)",
+                n_pos,
+                n_neg,
+                n_arousal_markers,
+            )
+
         n_appreciation = sum(1 for w in self._appreciation if w in lower)
         n_criticism = sum(1 for w in self._criticism if w in lower)
 

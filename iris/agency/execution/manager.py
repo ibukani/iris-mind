@@ -52,6 +52,11 @@ class ExecutionManager:
         if self._monitor and event.plan.get("content", ""):
             self._monitor.record_user_input()
         self._apply_talkative_overrides(event.plan)
+        logger.info(
+            "ExecutionManager: executing plan session=%s abbreviated=%s",
+            event.plan.get("session_id"),
+            event.plan.get("abbreviated"),
+        )
         self._execute_general(event.plan)
 
     @staticmethod
@@ -154,6 +159,14 @@ class ExecutionManager:
             )
             model_name = self._model_config.get_model(model_role) if self._model_config else None
             self._context_window_mgr.check_and_summarize(self._messages, effective_ctx, model_name=model_name)
+
+        logger.info(
+            "ExecutionManager: response session=%s len=%d reflect=%s compress=%s",
+            session_id,
+            len(response_text),
+            run_reflexion,
+            run_compression,
+        )
 
         if self._monitor:
             flags = self._monitor.record_output()

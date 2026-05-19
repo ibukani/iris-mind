@@ -1,3 +1,4 @@
+import logging
 from pathlib import Path
 import subprocess
 import sys
@@ -5,20 +6,25 @@ import sys
 from iris.tools.decorator import register_tools, tool
 from iris.tools.registry import ToolRegistry
 
+logger = logging.getLogger(__name__)
+
 
 @tool(allowed_roles={"smart"})
 def generate_capability(name: str, code: str) -> str:
     """新しいcapabilityコードを生成し、tools/builtins に保存します"""
     dest = Path("iris/tools/builtins") / name / "server.py"
     if dest.exists():
+        logger.info("SelfMod: generate_capability %s FAILED (already exists)", name)
         return f"Error: already exists: {dest}"
     dest.parent.mkdir(parents=True, exist_ok=True)
     (dest.parent / "__init__.py").touch()
     dest.write_text(code, encoding="utf-8")
     result = _sandbox_test(dest)
     if result["ok"]:
+        logger.info("SelfMod: generated capability %s at %s", name, dest)
         return f"Created: {dest}\nSandbox test passed"
     dest.unlink(missing_ok=True)
+    logger.info("SelfMod: generate_capability %s FAILED (sandbox test)", name)
     return f"Sandbox test failed: {result['error']}"
 
 
@@ -30,6 +36,7 @@ def modify_file(path: str, new_content: str) -> str:
         return f"Error: file not found: {path}"
     old = fp.read_text(encoding="utf-8")
     fp.write_text(new_content, encoding="utf-8")
+    logger.info("SelfMod: modified %s (%d -> %d bytes)", path, len(old), len(new_content))
     return f"Modified: {path} ({len(old)} \u2192 {len(new_content)} bytes)"
 
 

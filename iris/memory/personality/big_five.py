@@ -3,8 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import json
+import logging
 from pathlib import Path
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 _DEFAULT_PATH = ".iris/data/big_five.json"
 
@@ -56,9 +59,11 @@ class BigFiveProfile:
         if not p.exists():
             profile = cls(_path=path)
             profile._save()
+            logger.info("BigFiveProfile: created new profile")
             return profile
         try:
             data = json.loads(p.read_text(encoding="utf-8"))
+            logger.info("BigFiveProfile: loaded from %s", path)
             return cls(
                 openness=data.get("openness", 50.0),
                 conscientiousness=data.get("conscientiousness", 50.0),
@@ -144,6 +149,8 @@ class BigFiveProfile:
                     "timestamp": now,
                 }
             )
+            for c in changes:
+                logger.info("BigFiveProfile: %s", c)
 
         self._save()
         return changes

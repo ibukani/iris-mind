@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import json
+import logging
 from pathlib import Path
 from typing import Protocol
 
 from iris.memory.long_term.vector_store import VectorStore
+
+logger = logging.getLogger(__name__)
 
 
 class AgentsMdStoreProtocol(Protocol):
@@ -41,6 +44,7 @@ class AgentsMdStore:
         if len(new_content.encode("utf-8")) > self.max_bytes:
             new_content = self._truncate(new_content)
         self.path.write_text(new_content, encoding="utf-8")
+        logger.info("AgentsMdStore: updated (%d bytes)", len(new_content.encode("utf-8")))
 
     def _truncate(self, content: str) -> str:
         lines = content.split("\n")
@@ -63,6 +67,7 @@ class EpisodicStore:
     def clear(self) -> None:
         if self.path.exists():
             self.path.unlink()
+        logger.info("EpisodicStore: cleared")
 
     def add(self, summary: str, metadata: dict | None = None) -> None:
         entries = self._load_all()
@@ -76,6 +81,7 @@ class EpisodicStore:
             "\n".join(json.dumps(e) for e in entries),
             encoding="utf-8",
         )
+        logger.info("EpisodicStore: added entry, total=%d", len(entries))
 
     def get_recent(self, n: int = 5) -> list[dict]:
         entries = self._load_all()
@@ -109,6 +115,7 @@ class SemanticStore:
         for e in entries[self._synced_count :]:
             self.vector.add(e)
         self._synced_count = len(entries)
+        logger.info("SemanticStore: synced %d entries to vector store", unsynced)
 
     def add(self, entry: dict) -> None:
         entries = self._load_all()
@@ -127,12 +134,14 @@ class SemanticStore:
         )
         self.vector.add(entry)
         self._synced_count = len(entries)
+        logger.info("SemanticStore: added entry, total=%d type=%s", len(entries), entry.get("type", "unknown"))
 
     def clear(self) -> None:
         if self.path.exists():
             self.path.unlink()
         self.vector.clear()
         self._synced_count = 0
+        logger.info("SemanticStore: cleared")
 
     def search(self, query: str, max_results: int = 3) -> list[dict]:
         return self.vector.search(query, max_results=max_results)

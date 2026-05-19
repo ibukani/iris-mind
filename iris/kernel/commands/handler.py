@@ -65,6 +65,7 @@ class CommandHandler:
         self._big_five = big_five
 
     def handle(self, name: str, args: str = "") -> str:
+        logger.info("CommandHandler: /%s %s", name, args[:100] if args else "")
         if name == "help":
             return self._help()
         if name == "status":

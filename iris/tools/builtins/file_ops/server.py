@@ -1,7 +1,10 @@
+import logging
 from pathlib import Path
 
 from iris.tools.decorator import register_tools, tool
 from iris.tools.registry import ToolRegistry
+
+logger = logging.getLogger(__name__)
 
 
 @tool(allowed_roles={"base", "smart"})
@@ -17,6 +20,7 @@ def write_file(path: str, content: str) -> str:
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(content, encoding="utf-8")
+    logger.info("FileOps: wrote %s (%d bytes)", path, len(content))
     return f"Written: {path} ({len(content)} bytes)"
 
 

@@ -121,6 +121,7 @@ plan は dict で表現され、`action` フィールドを持たない。動作
 | 属性 | 型 | 意味 |
 |------|-----|------|
 | `content` | str | ユーザー入力内容（proactive時は空文字） |
+| `model_role` | str | 使用モデルのロール（"default" / "fast"）。abbreviated時は"fast" |
 | `abbreviated` | bool | 抑制時・閾値未満 → 短縮応答 |
 | `tools_allowed` | bool | ツール利用の可否 |
 | `streaming` | bool | ストリーミング出力の有無 |
@@ -177,6 +178,11 @@ class ExecutionManager:
 | plan.abbreviated=False | LLMPipeline.generate: 通常 system prompt + ツールループ有効 |
 | plan.abbreviated=True | LLMPipeline.generate: plan.short_prompt 使用、ツールループ無効、streaming無効 |
 | plan.from_timer=True | 同上（abbreviated=False固定、tools_allowed=False） |
+| plan.model_role="fast" | 軽量モデルで短縮応答。abbreviated時に自動設定 |
+| plan.model_role="default" | 標準モデルで応答 |
+
+LLMPipeline は `plan.model_role` に従って `ModelConfig.get_model(role)` で使用モデルを決定する。
+ExecutionManager は圧縮実行時に `get_effective_context_window(role)` でper-modelの閾値を使用する。
 
 ```mermaid
 sequenceDiagram

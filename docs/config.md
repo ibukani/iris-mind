@@ -22,13 +22,10 @@ Config
 | フィールド | 型 | デフォルト | 説明 |
 |-----------|-----|-----------|------|
 | models | list[ModelEntry] | qwen3.5:9b (default) | 使用モデル一覧 |
-| provider | str | "ollama" | プロバイダ種別（"ollama" or "openrouter"） |
-| base_url | str | "http://localhost:11434" | API URL（Ollama or OpenRouter） |
-| api_key | str | "" | OpenRouter APIキー（${VAR_NAME}形式対応） |
-| temperature | float | 0.7 | LLM生成温度 |
-| num_gpu | int | 99 | GPUレイヤー数（99=全レイヤー、Ollamaのみ） |
-| num_ctx | int | 8192 | コンテキスト長 |
-| context_window | int | 0 | 会話ウィンドウサイズ（0=無制限） |
+| default_temperature | float | 0.7 | LLM生成温度（各ModelEntryで未指定時のフォールバック） |
+| default_num_ctx | int | 8192 | コンテキスト長（各ModelEntryで未指定時のフォールバック） |
+| default_num_gpu | int | 99 | GPUレイヤー数（各ModelEntryで未指定時のフォールバック, Ollamaのみ） |
+| default_context_window | int | 8192 | 圧縮トリガー閾値（各ModelEntryで未指定時のフォールバック） |
 
 **ModelEntry**:
 
@@ -36,16 +33,32 @@ Config
 |-----------|-----|-----------|------|
 | name | str | — | モデル名（Ollamaタグ形式 or OpenRouterモデルスラッグ） |
 | roles | list[str] | ["default"] | このモデルが担うロール一覧 |
+| provider | str | "ollama" | プロバイダ種別（"ollama" or "openrouter"） |
+| base_url | str | "http://localhost:11434" | API URL（Ollama or OpenRouter） |
+| api_key | str | "" | OpenRouter APIキー（${VAR_NAME}形式対応） |
 | max_tokens | int | 512 | 最大出力トークン数 |
 | temperature | float \| None | None | モデル個別の温度設定（上書き用） |
 | num_ctx | int \| None | None | モデル個別のコンテキスト長（上書き用） |
+| num_gpu | int \| None | None | モデル個別のGPUレイヤー数（Ollamaのみ） |
+| main_gpu | int \| None | None | 使用するGPUデバイス番号（マルチGPU環境） |
+| context_window | int \| None | None | モデル個別の圧縮トリガー閾値 |
 | capabilities | list[str] \| None | None | モデルの機能ラベル（例: ["vision", "tools"]） |
 | performance_tier | str | "balanced" | 性能区分（"fast" / "balanced" / "capable"） |
+| tokenizer_repo_id | str | "" | HuggingFace Hub のリポジトリID（例: "Qwen/Qwen3.5-9B"） |
+| tokenizer_local_path | str | "" | ローカル tokenizer.json のパス |
+| tokenizer_hf_token | str | "" | gated repo用 HF Token（${VAR_NAME}形式対応） |
 
 - `roles` は YAML上で1要素なら文字列でも記述可能: `roles: default`
 - モデルが1つだけの場合はシングルモードとなり、全処理にそのモデルを使用
 - 複数モデルがある場合は `get_model(role)` で role に合致するモデルを選択
-- `ModelEntry.role`（旧形式）の単一文字列は自動的にリストに変換される
+- 各モデルが独立した `provider` / `base_url` / `api_key` を持つため、OllamaとOpenRouterの混在が可能
+- 同じ `(provider, base_url, api_key)` のモデルは1つの Provider インスタンスを共有
+- `temperature` / `num_ctx` / `num_gpu` / `context_window` が `None` の場合は `default_*` が使用される
+
+**Tokenizer解決順**:
+1. `tokenizer_local_path` → ローカルファイルから直接ロード
+2. `tokenizer_repo_id` → HuggingFace Hub から `from_pretrained`（`tokenizer_hf_token` で gated repo対応）
+3. フォールバック → `len(text) // 2` によるNaive推定
 
 **ModelConfig ヘルパーメソッド**:
 
@@ -53,8 +66,10 @@ Config
 |---------|--------|------|
 | `model_names` | list[str] | 全モデル名一覧（property） |
 | `get_model(role)` | str | 指定 role に合致するモデル名。未合致時は models[0] にフォールバック |
-| `get_effective_temperature(role)` | float | role 別実効温度。モデル個別設定がなければ ModelConfig.temperature |
-| `get_effective_num_ctx(role)` | int | role 別実効コンテキスト長。モデル個別設定がなければ ModelConfig.num_ctx |
+| `get_effective_temperature(role)` | float | role 別実効温度。モデル個別設定がなければ `default_temperature` |
+| `get_effective_num_ctx(role)` | int | role 別実効コンテキスト長。モデル個別設定がなければ `default_num_ctx` |
+| `get_effective_num_gpu(role)` | int | role 別実効GPUレイヤー数。モデル個別設定がなければ `default_num_gpu` |
+| `get_effective_context_window(role)` | int | role 別実効圧縮閾値。モデル個別設定がなければ `default_context_window` |
 | `get_model_capabilities(role)` | list[str] | role 別の機能ラベル一覧 |
 | `get_model_performance_tier(role)` | str | role 別の性能区分 |
 
@@ -135,29 +150,40 @@ trigger_weights:
 ## config.yaml 例
 
 ```yaml
-# シングルモード（モデル1つ、全処理に使用）
+# シングルモード（Ollama 1モデル）
 model:
-  provider: openrouter
-  base_url: https://openrouter.ai/api/v1
-  api_key: "${OPENROUTER_API_KEY}"
-  models:
-    - name: google/gemma-4-26b-a4b-it:free
-      roles: [default]
-      max_tokens: 1024
-  temperature: 0.7
+    default_num_ctx: 8192
+    default_context_window: 8192
+    default_temperature: 0.7
+    models:
+        - name: qwen3.5:9b
+          roles: [default]
+          provider: ollama
+          base_url: http://localhost:11434
+          max_tokens: 1024
+          tokenizer_repo_id: Qwen/Qwen3.5-9B
 
-# マルチモード（モデル複数、roleで使い分け）
+# マルチプロバイダモード（Ollama + OpenRouter 混在）
 # model:
-#   provider: ollama
-#   base_url: http://localhost:11434
-#   models:
-#     - name: qwen3.5:2b
-#       roles: [default]
-#       max_tokens: 512
-#     - name: qwen3.5:9b
-#       roles: [smart]
-#       max_tokens: 1024
-#   temperature: 0.7
+#     default_num_ctx: 8192
+#     default_context_window: 8192
+#     default_num_gpu: 99
+#     default_temperature: 0.7
+#     models:
+#         - name: qwen3.5:9b
+#           roles: [default, fast]
+#           provider: ollama
+#           base_url: http://localhost:11434
+#           max_tokens: 1024
+#
+#         - name: gpt-4o
+#           roles: [capable]
+#           provider: openrouter
+#           base_url: https://openrouter.ai/api/v1
+#           api_key: ${OPENROUTER_API_KEY}
+#           max_tokens: 4096
+#           context_window: 128000
+#           tokenizer_repo_id: Xenova/gpt-4o
 
 proactive:
   check_interval_sec: 5.0

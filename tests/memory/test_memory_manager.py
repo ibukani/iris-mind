@@ -19,7 +19,6 @@ def _message_event(session_id: str = "", content: str = "") -> MessageEvent:
         direction="request",
         msg_type="chat",
         content=content,
-        is_final=True,
     )
 
 

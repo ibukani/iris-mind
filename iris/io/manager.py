@@ -92,7 +92,6 @@ class IOManager:
                 direction=msg.direction.value if isinstance(msg.direction, Direction) else "",
                 msg_type=msg.msg_type,
                 content=msg.content,
-                is_final=True,
             )
         )
 

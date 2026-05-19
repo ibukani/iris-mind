@@ -87,7 +87,6 @@ class MessageEvent(Event):
     content: str = ""
     state: str | None = None
     correlation_id: str | None = None
-    is_final: bool = True
 
 
 @dataclass

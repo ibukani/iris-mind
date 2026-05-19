@@ -64,8 +64,7 @@ logging:
   console_level: DEBUG
   dir: logs
   file_level: INFO
-  loggers:
-    #iris.agency.execution.inhibition: DEBUG
-    #iris.agency.planning: DEBUG
-    #iris.io: DEBUG
+  # 特定ロガーのレベル上書き（例: iris.io: DEBUG）
+  # loggers:
+  #   iris.io: DEBUG
   max_bytes: 5242880

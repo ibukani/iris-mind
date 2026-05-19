@@ -11,7 +11,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from iris.kernel.config import Config
+from iris.kernel.config import Config, ModelEntry
 from iris.kernel.supervisor import Supervisor
 
 
@@ -33,10 +33,19 @@ def _check_environment(config: Config) -> bool:
     from iris.llm.llm_bridge import get_provider_class
 
     console = Console()
-    provider_cls = get_provider_class(config.model.provider)
-    ok = provider_cls.ensure_environment(config.model)
+    groups: dict[str, list[ModelEntry]] = {}
+    for entry in config.model.models:
+        groups.setdefault(entry.provider, []).append(entry)
+
+    ok = True
+    for provider_type, entries in groups.items():
+        console.print(f"[bold]Checking {provider_type} ({len(entries)} models)...[/bold]")
+        provider_cls = get_provider_class(provider_type)
+        if not provider_cls.ensure_environment(entries, config.model):
+            console.print(f"[bold red]{provider_type} 環境チェックに失敗しました。[/bold red]")
+            ok = False
     if not ok:
-        console.print("[bold red]環境チェックに失敗しました。終了します。[/bold red]")
+        console.print("[bold red]一部のプロバイダ環境チェックに失敗しました。終了します。[/bold red]")
     return ok
 
 

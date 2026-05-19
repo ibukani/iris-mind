@@ -112,7 +112,7 @@ class CommandHandler:
         if cfg is None:
             return "Kernel running (no config)"
         lines = [
-            f"Model: {cfg.model.provider} ({cfg.model.get_model('default')})",
+            f"Models: {[m.name for m in cfg.model.models]}",
             f"Session: {cfg.session.host}:{cfg.session.port}",
             f"Memory: episodic={cfg.memory.episodic_max_entries}, semantic={cfg.memory.semantic_max_entries}",
         ]
@@ -251,10 +251,15 @@ class CommandHandler:
         cfg = self._config
         if not cfg:
             return "Config not available"
-        lines = [
-            f"Provider: {cfg.model.provider}",
-            f"Model: {cfg.model.get_model('default')}",
-        ]
+        lines = [f"Default model: {cfg.model.get_model('default')}"]
+        for m in cfg.model.models:
+            info = f"  {m.name} [{m.provider}:{m.base_url}] ctx={m.num_ctx or cfg.model.default_num_ctx}"
+            if m.num_gpu is not None:
+                info += f" gpu={m.num_gpu}"
+            if m.main_gpu is not None:
+                info += f" main_gpu={m.main_gpu}"
+            info += f" max_tokens={m.max_tokens}"
+            lines.append(info)
         if self._llm:
             ok = self._llm.is_available()
             lines.append(f"Status: {'available' if ok else 'unreachable'}")

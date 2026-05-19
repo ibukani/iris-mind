@@ -20,7 +20,7 @@ from typing import Any
 import httpx
 from ollama import Client
 
-from iris.kernel.config import ModelConfig
+from iris.kernel.config import ModelConfig, ModelEntry
 
 logger = logging.getLogger(__name__)
 _MAX_RETRIES = 3
@@ -89,16 +89,20 @@ class OllamaProvider:
         stream: bool,
         kwargs: dict[str, Any],
     ) -> dict[str, Any]:
+        options: dict[str, Any] = {
+            "temperature": temperature,
+            "num_predict": max_tokens,
+            "num_ctx": kwargs.pop("num_ctx", self.num_ctx),
+            "num_gpu": kwargs.pop("num_gpu", self.num_gpu),
+            "repeat_penalty": 1.1,
+        }
+        main_gpu = kwargs.pop("main_gpu", None)
+        if main_gpu is not None:
+            options["main_gpu"] = main_gpu
         call_kwargs: dict[str, Any] = {
             "model": model or self.model_name,
             "messages": messages,
-            "options": {
-                "temperature": temperature,
-                "num_predict": max_tokens,
-                "num_ctx": self.num_ctx,
-                "num_gpu": self.num_gpu,
-                "repeat_penalty": 1.1,
-            },
+            "options": options,
             "stream": stream,
             "think": enable_thinking,
         }
@@ -197,13 +201,15 @@ class OllamaProvider:
             return False
 
     @classmethod
-    def ensure_environment(cls, model_config: ModelConfig) -> bool:
+    def ensure_environment(cls, entries: list[ModelEntry], model_config: ModelConfig) -> bool:
         """Ollama 環境を確認・準備する（再起動 → モデル確認 → pull）。"""
-        os.environ.setdefault("OLLAMA_GPU_LAYERS", str(model_config.num_gpu))
+        default_gpu = model_config.default_num_gpu if entries else 99
+        os.environ.setdefault("OLLAMA_GPU_LAYERS", str(default_gpu))
         _restart_ollama()
-        _stop_config_models(model_config.model_names)
+        model_names = [e.name for e in entries]
+        _stop_config_models(model_names)
         time.sleep(0.5)
-        return all(_ensure_model_pulled(name) for name in model_config.model_names)
+        return all(_ensure_model_pulled(name) for name in model_names)
 
 
 def _process_message(msg: dict) -> dict:

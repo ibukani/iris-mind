@@ -110,8 +110,6 @@ def test_get_model_multi_unknown_falls_back() -> None:
                 {"name": "base", "roles": ["default"]},
                 {"name": "smart", "roles": ["smart"]},
             ],
-            provider="ollama",
-            base_url="http://localhost:11434",
         ),
     )
     assert config.model.get_model("nonexistent") == "base"
@@ -123,10 +121,15 @@ def test_env_var_resolution() -> None:
         yaml.dump(
             {
                 "model": {
-                    "models": [{"name": "m", "roles": ["default"]}],
-                    "provider": "openrouter",
-                    "api_key": "${TEST_IRIS_API_KEY}",
-                    "base_url": "http://localhost:11434",
+                    "models": [
+                        {
+                            "name": "m",
+                            "roles": ["default"],
+                            "provider": "openrouter",
+                            "api_key": "${TEST_IRIS_API_KEY}",
+                            "base_url": "http://localhost:11434",
+                        },
+                    ],
                 },
             },
             f,
@@ -135,7 +138,7 @@ def test_env_var_resolution() -> None:
 
     try:
         config = Config.load(path)
-        assert config.model.api_key == "my-test-key-123"
+        assert config.model.models[0].api_key == "my-test-key-123"
     finally:
         os.unlink(path)
         del os.environ["TEST_IRIS_API_KEY"]
@@ -145,14 +148,15 @@ def test_default_values() -> None:
     config = Config(
         model=ModelConfig(
             models=[{"name": "m", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
-            provider="ollama",
-            base_url="http://localhost:11434",
         ),
     )
-    assert config.model.temperature == 0.7
-    assert config.model.num_gpu == 99
-    assert config.model.num_ctx == 8192
-    assert config.model.context_window == 0
+    assert config.model.default_temperature == 0.7
+    assert config.model.default_num_gpu == 99
+    assert config.model.default_num_ctx == 8192
+    assert config.model.default_context_window == 8192
+    assert config.model.models[0].provider == "ollama"
+    assert config.model.models[0].base_url == "http://localhost:11434"
+    assert config.model.models[0].api_key == ""
     assert config.personality.name == "Iris"
 
 

@@ -21,7 +21,7 @@ from iris.limbic.emotional_memory import EmotionalMemory
 from iris.limbic.manager import LimbicManager
 from iris.llm.capability_checker import CapabilityChecker
 from iris.llm.context_window import LLMContextWindowManager
-from iris.llm.llm_bridge import LLMBridge, create_provider
+from iris.llm.llm_bridge import LLMBridge
 from iris.llm.tokenizer_manager import TokenizerManager
 from iris.memory.hippocampal.manager import HippocampalManager
 from iris.memory.hippocampal.reflexion import Reflexion
@@ -248,15 +248,7 @@ class KernelFactory:
 
     @staticmethod
     def _build_llm(config: Config) -> LLMBridge:
-        provider = create_provider(
-            provider_type=config.model.provider,
-            base_url=config.model.base_url,
-            api_key=config.model.api_key,
-            default_model=config.model.get_model("default"),
-            num_gpu=config.model.num_gpu,
-            num_ctx=config.model.num_ctx,
-        )
-        return LLMBridge(provider=provider)
+        return LLMBridge(model_config=config.model)
 
     @staticmethod
     def _build_tools() -> tuple[ToolRegistry, ToolExecutionEngine]:
@@ -331,7 +323,7 @@ class KernelFactory:
             event_bus=event_bus,
             llm_pipeline=pipeline,
             context_window_mgr=context_window_mgr,
-            context_window=config.model.context_window,
+            context_window=config.model.default_context_window,
             model_config=config.model,
             hippocampal=hippocampal,
             monitor=monitor,

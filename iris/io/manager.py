@@ -63,7 +63,7 @@ class IOManager:
         self._session_mgr.route_message(msg)
 
     def _on_tcp_message(self, msg: Message) -> None:
-        if msg.direction not in (Direction.REQUEST, Direction.EVENT):
+        if msg.direction != Direction.REQUEST:
             logger.warning("IOManager: unexpected direction from client: %s", msg.direction)
             return
 
@@ -102,7 +102,7 @@ class IOManager:
             logger.debug("IOManager: command missing slash session=%s", msg.session_id)
             self._session_mgr.route_command_output(
                 msg.session_id,
-                CommandOutput(content=result, session_id=msg.session_id),
+                CommandOutput(content=result, session_id=msg.session_id, correlation_id=msg.id),
             )
             return
 
@@ -117,5 +117,5 @@ class IOManager:
         logger.debug("IOManager: command result session=%s result=%.100s", msg.session_id, result)
         self._session_mgr.route_command_output(
             msg.session_id,
-            CommandOutput(content=result, session_id=msg.session_id),
+            CommandOutput(content=result, session_id=msg.session_id, correlation_id=msg.id),
         )

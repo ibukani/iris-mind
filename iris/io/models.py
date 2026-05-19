@@ -70,6 +70,7 @@ class Message(BaseModel):
 
 
 class CommandInput(BaseModel):
+    msg_type: str = "command"
     id: str = Field(default_factory=lambda: uuid4().hex[:12])
     session_id: str = ""
     source_role: str = ""

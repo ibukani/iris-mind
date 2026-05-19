@@ -37,6 +37,7 @@ _MSG_PERMISSION_MAP: dict[str, Permission] = {
     "system": Permission.RECEIVE_CHAT,
     "error": Permission.RECEIVE_CHAT,
     "interrupt": Permission.INTERRUPT,
+    "command": Permission.RECEIVE_COMMAND,
 }
 
 _INPUT_PERMISSION_MAP: dict[str, Permission] = {
@@ -44,6 +45,7 @@ _INPUT_PERMISSION_MAP: dict[str, Permission] = {
     "system": Permission.SEND_CHAT,
     "interrupt": Permission.INTERRUPT,
     "execute_result": Permission.EXECUTE_ACTION,
+    "command": Permission.SEND_COMMAND,
 }
 
 
@@ -118,6 +120,9 @@ class SessionManager:
         if session.state != SessionState.ACTIVE:
             return
         if session.conn is None:
+            return
+        if Permission.RECEIVE_COMMAND not in session.permissions:
+            logger.warning("Command output denied for session=%s (no receive_command)", session_id)
             return
         self._send_to_session(session, msg)
 

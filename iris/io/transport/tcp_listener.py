@@ -157,7 +157,16 @@ class TcpListener:
                 self._session_manager.remove_session(session_id)
 
     def _dispatch_message(self, data: dict[str, Any], session_role: str) -> None:
-        msg = Message(**data)
+        from pydantic import ValidationError
+
+        try:
+            msg = Message(**data)
+        except (ValidationError, Exception):
+            logger.warning(
+                "TcpListener: invalid Message (unknown direction or bad data), ignoring: keys=%s",
+                list(data.keys()),
+            )
+            return
         msg.source_role = session_role
         msg.session_id = msg.session_id or ""
 
@@ -218,6 +227,12 @@ class TcpListener:
             return
         if not self._session_manager.is_session_active(msg.session_id):
             logger.warning("TcpListener: CommandInput from inactive session: %s", msg.session_id)
+            return
+        if not self._session_manager.check_send_permission(msg.session_id, "command"):
+            logger.warning(
+                "TcpListener: session=%s lacks permission to send command",
+                msg.session_id,
+            )
             return
 
         logger.debug(

@@ -36,20 +36,12 @@ model:
   models:
     - api_key: ""
       base_url: http://localhost:11434
-      capabilities: null
-      context_window: null
-      main_gpu: null
       max_tokens: 1024
       name: qwen3.5:9b
-      num_ctx: null
-      num_gpu: null
       performance_tier: balanced
       provider: ollama
       roles:
         - default
-      temperature: null
-      tokenizer_hf_token: ""
-      tokenizer_local_path: ""
       tokenizer_repo_id: Qwen/Qwen3.5-9B
 
 # TCP サーバー — 外部クライアント接続の listen 設定
@@ -73,7 +65,7 @@ logging:
   dir: logs
   file_level: INFO
   loggers:
-    iris.agency.execution.inhibition: DEBUG
-    iris.agency.planning: DEBUG
-    iris.io: DEBUG
+    #iris.agency.execution.inhibition: DEBUG
+    #iris.agency.planning: DEBUG
+    #iris.io: DEBUG
   max_bytes: 5242880

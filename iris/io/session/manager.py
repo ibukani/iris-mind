@@ -12,9 +12,9 @@ from iris.io.auth.authenticator import Authenticator
 from iris.io.models import (
     AuthMessage,
     CommandOutput,
-    ConnectionMode,
     ControlMessage,
-    OutputMessage,
+    Message,
+    Permission,
     SessionInfo,
     SessionState,
 )
@@ -29,9 +29,27 @@ class SessionConfig:
     access_token: str = ""
 
 
-class SessionManager:
-    """セッションのライフサイクルを管理する。"""
+_MSG_PERMISSION_MAP: dict[str, Permission] = {
+    "chat": Permission.RECEIVE_CHAT,
+    "execute": Permission.EXECUTE_ACTION,
+    "execute_result": Permission.EXECUTE_ACTION,
+    "ack": Permission.RECEIVE_CHAT,
+    "system": Permission.RECEIVE_CHAT,
+    "error": Permission.RECEIVE_CHAT,
+    "interrupt": Permission.INTERRUPT,
+    "command": Permission.RECEIVE_COMMAND,
+}
 
+_INPUT_PERMISSION_MAP: dict[str, Permission] = {
+    "chat": Permission.SEND_CHAT,
+    "system": Permission.SEND_CHAT,
+    "interrupt": Permission.INTERRUPT,
+    "execute_result": Permission.EXECUTE_ACTION,
+    "command": Permission.SEND_COMMAND,
+}
+
+
+class SessionManager:
     def __init__(self, config: SessionConfig | None = None) -> None:
         self._sessions: dict[str, SessionInfo] = {}
         cfg = config or SessionConfig()
@@ -50,8 +68,8 @@ class SessionManager:
             session = SessionInfo(
                 session_id=session_id,
                 state=SessionState.ACTIVE,
-                mode=msg.mode,
-                roles=msg.roles,
+                role=msg.role or "external",
+                permissions=msg.permissions[:],
                 identity=msg.identity,
                 description=msg.description,
                 conn=conn,
@@ -60,65 +78,66 @@ class SessionManager:
             )
             self._sessions[session_id] = session
 
-            logger.info("Session created: %s (mode=%s)", session_id, msg.mode.value)
+            logger.info("Session created: %s (role=%s)", session_id, msg.role)
             return ControlMessage(msg_type="auth_success", session_id=session_id)
 
-    def route_output(self, session_id: str, message: OutputMessage | CommandOutput) -> None:
-        if not session_id:
-            logger.debug("SessionManager: broadcast output type=%s", message.msg_type)
-            self._broadcast_output(message)
+    def route_message(self, msg: Message) -> None:
+        # Get target session(s) under lock, then send outside lock
+        session: SessionInfo | None = None
+        targets: list[SessionInfo] = []
+
+        with self._lock:
+            if msg.session_id:
+                s = self._sessions.get(msg.session_id)
+                if s is not None and s.state == SessionState.ACTIVE and s.conn is not None:
+                    session = s
+            elif msg.target_role == "*":
+                targets = [s for s in self._sessions.values() if s.state == SessionState.ACTIVE and s.conn is not None]
+            else:
+                targets = [
+                    s
+                    for s in self._sessions.values()
+                    if s.state == SessionState.ACTIVE and s.role == msg.target_role and s.conn is not None
+                ]
+
+        if session is not None:
+            self._send_to_session(session, msg)
             return
 
+        permission = _MSG_PERMISSION_MAP.get(msg.msg_type)
+        for s in targets:
+            if permission is not None and permission not in s.permissions:
+                continue
+            self._send_to_session(s, msg)
+
+    def route_command_output(self, session_id: str, msg: CommandOutput) -> None:
         with self._lock:
             session = self._sessions.get(session_id)
-            if session is None:
-                logger.warning("Output route for unknown session: %s", session_id)
-                return
 
-            if session.conn is None:
-                logger.warning("Output route for session without connection: %s", session_id)
-                return
+        if session is None:
+            logger.warning("Command output route for unknown session: %s", session_id)
+            return
+        if session.state != SessionState.ACTIVE:
+            return
+        if session.conn is None:
+            return
+        if Permission.RECEIVE_COMMAND not in session.permissions:
+            logger.warning("Command output denied for session=%s (no receive_command)", session_id)
+            return
+        self._send_to_session(session, msg)
 
-            if session.mode == ConnectionMode.INPUT_ONLY:
-                logger.warning("Output route rejected: session %s is INPUT_ONLY", session_id)
-                return
-
-            conn = session.conn
-            session.last_activity = datetime.now()
-
-        truncated = message.content[:200] + "..." if len(message.content) > 200 else message.content
-        logger.debug(
-            "SessionManager: output session=%s type=%s state=%s content=%.200s",
-            session_id,
-            message.msg_type,
-            message.state,
-            truncated,
-        )
-        raw = message.model_dump_json().encode("utf-8")
+    @staticmethod
+    def _send_to_session(session: SessionInfo, msg: Message | CommandOutput) -> None:
+        conn = session.conn
+        if conn is None:
+            return
+        raw = msg.model_dump_json().encode("utf-8")
         try:
             conn.send_bytes(raw)
+            session.last_activity = datetime.now()
         except (BrokenPipeError, ConnectionError, EOFError):
-            logger.warning("Output connection lost for session: %s", session_id)
-            self.remove_session(session_id)
-
-    def _broadcast_output(self, message: OutputMessage | CommandOutput) -> None:
-        with self._lock:
-            targets = list(self._sessions.items())
-
-        logger.debug("SessionManager: broadcast to %d sessions type=%s", len(targets), message.msg_type)
-        for sid, session in targets:
-            if session.state != SessionState.ACTIVE:
-                continue
-            if session.conn is None:
-                continue
-            if session.mode == ConnectionMode.INPUT_ONLY:
-                continue
-            raw = message.model_dump_json().encode("utf-8")
-            try:
-                session.conn.send_bytes(raw)
-                session.last_activity = datetime.now()
-            except (BrokenPipeError, ConnectionError, EOFError):
-                self.remove_session(sid)
+            logger.warning("Connection lost for session: %s", session.session_id)
+            session.conn = None
 
     def update_activity(self, session_id: str | None) -> None:
         if session_id is None:
@@ -132,11 +151,6 @@ class SessionManager:
         with self._lock:
             session = self._sessions.get(session_id)
             return session is not None and session.state == SessionState.ACTIVE
-
-    def get_session_mode(self, session_id: str) -> ConnectionMode | None:
-        with self._lock:
-            session = self._sessions.get(session_id)
-            return session.mode if session else None
 
     def get_session_info(self, session_id: str) -> SessionInfo | None:
         with self._lock:
@@ -156,13 +170,23 @@ class SessionManager:
         with self._lock:
             return [s for s in self._sessions.values() if s.state == SessionState.ACTIVE]
 
-    def get_roles_summary(self) -> str:
+    def check_send_permission(self, session_id: str, msg_type: str) -> bool:
+        required = _INPUT_PERMISSION_MAP.get(msg_type)
+        if required is None:
+            return True
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session is None:
+                return False
+            return required in session.permissions
+
+    def get_sessions_summary(self) -> str:
         with self._lock:
             sessions = [s for s in self._sessions.values() if s.state == SessionState.ACTIVE]
         if not sessions:
             return ""
         lines: list[str] = []
         for s in sessions:
-            roles_str = ", ".join(r.value for r in s.roles)
-            lines.append(f"[{roles_str}]")
-        return "Active sessions:\n" + "\n".join(lines)
+            perms = ", ".join(p.value for p in s.permissions)
+            lines.append(f"{s.role or 'unknown'}: {perms}")
+        return "Connected clients:\n" + "\n".join(lines)

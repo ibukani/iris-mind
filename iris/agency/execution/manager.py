@@ -8,7 +8,8 @@ from iris.agency.execution.inhibition import InhibitionController
 from iris.agency.execution.monitor import OutputMonitor
 from iris.agency.execution.pipeline import LLMPipeline
 from iris.event.event_bus import EventBus
-from iris.event.event_types import OutputRequest
+from iris.event.event_types import MessageEvent
+from iris.io.models import StreamState
 from iris.kernel.config import ModelConfig
 from iris.llm.context_window import LLMContextWindowManager
 from iris.memory.hippocampal.manager import HippocampalManager
@@ -89,13 +90,14 @@ class ExecutionManager:
 
         if show_thinking:
             self._event_bus.publish(
-                OutputRequest(
+                MessageEvent(
                     timestamp=None,
                     source="execution",
                     session_id=session_id,
-                    message_type="stream",
+                    msg_type="chat",
                     content="",
-                    state="thinking",
+                    state=StreamState.THINKING.value,
+                    direction="stream",
                 )
             )
 
@@ -107,13 +109,14 @@ class ExecutionManager:
 
             def _on_token(delta: str) -> None:
                 self._event_bus.publish(
-                    OutputRequest(
+                    MessageEvent(
                         timestamp=None,
                         source="execution",
                         session_id=session_id,
-                        message_type="stream",
+                        msg_type="chat",
                         content=delta,
-                        state="speaking",
+                        state=StreamState.SPEAKING.value,
+                        direction="stream",
                     )
                 )
 
@@ -158,23 +161,25 @@ class ExecutionManager:
 
         if show_thinking:
             self._event_bus.publish(
-                OutputRequest(
+                MessageEvent(
                     timestamp=None,
                     source="execution",
                     session_id=session_id,
-                    message_type="stream",
+                    msg_type="chat",
                     content="",
-                    state="done",
+                    state=StreamState.DONE.value,
+                    direction="stream",
                 )
             )
 
         self._event_bus.publish(
-            OutputRequest(
+            MessageEvent(
                 timestamp=None,
                 source="execution",
                 session_id=session_id,
-                message_type="response",
+                msg_type="chat",
                 content=response_text,
+                direction="response",
             )
         )
 

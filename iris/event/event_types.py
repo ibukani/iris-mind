@@ -3,8 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import fields as _fields
 from datetime import datetime
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 import uuid as _uuid
+
+if TYPE_CHECKING:
+    pass
 
 
 @dataclass(kw_only=True)
@@ -75,11 +78,15 @@ class AgentAnomalyEvent(Event):
 
 
 @dataclass
-class InputReceived(Event):
+class MessageEvent(Event):
     session_id: str = ""
+    source_role: str = ""
+    target_role: str = ""
+    direction: str = ""
+    msg_type: str = ""
     content: str = ""
-    msg_type: str = "dispatch_text"
-    is_final: bool = True
+    state: str | None = None
+    correlation_id: str | None = None
 
 
 @dataclass
@@ -87,15 +94,6 @@ class InputReady(Event):
     session_id: str = ""
     content: str = ""
     context: dict | None = None
-
-
-@dataclass
-class OutputRequest(Event):
-    session_id: str = ""
-    message_type: str = ""
-    content: str = ""
-    state: str | None = None
-    correlation_id: str | None = None
 
 
 def new_trace_id() -> str:
@@ -107,9 +105,8 @@ __all__ = [
     "AgentStateChangeEvent",
     "Event",
     "InputReady",
-    "InputReceived",
     "MemoryUpdateEvent",
-    "OutputRequest",
+    "MessageEvent",
     "TimerTick",
     "new_trace_id",
 ]

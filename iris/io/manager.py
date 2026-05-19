@@ -4,8 +4,8 @@ from collections.abc import Callable
 import logging
 
 from iris.event.event_bus import EventBus
-from iris.event.event_types import InputReceived, OutputRequest
-from iris.io.models import CommandInput, CommandOutput, InputMessage, OutputMessage
+from iris.event.event_types import MessageEvent
+from iris.io.models import CommandInput, CommandOutput, Direction, Message
 from iris.io.session.manager import SessionManager
 from iris.io.transport.tcp_listener import TcpListener
 
@@ -25,10 +25,9 @@ class IOManager:
         self._tcp_listener = tcp_listener
         self._cmd_handler = command_handler
 
-        self._event_bus.subscribe("OutputRequest", self._on_output_request)
-        self._tcp_listener.set_on_input(self._on_tcp_input)
+        self._event_bus.subscribe("MessageEvent", self._on_message_event)
+        self._tcp_listener.set_on_message(self._on_tcp_message)
         self._tcp_listener.set_on_command(self._on_tcp_command)
-        self._tcp_listener.set_on_interrupt(self._on_tcp_interrupt)
 
     def set_command_handler(self, handler: Callable[[str, str], str]) -> None:
         self._cmd_handler = handler
@@ -39,40 +38,60 @@ class IOManager:
     def stop(self) -> None:
         self._tcp_listener.stop()
 
-    def _on_output_request(self, event: OutputRequest) -> None:
-        msg = OutputMessage(
-            msg_type=event.message_type,
+    def _on_message_event(self, event: MessageEvent) -> None:
+        session_info = self._session_mgr.get_session_info(event.session_id)
+        target_role = session_info.role if session_info else event.source_role or "*"
+
+        msg = Message(
+            msg_type=event.msg_type,
             content=event.content,
             state=event.state,
             correlation_id=event.correlation_id,
+            source_role="mind",
+            target_role=target_role,
+            session_id=event.session_id,
+            direction=Direction(event.direction) if event.direction else Direction.RESPONSE,
         )
         logger.debug(
-            "IOManager: output request session=%s type=%s state=%s content_len=%d",
+            "IOManager: message event session=%s type=%s state=%s target_role=%s content_len=%d",
             event.session_id,
-            event.message_type,
+            event.msg_type,
             event.state,
+            target_role,
             len(event.content) if event.content else 0,
         )
-        self._session_mgr.route_output(event.session_id, msg)
+        self._session_mgr.route_message(msg)
 
-    def _on_tcp_input(self, msg: InputMessage) -> None:
+    def _on_tcp_message(self, msg: Message) -> None:
+        if msg.direction != Direction.REQUEST:
+            logger.warning("IOManager: unexpected direction from client: %s", msg.direction)
+            return
+
+        if msg.target_role != "mind":
+            self._session_mgr.route_message(msg)
+            return
+
         truncated = msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
         logger.debug(
-            "IOManager: input session=%s type=%s final=%s content=%.200s",
+            "IOManager: message session=%s dir=%s type=%s source=%s target=%s content=%.200s",
             msg.session_id,
+            msg.direction.value,
             msg.msg_type,
-            msg.is_final,
+            msg.source_role,
+            msg.target_role,
             truncated,
         )
 
         self._event_bus.publish(
-            InputReceived(
+            MessageEvent(
                 timestamp=None,
                 source="io",
                 session_id=msg.session_id,
-                content=msg.content,
+                source_role=msg.source_role,
+                target_role=msg.target_role,
+                direction=msg.direction.value if isinstance(msg.direction, Direction) else "",
                 msg_type=msg.msg_type,
-                is_final=msg.is_final,
+                content=msg.content,
             )
         )
 
@@ -81,9 +100,9 @@ class IOManager:
         if not content.startswith("/"):
             result = "Commands start with /"
             logger.debug("IOManager: command missing slash session=%s", msg.session_id)
-            self._session_mgr.route_output(
+            self._session_mgr.route_command_output(
                 msg.session_id,
-                CommandOutput(content=result, session_id=msg.session_id),
+                CommandOutput(content=result, session_id=msg.session_id, correlation_id=msg.id),
             )
             return
 
@@ -96,11 +115,7 @@ class IOManager:
         result = self._cmd_handler(name, args) if self._cmd_handler else f"No command handler: /{name}"
 
         logger.debug("IOManager: command result session=%s result=%.100s", msg.session_id, result)
-        self._session_mgr.route_output(
+        self._session_mgr.route_command_output(
             msg.session_id,
-            CommandOutput(content=result, session_id=msg.session_id),
+            CommandOutput(content=result, session_id=msg.session_id, correlation_id=msg.id),
         )
-
-    def _on_tcp_interrupt(self, session_id: str) -> None:
-        logger.info("IOManager: interrupt received for session=%s", session_id)
-        logger.debug("IOManager: interrupt processed session=%s", session_id)

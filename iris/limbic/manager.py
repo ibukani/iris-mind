@@ -5,7 +5,7 @@ import logging
 import time
 from typing import Any, Protocol, TypedDict, runtime_checkable
 
-from iris.event.event_types import InputReceived, TimerTick
+from iris.event.event_types import MessageEvent, TimerTick
 from iris.limbic.acc import AnteriorCingulateCortex
 from iris.limbic.amygdala import Amygdala
 from iris.limbic.emotional_memory import EmotionalMemory
@@ -99,11 +99,13 @@ class LimbicManager:
         self._last_decay_time: float = time.time()
 
         if event_bus is not None:
-            event_bus.subscribe("InputReceived", self._on_input_received)
+            event_bus.subscribe("MessageEvent", self._on_message_event)
             event_bus.subscribe("TimerTick", self._on_timer_tick)
 
-    def _on_input_received(self, event: InputReceived) -> None:
+    def _on_message_event(self, event: MessageEvent) -> None:
         if not event.content:
+            return
+        if event.direction not in ("request", "event") or event.msg_type not in ("chat", "system"):
             return
         self._decay()
         delta = self._amygdala.evaluate(event.content)

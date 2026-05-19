@@ -8,13 +8,11 @@ import threading
 from typing import Any
 
 from iris.io.models import (
-    INPUT_MSG_TYPES,
     TCP_HOST,
     TCP_PORT,
     CommandInput,
-    InputMessage,
-    InterruptMessage,
-    OutputMessage,
+    Direction,
+    Message,
 )
 from iris.io.session.manager import SessionManager
 
@@ -22,34 +20,29 @@ logger = logging.getLogger(__name__)
 
 
 class TcpListener:
-    """TCP接続を1ポートで受け付け、メッセージ種別に応じてディスパッチする。"""
+    """TCP接続を1ポートで受け付け、メッセージ種別に応じてディスパッチする (v2.0)。"""
 
     def __init__(
         self,
         session_manager: SessionManager,
-        on_input: Callable[[InputMessage], None] | None = None,
+        on_message: Callable[[Message], None] | None = None,
         on_command: Callable[[CommandInput], None] | None = None,
-        on_interrupt: Callable[[str], None] | None = None,
     ) -> None:
         self._session_manager = session_manager
-        self._on_input = on_input or self._noop
+        self._on_message = on_message or self._noop
         self._on_command = on_command
-        self._on_interrupt = on_interrupt
         self._listener: Listener | None = None
         self._running = False
         self._thread: threading.Thread | None = None
 
-    def set_on_input(self, on_input: Callable[[InputMessage], None]) -> None:
-        self._on_input = on_input
+    def set_on_message(self, on_message: Callable[[Message], None]) -> None:
+        self._on_message = on_message
 
     def set_on_command(self, on_command: Callable[[CommandInput], None]) -> None:
         self._on_command = on_command
 
-    def set_on_interrupt(self, on_interrupt: Callable[[str], None]) -> None:
-        self._on_interrupt = on_interrupt
-
     @staticmethod
-    def _noop(_msg: InputMessage) -> None:
+    def _noop(_msg: Message) -> None:
         return
 
     def start(self, host: str = TCP_HOST, port: int = TCP_PORT) -> None:
@@ -85,6 +78,7 @@ class TcpListener:
     def _serve(self, conn: Connection) -> None:
         auth_done = False
         session_id: str | None = None
+        session_role: str = "external"
         try:
             while self._running:
                 raw = conn.recv_bytes()
@@ -101,10 +95,10 @@ class TcpListener:
                     if auth_done:
                         logger.warning("TcpListener: duplicate auth, ignoring")
                         continue
-                    sid = self._handle_auth(conn, data)
-                    if sid is None:
+                    result = self._handle_auth(conn, data)
+                    if result is None:
                         return
-                    session_id = sid
+                    session_id, session_role = result
                     auth_done = True
                     continue
 
@@ -116,24 +110,13 @@ class TcpListener:
                     self._handle_ping(conn, session_id)
                     continue
 
-                if mt == "interrupt":
-                    im = InterruptMessage(**data)
-                    logger.debug("TcpListener: interrupt session=%s", im.session_id)
-                    if self._on_interrupt:
-                        self._on_interrupt(im.session_id)
-                    continue
-
-                if mt in "command":
+                if mt == "command":
                     self._session_manager.update_activity(session_id)
-                    self._handle_command(data)
+                    self._handle_command(data, session_role)
                     continue
 
-                if mt in INPUT_MSG_TYPES:
-                    self._session_manager.update_activity(session_id)
-                    self._handle_input(data)
-                    continue
-
-                logger.debug("TcpListener: unknown msg_type=%s, ignoring", mt)
+                self._session_manager.update_activity(session_id)
+                self._dispatch_message(data, session_role)
 
         except (EOFError, ConnectionError, BrokenPipeError):
             logger.info("TcpListener: connection closed")
@@ -145,7 +128,7 @@ class TcpListener:
                 if session_id:
                     self._session_manager.remove_session(session_id)
 
-    def _handle_auth(self, conn: Connection, data: dict[str, Any]) -> str | None:
+    def _handle_auth(self, conn: Connection, data: dict[str, Any]) -> tuple[str, str] | None:
         from iris.io.models import AuthMessage
 
         msg = AuthMessage(**data)
@@ -155,8 +138,9 @@ class TcpListener:
         if response.msg_type == "auth_failure":
             logger.info("TcpListener: auth failed, closing connection")
             return None
-        logger.info("TcpListener: session %s authenticated", response.session_id)
-        return response.session_id
+        assert response.session_id is not None
+        logger.info("TcpListener: session %s authenticated (role=%s)", response.session_id, msg.role)
+        return response.session_id, msg.role or "external"
 
     def _handle_ping(self, conn: Connection, session_id: str | None) -> None:
         from iris.io.models import PongMessage
@@ -172,49 +156,90 @@ class TcpListener:
             if session_id:
                 self._session_manager.remove_session(session_id)
 
-    def _handle_input(self, data: dict[str, Any]) -> None:
-        msg = InputMessage(**data)
-        session_id = msg.session_id
-        if not session_id:
-            logger.warning("TcpListener: InputMessage without session_id")
+    def _dispatch_message(self, data: dict[str, Any], session_role: str) -> None:
+        from pydantic import ValidationError
+
+        try:
+            msg = Message(**data)
+        except (ValidationError, Exception):
+            logger.warning(
+                "TcpListener: invalid Message (unknown direction or bad data), ignoring: keys=%s",
+                list(data.keys()),
+            )
             return
-        if not self._session_manager.is_session_active(session_id):
-            logger.warning("TcpListener: InputMessage from inactive session: %s", session_id)
+        msg.source_role = session_role
+        msg.session_id = msg.session_id or ""
+
+        if not msg.session_id:
+            logger.warning("TcpListener: Message without session_id, ignoring")
+            return
+        if not self._session_manager.is_session_active(msg.session_id):
+            logger.warning("TcpListener: Message from inactive session: %s", msg.session_id)
+            return
+        if not self._session_manager.check_send_permission(msg.session_id, msg.msg_type):
+            logger.warning(
+                "TcpListener: session=%s lacks permission for msg_type=%s",
+                msg.session_id,
+                msg.msg_type,
+            )
+            err = Message(
+                msg_type="error",
+                content=f"Permission denied: cannot send {msg.msg_type}",
+                source_role="mind",
+                target_role=session_role,
+                session_id=msg.session_id,
+                direction=Direction.RESPONSE,
+            )
+            self._session_manager.route_message(err)
             return
 
         truncated = msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
         logger.debug(
-            "TcpListener: input dispatch id=%s session=%s type=%s final=%s content=%.200s",
+            "TcpListener: message dispatch id=%s session=%s dir=%s type=%s source=%s target=%s content=%.200s",
             msg.id,
-            session_id,
+            msg.session_id,
+            msg.direction.value if isinstance(msg.direction, Direction) else msg.direction,
             msg.msg_type,
-            msg.is_final,
+            msg.source_role,
+            msg.target_role,
             truncated,
         )
-        self._on_input(msg)
+
+        self._on_message(msg)
 
         if msg.metadata.get("ack_required", False):
-            ack = OutputMessage(
+            ack = Message(
                 msg_type="ack",
                 content=f"ack:{msg.id}",
                 correlation_id=msg.id,
+                source_role="mind",
+                target_role=session_role,
+                session_id=msg.session_id,
+                direction=Direction.RESPONSE,
             )
-            self._session_manager.route_output(session_id, ack)
+            self._session_manager.route_message(ack)
 
-    def _handle_command(self, data: dict[str, Any]) -> None:
+    def _handle_command(self, data: dict[str, Any], session_role: str) -> None:
         msg = CommandInput(**data)
-        session_id = msg.session_id
-        if not session_id:
+        msg.source_role = session_role
+        if not msg.session_id:
             logger.warning("TcpListener: CommandInput without session_id")
             return
-        if not self._session_manager.is_session_active(session_id):
-            logger.warning("TcpListener: CommandInput from inactive session: %s", session_id)
+        if not self._session_manager.is_session_active(msg.session_id):
+            logger.warning("TcpListener: CommandInput from inactive session: %s", msg.session_id)
+            return
+        if not self._session_manager.check_send_permission(msg.session_id, "command"):
+            logger.warning(
+                "TcpListener: session=%s lacks permission to send command",
+                msg.session_id,
+            )
             return
 
         logger.debug(
-            "TcpListener: command dispatch id=%s session=%s content=%.200s",
+            "TcpListener: command dispatch id=%s session=%s role=%s content=%.200s",
             msg.id,
-            session_id,
+            msg.session_id,
+            msg.source_role,
             msg.content,
         )
         if self._on_command:

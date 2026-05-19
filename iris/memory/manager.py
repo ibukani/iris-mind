@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from iris.limbic.models import EmotionState
 
-from iris.event.event_types import InputReady, InputReceived, TimerTick
+from iris.event.event_types import InputReady, MessageEvent, TimerTick
 from iris.memory.long_term.manager import LongTermMemoryManager
 from iris.memory.long_term.stores import EpisodicStore, SemanticStore
 from iris.memory.long_term.vector_store import VectorStore
@@ -57,14 +57,16 @@ class MemoryManager:
         self._pending_lock: threading.Lock = threading.Lock()
 
         if event_bus is not None:
-            event_bus.subscribe("InputReceived", self._on_input_received)
+            event_bus.subscribe("MessageEvent", self._on_message_event)
             event_bus.subscribe("TimerTick", self._on_timer_tick)
 
     def set_sensory_buffer(self, buf: SensoryMemoryManager) -> None:
         self.sensory = buf
 
-    def _on_input_received(self, event: InputReceived) -> None:
+    def _on_message_event(self, event: MessageEvent) -> None:
         if not event.content:
+            return
+        if event.direction not in ("request", "event") or event.msg_type not in ("chat", "system"):
             return
         self.sensory.store_raw(event.content)
         with self._pending_lock:

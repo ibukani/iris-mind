@@ -119,7 +119,7 @@ class CommandHandler:
         # /memory search → MemoryManager.search("semantic")
         # /memory clear  → MemoryManager.clear()
         # /emotion       → LimbicManager.get_emotion_report()
-        # /sessions      → SessionManager.get_roles_summary()
+        # /sessions      → SessionManager.get_sessions_summary()
 ```
 
 ```mermaid

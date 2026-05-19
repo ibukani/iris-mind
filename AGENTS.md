@@ -37,7 +37,7 @@ iris/                             ← アプリケーションコア
 │   └── commands/                 ← CommandHandler（/shutdown 等）
 ├── io/                           ← 視床: 入出力中継
 │   ├── manager.py                ← IOManager
-│   ├── models.py                 ← InputMessage, OutputMessage
+│   ├── models.py                 ← Message, CommandInput, CommandOutput, Permission, Direction
 │   ├── transport/                ← TcpListener
 │   ├── session/                  ← SessionManager
 │   └── auth/                     ← Authenticator

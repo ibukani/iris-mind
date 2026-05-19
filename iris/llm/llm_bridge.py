@@ -77,13 +77,12 @@ class LLMBridge:
         provider = self._resolve_provider(model_name)
         entry = self._entries.get(model_name)
         if entry is not None:
-            if temperature == 0.7 and entry.temperature is not None:
-                temperature = entry.temperature
-            if max_tokens == 4096 and entry.max_tokens != 512:
-                max_tokens = entry.max_tokens
-            kwargs.setdefault("num_ctx", entry.num_ctx)
-            kwargs.setdefault("num_gpu", entry.num_gpu)
-            kwargs.setdefault("main_gpu", entry.main_gpu)
+            if entry.num_ctx is not None:
+                kwargs.setdefault("num_ctx", entry.num_ctx)
+            if entry.num_gpu is not None:
+                kwargs.setdefault("num_gpu", entry.num_gpu)
+            if entry.main_gpu is not None:
+                kwargs.setdefault("main_gpu", entry.main_gpu)
 
         return provider.chat(
             messages=messages,
@@ -107,12 +106,10 @@ class LLMBridge:
         return any_ok
 
     def unload_model(self, model_name: str | None = None) -> None:
-        if model_name and model_name in self._model_map:
-            key = self._model_map[model_name]
-            self._providers[key].unload_model(model_name)
-            return
-        for provider in self._providers.values():
-            provider.unload_model("")
+        if model_name:
+            key = self._model_map.get(model_name)
+            if key:
+                self._providers[key].unload_model(model_name)
 
     def _resolve_provider(self, model_name: str) -> LLMProvider:
         key = self._model_map.get(model_name)
@@ -126,25 +123,3 @@ class LLMBridge:
         for name in self._model_map:
             return name
         return ""
-
-
-def create_provider(
-    provider_type: str,
-    *,
-    base_url: str = "http://localhost:11434",
-    api_key: str = "",
-    default_model: str = "qwen3.5:9b",
-    num_gpu: int = 0,
-    num_ctx: int = 8192,
-) -> LLMProvider:
-    """互換用ラッパー — LLMBridge の直接利用を推奨。"""
-    entry = ModelEntry(
-        name=default_model,
-        roles=["default"],
-        provider=provider_type,
-        base_url=base_url,
-        api_key=api_key,
-        num_gpu=num_gpu,
-        num_ctx=num_ctx,
-    )
-    return LLMBridge._create_provider(entry)

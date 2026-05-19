@@ -144,8 +144,13 @@ class ExecutionManager:
 
         if run_compression and self._context_window_mgr:
             model_role = plan.get("model_role", "default")
+            effective_ctx = (
+                self._model_config.get_effective_context_window(model_role)
+                if self._model_config
+                else self._context_window
+            )
             model_name = self._model_config.get_model(model_role) if self._model_config else None
-            self._context_window_mgr.check_and_summarize(self._messages, self._context_window, model_name=model_name)
+            self._context_window_mgr.check_and_summarize(self._messages, effective_ctx, model_name=model_name)
 
         if self._monitor:
             flags = self._monitor.record_output()

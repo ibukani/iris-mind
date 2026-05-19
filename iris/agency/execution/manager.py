@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import logging
+import threading
 
 from iris.agency.bus import InternalBus, PlanDecided
 from iris.agency.execution.inhibition import InhibitionController
@@ -144,33 +145,11 @@ class ExecutionManager:
         if response_text and self._memory:
             self._memory.short_term.add_turn("assistant", response_text)
 
-        if run_reflexion and self._hippocampal:
-            self._msg_count_since_reflect = self._hippocampal.maybe_run(
-                self._messages,
-                self._msg_count_since_reflect,
-            )
-
-        if run_compression and self._context_window_mgr:
-            model_role = plan.get("model_role", "default")
-            effective_ctx = (
-                self._model_config.get_effective_context_window(model_role)
-                if self._model_config
-                else self._context_window
-            )
-            model_name = self._model_config.get_model(model_role) if self._model_config else None
-            self._context_window_mgr.check_and_summarize(self._messages, effective_ctx, model_name=model_name)
-
         logger.info(
-            "ExecutionManager: response session=%s len=%d reflect=%s compress=%s",
+            "ExecutionManager: response session=%s len=%d",
             session_id,
             len(response_text),
-            run_reflexion,
-            run_compression,
         )
-
-        if self._monitor:
-            flags = self._monitor.record_output()
-            self._handle_monitor_flags(flags)
 
         if show_thinking:
             self._event_bus.publish(
@@ -195,6 +174,29 @@ class ExecutionManager:
                 direction="response",
             )
         )
+
+        if self._monitor:
+            flags = self._monitor.record_output()
+            self._handle_monitor_flags(flags)
+
+        def _post_process() -> None:
+            if run_reflexion and self._hippocampal:
+                self._msg_count_since_reflect = self._hippocampal.maybe_run(
+                    self._messages,
+                    self._msg_count_since_reflect,
+                )
+            if run_compression and self._context_window_mgr:
+                model_role = plan.get("model_role", "default")
+                effective_ctx = (
+                    self._model_config.get_effective_context_window(model_role)
+                    if self._model_config
+                    else self._context_window
+                )
+                model_name = self._model_config.get_model(model_role) if self._model_config else None
+                self._context_window_mgr.check_and_summarize(self._messages, effective_ctx, model_name=model_name)
+
+        if run_reflexion or run_compression:
+            threading.Thread(target=_post_process, daemon=True).start()
 
     def _handle_monitor_flags(self, flags: list[str]) -> None:
         if "talkative" in flags and self._monitor and self._inhibition:

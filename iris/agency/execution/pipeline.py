@@ -54,28 +54,15 @@ class LLMPipeline:
         self._governance_principles = governance_principles
         self._session_roles_summary: str = ""
         self._max_tool_iterations: int = 3
+        self._sysprompt_cache: str | None = None
 
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
 
     def _build_system_prompt(self, context_hint: str = "") -> str:
-        """Iris のシステムプロンプトを構築する。
+        if self._sysprompt_cache is not None:
+            return self._sysprompt_cache
 
-        Personality テンプレートに、以下の動的情報を注入する：
-        - AgentsMD：構造記憶（ツール・ロール情報）
-        - Speech Style：蓄積された話し方の特徴
-        - Personality Traits：蓄積された性格特性
-        - User Preferences：ユーザーの好みや興味
-        - Governance Principles：行動の方針
-        - Session Roles：現在のセッション中の役割
-        - Context Hint：会話固有のコンテキスト
-
-        Args:
-            context_hint: 会話の事前情報。例："ユーザーが新規ジョブについて質問中"
-
-        Returns:
-            完成したシステムプロンプト文字列。
-        """
         agents_md = self._agents_md_store.load() if self._agents_md_store else ""
         speech_style = self._persona_profile.get_speech_style() if self._persona_profile else ""
         traits = self._persona_profile.get_traits() if self._persona_profile else ""
@@ -107,6 +94,7 @@ class LLMPipeline:
 
         if context_hint:
             prompt += f"\n\n## 会話コンテキスト\n{context_hint}"
+        self._sysprompt_cache = prompt
         return prompt
 
     def _get_tools(self) -> list[dict] | None:
@@ -151,6 +139,7 @@ class LLMPipeline:
         Returns:
             生成されたテキスト。
         """
+        self._sysprompt_cache = None
         model_role = plan.get("model_role", "default")
         context_hint = plan.get("context_hint", "")
         max_tokens = plan.get("max_tokens", 0) or None

@@ -4,6 +4,7 @@ from datetime import UTC, datetime
 import json
 import logging
 from pathlib import Path
+import time
 from typing import Protocol
 
 from iris.memory.long_term.vector_store import VectorStore
@@ -31,19 +32,29 @@ class SemanticStoreProtocol(Protocol):
 class AgentsMdStore:
     """構造記憶。.iris/data/iris_profile.mdの読み書き。"""
 
-    def __init__(self, path: str = ".iris/data/iris_profile.md", max_bytes: int = 2048):
+    def __init__(self, path: str = ".iris/data/iris_profile.md", max_bytes: int = 2048, cache_ttl: float = 10.0):
         self.path = Path(path)
         self.max_bytes = max_bytes
+        self._cache: str | None = None
+        self._cache_time: float = 0
+        self._cache_ttl: float = cache_ttl
 
     def load(self) -> str:
+        now = time.time()
+        if self._cache is not None and (now - self._cache_time) < self._cache_ttl:
+            return self._cache
         if self.path.exists():
-            return self.path.read_text(encoding="utf-8")
+            self._cache = self.path.read_text(encoding="utf-8")
+            self._cache_time = now
+            return self._cache
         return ""
 
     def update(self, new_content: str) -> None:
         if len(new_content.encode("utf-8")) > self.max_bytes:
             new_content = self._truncate(new_content)
         self.path.write_text(new_content, encoding="utf-8")
+        self._cache = new_content
+        self._cache_time = time.time()
         logger.info("AgentsMdStore: updated (%d bytes)", len(new_content.encode("utf-8")))
 
     def _truncate(self, content: str) -> str:

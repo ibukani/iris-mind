@@ -40,6 +40,7 @@ model:
       name: qwen3.5:9b
       performance_tier: balanced
       provider: ollama
+      num_gpu: 99
       roles:
         - default
       tokenizer_repo_id: Qwen/Qwen3.5-9B

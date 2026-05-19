@@ -38,6 +38,7 @@ class LLMBridge:
         self._providers: dict[str, LLMProvider] = {}
         self._model_map: dict[str, str] = {}
         self._entries: dict[str, ModelEntry] = {}
+        self._model_config = model_config
 
         for entry in model_config.models:
             key = f"{entry.provider}|{entry.base_url}|{entry.api_key}"
@@ -46,8 +47,7 @@ class LLMBridge:
             self._model_map[entry.name] = key
             self._entries[entry.name] = entry
 
-    @staticmethod
-    def _create_provider(entry: ModelEntry) -> LLMProvider:
+    def _create_provider(self, entry: ModelEntry) -> LLMProvider:
         if entry.provider == "openrouter":
             return OpenRouterProvider(
                 api_key=entry.api_key or "",
@@ -57,8 +57,8 @@ class LLMBridge:
         return OllamaProvider(
             model_name=entry.name,
             base_url=entry.base_url or "http://localhost:11434",
-            num_gpu=entry.num_gpu or 0,
-            num_ctx=entry.num_ctx or 8192,
+            num_gpu=entry.num_gpu if entry.num_gpu is not None else self._model_config.default_num_gpu,
+            num_ctx=entry.num_ctx if entry.num_ctx is not None else self._model_config.default_num_ctx,
         )
 
     def chat(

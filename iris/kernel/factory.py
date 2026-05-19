@@ -45,16 +45,38 @@ logger = logging.getLogger(__name__)
 
 
 def _ensure_access_token(config: Config) -> None:
+    import os as _os
+    from pathlib import Path as _Path
+
+    token = _os.environ.get("IRIS_ACCESS_TOKEN", "")
+    if token:
+        config.session.access_token = token
+        return
+
     if config.session.access_token:
         return
-    import os as _os
-    if _os.environ.get("IRIS_ACCESS_TOKEN"):
-        return
+
+    secrets_path = _Path(".iris/secrets.yaml")
+    if secrets_path.exists():
+        import yaml as _yaml
+
+        secrets = _yaml.safe_load(secrets_path.read_text(encoding="utf-8"))
+        if secrets and "access_token" in secrets:
+            config.session.access_token = secrets["access_token"]
+            return
+
     from iris.io.auth.authenticator import Authenticator as _Auth
+
     token = _Auth.generate_token()
     config.session.access_token = token
-    config.save("config.yaml")
-    logger.info("Generated access_token and saved to config.yaml")
+    secrets_path.parent.mkdir(parents=True, exist_ok=True)
+    import yaml as _yaml
+
+    secrets_path.write_text(
+        _yaml.dump({"access_token": token}, default_flow_style=False),
+        encoding="utf-8",
+    )
+    logger.info("Generated access_token and saved to .iris/secrets.yaml")
 
 
 @dataclass

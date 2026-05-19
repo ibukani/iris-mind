@@ -196,11 +196,11 @@ class CommandHandler:
         if not self._memory:
             return "Memory not available"
         lines = ["Memory stats:"]
-        if self._memory._episodic:
-            entries = self._memory._episodic._load_all()
+        if self._memory.long_term.episodic:
+            entries = self._memory.long_term.episodic._load_all()
             lines.append(f"  Episodic: {len(entries)} entries")
-        if self._memory._semantic:
-            entries = self._memory._semantic._load_all()
+        if self._memory.long_term.semantic:
+            entries = self._memory.long_term.semantic._load_all()
             lines.append(f"  Semantic: {len(entries)} entries")
         return "\n".join(lines)
 

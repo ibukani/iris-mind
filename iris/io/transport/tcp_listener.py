@@ -198,7 +198,7 @@ class TcpListener:
             "TcpListener: message dispatch id=%s session=%s dir=%s type=%s source=%s target=%s content=%.200s",
             msg.id,
             msg.session_id,
-            msg.direction.value if isinstance(msg.direction, Direction) else msg.direction,
+            msg.direction.value,
             msg.msg_type,
             msg.source_role,
             msg.target_role,

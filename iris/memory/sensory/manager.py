@@ -102,6 +102,13 @@ class SensoryMemoryManager:
             self._cancel_timer_locked()
             self._fragments.clear()
 
+    def clear(self) -> None:
+        with self._lock:
+            self._cancel_timer_locked()
+            self._fragments.clear()
+            self._raw_input = ""
+            self._raw_timestamp = ""
+
     def close(self) -> None:
         with self._lock:
             self._closed = True

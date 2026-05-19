@@ -12,6 +12,7 @@ build/
 # Data files (runtime generated)
 .iris/data/
 !.iris/data/iris_profile.md
+.iris/secrets.yaml
 
 # Test artifacts
 chroma_test/

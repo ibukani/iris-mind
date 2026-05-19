@@ -45,6 +45,7 @@ class TokenizerManager:
                 os.environ.setdefault("HF_TOKEN", hf_token)
             try:
                 self._tokenizer = Tokenizer.from_pretrained(repo_id)
+                assert self._tokenizer is not None
                 logger.info("Tokenizer loaded from HF Hub: %s (vocab=%d)", repo_id, self._tokenizer.get_vocab_size())
             except Exception as e:
                 logger.warning("Failed to load tokenizer from %s: %s", repo_id, e)

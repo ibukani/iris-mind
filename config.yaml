@@ -37,7 +37,6 @@ model:
 session:
     host: 127.0.0.1
     port: 9876
-    access_token: ""
 logging:
     file_level: INFO # ファイルログのしきい値
     console_level: DEBUG

@@ -89,7 +89,7 @@ class IOManager:
                 session_id=msg.session_id,
                 source_role=msg.source_role,
                 target_role=msg.target_role,
-                direction=msg.direction.value if isinstance(msg.direction, Direction) else "",
+                direction=msg.direction.value,
                 msg_type=msg.msg_type,
                 content=msg.content,
             )

@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 
 from iris.event import EventBus
-from iris.io.models import CommandOutput, ConnectionMode, OutputMessage
+from iris.io.models import CommandOutput, Message
 from iris.kernel.config import Config, ModelConfig, ProactiveConfig
 
 # ── Fake LLM Provider ─────────────────────────────────────────
@@ -210,35 +210,36 @@ class FakePersonaProfile:
 @dataclass
 class FakeSessionInfo:
     session_id: str = ""
-    roles: list = field(default_factory=list)
+    role: str = ""
+    permissions: list = field(default_factory=list)
     identity: str = ""
 
 
 class FakeSessionManager:
     def __init__(self) -> None:
-        self.sent: list[OutputMessage | CommandOutput] = []
+        self.sent: list[Message | CommandOutput] = []
         self._session_info: FakeSessionInfo | None = None
 
     def set_session_info(self, info: FakeSessionInfo) -> None:
         self._session_info = info
 
-    def route_output(self, session_id: str, message: OutputMessage | CommandOutput) -> None:
-        self.sent.append(message.model_copy(update={"metadata": {**message.metadata, "session_id": session_id}}))
+    def route_message(self, msg: Message) -> None:
+        self.sent.append(msg)
+
+    def route_command_output(self, session_id: str, msg: CommandOutput) -> None:
+        self.sent.append(msg)
 
     def is_session_active(self, session_id: str) -> bool:
         return bool(session_id)
 
-    def get_session_mode(self, session_id: str) -> ConnectionMode | None:
-        return ConnectionMode.BIDIRECTIONAL if session_id else None
-
     def get_session_info(self, session_id: str) -> FakeSessionInfo | None:
         return self._session_info
 
-    def get_roles_summary(self) -> str:
+    def get_sessions_summary(self) -> str:
         info = self._session_info
-        if info and info.roles:
-            r = ", ".join(r.value if hasattr(r, "value") else str(r) for r in info.roles)
-            return f"Active sessions:\n[{r}]"
+        if info and info.permissions:
+            r = ", ".join(p.value if hasattr(p, "value") else str(p) for p in info.permissions)
+            return f"Connected clients:\n{info.role}: {r}"
         return ""
 
 

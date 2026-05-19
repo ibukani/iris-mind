@@ -223,7 +223,7 @@ class CommandHandler:
     def _sessions(self) -> str:
         if not self._session_mgr:
             return "Session manager not available"
-        summary = self._session_mgr.get_roles_summary()
+        summary = self._session_mgr.get_sessions_summary()
         if not summary:
             return "No active sessions"
         return summary

@@ -328,7 +328,7 @@ class KernelFactory:
             hippocampal=hippocampal,
             monitor=monitor,
             inhibition=inhibition,
-            session_roles_getter=session_mgr.get_roles_summary,
+            session_roles_getter=session_mgr.get_sessions_summary,
             memory=memory,
         )
 

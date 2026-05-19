@@ -1,4 +1,4 @@
-# Iris IO 層
+# Iris IO 層 (v2.0)
 
 > **注記**: 脳科学・神経科学の用語との対応付けは設計指針であり、厳密な解剖学的正確性を保証するものではありません。
 
@@ -7,10 +7,10 @@
 ## 責務
 
 - 外部からの入力を TCP で受け付け、Global EventBus に publish する
-- Global EventBus からの出力要求を TCP で外部に送出する
-- セッション管理（接続単位の識別・状態管理）
-- 認証（access_token 検証）
-- コマンド入力の検出と処理（CommandInput → CommandHandler → CommandOutput）
+- Global EventBus からのメッセージイベントを TCP で外部に送出する
+- セッション管理（接続単位の識別・権限管理）
+- 認証（access_token 検証 + role/permission 付与）
+- コマンド入力の検出と処理（CommandInput → CommandHandler → CommandOutput）→ EventBus を経由せず直接処理
 
 ## 構成
 
@@ -18,10 +18,10 @@
 iris/io/
 ├── __init__.py
 ├── manager.py         IOManager
-├── models.py          InputMessage, OutputMessage, CommandInput, CommandOutput
+├── models.py          Message, CommandInput, CommandOutput, Permission, Direction
 ├── transport/
 │   ├── __init__.py
-│   └── tcp_listener.py   ← 通常入力とコマンドを別コールバックで分岐
+│   └── tcp_listener.py   ← Message と CommandInput を別コールバックで分岐
 ├── session/
 │   ├── __init__.py
 │   └── manager.py     SessionManager
@@ -37,22 +37,18 @@ class IOManager:
     """入出力中継。視床の役割: 感覚入力を適切な層に中継し、
     出力命令を運動系に伝える。
 
-    subscribe: OutputRequest (global)
-      → session_manager.route_output → transport で送出
+    subscribe: MessageEvent (global)
+      → session_manager.route_message → transport で送出
 
     transport からの受信:
-      → 通常入力: InputMessage → InputReceived を Global EventBus に publish
-      → コマンド入力: CommandInput → CommandHandler で処理 → CommandOutput
+      → Message (target_role=mind): MessageEvent を Global EventBus に publish
+      → Message (target_role!=mind): session_manager.route_message で直接ルーティング
+      → CommandInput: CommandHandler で処理 → CommandOutput
     """
 
     def start(self) -> None
-        # transport (TCP listener) 起動
-
     def stop(self) -> None
-        # transport 停止
-
     def set_command_handler(self, handler) -> None
-        # CommandHandler を注入
 ```
 
 ```mermaid
@@ -71,55 +67,52 @@ sequenceDiagram
     TRANS->>SESS: authenticate()
     SESS->>AUTH: verify()
     AUTH-->>SESS: ok
-    SESS-->>TRANS: auth_success
+    SESS-->>TRANS: auth_success(role, permissions)
     TRANS-->>TCP: auth_success
 
-    TCP->>TRANS: InputMessage (msg_type: dispatch_text)
-    TRANS->>SESS: session確認
+    TCP->>TRANS: Message (direction:request, target_role:mind)
+    TRANS->>SESS: session確認 + source_role 設定
     SESS-->>TRANS: ok
-    TRANS->>IO: on_input(msg)
-    IO->>EB: InputReceived(message)
+    TRANS->>IO: on_message(msg)
+    IO->>EB: MessageEvent(session_id, content, ...)
 
     Note over TCP,CMD: コマンド入力経路
 
     TCP->>TRANS: CommandInput (msg_type: command)
-    TRANS->>SESS: session確認
+    TRANS->>SESS: session確認 + source_role 設定
     SESS-->>TRANS: ok
     TRANS->>IO: on_command(msg)
     IO->>CMD: cmd_handler.handle(name, args)
     CMD-->>IO: result
-    IO->>SESS: route_output(session_id, CommandOutput)
+    IO->>SESS: route_command_output(session_id, CommandOutput)
 
     Note over TCP,EB: 出力経路
 
-    EB-->>IO: OutputRequest(session_id, message)
-    IO->>SESS: route_output(session_id, message)
-    SESS->>TRANS: conn.send_bytes(message)
-    TRANS-->>TCP: OutputMessage
-    IO->>EB: OutputSent(session_id, message_id)
+    EB-->>IO: MessageEvent(session_id, msg_type, content, ...)
+    IO->>SESS: route_message(msg)
+    SESS->>TRANS: conn.send_bytes(Message JSON)
+    TRANS-->>TCP: Message
 ```
 
 ## models.py
 
 ```python
-INPUT_MSG_TYPES = frozenset({"dispatch_text", "converse_text", "system"})  # command は分離
-OUTPUT_STREAM_STATES = frozenset({"thinking", "speaking", "done", "interrupted"})
+class Permission(Enum):
+    SEND_CHAT / RECEIVE_CHAT / SEND_COMMAND / RECEIVE_COMMAND
+    RECEIVE_LOG / INTERRUPT / EXECUTE_ACTION
 
-class ConnectionMode(Enum): INPUT_ONLY / OUTPUT_ONLY / BIDIRECTIONAL
+class Direction(Enum): REQUEST / RESPONSE / STREAM / EVENT
 class SessionState(Enum): ACTIVE / CLOSED
-class SessionRole(Enum): CONVERSATION_INPUT / COMMAND_INPUT / CONVERSATION_OUTPUT / COMMAND_OUTPUT / LOG
 
-class AuthMessage(BaseModel)
-class ControlMessage(BaseModel)
-class InputMessage(BaseModel)    # 通常入力（会話）
-class CommandInput(BaseModel)     # システムコマンド入力
-class OutputMessage(BaseModel)    # 通常出力（会話応答・ストリーム）
-class CommandOutput(BaseModel)    # コマンド応答
-class InterruptMessage(BaseModel)
-class SessionInfo(BaseModel)
+class AuthMessage(BaseModel)      # access_token, role, permissions
+class ControlMessage(BaseModel)   # auth_success/failure
+class Message(BaseModel)          # 統一言語: source_role, target_role, direction, msg_type, content
+class CommandInput(BaseModel)     # システムコマンド入力（fast-path）
+class CommandOutput(BaseModel)    # コマンド応答（fast-path）
+class SessionInfo(BaseModel)      # session_id, role, permissions, conn
 ```
 
-**準同期入力（converse_text）の扱い**: 入力種別の区別を IO 層で行わず、すべて `InputReceived` として Memory 層に送る。Memory/sensory/InputBuffer が断片的入力を統合する。`msg_type` はメタデータとして保持される。
+**Message の方向制御**: `direction` フィールド (`request`/`response`/`stream`/`event`) でメッセージの意味を区別。`target_role` で配送先を指定（`*` = 全セッションにブロードキャスト）。
 
 ## transport/
 
@@ -127,17 +120,18 @@ class SessionInfo(BaseModel)
 
 ```python
 class TcpListener:
-    """TCP 接続の待受とメッセージの送受信。
-    1ポートで全接続を受け付け、認証・入力・出力を多重化する。
-    msg_type に応じて on_input (通常) / on_command (コマンド) を振り分ける。
-    """
-
-    def __init__(self, session_manager, on_input, on_command, on_interrupt)
-    def set_on_input(self, on_input: Callable[[InputMessage], None]) -> None
+    def __init__(self, session_manager, on_message, on_command)
+    def set_on_message(self, on_message: Callable[[Message], None]) -> None
     def set_on_command(self, on_command: Callable[[CommandInput], None]) -> None
     def start(self, host: str, port: int) -> None
     def stop(self) -> None
 ```
+
+`msg_type` に応じてディスパッチ:
+- `auth` → 認証処理
+- `ping` → pong 応答
+- `command` → CommandInput として処理
+- その他 → Message として処理（`source_role` は認証済みセッションの role で上書き）
 
 ## session/
 
@@ -145,17 +139,22 @@ class TcpListener:
 
 ```python
 class SessionManager:
-    """セッションの確立・維持・破棄を管理する。
-    接続ごとに SessionInfo を保持し、出力のルーティングを行う。
-    """
-
     def authenticate(self, conn, msg: AuthMessage) -> ControlMessage
-    def route_output(self, session_id: str, message: OutputMessage | CommandOutput) -> None
+    def route_message(self, msg: Message) -> None
+    def route_command_output(self, session_id: str, msg: CommandOutput) -> None
+    def get_sessions_summary(self) -> str
     def get_session_info(self, session_id: str) -> SessionInfo | None
-    def get_session_mode(self, session_id: str) -> ConnectionMode | None
-    def get_roles_summary(self) -> str
-    def close_session(self, session_id: str) -> None
+    def remove_session(self, session_id: str) -> None
 ```
+
+**Permission ベースの出力フィルタリング**: `route_message` は `_MSG_PERMISSION_MAP` に基づき、宛先セッションの権限をチェックしてから配送する。
+
+| msg_type | 必要な Permission |
+|----------|-------------------|
+| chat / proactive / system / ack / error | RECEIVE_CHAT |
+| execute | EXECUTE_ACTION |
+| execute_result | SEND_CHAT |
+| interrupt | INTERRUPT |
 
 ## auth/
 
@@ -163,21 +162,14 @@ class SessionManager:
 
 ```python
 class Authenticator:
-    """access_token の検証。
-    シンプルなトークンベース認証。
-    """
-
-    def authenticate(self, token: str | None, expected: str | None) -> bool
+    def authenticate(self, msg: AuthMessage) -> tuple[bool, str | None]
 ```
 
-## Event I/O マッピング
+## Event I/O マッピング (v2.0)
 
 | 方向 | 通信相手 | Event／型 | 説明 |
 |------|----------|-----------|------|
-| Inbound | TCP → IO | `InputReceived(msg)` via EventBus | テキスト入力（`dispatch_text`, `converse_text`, `system`） |
-| Inbound | TCP → IO | `CommandInput` → CommandHandler | コマンド入力（`command`）、EventBus を経由せず直接処理 |
-| Outbound | IO ← EventBus | `OutputRequest(session_id, msg)` | 出力要求 |
-| Outbound | IO → EventBus | `OutputSent(session_id, msg_id)` | 出力完了通知 |
+| Inbound | TCP → IO | `MessageEvent` via EventBus | Message 入力（`direction=request`, `target_role=mind`） |
+| Inbound | TCP → IO | `CommandInput` → CommandHandler | コマンド入力、EventBus を経由せず直接処理 |
+| Outbound | IO ← EventBus | `MessageEvent(session_id, msg_type, content)` | 出力要求（mind→client） |
 | Outbound | IO → TCP | `CommandOutput` | コマンド応答、EventBus を経由せず直接送出 |
-
-

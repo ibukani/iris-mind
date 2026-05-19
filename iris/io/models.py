@@ -10,14 +10,22 @@ from pydantic import BaseModel, Field
 TCP_HOST = "127.0.0.1"
 TCP_PORT = 9876
 
-INPUT_MSG_TYPES: frozenset[str] = frozenset({"dispatch_text", "converse_text", "system"})
-OUTPUT_STREAM_STATES: frozenset[str] = frozenset({"thinking", "speaking", "done", "interrupted"})
+
+class Permission(Enum):
+    SEND_CHAT = "send_chat"
+    RECEIVE_CHAT = "receive_chat"
+    SEND_COMMAND = "send_command"
+    RECEIVE_COMMAND = "receive_command"
+    RECEIVE_LOG = "receive_log"
+    INTERRUPT = "interrupt"
+    EXECUTE_ACTION = "execute_action"
 
 
-class ConnectionMode(Enum):
-    INPUT_ONLY = "input_only"
-    OUTPUT_ONLY = "output_only"
-    BIDIRECTIONAL = "bidirectional"
+class Direction(Enum):
+    REQUEST = "request"
+    RESPONSE = "response"
+    STREAM = "stream"
+    EVENT = "event"
 
 
 class SessionState(Enum):
@@ -25,24 +33,11 @@ class SessionState(Enum):
     CLOSED = "closed"
 
 
-class SessionRole(Enum):
-    CONVERSATION_INPUT = "conversation_input"
-    COMMAND_INPUT = "command_input"
-    CONVERSATION_OUTPUT = "conversation_output"
-    COMMAND_OUTPUT = "command_output"
-    LOG = "log"
-
-
 class AuthMessage(BaseModel):
     msg_type: str = "auth"
     access_token: str | None = None
-    mode: ConnectionMode = ConnectionMode.BIDIRECTIONAL
-    roles: list[SessionRole] = [
-        SessionRole.CONVERSATION_INPUT,
-        SessionRole.CONVERSATION_OUTPUT,
-        SessionRole.COMMAND_INPUT,
-        SessionRole.COMMAND_OUTPUT,
-    ]
+    role: str = "external"
+    permissions: list[Permission] = []
     identity: str = ""
     description: str = ""
 
@@ -53,20 +48,13 @@ class ControlMessage(BaseModel):
     error_message: str | None = None
 
 
-class InputMessage(BaseModel):
-    id: str = Field(default_factory=lambda: uuid4().hex[:12])
-    session_id: str = ""
-    source: str
-    msg_type: str = "dispatch_text"
-    content: str
-    content_type: str = "text/plain"
-    is_final: bool = True
-    metadata: dict = {}
-
-
-class OutputMessage(BaseModel):
+class Message(BaseModel):
     id: str = Field(default_factory=lambda: uuid4().hex[:12])
     correlation_id: str | None = None
+    session_id: str = ""
+    source_role: str
+    target_role: str = "*"
+    direction: Direction
     msg_type: str
     content: str
     content_type: str = "text/plain"
@@ -77,7 +65,7 @@ class OutputMessage(BaseModel):
 class CommandInput(BaseModel):
     id: str = Field(default_factory=lambda: uuid4().hex[:12])
     session_id: str = ""
-    source: str = ""
+    source_role: str = ""
     content: str
 
 
@@ -88,11 +76,6 @@ class CommandOutput(BaseModel):
     msg_type: str = "command"
     content: str
     state: str | None = None
-
-
-class InterruptMessage(BaseModel):
-    msg_type: str = "interrupt"
-    session_id: str
 
 
 class PingMessage(BaseModel):
@@ -106,8 +89,8 @@ class PongMessage(BaseModel):
 class SessionInfo(BaseModel):
     session_id: str
     state: SessionState
-    mode: ConnectionMode = ConnectionMode.BIDIRECTIONAL
-    roles: list[SessionRole] = []
+    role: str = "external"
+    permissions: list[Permission] = []
     identity: str = ""
     description: str = ""
     conn: Any | None = None

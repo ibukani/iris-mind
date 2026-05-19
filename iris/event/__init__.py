@@ -4,9 +4,8 @@ from iris.event.event_types import (
     AgentStateChangeEvent,
     Event,
     InputReady,
-    InputReceived,
     MemoryUpdateEvent,
-    OutputRequest,
+    MessageEvent,
     TimerTick,
     new_trace_id,
 )
@@ -18,9 +17,8 @@ __all__ = [
     "EventBus",
     "EventBusProtocol",
     "InputReady",
-    "InputReceived",
     "MemoryUpdateEvent",
-    "OutputRequest",
+    "MessageEvent",
     "TimerTick",
     "new_trace_id",
 ]

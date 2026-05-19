@@ -5,8 +5,22 @@ from typing import Any
 import pytest
 
 from iris.event import Event, EventBus
-from iris.event.event_types import InputReady, InputReceived, TimerTick
+from iris.event.event_types import InputReady, MessageEvent, TimerTick
 from iris.memory.manager import MemoryManager
+
+
+def _message_event(session_id: str = "", content: str = "") -> MessageEvent:
+    return MessageEvent(
+        timestamp=None,
+        source="test",
+        session_id=session_id,
+        source_role="cli",
+        target_role="mind",
+        direction="request",
+        msg_type="chat",
+        content=content,
+        is_final=True,
+    )
 
 
 @pytest.fixture
@@ -31,15 +45,15 @@ def _collect_input_ready(events: list[InputReady]) -> Any:
 
 class TestMemoryManagerInputPending:
     def test_subscribes_on_init(self, event_bus: EventBus) -> None:
-        received: list[InputReceived] = []
+        received: list[MessageEvent] = []
 
         def handler(event: Event) -> None:
             received.append(event)
 
-        event_bus.subscribe("InputReceived", handler)
+        event_bus.subscribe("MessageEvent", handler)
         MemoryManager(event_bus=event_bus)
         event_bus.publish(
-            InputReceived(timestamp=None, source="test", session_id="s1", content="hello"),
+            _message_event(session_id="s1", content="hello"),
         )
         assert len(received) == 1
         assert received[0].content == "hello"
@@ -50,21 +64,21 @@ class TestMemoryManagerInputPending:
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
 
         event_bus.publish(
-            InputReceived(timestamp=None, source="test", session_id="s1", content=""),
+            _message_event(session_id="s1", content=""),
         )
         event_bus.publish(
             TimerTick(timestamp=None, source="kernel", tick_count=0),
         )
         assert len(ready_events) == 0
 
-    def test_input_received_stores_pending(self, event_bus: EventBus) -> None:
+    def test_message_event_stores_pending(self, event_bus: EventBus) -> None:
         MemoryManager(event_bus=event_bus)
 
         event_bus.publish(
-            InputReceived(timestamp=None, source="test", session_id="s1", content="hello"),
+            _message_event(session_id="s1", content="hello"),
         )
         event_bus.publish(
-            InputReceived(timestamp=None, source="test", session_id="s2", content="world"),
+            _message_event(session_id="s2", content="world"),
         )
 
         ready_events: list[InputReady] = []
@@ -82,7 +96,7 @@ class TestMemoryManagerInputPending:
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
 
         event_bus.publish(
-            InputReceived(timestamp=None, source="test", session_id="s1", content="こんにちは"),
+            _message_event(session_id="s1", content="こんにちは"),
         )
         event_bus.publish(
             TimerTick(timestamp=None, source="kernel", tick_count=0),
@@ -111,7 +125,7 @@ class TestMemoryManagerInputPending:
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
 
         event_bus.publish(
-            InputReceived(timestamp=None, source="test", session_id="s1", content="hello"),
+            _message_event(session_id="s1", content="hello"),
         )
         event_bus.publish(
             TimerTick(timestamp=None, source="kernel", tick_count=0),
@@ -130,10 +144,10 @@ class TestMemoryManagerInputPending:
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
 
         event_bus.publish(
-            InputReceived(timestamp=None, source="test", session_id="s1", content="first"),
+            _message_event(session_id="s1", content="first"),
         )
         event_bus.publish(
-            InputReceived(timestamp=None, source="test", session_id="s2", content="second"),
+            _message_event(session_id="s2", content="second"),
         )
 
         event_bus.publish(
@@ -155,10 +169,10 @@ class TestMemoryManagerInputPending:
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
 
         event_bus.publish(
-            InputReceived(timestamp=None, source="test", session_id="s1", content="old"),
+            _message_event(session_id="s1", content="old"),
         )
         event_bus.publish(
-            InputReceived(timestamp=None, source="test", session_id="s1", content="new"),
+            _message_event(session_id="s1", content="new"),
         )
 
         event_bus.publish(
@@ -183,7 +197,7 @@ class TestMemoryManagerInputPending:
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
 
         event_bus.publish(
-            InputReceived(timestamp=None, source="test", session_id="s1", content="user msg"),
+            _message_event(session_id="s1", content="user msg"),
         )
         event_bus.publish(
             TimerTick(timestamp=None, source="kernel", tick_count=0),
@@ -199,7 +213,7 @@ class TestMemoryManagerInputPending:
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
 
         event_bus.publish(
-            InputReceived(timestamp=None, source="test", session_id="s1", content="hello"),
+            _message_event(session_id="s1", content="hello"),
         )
         event_bus.publish(
             TimerTick(timestamp=None, source="kernel", tick_count=0),
@@ -208,7 +222,7 @@ class TestMemoryManagerInputPending:
 
         ready_events.clear()
         event_bus.publish(
-            InputReceived(timestamp=None, source="test", session_id="s1", content="second"),
+            _message_event(session_id="s1", content="second"),
         )
         event_bus.publish(
             TimerTick(timestamp=None, source="kernel", tick_count=1),

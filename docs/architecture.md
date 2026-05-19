@@ -90,17 +90,17 @@ sequenceDiagram
     participant AG as Agency層
     participant KRN as Kernel層
 
-    TCP->>IO: InputMessage
-    IO->>EB: InputReceived(msg)
-    EB->>MEM: InputReceived
+    TCP->>IO: Message (direction:request, target_role:mind)
+    IO->>EB: MessageEvent(...)
+    EB->>MEM: MessageEvent (MemoryManager購読)
     MEM->>MEM: sensory buffer → flush
     MEM->>EB: InputReady(content)
     EB->>AG: InputReady (PlanningManager直購読)
     AG->>AG: _build_plan → PlanDecided
     AG->>AG: _execute_general(plan)
-    AG->>EB: OutputRequest(output)
-    EB->>IO: OutputRequest
-    IO->>TCP: OutputMessage
+    AG->>EB: MessageEvent(...)
+    EB->>IO: MessageEvent
+    IO->>TCP: Message (direction:response)
     AG->>AG: 実行後: reflexion / compression
 
     KRN->>EB: TimerTick (5秒間隔)
@@ -225,12 +225,15 @@ iris/
 # iris/event/event_types.py
 
 @dataclass
-class InputReceived:
-    timestamp: float | None
-    source: str
+class MessageEvent:
     session_id: str
+    source_role: str
+    target_role: str
+    direction: str           # "request" | "response" | "stream" | "event"
+    msg_type: str            # "chat" | "system" | "stream" | "response" | ...
     content: str
-    msg_type: str
+    state: str | None
+    correlation_id: str | None
     is_final: bool
 
 @dataclass
@@ -240,13 +243,6 @@ class InputReady:
     session_id: str
     content: str
     context: dict | None
-
-@dataclass
-class OutputRequest:
-    session_id: str
-    message_type: str     # "stream" | "response"
-    content: str
-    state: str | None     # "thinking" | "speaking" | "done"
 
 @dataclass
 class TimerTick:

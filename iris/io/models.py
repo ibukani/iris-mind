@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 from uuid import uuid4
 
@@ -28,6 +28,13 @@ class Direction(Enum):
     EVENT = "event"
 
 
+class StreamState(StrEnum):
+    THINKING = "thinking"
+    SPEAKING = "speaking"
+    DONE = "done"
+    INTERRUPTED = "interrupted"
+
+
 class SessionState(Enum):
     ACTIVE = "active"
     CLOSED = "closed"
@@ -49,10 +56,10 @@ class ControlMessage(BaseModel):
 
 
 class Message(BaseModel):
-    id: str = Field(default_factory=lambda: uuid4().hex[:12])
+    id: str = ""
     correlation_id: str | None = None
     session_id: str = ""
-    source_role: str
+    source_role: str = ""
     target_role: str = "*"
     direction: Direction
     msg_type: str

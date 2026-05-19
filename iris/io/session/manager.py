@@ -40,6 +40,13 @@ _MSG_PERMISSION_MAP: dict[str, Permission] = {
     "interrupt": Permission.INTERRUPT,
 }
 
+_INPUT_PERMISSION_MAP: dict[str, Permission] = {
+    "chat": Permission.SEND_CHAT,
+    "system": Permission.SEND_CHAT,
+    "interrupt": Permission.INTERRUPT,
+    "execute_result": Permission.SEND_CHAT,
+}
+
 
 class SessionManager:
     def __init__(self, config: SessionConfig | None = None) -> None:
@@ -126,8 +133,6 @@ class SessionManager:
             session.last_activity = datetime.now()
         except (BrokenPipeError, ConnectionError, EOFError):
             logger.warning("Connection lost for session: %s", session.session_id)
-            # remove_session is called by _serve loop on connection error;
-            # avoid re-entrant lock issues by deferring cleanup.
             session.conn = None
 
     def update_activity(self, session_id: str | None) -> None:
@@ -160,6 +165,16 @@ class SessionManager:
     def get_active_sessions(self) -> list[SessionInfo]:
         with self._lock:
             return [s for s in self._sessions.values() if s.state == SessionState.ACTIVE]
+
+    def check_send_permission(self, session_id: str, msg_type: str) -> bool:
+        required = _INPUT_PERMISSION_MAP.get(msg_type)
+        if required is None:
+            return True
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session is None:
+                return False
+            return required in session.permissions
 
     def get_sessions_summary(self) -> str:
         with self._lock:

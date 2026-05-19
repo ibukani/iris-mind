@@ -6,6 +6,7 @@ import logging
 from multiprocessing.connection import Connection, Listener
 import threading
 from typing import Any
+from uuid import uuid4
 
 from iris.io.models import (
     TCP_HOST,
@@ -158,6 +159,7 @@ class TcpListener:
 
     def _dispatch_message(self, data: dict[str, Any], session_role: str) -> None:
         msg = Message(**data)
+        msg.id = uuid4().hex[:12]
         msg.source_role = session_role
         msg.session_id = msg.session_id or ""
 
@@ -166,6 +168,22 @@ class TcpListener:
             return
         if not self._session_manager.is_session_active(msg.session_id):
             logger.warning("TcpListener: Message from inactive session: %s", msg.session_id)
+            return
+        if not self._session_manager.check_send_permission(msg.session_id, msg.msg_type):
+            logger.warning(
+                "TcpListener: session=%s lacks permission for msg_type=%s",
+                msg.session_id,
+                msg.msg_type,
+            )
+            err = Message(
+                msg_type="error",
+                content=f"Permission denied: cannot send {msg.msg_type}",
+                source_role="mind",
+                target_role=session_role,
+                session_id=msg.session_id,
+                direction=Direction.RESPONSE,
+            )
+            self._session_manager.route_message(err)
             return
 
         truncated = msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
@@ -189,6 +207,7 @@ class TcpListener:
                 correlation_id=msg.id,
                 source_role="mind",
                 target_role=session_role,
+                session_id=msg.session_id,
                 direction=Direction.RESPONSE,
             )
             self._session_manager.route_message(ack)

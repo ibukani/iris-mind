@@ -9,6 +9,7 @@ from iris.agency.execution.monitor import OutputMonitor
 from iris.agency.execution.pipeline import LLMPipeline
 from iris.event.event_bus import EventBus
 from iris.event.event_types import MessageEvent
+from iris.io.models import StreamState
 from iris.kernel.config import ModelConfig
 from iris.llm.context_window import LLMContextWindowManager
 from iris.memory.hippocampal.manager import HippocampalManager
@@ -95,7 +96,7 @@ class ExecutionManager:
                     session_id=session_id,
                     msg_type="stream",
                     content="",
-                    state="thinking",
+                    state=StreamState.THINKING.value,
                     direction="stream",
                 )
             )
@@ -114,7 +115,7 @@ class ExecutionManager:
                         session_id=session_id,
                         msg_type="stream",
                         content=delta,
-                        state="speaking",
+                        state=StreamState.SPEAKING.value,
                         direction="stream",
                     )
                 )
@@ -166,7 +167,7 @@ class ExecutionManager:
                     session_id=session_id,
                     msg_type="stream",
                     content="",
-                    state="done",
+                    state=StreamState.DONE.value,
                     direction="stream",
                 )
             )

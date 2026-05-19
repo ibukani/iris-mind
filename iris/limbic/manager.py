@@ -105,6 +105,8 @@ class LimbicManager:
     def _on_message_event(self, event: MessageEvent) -> None:
         if not event.content:
             return
+        if event.direction not in ("request", "event") or event.msg_type not in ("chat", "system"):
+            return
         self._decay()
         delta = self._amygdala.evaluate(event.content)
         adjusted = self._acc.regulate(delta, self._emotion, self._get_big_five_scores())

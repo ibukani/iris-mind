@@ -194,7 +194,9 @@ class ExecutionManager:
                 )
                 model_name = self._model_config.get_model(model_role) if self._model_config else None
                 summary = self._context_window_mgr.check_and_summarize(
-                    self._messages, effective_ctx, model_name=model_name,
+                    self._messages,
+                    effective_ctx,
+                    model_name=model_name,
                 )
                 if summary and len(self._messages) > 6:
                     keep = 6

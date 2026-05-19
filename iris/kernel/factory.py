@@ -136,7 +136,6 @@ class KernelFactory:
             )
             for entry in config.model.models
         }
-        default_tokenizer = tokenizers.get(config.model.get_model("default"))
 
         # ============================================================
         # Phase 4: ケイパビリティ (ツール)
@@ -165,7 +164,7 @@ class KernelFactory:
             scoring=scoring,
             limbic=limbic,
             big_five=big_five,
-            tokenizer_mgr=default_tokenizer,
+            tokenizers=tokenizers,
         )
 
         # ============================================================
@@ -279,7 +278,7 @@ class KernelFactory:
         scoring: ProactiveScoring,
         limbic: LimbicManager | None = None,
         big_five: BigFiveProfile | None = None,
-        tokenizer_mgr: TokenizerManager | None = None,
+        tokenizers: dict[str, TokenizerManager] | None = None,
     ) -> AgencyManager:
         personality = Personality(name=config.personality.name, prompt_file=config.personality.prompt_file)
         capability_checker = CapabilityChecker(config=config.model)
@@ -322,7 +321,10 @@ class KernelFactory:
 
         monitor = OutputMonitor(internal_bus=internal_bus)
         context_window_mgr = LLMContextWindowManager(
-            llm=llm, compact_model=config.model.get_model("default"), tokenizer_mgr=tokenizer_mgr
+            llm=llm,
+            compact_model=config.model.get_model("default"),
+            tokenizers=tokenizers,
+            default_model_name=config.model.get_model("default"),
         )
         execution = ExecutionManager(
             internal_bus=internal_bus,
@@ -330,6 +332,7 @@ class KernelFactory:
             llm_pipeline=pipeline,
             context_window_mgr=context_window_mgr,
             context_window=config.model.context_window,
+            model_config=config.model,
             hippocampal=hippocampal,
             monitor=monitor,
             inhibition=inhibition,

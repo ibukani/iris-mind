@@ -121,14 +121,15 @@ class LLMPipeline:
         on_token: Callable[[str], None] | None = None,
         interrupt_token: InterruptToken | None = None,
         context_hint: str = "",
+        model_role: str = "default",
     ) -> dict:
         system_prompt = self._build_system_prompt(context_hint=context_hint)
         msgs: list[dict] = [{"role": "system", "content": system_prompt}, *messages]
 
         return self._llm.chat(
             messages=msgs,
-            model=self._model_config.get_model("default"),
-            temperature=self._model_config.temperature,
+            model=self._model_config.get_model(model_role),
+            temperature=self._model_config.get_effective_temperature(model_role),
             tools=tools,
             on_token=on_token,
             interrupt_token=interrupt_token,
@@ -148,14 +149,19 @@ class LLMPipeline:
         Returns:
             生成されたテキスト。
         """
+        model_role = plan.get("model_role", "default")
         context_hint = plan.get("context_hint", "")
         if plan.get("tools_allowed", True):
-            return self._generate_with_tools(messages, context_hint=context_hint, on_token=on_token)
+            return self._generate_with_tools(
+                messages, context_hint=context_hint, on_token=on_token, model_role=model_role
+            )
         max_tokens = plan.get("max_tokens", 80) or None
         temperature = plan.get("temperature", 0.5)
-        return self._generate_without_tools(plan, max_tokens, temperature)
+        return self._generate_without_tools(plan, max_tokens, temperature, model_role=model_role)
 
-    def _generate_without_tools(self, plan: dict, max_tokens: int | None, temperature: float) -> str:
+    def _generate_without_tools(
+        self, plan: dict, max_tokens: int | None, temperature: float, model_role: str = "default"
+    ) -> str:
         context_hint = plan.get("context_hint", "")
         system_prompt = self._build_system_prompt(context_hint=context_hint)
         situation = plan.get("situation", "")
@@ -172,7 +178,7 @@ class LLMPipeline:
         try:
             resp = self._llm.chat(
                 messages=msgs,
-                model=self._model_config.get_model("default"),
+                model=self._model_config.get_model(model_role),
                 max_tokens=max_tokens or 80,
                 temperature=temperature,
             )
@@ -189,9 +195,10 @@ class LLMPipeline:
         on_token: Callable[[str], None] | None = None,
         interrupt_token: InterruptToken | None = None,
         context_hint: str = "",
+        model_role: str = "default",
     ) -> str:
         tools = self._get_tools()
-        if tools and self._capability_checker and not self._capability_checker.supports_tools("default"):
+        if tools and self._capability_checker and not self._capability_checker.supports_tools(model_role):
             tools = None
 
         iteration = 0
@@ -204,7 +211,12 @@ class LLMPipeline:
 
             iteration += 1
             resp = self.call(
-                messages, tools=tools, on_token=on_token, interrupt_token=interrupt_token, context_hint=context_hint
+                messages,
+                tools=tools,
+                on_token=on_token,
+                interrupt_token=interrupt_token,
+                context_hint=context_hint,
+                model_role=model_role,
             )
             msg = resp.get("message", {})
 

@@ -44,12 +44,21 @@ class LLMContextWindowManager:
         self,
         llm: LLMProvider | None = None,
         compact_model: str | None = None,
-        tokenizer_mgr: TokenizerManager | None = None,
+        tokenizers: dict[str, TokenizerManager] | None = None,
+        default_model_name: str | None = None,
     ) -> None:
         self._llm = llm
         self._compact_model = compact_model
-        self._tokenizer_mgr = tokenizer_mgr
+        self._tokenizers = tokenizers or {}
+        self._default_model_name = default_model_name
         self._summary: str = ""
+
+    def _get_tokenizer(self, model_name: str | None = None) -> TokenizerManager | None:
+        if model_name and model_name in self._tokenizers:
+            return self._tokenizers[model_name]
+        if self._default_model_name and self._default_model_name in self._tokenizers:
+            return self._tokenizers[self._default_model_name]
+        return None
 
     @property
     def summary(self) -> str:
@@ -61,6 +70,7 @@ class LLMContextWindowManager:
         context_window: int,
         threshold: float = 0.85,
         preserve_last: int = 6,
+        model_name: str | None = None,
     ) -> str:
         """会話履歴がコンテキストウィンドウ制限に接近した場合、LLM要約で圧縮する。
 
@@ -73,6 +83,7 @@ class LLMContextWindowManager:
             context_window: LLM の context_window 上限（トークン数）。
             threshold: 圧縮トリガー閾値（デフォルト 85% = context_window * 0.85）。
             preserve_last: 直近 N 件のメッセージは圧縮対象外（デフォルト 6）。
+            model_name: トークナイザー選択用のモデル名（省略時はdefault）。
 
         Returns:
             現在の session summary（自動更新された要約文、または前回の要約）。
@@ -82,7 +93,8 @@ class LLMContextWindowManager:
         if len(messages) <= preserve_last:
             return self._summary
 
-        total = estimate_messages_tokens(messages, self._tokenizer_mgr)
+        tokenizer = self._get_tokenizer(model_name)
+        total = estimate_messages_tokens(messages, tokenizer)
         if total < context_window * threshold:
             return self._summary
 

@@ -12,10 +12,10 @@ logger = logging.getLogger(__name__)
 _DEFAULT_PATH = ".iris/data/big_five.json"
 
 # PEM: 指数移動平均の更新率
-_PEM_LAMBDA = 0.95
+_PEM_LAMBDA = 0.8
 
 # 性格変化検出の閾値
-_CHANGE_THRESHOLD = 3.0
+_CHANGE_THRESHOLD = 1.0
 
 
 def _default_ocean() -> dict[str, float]:

@@ -160,7 +160,7 @@ class ShortTermMemoryManager:
         self._active_references.clear()
 
     def should_consolidate(self) -> bool:
-        return len(self._turns) >= self._max_turns
+        return len(self._turns) >= max(3, self._max_turns // 2)
 
     @property
     def current_topics(self) -> list[str]:

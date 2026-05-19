@@ -37,6 +37,17 @@ class HippocampalManager:
         if len(messages) < 2:
             return msg_count_since_reflect
 
+        self._reflect_and_consolidate(messages, force=False)
+        return 0
+
+    def force_run(self, messages: list[dict]) -> None:
+        if self._reflexion is None:
+            return
+        self._reflect_and_consolidate(messages, force=True)
+
+    def _reflect_and_consolidate(self, messages: list[dict], force: bool = False) -> None:
+        if self._reflexion is None:
+            return
         try:
             result = self._reflexion.quick_reflect(messages)
 
@@ -73,7 +84,7 @@ class HippocampalManager:
                     except (json.JSONDecodeError, TypeError):
                         logger.debug("Could not parse big_five_estimate: %s", bf_raw)
 
-            self._maybe_consolidate_short_term()
+            self._consolidate_short_term(force=force)
 
             logger.info(
                 "Quick reflect stored: speech_style=%s traits=%s reaction=%s",
@@ -84,15 +95,12 @@ class HippocampalManager:
         except Exception as e:
             logger.exception("Quick reflect failed: %s", e)
 
-        return 0
-
-    def _maybe_consolidate_short_term(self) -> None:
+    def _consolidate_short_term(self, force: bool = False) -> None:
         if self._memory is None:
             return
-        stm = self._memory.short_term
-        if not stm.should_consolidate():
+        if not force and not self._memory.short_term.should_consolidate():
             return
-        unconsolidated = stm.get_unconsolidated_turns()
+        unconsolidated = self._memory.short_term.get_unconsolidated_turns()
         if not unconsolidated:
             return
         user_turns = [t for t in unconsolidated if t.get("role") == "user"]
@@ -101,12 +109,12 @@ class HippocampalManager:
             self._memory.long_term.store_episodic(
                 {"content": f"[conversation] {combined}", "kind": "conversation"},
             )
-        topics = stm.current_topics
+        topics = self._memory.short_term.current_topics
         for topic in topics:
             self._memory.long_term.store_semantic(
                 {"content": topic, "type": "topic", "tags": ["short_term_topic"]},
             )
-        stm.mark_consolidated()
+        self._memory.short_term.mark_consolidated()
         logger.info("Hippocampal: consolidated %d turns, %d topics", len(unconsolidated), len(topics))
 
     def run_session(self, messages: list[dict], memory: MemoryManager | None = None) -> None:

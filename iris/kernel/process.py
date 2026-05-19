@@ -51,6 +51,7 @@ class KernelProcess:
             return
 
         ctx.shutdown_requested = True
+        ctx.agency.flush_memory()
         ctx.io.stop()
 
         logger.info("KernelProcess: shutdown complete")

@@ -104,7 +104,7 @@ class PlanningManager:
                 "abbreviated": False,
                 "tools_allowed": False,
                 "streaming": False,
-                "max_tokens": 120,
+                "max_tokens": 512,
                 "temperature": 0.8,
                 "show_thinking": False,
                 "run_reflexion": False,
@@ -145,7 +145,7 @@ class PlanningManager:
         d = limbic_mood.get("dominance", 0.5)
 
         if v < -0.3:
-            plan["max_tokens"] = min(plan.get("max_tokens", 0) or 9999, 60)
+            plan["max_tokens"] = min(plan.get("max_tokens", 0) or 9999, 256)
             if plan.get("abbreviated", False) is False:
                 plan["temperature"] = plan.get("temperature", 0.7) + 0.15
                 plan["tools_allowed"] = False
@@ -155,7 +155,7 @@ class PlanningManager:
 
         if a > 0.6:
             plan["temperature"] = max(plan.get("temperature", 0.7) - 0.15, 0.3)
-            plan["max_tokens"] = min(plan.get("max_tokens", 0) or 9999, 100)
+            plan["max_tokens"] = min(plan.get("max_tokens", 0) or 9999, 256)
         elif a < 0.15:
             plan["temperature"] = min(plan.get("temperature", 0.7) + 0.2, 1.0)
 
@@ -165,7 +165,7 @@ class PlanningManager:
             plan["temperature"] = plan.get("temperature", 0.7) + 0.05
         elif d > 0.6:
             plan["temperature"] = max(plan.get("temperature", 0.7) - 0.1, 0.2)
-            plan["max_tokens"] = min(plan.get("max_tokens", 0) or 9999, 150)
+            plan["max_tokens"] = min(plan.get("max_tokens", 0) or 9999, 512)
 
         plan["temperature"] = max(0.2, min(1.0, plan.get("temperature", 0.7)))
 

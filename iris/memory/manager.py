@@ -178,6 +178,25 @@ class MemoryManager:
         if stream == "semantic" or stream is None:
             self.long_term.clear_semantic()
 
+    def flush(self) -> None:
+        """未定着の短期記憶を長期記憶に書き出してからクリアする。"""
+        unconsolidated = self.short_term.get_unconsolidated_turns()
+        if not unconsolidated:
+            return
+        user_turns = [t for t in unconsolidated if t.get("role") == "user"]
+        if user_turns:
+            combined = " | ".join(t["content"][:100] for t in user_turns[-3:])
+            self.long_term.store_episodic(
+                {"content": f"[conversation] {combined}", "kind": "conversation"},
+            )
+        topics = self.short_term.current_topics
+        for topic in topics:
+            self.long_term.store_semantic(
+                {"content": topic, "type": "topic", "tags": ["short_term_topic"]},
+            )
+        self.short_term.mark_consolidated()
+        logger.info("MemoryManager: flushed %d turns, %d topics", len(unconsolidated), len(topics))
+
     # ============================================================
     # 後方互換 API
     # ============================================================

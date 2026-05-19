@@ -22,7 +22,7 @@ class EmotionState:
 
     valence: float = 0.0
     arousal: float = 0.0
-    dominance: float = 0.0
+    dominance: float = 0.5
     updated_at: float = field(default_factory=time.time)
 
     def decay(self, dt: float | None = None) -> None:
@@ -39,7 +39,7 @@ class EmotionState:
         lambda_d = 0.03
         self.valence *= math.exp(-lambda_v * minutes)
         self.arousal *= math.exp(-lambda_a * minutes)
-        self.dominance *= math.exp(-lambda_d * minutes)
+        self.dominance = 0.5 + (self.dominance - 0.5) * math.exp(-lambda_d * minutes)
         self._clamp()
 
     def apply(self, delta: EmotionDelta, intensity: float = 1.0) -> None:

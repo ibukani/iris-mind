@@ -22,3 +22,6 @@ class AgencyManager:
 
     def compact_context(self) -> str:
         return self._execution.compact_context()
+
+    def flush_memory(self) -> None:
+        self._execution.flush_memory()

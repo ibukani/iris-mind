@@ -68,7 +68,7 @@ class ExecutionManager:
         if degree >= 1:
             plan["abbreviated"] = True
         if degree >= 2:
-            plan["max_tokens"] = min(plan.get("max_tokens", 0) or 120, 60)
+            plan["max_tokens"] = min(plan.get("max_tokens", 0) or 120, 256)
         if degree >= 3:
             plan["run_reflexion"] = False
             plan["run_compression"] = False
@@ -193,7 +193,16 @@ class ExecutionManager:
                     else self._context_window
                 )
                 model_name = self._model_config.get_model(model_role) if self._model_config else None
-                self._context_window_mgr.check_and_summarize(self._messages, effective_ctx, model_name=model_name)
+                summary = self._context_window_mgr.check_and_summarize(
+                    self._messages, effective_ctx, model_name=model_name,
+                )
+                if summary and len(self._messages) > 6:
+                    keep = 6
+                    self._messages = [
+                        {"role": "system", "content": f"## Session Summary\n{summary}"},
+                        *self._messages[-keep:],
+                    ]
+                    logger.info("Auto-compacted: summary_len=%d, kept=%d", len(summary), keep)
 
         if run_reflexion or run_compression:
             threading.Thread(target=_post_process, daemon=True).start()
@@ -203,6 +212,12 @@ class ExecutionManager:
             degree = self._monitor.talkative_degree
             self._inhibition.apply_frequency_penalty(degree)
             logger.debug("Applied frequency penalty: degree=%d", degree)
+
+    def flush_memory(self) -> None:
+        if self._hippocampal:
+            self._hippocampal.force_run(self._messages)
+        if self._memory:
+            self._memory.flush()
 
     def compact_context(self) -> str:
         if self._context_window_mgr is None:

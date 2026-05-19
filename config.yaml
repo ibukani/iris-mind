@@ -1,50 +1,79 @@
 # Iris Kernel Configuration
 
-# AIの動作に関する設定
+# 人格設定 — Iris の名前とシステムプロンプト
 personality:
-    name: Iris
-    prompt_file: .iris/config/personality_default.md
+  name: Iris
+  prompt_file: .iris/config/personality_default.md
+
+# 記憶系 — 各記憶層の保存先と上限
 memory:
-    agents_md_max_bytes: 2048
-    agents_md_path: .iris/data/iris_profile.md
-    episodic_max_entries: 30
-    episodic_path: .iris/data/episodes.jsonl
-    semantic_max_entries: 100
-    semantic_path: .iris/data/semantic.jsonl
-    vector_db_path: .iris/data/chroma_db
+  agents_md_max_bytes: 2048
+  agents_md_path: .iris/data/iris_profile.md
+  episodic_max_entries: 30
+  episodic_path: .iris/data/episodes.jsonl
+  semantic_max_entries: 100
+  semantic_path: .iris/data/semantic.jsonl
+  vector_db_path: .iris/data/chroma_db
+
+# 自発発話 — プロアクティブな割り込みの重み・閾値
 proactive:
-    check_interval_sec: 5.0
-    min_interval_sec: 30.0
-    max_interval_sec: 300.0
-    trigger_weights:
-        time: 0.40
-        memory: 0.35
-        context: 0.15
-        mood: 0.10
-    speak_threshold: 0.20
+  check_interval_sec: 5.0
+  min_interval_sec: 30.0
+  max_interval_sec: 300.0
+  trigger_weights:
+    time: 0.40
+    memory: 0.35
+    context: 0.15
+    mood: 0.10
+  speak_threshold: 0.20
+
+# LLM モデル — プロバイダ・コンテキストサイズ・性能設定
 model:
-    default_context_window: 8192
-    default_num_ctx: 8192
-    default_num_gpu: 99
-    default_temperature: 0.7
-    models:
-        - name: qwen3.5:9b
-          roles: [default]
-          provider: ollama
-          base_url: http://localhost:11434
-          max_tokens: 1024
-          tokenizer_repo_id: Qwen/Qwen3.5-9B
+  default_context_window: 8192
+  default_num_ctx: 8192
+  default_num_gpu: 99
+  default_temperature: 0.7
+  models:
+    - api_key: ""
+      base_url: http://localhost:11434
+      capabilities: null
+      context_window: null
+      main_gpu: null
+      max_tokens: 1024
+      name: qwen3.5:9b
+      num_ctx: null
+      num_gpu: null
+      performance_tier: balanced
+      provider: ollama
+      roles:
+        - default
+      temperature: null
+      tokenizer_hf_token: ""
+      tokenizer_local_path: ""
+      tokenizer_repo_id: Qwen/Qwen3.5-9B
+
+# TCP サーバー — 外部クライアント接続の listen 設定
 session:
-    host: 127.0.0.1
-    port: 9876
+  host: 127.0.0.1
+  port: 9876
+
+# 準同期的応答 — 割り込み判定のための反応準備
+quasi_sync:
+  response_readiness:
+    confidence_threshold: 0.6
+    llm_model_role: fast
+    tier1_min_fragments: 2
+    tier1_question_detect: true
+
+# ログ出力 — レベル・保存先・ローテーション
 logging:
-    file_level: INFO # ファイルログのしきい値
-    console_level: DEBUG
-    console_format: "%(asctime)s [%(levelname)s] %(message)s"
-    loggers:
-        iris.io: DEBUG
-        iris.agency.planning: DEBUG
-        iris.agency.execution.inhibition: DEBUG
-    dir: logs
-    max_bytes: 5242880
-    backup_count: 14
+  backup_count: 14
+  console_format: "%(asctime)s [%(levelname)s] %(message)s"
+  console_level: DEBUG
+  dir: logs
+  file_level: INFO
+  loggers:
+    iris.agency.execution.inhibition: DEBUG
+    iris.agency.planning: DEBUG
+    iris.io: DEBUG
+  max_bytes: 5242880

@@ -9,6 +9,7 @@ from iris.agency.execution.monitor import OutputMonitor
 from iris.agency.execution.pipeline import LLMPipeline
 from iris.event.event_bus import EventBus
 from iris.event.event_types import OutputRequest
+from iris.kernel.config import ModelConfig
 from iris.llm.context_window import LLMContextWindowManager
 from iris.memory.hippocampal.manager import HippocampalManager
 from iris.memory.manager import MemoryManager
@@ -24,6 +25,7 @@ class ExecutionManager:
         llm_pipeline: LLMPipeline,
         context_window_mgr: LLMContextWindowManager | None = None,
         context_window: int = 0,
+        model_config: ModelConfig | None = None,
         hippocampal: HippocampalManager | None = None,
         monitor: OutputMonitor | None = None,
         inhibition: InhibitionController | None = None,
@@ -35,6 +37,7 @@ class ExecutionManager:
         self._pipeline = llm_pipeline
         self._context_window_mgr = context_window_mgr
         self._context_window = context_window
+        self._model_config = model_config
         self._hippocampal = hippocampal
         self._monitor = monitor
         self._inhibition = inhibition
@@ -140,7 +143,14 @@ class ExecutionManager:
             )
 
         if run_compression and self._context_window_mgr:
-            self._context_window_mgr.check_and_summarize(self._messages, self._context_window)
+            model_role = plan.get("model_role", "default")
+            effective_ctx = (
+                self._model_config.get_effective_context_window(model_role)
+                if self._model_config
+                else self._context_window
+            )
+            model_name = self._model_config.get_model(model_role) if self._model_config else None
+            self._context_window_mgr.check_and_summarize(self._messages, effective_ctx, model_name=model_name)
 
         if self._monitor:
             flags = self._monitor.record_output()

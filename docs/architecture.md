@@ -199,11 +199,12 @@ iris/
 │
 ├── llm/                       # LLM 基盤
 │   ├── __init__.py
-│   ├── llm_bridge.py
-│   ├── provider.py
-│   ├── ollama_provider.py
-│   ├── openrouter_provider.py
+│   ├── llm_bridge.py          LLMBridge（マルチプロバイダルーター）
+│   ├── provider.py            LLMProvider / ProviderFactory Protocol
+│   ├── ollama_provider.py     Ollamaプロバイダ
+│   ├── openrouter_provider.py OpenRouterプロバイダ
 │   ├── capability_checker.py
+│   ├── tokenizer_manager.py   TokenizerManager（tokenizersラッパー）
 │   └── context_window.py      LLMContextWindowManager（会話履歴圧縮）
 │
 └── tools/                     # @tool, ToolRegistry, ビルトイン

@@ -10,7 +10,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Protocol
 
-from iris.kernel.config import ModelConfig
+from iris.kernel.config import ModelConfig, ModelEntry
 
 
 class LLMProvider(Protocol):
@@ -41,4 +41,4 @@ class ProviderFactory(Protocol):
     """
 
     @classmethod
-    def ensure_environment(cls, model_config: ModelConfig) -> bool: ...
+    def ensure_environment(cls, entries: list[ModelEntry], model_config: ModelConfig) -> bool: ...

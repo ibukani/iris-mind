@@ -19,7 +19,7 @@ _VALID_PERFORMANCE_TIERS = {"fast", "balanced", "capable"}
 
 
 def _default_models() -> list[ModelEntry]:
-    return [ModelEntry(name="qwen3.5:9b", roles=["default"], max_tokens=1024)]
+    return [ModelEntry(name="qwen3.5:9b", roles=["default"], max_tokens=1024, provider="ollama")]
 
 
 def _default_trigger_weights() -> dict[str, float]:
@@ -49,11 +49,20 @@ def _resolve_env_refs(raw: object) -> object:
 class ModelEntry(BaseModel):
     name: str
     roles: list[str] = Field(default_factory=lambda: ["default"])
+    provider: str = "ollama"
+    base_url: str = "http://localhost:11434"
+    api_key: str = ""
     max_tokens: int = 512
     temperature: float | None = None
     num_ctx: int | None = None
+    num_gpu: int | None = None
+    main_gpu: int | None = None
+    context_window: int | None = None
     capabilities: list[str] | None = None
     performance_tier: str = "balanced"
+    tokenizer_repo_id: str = ""
+    tokenizer_local_path: str = ""
+    tokenizer_hf_token: str = ""
 
     @field_validator("roles", mode="before")
     @classmethod
@@ -74,13 +83,10 @@ class ModelEntry(BaseModel):
 
 class ModelConfig(BaseModel):
     models: list[ModelEntry] = Field(default_factory=_default_models)
-    provider: str = "ollama"
-    base_url: str = "http://localhost:11434"
-    api_key: str = ""
-    temperature: float = 0.7
-    num_gpu: int = 99
-    num_ctx: int = 8192
-    context_window: int = 0
+    default_temperature: float = 0.7
+    default_num_ctx: int = 8192
+    default_num_gpu: int = 99
+    default_context_window: int = 8192
 
     @property
     def model_names(self) -> list[str]:
@@ -100,13 +106,25 @@ class ModelConfig(BaseModel):
         m = self._find_model(role)
         if m is not None and m.temperature is not None:
             return m.temperature
-        return self.temperature
+        return self.default_temperature
 
     def get_effective_num_ctx(self, role: str = "default") -> int:
         m = self._find_model(role)
         if m is not None and m.num_ctx is not None:
             return m.num_ctx
-        return self.num_ctx
+        return self.default_num_ctx
+
+    def get_effective_num_gpu(self, role: str = "default") -> int:
+        m = self._find_model(role)
+        if m is not None and m.num_gpu is not None:
+            return m.num_gpu
+        return self.default_num_gpu
+
+    def get_effective_context_window(self, role: str = "default") -> int:
+        m = self._find_model(role)
+        if m is not None and m.context_window is not None:
+            return m.context_window
+        return self.default_context_window
 
     def get_model_capabilities(self, role: str = "default") -> list[str]:
         m = self._find_model(role)

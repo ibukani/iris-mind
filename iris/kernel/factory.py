@@ -21,7 +21,8 @@ from iris.limbic.emotional_memory import EmotionalMemory
 from iris.limbic.manager import LimbicManager
 from iris.llm.capability_checker import CapabilityChecker
 from iris.llm.context_window import LLMContextWindowManager
-from iris.llm.llm_bridge import LLMBridge, create_provider
+from iris.llm.llm_bridge import LLMBridge
+from iris.llm.tokenizer_manager import TokenizerManager
 from iris.memory.hippocampal.manager import HippocampalManager
 from iris.memory.hippocampal.reflexion import Reflexion
 from iris.memory.long_term.manager import LongTermMemoryManager
@@ -127,6 +128,14 @@ class KernelFactory:
         # Phase 4: LLM・パーソナリティ
         # ============================================================
         llm = KernelFactory._build_llm(config)
+        tokenizers: dict[str, TokenizerManager] = {
+            entry.name: TokenizerManager(
+                repo_id=entry.tokenizer_repo_id,
+                local_path=entry.tokenizer_local_path,
+                hf_token=entry.tokenizer_hf_token,
+            )
+            for entry in config.model.models
+        }
 
         # ============================================================
         # Phase 4: ケイパビリティ (ツール)
@@ -155,6 +164,7 @@ class KernelFactory:
             scoring=scoring,
             limbic=limbic,
             big_five=big_five,
+            tokenizers=tokenizers,
         )
 
         # ============================================================
@@ -238,15 +248,7 @@ class KernelFactory:
 
     @staticmethod
     def _build_llm(config: Config) -> LLMBridge:
-        provider = create_provider(
-            provider_type=config.model.provider,
-            base_url=config.model.base_url,
-            api_key=config.model.api_key,
-            default_model=config.model.get_model("default"),
-            num_gpu=config.model.num_gpu,
-            num_ctx=config.model.num_ctx,
-        )
-        return LLMBridge(provider=provider)
+        return LLMBridge(model_config=config.model)
 
     @staticmethod
     def _build_tools() -> tuple[ToolRegistry, ToolExecutionEngine]:
@@ -268,6 +270,7 @@ class KernelFactory:
         scoring: ProactiveScoring,
         limbic: LimbicManager | None = None,
         big_five: BigFiveProfile | None = None,
+        tokenizers: dict[str, TokenizerManager] | None = None,
     ) -> AgencyManager:
         personality = Personality(name=config.personality.name, prompt_file=config.personality.prompt_file)
         capability_checker = CapabilityChecker(config=config.model)
@@ -309,13 +312,19 @@ class KernelFactory:
         )
 
         monitor = OutputMonitor(internal_bus=internal_bus)
-        context_window_mgr = LLMContextWindowManager(llm=llm, compact_model=config.model.get_model("default"))
+        context_window_mgr = LLMContextWindowManager(
+            llm=llm,
+            compact_model=config.model.get_model("default"),
+            tokenizers=tokenizers,
+            default_model_name=config.model.get_model("default"),
+        )
         execution = ExecutionManager(
             internal_bus=internal_bus,
             event_bus=event_bus,
             llm_pipeline=pipeline,
             context_window_mgr=context_window_mgr,
-            context_window=config.model.context_window,
+            context_window=config.model.default_context_window,
+            model_config=config.model,
             hippocampal=hippocampal,
             monitor=monitor,
             inhibition=inhibition,

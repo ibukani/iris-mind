@@ -15,7 +15,7 @@ from typing import Any
 
 import httpx
 
-from iris.kernel.config import ModelConfig
+from iris.kernel.config import ModelConfig, ModelEntry
 
 logger = logging.getLogger(__name__)
 
@@ -200,18 +200,21 @@ class OpenRouterProvider:
         return
 
     @classmethod
-    def ensure_environment(cls, model_config: ModelConfig) -> bool:
+    def ensure_environment(cls, entries: list[ModelEntry], model_config: ModelConfig) -> bool:
         """OpenRouter 環境を確認する（API キー検証 → モデル存在確認）。"""
-        if not model_config.api_key or model_config.api_key.startswith("${"):
+        if not entries:
+            return True
+        entry = entries[0]
+        if not entry.api_key or entry.api_key.startswith("${"):
             print(
-                "APIキーが設定されていません。config.yaml の model.api_key を確認してください。",
+                "APIキーが設定されていません。モデルエントリの api_key を確認してください。",
                 file=sys.stderr,
             )
             return False
 
-        base_url = model_config.base_url.rstrip("/")
+        base_url = entry.base_url.rstrip("/")
         headers = {
-            "Authorization": f"Bearer {model_config.api_key}",
+            "Authorization": f"Bearer {entry.api_key}",
             "Content-Type": "application/json",
         }
         try:
@@ -224,7 +227,7 @@ class OpenRouterProvider:
             return False
 
         ok = True
-        for m in model_config.models:
+        for m in entries:
             if m.name not in remote_ids:
                 print(
                     f"  警告: モデル '{m.name}' が OpenRouter のモデル一覧に見つかりません。"

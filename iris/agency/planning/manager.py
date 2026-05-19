@@ -90,6 +90,7 @@ class PlanningManager:
             plan: dict = {
                 "content": "",
                 "situation": "proactive",
+                "model_role": "default",
                 "context_hint": context.get("context_hint", ""),
                 "scores": scores,
                 "total_score": context.get("salience", 0.0),
@@ -115,6 +116,7 @@ class PlanningManager:
         )
         plan = {
             "content": content,
+            "model_role": "fast" if abbreviated else "default",
             "context_hint": context_hint,
             "abbreviated": abbreviated,
             "tools_allowed": not abbreviated,

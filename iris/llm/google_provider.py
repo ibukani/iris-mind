@@ -231,14 +231,14 @@ class GoogleProvider:
             resp = httpx.get(f"{base_url}/models", headers=headers, timeout=10.0)
             resp.raise_for_status()
             data = resp.json()
-            remote_ids = {m["id"] for m in data.get("data", [])}
+            remote_ids = {m["id"].removeprefix("models/") for m in data.get("data", [])}
         except Exception as e:
             print(f"Google API への接続に失敗しました: {e}", file=sys.stderr)
             return False
 
         ok = True
         for m in entries:
-            if m.name not in remote_ids:
+            if m.name.removeprefix("models/") not in remote_ids:
                 print(
                     f"  警告: モデル '{m.name}' が Google AI Studio のモデル一覧に見つかりません。"
                     f" モデル名を確認してください。",

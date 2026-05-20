@@ -47,7 +47,7 @@ class LongTermMemoryManager:
         elif isinstance(data, dict):
             summary = data.get("content") or data.get("summary") or str(data)
             kind = data.get("kind", kind)
-        if kind:
+        if kind and not summary.startswith(f"[{kind}]"):
             summary = f"[{kind}] {summary}"
         self._episodic.add(summary)
 

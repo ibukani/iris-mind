@@ -146,3 +146,31 @@ def test_semantic_store_adds_default_fields() -> None:
         import shutil
 
         shutil.rmtree(tmpdir, ignore_errors=True)
+
+
+def test_long_term_manager_store_episodic_prefix() -> None:
+    import os
+    import tempfile
+
+    from iris.memory.long_term.manager import LongTermMemoryManager
+
+    fd, path = tempfile.mkstemp(suffix=".jsonl")
+    os.close(fd)
+    try:
+        store = EpisodicStore(path=path, max_entries=30)
+        manager = LongTermMemoryManager(episodic=store)
+
+        manager.store_episodic("hello", kind="conversation")
+        manager.store_episodic("[conversation] world", kind="conversation")
+        manager.store_episodic({"content": "[conversation] | combined text", "kind": "conversation"})
+        manager.store_episodic("[other] test", kind="conversation")
+
+        recent = store.get_recent(5)
+        assert len(recent) == 4
+        assert recent[0]["summary"] == "[conversation] hello"
+        assert recent[1]["summary"] == "[conversation] world"
+        assert recent[2]["summary"] == "[conversation] | combined text"
+        assert recent[3]["summary"] == "[conversation] [other] test"
+    finally:
+        if os.path.exists(path):
+            os.unlink(path)

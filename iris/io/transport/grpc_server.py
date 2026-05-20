@@ -110,7 +110,17 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
         session_role = auth_msg.role or "external"
         logger.info("GrpcServer: session %s authenticated (role=%s)", session_id, session_role)
 
-        # 2. 受信ループ起動 (Client -> Server)
+        # 2. 認証成功をクライアントに通知（デッドロック防止）
+        ack = grpc_service_pb2.Message(  # type: ignore[attr-defined]
+            id="",
+            msg_type="auth_success",
+            session_id=session_id,
+            direction="response",
+            content="authenticated",
+        )
+        yield grpc_service_pb2.BidirectionalStreamResponse(message=ack)  # type: ignore[attr-defined]
+
+        # 3. 受信ループ起動 (Client -> Server)
         receive_task = asyncio.create_task(self._receive_loop(request_iterator, session_id, session_role))
 
         try:

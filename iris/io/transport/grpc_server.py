@@ -165,7 +165,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
         except asyncio.CancelledError:
             pass
         except GeneratorExit:
-            raise
+            return
         finally:
             receive_task.cancel()
             with contextlib.suppress(Exception):
@@ -317,10 +317,11 @@ class GrpcListener:
                 except Exception:
                     logger.exception("Error stopping gRPC server")
                 finally:
-                    for task in asyncio.all_tasks(loop):
-                        if task is not asyncio.current_task() and not task.done():
-                            task.cancel()
-                    await asyncio.sleep(0)
+                    tasks = [t for t in asyncio.all_tasks(loop) if t is not asyncio.current_task() and not t.done()]
+                    for t in tasks:
+                        t.cancel()
+                    if tasks:
+                        await asyncio.wait(tasks, timeout=2.0)
                     loop.stop()
 
             if loop.is_running():

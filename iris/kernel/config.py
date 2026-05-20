@@ -18,6 +18,11 @@ _ENV_REF_RE = re.compile(r"\$\{([^}]+)\}")
 _VALID_PERFORMANCE_TIERS = {"fast", "balanced", "capable"}
 
 
+class ProviderConnection(BaseModel):
+    base_url: str = ""
+    api_key: str = ""
+
+
 def _default_models() -> list[ModelEntry]:
     return [ModelEntry(name="qwen3.5:9b", roles=["default"], max_tokens=1024, provider="ollama")]
 
@@ -50,8 +55,6 @@ class ModelEntry(BaseModel):
     name: str
     roles: list[str] = Field(default_factory=lambda: ["default"])
     provider: str = "ollama"
-    base_url: str = "http://localhost:11434"
-    api_key: str = ""
     max_tokens: int = 512
     temperature: float | None = None
     num_ctx: int | None = None
@@ -62,7 +65,6 @@ class ModelEntry(BaseModel):
     performance_tier: str = "balanced"
     tokenizer_repo_id: str = ""
     tokenizer_local_path: str = ""
-    tokenizer_hf_token: str = ""
     keep_alive: str | None = None
     presence_penalty: float | None = None
     frequency_penalty: float | None = None
@@ -86,6 +88,8 @@ class ModelEntry(BaseModel):
 
 
 class ModelConfig(BaseModel):
+    providers: dict[str, ProviderConnection] = Field(default_factory=dict)
+    hf_token: str = ""
     models: list[ModelEntry] = Field(default_factory=_default_models)
     default_temperature: float = 0.7
     default_num_ctx: int = 8192

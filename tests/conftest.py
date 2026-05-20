@@ -486,8 +486,6 @@ def minimal_config() -> Config:
     return Config(
         model=ModelConfig(
             models=[{"name": "test-model", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
-            provider="ollama",
-            base_url="http://localhost:11434",
         ),
     )
 

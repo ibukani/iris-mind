@@ -20,7 +20,7 @@ flowchart TD
     end
     subgraph IO["io/ 視床"]
         IO_M["IOManager<br/>入出力中継"]
-        TCP["TcpListener / SessionManager"]
+        GRPC["GrpcListener / SessionManager"]
     end
     subgraph Memory["memory/ 感覚野+海馬+皮質"]
         MM["MemoryManager<br/>記憶オーケストレーション"]
@@ -46,7 +46,7 @@ flowchart TD
     end
 
     Console --> Kernel
-    CLI <-->|TCP 127.0.0.1:9876| IO
+    CLI <-->|gRPC 127.0.0.1:9876| IO
     EB --- IO
     EB --- Memory
     EB --- Agency
@@ -58,20 +58,20 @@ flowchart TD
 
 - **Supervisor** — Kernel プロセスの起動・監視・管理コンソール (`main.py`)
 - **Kernel 層** — 脳幹+視床下部。プロセス管理、DIコンテナ、スラッシュコマンド。TimerTick(5秒) 発行
-- **IO 層** — 視床。TCP入出力、セッション管理
+- **IO 層** — 視床。gRPC入出力、セッション管理
 - **Memory 層** — 感覚野+海馬+皮質。断片的入力の統合、エピソード/意味記憶、Reflexion、人格
 - **Agency 層** — 前頭前野+基底核+運動野。PFC評価（ProactiveScoring）、意思決定、基底核抑制、行動実行
 - **LLM 層** — 言語処理基盤。LLM接続、ContextWindow圧縮
 - **Event 層** — 神経路。全層を疎結合するグローバルEventBus
 
 シャットダウンは Supervisor の管理コンソール (`/shutdown`) または Ctrl+C で行う。
-TCP 経由でも `/shutdown` コマンドを送信可能。
+gRPC 経由でも `/shutdown` コマンドを送信可能。
 
 詳細な設計は [`docs/`](./docs/README.md) を参照。
 
 ## 外部開発者向け（Client接続）
 
-Iris に TCP 接続して会話するクライアントを開発する場合:
+Iris に gRPC 接続して会話するクライアントを開発する場合:
 
 1. **[Client Guide](./docs/client-guide.md)** — 応答パターン・自発発話・コマンド・期待される動作
 2. **[IPC Protocol Spec](./docs/ipc-spec.md)** — ワイヤー形式・認証・メッセージ構造・実装例
@@ -83,14 +83,14 @@ flowchart LR
         CLI["CLI / Web / 他言語"]
     end
     subgraph Iris["Iris Mind"]
-        TCP["TcpListener :9876"]
+        GRPC["GrpcListener :9876"]
         IO["IOManager"]
         EV["EventBus"]
     end
-    CLI <-->|TCP| TCP
-    TCP --> IO
+    CLI <-->|gRPC| GRPC
+    GRPC --> IO
     IO --> EV
-    EV --> IO --> TCP --> CLI
+    EV --> IO --> GRPC --> CLI
 ```
 
 ## 機能
@@ -230,18 +230,18 @@ pytest tests/                         # 全テスト実行
 |---|---|
 | [architecture.md](./docs/architecture.md) | 全体アーキテクチャ — 脳科学ベース層分割 |
 | [agency-layer.md](./docs/agency-layer.md) | Agency 層 — 意思決定と行動実行 |
-| [io-layer.md](./docs/io-layer.md) | IO 層 — TCP入出力・セッション管理 |
+| [io-layer.md](./docs/io-layer.md) | IO 層 — gRPC入出力・セッション管理 |
 | [kernel-layer.md](./docs/kernel-layer.md) | Kernel 層 — プロセス管理・DI |
 | [memory-layer.md](./docs/memory-layer.md) | Memory 層 — 感覚野+海馬+皮質記憶 |
 | [config.md](./docs/config.md) | Config 設定一覧 |
-| [ipc-spec.md](./docs/ipc-spec.md) | IPC プロトコル仕様 (TCP) |
+| [ipc-spec.md](./docs/ipc-spec.md) | IPC プロトコル仕様 (gRPC) |
 
 ## 技術スタック
 
 - **言語**: Python 3.13+
 - **LLM**: Ollama / OpenRouter (Qwen3.5:9b 他)
 - **ベクトル検索**: ChromaDB + ONNX MiniLM-L6-v2
-- **IPC**: TCP/IP (`AF_INET`) — 1ポート多重
+- **IPC**: gRPC (HTTP/2) — 1ポート多重
 - **UI**: Rich (TUI), prompt_toolkit
 - **テスト**: pytest (138 tests), ruff, mypy
 

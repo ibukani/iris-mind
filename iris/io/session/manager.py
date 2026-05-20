@@ -4,9 +4,8 @@ import contextlib
 from dataclasses import dataclass
 from datetime import datetime
 import logging
-from multiprocessing.connection import Connection
 import threading
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from iris.io.auth.authenticator import Authenticator
@@ -64,7 +63,7 @@ class SessionManager:
         self._event_bus = event_bus
         self._last_disconnect_times: dict[str, datetime] = {}
 
-    def authenticate(self, conn: Connection, msg: AuthMessage) -> ControlMessage:
+    def authenticate(self, conn: Any, msg: AuthMessage) -> ControlMessage:
         offline_duration = ""
         with self._lock:
             success, error = self._authenticator.authenticate(msg)

@@ -16,6 +16,8 @@ dependencies = [
     "rich>=13",
     "chromadb>=1.4",
     "tokenizers>=0.21",
+    "grpcio>=1.62.0",
+    "grpcio-tools>=1.62.0",
 ]
 
 [project.optional-dependencies]
@@ -138,6 +140,17 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = "tests.*"
 ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = [
+  "iris.io.transport.grpc_service_pb2",
+  "iris.io.transport.grpc_service_pb2_grpc",
+]
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = ["grpc"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

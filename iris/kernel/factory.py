@@ -15,7 +15,7 @@ from iris.agency.planning.scoring import ProactiveScoring
 from iris.event.event_bus import EventBus
 from iris.io.manager import IOManager
 from iris.io.session.manager import SessionConfig, SessionManager
-from iris.io.transport.tcp_listener import TcpListener
+from iris.io.transport.grpc_server import GrpcListener
 from iris.kernel.commands.handler import CommandHandler
 from iris.limbic.emotional_memory import EmotionalMemory
 from iris.limbic.manager import LimbicManager
@@ -92,7 +92,7 @@ class KernelContext:
     memory: MemoryManager
     agency: AgencyManager
     cmd_handler: CommandHandler
-    tcp_listener: TcpListener
+    grpc_listener: GrpcListener
     session_mgr: SessionManager
     shutdown_requested: bool = False
 
@@ -130,12 +130,12 @@ class KernelFactory:
             config=SessionConfig(**config.session.model_dump()),
             event_bus=event_bus,
         )
-        tcp_listener = TcpListener(session_manager=session_mgr)
+        grpc_listener = GrpcListener(session_manager=session_mgr)
 
         io_mgr = IOManager(
             event_bus=event_bus,
             session_manager=session_mgr,
-            tcp_listener=tcp_listener,
+            grpc_listener=grpc_listener,
         )
 
         # ============================================================
@@ -227,7 +227,7 @@ class KernelFactory:
             memory=memory_mgr,
             agency=agency,
             cmd_handler=None,  # type: ignore[arg-type]
-            tcp_listener=tcp_listener,
+            grpc_listener=grpc_listener,
             session_mgr=session_mgr,
         )
 

@@ -201,7 +201,7 @@ class InhibitionController:
         base_cooldown = 600.0
         extra = base_cooldown * (2**degree - 1)
         self._cooldown_until = time.time() + extra
-        self._negative_mood_score = min(1.0, degree * 0.15)
+        self._negative_mood_score = min(1.0, self._negative_mood_score + degree * 0.15)
         logger.info(
             "Frequency penalty applied: degree=%d cooldown=%.0fs mood=%.2f",
             degree,

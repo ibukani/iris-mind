@@ -190,7 +190,7 @@ class ProactiveScoring:
         if limbic_mood:
             valence = limbic_mood.get("valence", 0.0)
             arousal = limbic_mood.get("arousal", 0.0)
-            dominance = limbic_mood.get("dominance", 0.0)
+            dominance = limbic_mood.get("dominance", 0.5)
 
             mood_valence = valence * 0.5 if valence > 0 else valence * 1.5
 

@@ -121,15 +121,11 @@ class PlanningManager:
         from_timer = context.get("from_timer", False)
 
         if from_timer:
-            scores = context.get("scores", {})
             plan: dict = {
                 "content": "",
                 "situation": "proactive",
                 "model_role": "default",
                 "context_hint": context.get("context_hint", ""),
-                "scores": scores,
-                "total_score": context.get("salience", 0.0),
-                "trigger_type": max(scores, key=lambda k: scores[k]) if scores else "unknown",
                 "abbreviated": False,
                 "tools_allowed": False,
                 "streaming": False,
@@ -209,7 +205,9 @@ class PlanningManager:
         d = limbic_mood.get("dominance", 0.5)
 
         if v < -0.3:
-            plan["max_tokens"] = min(plan.get("max_tokens", 0) or 9999, 256)
+            current = plan.get("max_tokens", 0)
+            if current > 0:
+                plan["max_tokens"] = min(current, 256)
             if plan.get("abbreviated", False) is False:
                 plan["temperature"] = plan.get("temperature", 0.7) + 0.15
                 plan["tools_allowed"] = False
@@ -219,7 +217,9 @@ class PlanningManager:
 
         if a > 0.6:
             plan["temperature"] = max(plan.get("temperature", 0.7) - 0.15, 0.3)
-            plan["max_tokens"] = min(plan.get("max_tokens", 0) or 9999, 256)
+            current = plan.get("max_tokens", 0)
+            if current > 0:
+                plan["max_tokens"] = min(current, 256)
         elif a < 0.15:
             plan["temperature"] = min(plan.get("temperature", 0.7) + 0.2, 1.0)
 
@@ -229,7 +229,9 @@ class PlanningManager:
             plan["temperature"] = plan.get("temperature", 0.7) + 0.05
         elif d > 0.6:
             plan["temperature"] = max(plan.get("temperature", 0.7) - 0.1, 0.2)
-            plan["max_tokens"] = min(plan.get("max_tokens", 0) or 9999, 512)
+            current = plan.get("max_tokens", 0)
+            if current > 0:
+                plan["max_tokens"] = min(current, 512)
 
         plan["temperature"] = max(0.2, min(1.0, plan.get("temperature", 0.7)))
 

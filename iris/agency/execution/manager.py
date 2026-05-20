@@ -104,13 +104,15 @@ class ExecutionManager:
     @staticmethod
     def _apply_talkative_overrides(plan: dict[str, Any]) -> None:
         """多弁度（talkative_degree）に応じてプランパラメータを上書き調整する。"""
-        degree = plan.pop("talkative_degree", 0)
+        degree = plan.get("talkative_degree", 0)
         if degree <= 0:
             return
         if degree >= 1:
             plan["abbreviated"] = True
         if degree >= 2:
-            plan["max_tokens"] = min(plan.get("max_tokens", 0) or 120, 256)
+            current = plan.get("max_tokens", 0)
+            if current > 0:
+                plan["max_tokens"] = min(current, 256)
         if degree >= 3:
             plan["run_reflexion"] = False
             plan["run_compression"] = False

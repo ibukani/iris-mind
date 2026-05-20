@@ -121,6 +121,39 @@ class PlanningManager:
         logger.debug(
             "Plan built: abbreviated=%s suppressed=%s gate_score=%.3f", abbreviated, gate.suppressed, gate.score
         )
+
+        # 雑談判定とトークン制限
+        is_task = False
+        task_keywords = [
+            "コード",
+            "ファイル",
+            "実装",
+            "作成",
+            "修正",
+            "テスト",
+            "実行",
+            "ディレクトリ",
+            "adr",
+            "ルール",
+            "ログ",
+            "詳しく",
+            "説明",
+            "なぜ",
+            "どうやって",
+            "設計",
+        ]
+        content_lower = content.lower()
+        if len(content) > 100 or any(kw in content_lower for kw in task_keywords) or content.startswith("/"):
+            is_task = True
+
+        if abbreviated:
+            max_tokens = 80
+        elif not is_task:
+            max_tokens = 120  # 雑談時は短文トークン制限
+            context_hint = f"雑談 / {context_hint}" if context_hint else "雑談"
+        else:
+            max_tokens = 0  # タスク時は制限なし
+
         plan = {
             "content": content,
             "model_role": "fast" if abbreviated else "default",
@@ -128,10 +161,10 @@ class PlanningManager:
             "abbreviated": abbreviated,
             "tools_allowed": not abbreviated,
             "streaming": not abbreviated,
-            "max_tokens": 80 if abbreviated else 0,
+            "max_tokens": max_tokens,
             "temperature": 0.5 if abbreviated else 0.7,
-            "show_thinking": not abbreviated,
-            "run_reflexion": not abbreviated,
+            "show_thinking": not abbreviated and is_task,  # 雑談時は思考表示をOFF（Neiroライク）
+            "run_reflexion": not abbreviated and is_task,  # 雑談時は振り返りもスキップ
             "run_compression": not abbreviated,
             "record_history": True,
         }

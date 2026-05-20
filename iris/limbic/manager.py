@@ -183,14 +183,14 @@ class LimbicManager:
         elif e.valence > 0.2:
             hints.append("穏やかで親しみやすいトーンで応答してください")
         elif e.valence < -0.5:
-            hints.append("簡潔に、必要最低限の応答に留めてください")
+            hints.append("簡潔に、1文以内の最小限の言葉で応答してください")
         elif e.valence < -0.2:
-            hints.append("やや控えめなトーンで応答してください")
+            hints.append("やや控えめに、1文程度の短い言葉で応答してください")
 
         if e.arousal > 0.6:
-            hints.append("テンポ良く、活発に応答してください")
+            hints.append("テンポ良く、1〜2文の短い言葉で活発に応答してください")
         elif e.arousal < 0.2:
-            hints.append("ゆったりとしたペースで応答してください")
+            hints.append("ゆったりとしたペースで、1〜2文程度で応答してください")
 
         if e.dominance > 0.6:
             hints.append("自信を持って明確に応答してください")

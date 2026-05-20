@@ -6,6 +6,7 @@ from datetime import datetime
 import logging
 from multiprocessing.connection import Connection
 import threading
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from iris.io.auth.authenticator import Authenticator
@@ -18,6 +19,10 @@ from iris.io.models import (
     SessionInfo,
     SessionState,
 )
+
+if TYPE_CHECKING:
+    from iris.event.event_bus import EventBus
+
 
 logger = logging.getLogger(__name__)
 
@@ -50,14 +55,17 @@ _INPUT_PERMISSION_MAP: dict[str, Permission] = {
 
 
 class SessionManager:
-    def __init__(self, config: SessionConfig | None = None) -> None:
+    def __init__(self, config: SessionConfig | None = None, event_bus: EventBus | None = None) -> None:
         self._sessions: dict[str, SessionInfo] = {}
         cfg = config or SessionConfig()
         self._authenticator = Authenticator(access_token=cfg.access_token)
         self._config = cfg
         self._lock = threading.Lock()
+        self._event_bus = event_bus
+        self._last_disconnect_times: dict[str, datetime] = {}
 
     def authenticate(self, conn: Connection, msg: AuthMessage) -> ControlMessage:
+        offline_duration = ""
         with self._lock:
             success, error = self._authenticator.authenticate(msg)
             if not success:
@@ -78,8 +86,38 @@ class SessionManager:
             )
             self._sessions[session_id] = session
 
+            key = f"{session.role}:{session.identity}" if session.identity else session.role
+            if key in self._last_disconnect_times:
+                disc_time = self._last_disconnect_times[key]
+                diff = now - disc_time
+                secs = int(diff.total_seconds())
+                if secs < 60:
+                    offline_duration = "たった今"
+                elif secs < 3600:
+                    offline_duration = f"{secs // 60}分間"
+                elif secs < 86400:
+                    offline_duration = f"{secs // 3600}時間{(secs % 3600) // 60}分間"
+                else:
+                    offline_duration = f"{secs // 86400}日間"
+
             logger.info("Session created: %s (role=%s)", session_id, msg.role)
-            return ControlMessage(msg_type="auth_success", session_id=session_id)
+
+        if self._event_bus:
+            from iris.event.event_types import ClientSessionEvent
+
+            self._event_bus.publish(
+                ClientSessionEvent(
+                    timestamp=now,
+                    source="session",
+                    session_id=session_id,
+                    action="connected",
+                    role=session.role,
+                    identity=session.identity,
+                    offline_duration=offline_duration,
+                )
+            )
+
+        return ControlMessage(msg_type="auth_success", session_id=session_id)
 
     def route_message(self, msg: Message) -> None:
         # Get target session(s) under lock, then send outside lock
@@ -157,6 +195,7 @@ class SessionManager:
             return self._sessions.get(session_id)
 
     def remove_session(self, session_id: str) -> None:
+        now = datetime.now()
         with self._lock:
             session = self._sessions.pop(session_id, None)
             if session:
@@ -165,6 +204,22 @@ class SessionManager:
                     with contextlib.suppress(Exception):
                         session.conn.close()
                 logger.info("Session removed: %s", session_id)
+                key = f"{session.role}:{session.identity}" if session.identity else session.role
+                self._last_disconnect_times[key] = now
+
+        if session and self._event_bus:
+            from iris.event.event_types import ClientSessionEvent
+
+            self._event_bus.publish(
+                ClientSessionEvent(
+                    timestamp=now,
+                    source="session",
+                    session_id=session_id,
+                    action="disconnected",
+                    role=session.role,
+                    identity=session.identity,
+                )
+            )
 
     def get_active_sessions(self) -> list[SessionInfo]:
         with self._lock:

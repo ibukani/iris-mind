@@ -50,11 +50,19 @@ class PlanningManager:
 
         gate = self._inhibition.evaluate(time.time())
 
-        if context.get("from_timer"):
-            self._inhibition.check_ignore()
-            logger.debug("Timer-triggered input: gate_suppressed=%s score=%.3f", gate.suppressed, gate.score)
+        is_system_event = "system_event" in context
+
+        if context.get("from_timer") or is_system_event:
+            if is_system_event:
+                self._inhibition.set_cooldown(30.0)
+
             if gate.suppressed:
+                logger.debug("Proactive trigger suppressed by gate (system_event=%s)", context.get("system_event"))
                 return
+
+            if context.get("from_timer"):
+                self._inhibition.check_ignore()
+
             total, scores = self._scoring.compute(
                 now=time.time(),
                 last_proactive_time=self._inhibition.last_proactive_time,
@@ -62,18 +70,35 @@ class PlanningManager:
                 negative_mood_score=self._inhibition.negative_mood_score,
                 limbic_mood=limbic_mood,
                 content=event.content,
+                context=context,
             )
             if total < self._cfg.speak_threshold:
                 logger.debug("Below speak_threshold: total=%.3f < threshold=%.2f", total, self._cfg.speak_threshold)
                 return
             self._inhibition.record_proactive_attempt()
+
+            context_hint = ""
+            if is_system_event:
+                event_name = context.get("system_event")
+                offline_duration = context.get("offline_duration", "")
+                role = context.get("role", "")
+                if event_name == "connected":
+                    if offline_duration:
+                        context_hint = (
+                            f"システムイベント: ロール {role} が {offline_duration} の切断期間を経て再接続しました。"
+                        )
+                    else:
+                        context_hint = f"システムイベント: ロール {role} が接続しました。"
+            else:
+                context_hint = self._build_context_hint(scores)
+
             context = {
                 "from_timer": True,
                 "salience": total,
                 "scores": scores,
-                "context_hint": self._build_context_hint(scores),
+                "context_hint": context_hint,
             }
-            logger.debug("Proactive plan published: total=%.3f scores=%s", total, scores)
+            logger.debug("Proactive plan published: total=%.3f scores=%s hint=%s", total, scores, context_hint)
         else:
             self._inhibition.notify_user_activity()
 

@@ -84,6 +84,14 @@ class LLMPipeline:
         if dynamic_personality:
             prompt += f"\n\n{dynamic_personality}"
 
+        import datetime
+
+        dt_now = datetime.datetime.now()
+        weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        weekday = weekdays[dt_now.weekday()]
+        current_time_str = f"{dt_now.strftime('%Y-%m-%d %H:%M:%S')} ({weekday})"
+        prompt += f"\n\n## 現在日時\n{current_time_str}"
+
         if self._limbic:
             mood_desc = self._limbic.build_mood_description()
             if mood_desc:

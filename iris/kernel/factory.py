@@ -126,7 +126,10 @@ class KernelFactory:
         # Phase 1: インフラ基盤 (EventBus, IO)
         # ============================================================
         event_bus = EventBus()
-        session_mgr = SessionManager(config=SessionConfig(**config.session.model_dump()))
+        session_mgr = SessionManager(
+            config=SessionConfig(**config.session.model_dump()),
+            event_bus=event_bus,
+        )
         tcp_listener = TcpListener(session_manager=session_mgr)
 
         io_mgr = IOManager(

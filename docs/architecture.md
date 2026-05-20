@@ -245,6 +245,14 @@ class InputReady:
     context: dict | None
 
 @dataclass
+class ClientSessionEvent(Event):
+    session_id: str
+    action: str              # "connected" | "disconnected"
+    role: str
+    identity: str
+    offline_duration: str    # 切断されていた期間（例: "3時間20分間"）
+
+@dataclass
 class TimerTick:
     timestamp: float
 ```
@@ -314,5 +322,3 @@ flowchart LR
   - `apply_limbic_modulation(emotion)` → InhibitionController が感情による抑制変調に利用 (inhibition.py)
   - `tag_recent_memory()` → EmotionalMemory が EpisodicStore に感情タグを付与
   - `current_emotion()` → ProactiveScoring が自発発話スコアリングの mood 因子として利用
-
-

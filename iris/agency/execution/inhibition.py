@@ -66,6 +66,11 @@ class InhibitionController:
         self._cooldown_until: float = 0.0
         self._is_sleeping: bool = False
         self._ignore_recorded: bool = False
+        self._generating: bool = False
+
+    def set_generating(self, generating: bool) -> None:
+        self._generating = generating
+        logger.debug("InhibitionController: generating state set to %s", generating)
 
     def notify_user_activity(self) -> None:
         self._last_user_activity = time.time()
@@ -84,6 +89,10 @@ class InhibitionController:
                 logger.info("Entered confirmation mode (ignores=%d)", self._consecutive_ignores)
 
     def evaluate(self, now: float) -> GateVerdict:
+        if self._generating:
+            logger.debug("Gate suppressed: active generation in progress")
+            return GateVerdict(suppressed=True, score=0.0, reason="generating", go_signal=0.0)
+
         if now < self._cooldown_until or self._is_sleeping:
             logger.debug(
                 "Gate suppressed: cooldown_or_sleep (now=%.3f, cooldown_until=%.3f)", now, self._cooldown_until

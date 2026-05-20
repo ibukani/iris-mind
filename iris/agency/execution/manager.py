@@ -147,6 +147,8 @@ class ExecutionManager:
             on_token = _on_token
 
         try:
+            if self._inhibition:
+                self._inhibition.set_generating(True)
             response_text = self._pipeline.generate(
                 plan=plan,
                 messages=self._messages,
@@ -155,6 +157,9 @@ class ExecutionManager:
         except Exception as e:
             response_text = f"[Error: {e}]"
             logger.exception("LLM call failed")
+        finally:
+            if self._inhibition:
+                self._inhibition.set_generating(False)
 
         if record_history:
             self._messages.append({"role": "assistant", "content": response_text})

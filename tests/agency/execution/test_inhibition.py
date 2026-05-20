@@ -67,3 +67,16 @@ def test_frequency_penalty_reduces_go_signal_indirectly(mock_time: Callable[[], 
     penalized = controller.evaluate(time.time())
 
     assert penalized.go_signal < normal_go
+
+
+def test_generating_suppresses_evaluate() -> None:
+    controller = InhibitionController()
+    controller.set_generating(True)
+    verdict = controller.evaluate(time.time())
+    assert verdict.suppressed
+    assert verdict.reason == "generating"
+
+    controller.set_generating(False)
+    verdict = controller.evaluate(time.time())
+    # generating 以外での抑制がなければ False
+    assert not verdict.suppressed or verdict.reason != "generating"

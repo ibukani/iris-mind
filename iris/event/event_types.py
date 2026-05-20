@@ -96,6 +96,15 @@ class InputReady(Event):
     context: dict | None = None
 
 
+@dataclass
+class ClientSessionEvent(Event):
+    session_id: str = ""
+    action: str = ""  # "connected" | "disconnected"
+    role: str = ""
+    identity: str = ""
+    offline_duration: str = ""
+
+
 def new_trace_id() -> str:
     return _uuid.uuid4().hex[:12]
 
@@ -103,6 +112,7 @@ def new_trace_id() -> str:
 __all__ = [
     "AgentAnomalyEvent",
     "AgentStateChangeEvent",
+    "ClientSessionEvent",
     "Event",
     "InputReady",
     "MemoryUpdateEvent",

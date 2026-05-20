@@ -8,8 +8,8 @@
 
 - **PlanningManager** がグローバル EventBus から `InputReady` を直接購読（AgencyManager は中継しない）
 - 意思決定（planning）: PFC が入力に対して何を行うか決定する
-- PFC スコアリング（ProactiveScoring）: 自発発話の価値を時間・記憶・文脈・感情・緊急性の5因子で評価
-- 基底核抑制（InhibitionController）: 行動の抑制を mood / confirmation / cooldown / **limbic 変調** で制御
+- PFC スコアリング（ProactiveScoring）: 自発発話の価値を時間・記憶・文脈・感情・緊急性・システムイベントで評価
+- 基底核抑制（InhibitionController）: 行動の抑制を mood / confirmation / cooldown / **generating（生成中）** / **limbic 変調** で制御
 - 行動実行（execution）: 決定された計画を LLM・Tool を用いて実行する
 
 ## Internal Bus
@@ -98,20 +98,22 @@ class PlanningManager:
 
 ```python
 class ProactiveScoring:
-    """5因子を重み付け統合:
+    """因子を重み付け統合:
     - time: 前回の行動からの経過時間
     - memory: 長期記憶との関連性（最近の話題 + 意味検索）
     - context: 直近会話の文脈的一貫性（+ short_termターン数で補正）
     - mood: 感情状態（limbic_mood dict: valence/arousal/dominance → PAD加重スコア）
     - urgency: 入力内容の緊急性（疑問・緊急語・長文・!!）
+    - system_event: クライアント接続等のシステムイベント発生時に優先度を大きく上方補正
 
     sensory/short_termは個別に算出され、totalを上方補正する。
     """
     def compute(self, now, last_proactive_time, last_user_activity, negative_mood_score,
-                limbic_mood: dict | None = None, content: str = "") -> tuple[float, dict]:
+                limbic_mood: dict | None = None, content: str = "", context: dict | None = None) -> tuple[float, dict]:
         # limbic_mood あり → PAD 3次元の重み付きスコアリング
         # limbic_mood なし → 従来の negative_mood_score ベース
         # content が空以外 → content_urgency で上方補正
+        # context に "system_event" = "connected" がある場合 → 閾値を超えるようブースト
 ```
 
 ### Plan 定義
@@ -214,5 +216,3 @@ sequenceDiagram
         EX->>EX: context_window_mgr.check_and_summarize()
     end
 ```
-
-

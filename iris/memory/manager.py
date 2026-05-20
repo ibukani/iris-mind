@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from iris.limbic.models import EmotionState
 
-from iris.event.event_types import InputReady, MessageEvent, TimerTick
+from iris.event.event_types import ClientSessionEvent, InputReady, MessageEvent, TimerTick
 from iris.memory.long_term.manager import LongTermMemoryManager
 from iris.memory.long_term.stores import EpisodicStore, SemanticStore
 from iris.memory.long_term.vector_store import VectorStore
@@ -59,6 +59,7 @@ class MemoryManager:
         if event_bus is not None:
             event_bus.subscribe("MessageEvent", self._on_message_event)
             event_bus.subscribe("TimerTick", self._on_timer_tick)
+            event_bus.subscribe("ClientSessionEvent", self._on_client_session_event)
 
     def set_sensory_buffer(self, buf: SensoryMemoryManager) -> None:
         self.sensory = buf
@@ -103,6 +104,29 @@ class MemoryManager:
                     session_id="",
                     content="",
                     context={"from_timer": True},
+                )
+            )
+
+    def _on_client_session_event(self, event: ClientSessionEvent) -> None:
+        if event.action == "connected" and self._event_bus is not None:
+            logger.info(
+                "MemoryManager: client connected session=%s role=%s offline_duration=%s",
+                event.session_id,
+                event.role,
+                event.offline_duration,
+            )
+            self._event_bus.publish(
+                InputReady(
+                    timestamp=None,
+                    source="memory",
+                    session_id=event.session_id,
+                    content="",
+                    context={
+                        "system_event": event.action,
+                        "offline_duration": event.offline_duration,
+                        "role": event.role,
+                        "identity": event.identity,
+                    },
                 )
             )
 

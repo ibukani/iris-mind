@@ -176,7 +176,7 @@ class KernelFactory:
             entry.name: TokenizerManager(
                 repo_id=entry.tokenizer_repo_id,
                 local_path=entry.tokenizer_local_path,
-                hf_token=entry.tokenizer_hf_token,
+                hf_token=config.model.hf_token,
             )
             for entry in config.model.models
         }

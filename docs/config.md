@@ -21,11 +21,20 @@ Config
 
 | フィールド | 型 | デフォルト | 説明 |
 |-----------|-----|-----------|------|
+| providers | dict[str, ProviderConnection] | {} | プロバイダ接続設定（base_url / api_key） |
+| hf_token | str | "" | HuggingFace gated repo 用トークン（全モデル共通） |
 | models | list[ModelEntry] | qwen3.5:9b (default) | 使用モデル一覧 |
 | default_temperature | float | 0.7 | LLM生成温度（各ModelEntryで未指定時のフォールバック） |
 | default_num_ctx | int | 8192 | コンテキスト長（各ModelEntryで未指定時のフォールバック） |
 | default_num_gpu | int | 99 | GPUレイヤー数（各ModelEntryで未指定時のフォールバック, Ollamaのみ） |
 | default_context_window | int | 8192 | 圧縮トリガー閾値（各ModelEntryで未指定時のフォールバック） |
+
+### ProviderConnection
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| base_url | str | "" | API URL（未設定時はプロバイダ別ハードコードデフォルト） |
+| api_key | str | "" | APIキー（${VAR_NAME}形式対応） |
 
 **ModelEntry**:
 
@@ -33,9 +42,7 @@ Config
 |-----------|-----|-----------|------|
 | name | str | — | モデル名（Ollamaタグ形式 or OpenRouterモデルスラッグ） |
 | roles | list[str] | ["default"] | このモデルが担うロール一覧 |
-| provider | str | "ollama" | プロバイダ種別（"ollama" / "openrouter" / "google"） |
-| base_url | str | "http://localhost:11434" | API URL（Ollama / OpenRouter / Google） |
-| api_key | str | "" | APIキー（OpenRouter / Google用、${VAR_NAME}形式対応） |
+| provider | str | "ollama" | プロバイダ種別（"ollama" / "openrouter" / "google"）。`providers` のキーとしても使用 |
 | max_tokens | int | 512 | 最大出力トークン数 |
 | temperature | float \| None | None | モデル個別の温度設定（上書き用） |
 | num_ctx | int \| None | None | モデル個別のコンテキスト長（上書き用） |
@@ -46,18 +53,18 @@ Config
 | performance_tier | str | "balanced" | 性能区分（"fast" / "balanced" / "capable"） |
 | tokenizer_repo_id | str | "" | HuggingFace Hub のリポジトリID（例: "Qwen/Qwen3.5-9B"） |
 | tokenizer_local_path | str | "" | ローカル tokenizer.json のパス |
-| tokenizer_hf_token | str | "" | gated repo用 HF Token（${VAR_NAME}形式対応） |
 
 - `roles` は YAML上で1要素なら文字列でも記述可能: `roles: default`
 - モデルが1つだけの場合はシングルモードとなり、全処理にそのモデルを使用
 - 複数モデルがある場合は `get_model(role)` で role に合致するモデルを選択
-- 各モデルが独立した `provider` / `base_url` / `api_key` を持つため、Ollama、OpenRouter、Google の混在が可能
-- 同じ `(provider, base_url, api_key)` のモデルは1つの Provider インスタンスを共有
+- 各モデルは `provider` で参照するプロバイダを指定。接続情報（`base_url` / `api_key`）は `model.providers` に集約
+- モデル個別の `base_url` / `api_key` は持たない。プロバイダ内で全モデルが同一接続を共有
+- 各プロバイダインスタンスは `(provider, base_url, api_key)` でユニーク化され、同一接続のモデル間で共有される
 - `temperature` / `num_ctx` / `num_gpu` / `context_window` が `None` の場合は `default_*` が使用される
 
 **Tokenizer解決順**:
 1. `tokenizer_local_path` → ローカルファイルから直接ロード
-2. `tokenizer_repo_id` → HuggingFace Hub から `from_pretrained`（`tokenizer_hf_token` で gated repo対応）
+2. `tokenizer_repo_id` → HuggingFace Hub から `from_pretrained`（`model.hf_token` で gated repo対応）
 3. フォールバック → `len(text) // 2` によるNaive推定
 
 **ModelConfig ヘルパーメソッド**:
@@ -152,45 +159,55 @@ trigger_weights:
 ```yaml
 # シングルモード（Ollama 1モデル）
 model:
-    default_num_ctx: 8192
-    default_context_window: 8192
-    default_temperature: 0.7
-    models:
-        - name: qwen3.5:9b
-          roles: [default]
-          provider: ollama
-          base_url: http://localhost:11434
-          max_tokens: 1024
-          tokenizer_repo_id: Qwen/Qwen3.5-9B
+  providers:
+    ollama:
+      base_url: http://localhost:11434
+
+  default_num_ctx: 8192
+  default_context_window: 8192
+  default_temperature: 0.7
+
+  models:
+    - name: qwen3.5:9b
+      roles: [default]
+      provider: ollama
+      max_tokens: 1024
+      tokenizer_repo_id: Qwen/Qwen3.5-9B
 
 # マルチプロバイダモード（Ollama + OpenRouter + Google 混在）
 # model:
-#     default_num_ctx: 8192
-#     default_context_window: 8192
-#     default_num_gpu: 99
-#     default_temperature: 0.7
-#     models:
-#         - name: qwen3.5:9b
-#           roles: [default, fast]
-#           provider: ollama
-#           base_url: http://localhost:11434
-#           max_tokens: 1024
+#   providers:
+#     ollama:
+#       base_url: http://localhost:11434
+#     openrouter:
+#       base_url: https://openrouter.ai/api/v1
+#       api_key: ${OPENROUTER_API_KEY}
+#     google:
+#       base_url: https://generativelanguage.googleapis.com/v1beta/openai
+#       api_key: ${GEMINI_API_KEY}
 #
-#         - name: gpt-4o
-#           roles: [capable]
-#           provider: openrouter
-#           base_url: https://openrouter.ai/api/v1
-#           api_key: ${OPENROUTER_API_KEY}
-#           max_tokens: 4096
-#           context_window: 128000
-#           tokenizer_repo_id: Xenova/gpt-4o
+#   hf_token: ${HF_TOKEN}
+#   default_num_ctx: 8192
+#   default_context_window: 8192
+#   default_temperature: 0.7
 #
-#         - name: gemini-2.5-flash
-#           roles: [default]
-#           provider: google
-#           base_url: https://generativelanguage.googleapis.com/v1beta/openai
-#           api_key: ${GEMINI_API_KEY}
-#           max_tokens: 4096
+#   models:
+#     - name: qwen3.5:9b
+#       roles: [default, fast]
+#       provider: ollama
+#       max_tokens: 1024
+#
+#     - name: gpt-4o
+#       roles: [capable]
+#       provider: openrouter
+#       max_tokens: 4096
+#       context_window: 128000
+#       tokenizer_repo_id: Xenova/gpt-4o
+#
+#     - name: gemini-2.5-flash
+#       roles: [default]
+#       provider: google
+#       max_tokens: 4096
 
 proactive:
   check_interval_sec: 5.0

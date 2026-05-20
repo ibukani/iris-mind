@@ -3,7 +3,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from iris.kernel.config import ModelConfig, ModelEntry
+from iris.kernel.config import ModelConfig, ModelEntry, ProviderConnection
 from iris.llm.google_provider import GoogleProvider
 
 
@@ -67,10 +67,13 @@ def test_google_provider_ensure_environment_success():
 
     with patch("httpx.get", return_value=mock_response) as mock_get:
         entries = [
-            ModelEntry(name="gemini-2.5-flash", provider="google", api_key="test_key"),
-            ModelEntry(name="gemini-2.0-flash", provider="google", api_key="test_key"),
+            ModelEntry(name="gemini-2.5-flash", provider="google"),
+            ModelEntry(name="gemini-2.0-flash", provider="google"),
         ]
-        model_config = ModelConfig(models=entries)
+        model_config = ModelConfig(
+            models=entries,
+            providers={"google": ProviderConnection(api_key="test_key")},
+        )
 
         res = GoogleProvider.ensure_environment(entries, model_config)
         assert res is True
@@ -78,16 +81,22 @@ def test_google_provider_ensure_environment_success():
 
 
 def test_google_provider_ensure_environment_api_key_missing():
-    entries = [ModelEntry(name="gemini-2.5-flash", provider="google", api_key="")]
-    model_config = ModelConfig(models=entries)
+    entries = [ModelEntry(name="gemini-2.5-flash", provider="google")]
+    model_config = ModelConfig(
+        models=entries,
+        providers={"google": ProviderConnection()},
+    )
     res = GoogleProvider.ensure_environment(entries, model_config)
     assert res is False
 
 
 def test_google_provider_ensure_environment_fail():
     with patch("httpx.get", side_effect=httpx.HTTPError("Connection error")) as mock_get:
-        entries = [ModelEntry(name="gemini-2.5-flash", provider="google", api_key="test_key")]
-        model_config = ModelConfig(models=entries)
+        entries = [ModelEntry(name="gemini-2.5-flash", provider="google")]
+        model_config = ModelConfig(
+            models=entries,
+            providers={"google": ProviderConnection(api_key="test_key")},
+        )
         res = GoogleProvider.ensure_environment(entries, model_config)
         assert res is False
         mock_get.assert_called_once()

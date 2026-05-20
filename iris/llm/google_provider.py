@@ -209,17 +209,22 @@ class GoogleProvider:
         """Google API 環境を確認する（API キー検証 → モデル存在確認）。"""
         if not entries:
             return True
-        entry = entries[0]
-        if not entry.api_key or entry.api_key.startswith("${"):
+        provider_name = entries[0].provider
+        conn = model_config.providers.get(provider_name)
+        api_key = conn.api_key if (conn and conn.api_key) else ""
+        base_url = (
+            (conn.base_url if conn else "") or "https://generativelanguage.googleapis.com/v1beta/openai"
+        ).rstrip("/")
+
+        if not api_key or api_key.startswith("${"):
             print(
-                "APIキーが設定されていません。モデルエントリの api_key を確認してください。",
+                "APIキーが設定されていません。model.providers の api_key を確認してください。",
                 file=sys.stderr,
             )
             return False
 
-        base_url = entry.base_url.rstrip("/")
         headers = {
-            "Authorization": f"Bearer {entry.api_key}",
+            "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json",
         }
         try:

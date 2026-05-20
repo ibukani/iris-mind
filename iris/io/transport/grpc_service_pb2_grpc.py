@@ -36,7 +36,7 @@ class IrisServiceStub(object):
             channel: A grpc.Channel.
         """
         self.BidirectionalStream = channel.stream_stream(
-                '/iris.io.IrisService/BidirectionalStream',
+                '/iris.io.transport.IrisService/BidirectionalStream',
                 request_serializer=iris_dot_io_dot_transport_dot_grpc__service__pb2.BidirectionalStreamRequest.SerializeToString,
                 response_deserializer=iris_dot_io_dot_transport_dot_grpc__service__pb2.BidirectionalStreamResponse.FromString,
                 _registered_method=True)
@@ -63,9 +63,9 @@ def add_IrisServiceServicer_to_server(servicer, server):
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
-            'iris.io.IrisService', rpc_method_handlers)
+            'iris.io.transport.IrisService', rpc_method_handlers)
     server.add_generic_rpc_handlers((generic_handler,))
-    server.add_registered_method_handlers('iris.io.IrisService', rpc_method_handlers)
+    server.add_registered_method_handlers('iris.io.transport.IrisService', rpc_method_handlers)
 
 
  # This class is part of an EXPERIMENTAL API.
@@ -87,7 +87,7 @@ class IrisService(object):
         return grpc.experimental.stream_stream(
             request_iterator,
             target,
-            '/iris.io.IrisService/BidirectionalStream',
+            '/iris.io.transport.IrisService/BidirectionalStream',
             iris_dot_io_dot_transport_dot_grpc__service__pb2.BidirectionalStreamRequest.SerializeToString,
             iris_dot_io_dot_transport_dot_grpc__service__pb2.BidirectionalStreamResponse.FromString,
             options,

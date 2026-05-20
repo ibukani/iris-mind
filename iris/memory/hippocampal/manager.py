@@ -76,7 +76,7 @@ class HippocampalManager:
                 bf_raw = result.get("big_five_estimate")
                 if bf_raw:
                     try:
-                        estimate = json.loads(bf_raw)
+                        estimate = bf_raw if isinstance(bf_raw, dict) else json.loads(bf_raw)
                         if isinstance(estimate, dict):
                             changes = self._big_five.update_from_estimate(estimate)
                             if changes:

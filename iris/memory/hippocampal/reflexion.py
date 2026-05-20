@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any
 
 from iris.llm.provider import LLMProvider
 
@@ -13,7 +14,7 @@ class Reflexion:
         self._llm = llm
         self._compact_model = compact_model
 
-    def reflect(self, conversation_history: list[dict]) -> dict[str, str | None]:
+    def reflect(self, conversation_history: list[dict]) -> dict[str, Any]:
         if len(conversation_history) < 2:
             return self._empty()
 
@@ -54,7 +55,7 @@ class Reflexion:
         raw = resp.get("message", {}).get("content")
         content = raw if isinstance(raw, str) else ""
         try:
-            result: dict[str, str | None] = json.loads(content)
+            result: dict[str, Any] = json.loads(content)
             return result
         except (json.JSONDecodeError, TypeError):
             return {
@@ -69,7 +70,7 @@ class Reflexion:
                 "big_five_estimate": None,
             }
 
-    def quick_reflect(self, conversation_slice: list[dict]) -> dict[str, str | None]:
+    def quick_reflect(self, conversation_slice: list[dict]) -> dict[str, Any]:
         if len(conversation_slice) < 2:
             return {"speech_style": "", "expressed_traits": "", "user_reaction": "", "big_five_estimate": None}
 
@@ -106,7 +107,7 @@ class Reflexion:
         raw = resp.get("message", {}).get("content")
         content = raw if isinstance(raw, str) else ""
         try:
-            result: dict[str, str | None] = json.loads(content)
+            result: dict[str, Any] = json.loads(content)
             return result
         except (json.JSONDecodeError, TypeError):
             return {"speech_style": "", "expressed_traits": "", "user_reaction": "", "big_five_estimate": None}
@@ -116,7 +117,7 @@ class Reflexion:
         return bool(reflection.get("missing_capability"))
 
     @staticmethod
-    def _empty() -> dict[str, str | None]:
+    def _empty() -> dict[str, Any]:
         return {
             "summary": "",
             "lesson": "",

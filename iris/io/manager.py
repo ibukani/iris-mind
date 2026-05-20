@@ -7,7 +7,7 @@ from iris.event.event_bus import EventBus
 from iris.event.event_types import MessageEvent
 from iris.io.models import CommandInput, CommandOutput, Direction, Message
 from iris.io.session.manager import SessionManager
-from iris.io.transport.grpc_server import GrpcListener
+from iris.io.transport.tcp_listener import TcpListener
 
 logger = logging.getLogger(__name__)
 
@@ -17,26 +17,26 @@ class IOManager:
         self,
         event_bus: EventBus,
         session_manager: SessionManager,
-        grpc_listener: GrpcListener,
+        tcp_listener: TcpListener,
         command_handler: Callable[[str, str], str] | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._session_mgr = session_manager
-        self._grpc_listener = grpc_listener
+        self._tcp_listener = tcp_listener
         self._cmd_handler = command_handler
 
         self._event_bus.subscribe("MessageEvent", self._on_message_event)
-        self._grpc_listener.set_on_message(self._on_grpc_message)
-        self._grpc_listener.set_on_command(self._on_grpc_command)
+        self._tcp_listener.set_on_message(self._on_tcp_message)
+        self._tcp_listener.set_on_command(self._on_tcp_command)
 
     def set_command_handler(self, handler: Callable[[str, str], str]) -> None:
         self._cmd_handler = handler
 
     def start(self, host: str, port: int) -> None:
-        self._grpc_listener.start(host=host, port=port)
+        self._tcp_listener.start(host=host, port=port)
 
     def stop(self) -> None:
-        self._grpc_listener.stop()
+        self._tcp_listener.stop()
 
     def _on_message_event(self, event: MessageEvent) -> None:
         session_info = self._session_mgr.get_session_info(event.session_id)
@@ -62,7 +62,7 @@ class IOManager:
         )
         self._session_mgr.route_message(msg)
 
-    def _on_grpc_message(self, msg: Message) -> None:
+    def _on_tcp_message(self, msg: Message) -> None:
         if msg.direction != Direction.REQUEST:
             logger.warning("IOManager: unexpected direction from client: %s", msg.direction)
             return
@@ -95,7 +95,7 @@ class IOManager:
             )
         )
 
-    def _on_grpc_command(self, msg: CommandInput) -> None:
+    def _on_tcp_command(self, msg: CommandInput) -> None:
         content = msg.content
         if not content.startswith("/"):
             result = "Commands start with /"

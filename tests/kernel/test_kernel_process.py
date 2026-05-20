@@ -8,6 +8,8 @@ def _dummy_config() -> Config:
     return Config(
         model=ModelConfig(
             models=[{"name": "test", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
+            provider="ollama",
+            base_url="http://localhost:11434",
         )
     )
 

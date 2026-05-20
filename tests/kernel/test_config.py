@@ -25,6 +25,8 @@ def test_config_load_from_yaml() -> None:
             {
                 "model": {
                     "models": [{"name": "qwen3.5:9b", "roles": ["default"]}],
+                    "provider": "ollama",
+                    "base_url": "http://localhost:11434",
                 },
                 "personality": {"name": "Iris"},
                 "memory": {
@@ -52,6 +54,8 @@ def test_config_save_and_reload() -> None:
         config = Config(
             model=ModelConfig(
                 models=[{"name": "m1", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
+                provider="ollama",
+                base_url="http://localhost:11434",
             ),
         )
         config.save(path)
@@ -65,6 +69,8 @@ def test_get_model_single_mode() -> None:
     config = Config(
         model=ModelConfig(
             models=[{"name": "only-model", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
+            provider="ollama",
+            base_url="http://localhost:11434",
         ),
     )
     assert config.model.get_model("default") == "only-model"
@@ -78,6 +84,8 @@ def test_get_model_multi_mode() -> None:
                 {"name": "base-model", "roles": ["default"]},
                 {"name": "smart-model", "roles": ["smart"]},
             ],
+            provider="ollama",
+            base_url="http://localhost:11434",
         ),
     )
     assert config.model.get_model("default") == "base-model"
@@ -88,6 +96,8 @@ def test_get_model_unknown_role_falls_back() -> None:
     config = Config(
         model=ModelConfig(
             models=[{"name": "only-model", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
+            provider="ollama",
+            base_url="http://localhost:11434",
         ),
     )
     assert config.model.get_model("unknown_role") == "only-model"
@@ -111,17 +121,13 @@ def test_env_var_resolution() -> None:
         yaml.dump(
             {
                 "model": {
-                    "providers": {
-                        "openrouter": {
-                            "api_key": "${TEST_IRIS_API_KEY}",
-                            "base_url": "http://localhost:11434",
-                        },
-                    },
                     "models": [
                         {
                             "name": "m",
                             "roles": ["default"],
                             "provider": "openrouter",
+                            "api_key": "${TEST_IRIS_API_KEY}",
+                            "base_url": "http://localhost:11434",
                         },
                     ],
                 },
@@ -132,7 +138,7 @@ def test_env_var_resolution() -> None:
 
     try:
         config = Config.load(path)
-        assert config.model.providers["openrouter"].api_key == "my-test-key-123"
+        assert config.model.models[0].api_key == "my-test-key-123"
     finally:
         os.unlink(path)
         del os.environ["TEST_IRIS_API_KEY"]
@@ -149,9 +155,8 @@ def test_default_values() -> None:
     assert config.model.default_num_ctx == 8192
     assert config.model.default_context_window == 8192
     assert config.model.models[0].provider == "ollama"
-    assert config.model.models[0].name == "m"
-    assert config.model.providers == {}
-    assert config.model.hf_token == ""
+    assert config.model.models[0].base_url == "http://localhost:11434"
+    assert config.model.models[0].api_key == ""
     assert config.personality.name == "Iris"
 
 
@@ -206,6 +211,9 @@ def test_get_effective_temperature_per_model() -> None:
                 {"name": "base", "roles": ["default"], "temperature": 0.5},
                 {"name": "smart", "roles": ["smart"], "temperature": 0.9},
             ],
+            provider="ollama",
+            base_url="http://localhost:11434",
+            temperature=0.7,
         ),
     )
     assert config.model.get_effective_temperature("default") == 0.5
@@ -216,6 +224,9 @@ def test_get_effective_temperature_fallback() -> None:
     config = Config(
         model=ModelConfig(
             models=[{"name": "base", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
+            provider="ollama",
+            base_url="http://localhost:11434",
+            temperature=0.7,
         ),
     )
     assert config.model.get_effective_temperature("default") == 0.7
@@ -225,6 +236,9 @@ def test_get_effective_temperature_unknown_role() -> None:
     config = Config(
         model=ModelConfig(
             models=[{"name": "base", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
+            provider="ollama",
+            base_url="http://localhost:11434",
+            temperature=0.7,
         ),
     )
     assert config.model.get_effective_temperature("nonexistent") == 0.7
@@ -236,6 +250,9 @@ def test_get_effective_num_ctx() -> None:
             models=[  # pyright: ignore[reportArgumentType]
                 {"name": "base", "roles": ["default"], "num_ctx": 4096},
             ],
+            provider="ollama",
+            base_url="http://localhost:11434",
+            num_ctx=8192,
         ),
     )
     assert config.model.get_effective_num_ctx("default") == 4096
@@ -250,6 +267,8 @@ def test_get_model_capabilities_explicit() -> None:
                 {"name": "base", "roles": ["default"], "capabilities": ["tools"]},
                 {"name": "smart", "roles": ["smart"], "capabilities": ["tools", "thinking"]},
             ],
+            provider="ollama",
+            base_url="http://localhost:11434",
         ),
     )
     assert config.model.get_model_capabilities("default") == ["tools"]
@@ -260,6 +279,8 @@ def test_get_model_capabilities_none() -> None:
     config = Config(
         model=ModelConfig(
             models=[{"name": "base", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
+            provider="ollama",
+            base_url="http://localhost:11434",
         ),
     )
     assert config.model.get_model_capabilities("default") == []
@@ -272,6 +293,8 @@ def test_get_model_performance_tier() -> None:
                 {"name": "base", "roles": ["default"], "performance_tier": "capable"},
                 {"name": "fast", "roles": ["fast"], "performance_tier": "fast"},
             ],
+            provider="ollama",
+            base_url="http://localhost:11434",
         ),
     )
     assert config.model.get_model_performance_tier("default") == "capable"
@@ -282,6 +305,8 @@ def test_get_model_performance_tier_default() -> None:
     config = Config(
         model=ModelConfig(
             models=[{"name": "base", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
+            provider="ollama",
+            base_url="http://localhost:11434",
         ),
     )
     assert config.model.get_model_performance_tier("default") == "balanced"

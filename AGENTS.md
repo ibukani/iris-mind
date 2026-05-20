@@ -38,7 +38,7 @@ iris/                             ← アプリケーションコア
 ├── io/                           ← 視床: 入出力中継
 │   ├── manager.py                ← IOManager
 │   ├── models.py                 ← Message, CommandInput, CommandOutput, Permission, Direction
-│   ├── transport/                ← GrpcListener
+│   ├── transport/                ← TcpListener
 │   ├── session/                  ← SessionManager
 │   └── auth/                     ← Authenticator
 ├── event/                        ← 神経路: Global EventBus

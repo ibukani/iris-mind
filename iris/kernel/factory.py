@@ -76,6 +76,10 @@ def _ensure_access_token(config: Config) -> None:
         _yaml.dump({"access_token": token}, default_flow_style=False),
         encoding="utf-8",
     )
+    try:
+        secrets_path.chmod(0o600)
+    except Exception:
+        logger.warning("Could not set strict permissions (0600) on %s", secrets_path)
     logger.info("Generated access_token and saved to .iris/secrets.yaml")
 
 
@@ -205,10 +209,9 @@ class KernelFactory:
         )
 
         # ============================================================
-        # Phase 6: KernelManager + CommandHandler
+        # Phase 6: KernelManager
         # ============================================================
         kernel_mgr = KernelManager()
-        cmd_handler = CommandHandler(config=config)
 
         # ============================================================
         # Phase 7: コンテキスト組み立て
@@ -220,7 +223,7 @@ class KernelFactory:
             limbic=limbic,
             memory=memory_mgr,
             agency=agency,
-            cmd_handler=cmd_handler,
+            cmd_handler=None,  # type: ignore[arg-type]
             tcp_listener=tcp_listener,
             session_mgr=session_mgr,
         )
@@ -228,14 +231,18 @@ class KernelFactory:
         def _on_shutdown() -> None:
             ctx.shutdown_requested = True
 
-        cmd_handler.set_shutdown_handler(_on_shutdown)
-        cmd_handler.set_compact_handler(ctx.agency.compact_context)
-        cmd_handler.set_memory(memory_mgr)
-        cmd_handler.set_limbic(limbic)
-        cmd_handler.set_session_mgr(session_mgr)
-        cmd_handler.set_llm(llm)
-        cmd_handler.set_registry(_registry)
-        cmd_handler.set_big_five(big_five)
+        cmd_handler = CommandHandler(
+            config=config,
+            on_shutdown=_on_shutdown,
+            on_compact=ctx.agency.compact_context,
+            memory=memory_mgr,
+            limbic=limbic,
+            session_mgr=session_mgr,
+            llm=llm,
+            registry=_registry,
+            big_five=big_five,
+        )
+        ctx.cmd_handler = cmd_handler
         ctx.io.set_command_handler(cmd_handler.handle)
 
         return ctx

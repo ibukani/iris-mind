@@ -88,10 +88,12 @@ class EpisodicStore:
         entries.append(entry)
         if len(entries) > self.max_entries:
             entries = entries[-self.max_entries :]
-        self.path.write_text(
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(
             "\n".join(json.dumps(e) for e in entries),
             encoding="utf-8",
         )
+        tmp.replace(self.path)
         logger.info("EpisodicStore: added entry, total=%d", len(entries))
 
     def get_recent(self, n: int = 5) -> list[dict]:
@@ -101,7 +103,15 @@ class EpisodicStore:
     def _load_all(self) -> list[dict]:
         if not self.path.exists():
             return []
-        return [json.loads(line) for line in self.path.read_text(encoding="utf-8").strip().split("\n") if line.strip()]
+        entries: list[dict] = []
+        for line in self.path.read_text(encoding="utf-8").strip().split("\n"):
+            if not line.strip():
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                logger.warning("EpisodicStore: skipping corrupt entry: %.80s", line)
+        return entries
 
 
 class SemanticStore:
@@ -139,10 +149,12 @@ class SemanticStore:
         entries.append(entry)
         if len(entries) > self.max_entries:
             entries = entries[-self.max_entries :]
-        self.path.write_text(
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(
             "\n".join(json.dumps(e) for e in entries),
             encoding="utf-8",
         )
+        tmp.replace(self.path)
         self.vector.add(entry)
         self._synced_count = len(entries)
         logger.info("SemanticStore: added entry, total=%d type=%s", len(entries), entry.get("type", "unknown"))
@@ -160,7 +172,15 @@ class SemanticStore:
     def _load_all(self) -> list[dict]:
         if not self.path.exists():
             return []
-        return [json.loads(line) for line in self.path.read_text(encoding="utf-8").strip().split("\n") if line.strip()]
+        entries: list[dict] = []
+        for line in self.path.read_text(encoding="utf-8").strip().split("\n"):
+            if not line.strip():
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                logger.warning("SemanticStore: skipping corrupt entry: %.80s", line)
+        return entries
 
     def _is_duplicate(self, content: str, entries: list[dict]) -> bool:
         return any(e.get("content") == content for e in entries)

@@ -51,6 +51,7 @@ class PlanningManager:
         gate = self._inhibition.evaluate(time.time())
 
         if context.get("from_timer"):
+            self._inhibition.check_ignore()
             logger.debug("Timer-triggered input: gate_suppressed=%s score=%.3f", gate.suppressed, gate.score)
             if gate.suppressed:
                 return

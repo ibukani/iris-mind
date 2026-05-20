@@ -86,9 +86,10 @@ class TestMemoryManagerInputPending:
             TimerTick(timestamp=None, source="kernel", tick_count=0),
         )
 
-        assert len(ready_events) == 1
-        assert ready_events[0].content in ("hello", "world")
-        assert ready_events[0].context == {}
+        assert len(ready_events) == 2
+        contents = {e.content for e in ready_events}
+        assert contents == {"hello", "world"}
+        assert all(e.context == {} for e in ready_events)
 
     def test_timer_with_pending_produces_input_ready(self, event_bus: EventBus, memory: MemoryManager) -> None:
         ready_events: list[InputReady] = []
@@ -137,7 +138,7 @@ class TestMemoryManagerInputPending:
         assert len(ready_events) == 2
         assert ready_events[1].context == {"from_timer": True}
 
-    def test_multiple_inputs_processed_one_per_tick(self, event_bus: EventBus) -> None:
+    def test_multiple_inputs_processed_in_one_tick(self, event_bus: EventBus) -> None:
         ready_events: list[InputReady] = []
         MemoryManager(event_bus=event_bus)
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
@@ -152,15 +153,15 @@ class TestMemoryManagerInputPending:
         event_bus.publish(
             TimerTick(timestamp=None, source="kernel", tick_count=0),
         )
-        assert len(ready_events) == 1
-        assert ready_events[0].content in ("first", "second")
+        assert len(ready_events) == 2
+        contents = {e.content for e in ready_events}
+        assert contents == {"first", "second"}
 
         event_bus.publish(
             TimerTick(timestamp=None, source="kernel", tick_count=1),
         )
+        # proactive_config が有効ではないので、これ以上イベントは増えないはず
         assert len(ready_events) == 2
-        remaining = {"first", "second"} - {ready_events[0].content}
-        assert ready_events[1].content in remaining
 
     def test_later_input_overwrites_earlier_same_session(self, event_bus: EventBus) -> None:
         ready_events: list[InputReady] = []

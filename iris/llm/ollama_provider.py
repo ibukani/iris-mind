@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 _MAX_RETRIES = 3
 _RETRY_BACKOFF_SECONDS = 0.5
 _CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+_IS_WINDOWS = sys.platform == "win32"
 
 
 class OllamaProvider:
@@ -232,24 +233,18 @@ def _log_retry(attempt: int) -> None:
 def _get_available_models() -> set[str]:
     """Ollama に既に pull 済みのモデル名のセットを返す。"""
     try:
-        result = subprocess.run(
-            ["ollama", "list"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            lines = result.stdout.strip().splitlines()
-            models: set[str] = set()
-            for line in lines[2:]:
-                if line.strip():
-                    name = line.strip().split()[0]
-                    if ":" in name:
-                        models.add(name.split(":")[0])
-            return models
+        client = Client()
+        response = client.list()
+        models: set[str] = set()
+        for model in response.get("models", []):
+            name = model.get("name", "") if isinstance(model, dict) else getattr(model, "name", "")
+            if name and ":" in name:
+                models.add(name.split(":")[0])
+            elif name:
+                models.add(name)
+        return models
     except Exception:
-        pass
-    return set()
+        return set()
 
 
 def _ensure_model_pulled(model_name: str) -> bool:
@@ -259,9 +254,13 @@ def _ensure_model_pulled(model_name: str) -> bool:
     if model_base in available:
         return True
 
-    console_input = input(
-        f"モデル '{model_name}' が見つかりません。\n  ollama pull {model_name}\nを実行してダウンロードしますか？ [y/N] "
-    )
+    try:
+        console_input = input(
+            f"モデル '{model_name}' が見つかりません。\n  ollama pull {model_name}\nを実行してダウンロードしますか？ [y/N] "
+        )
+    except EOFError:
+        logger.warning("Non-interactive environment: skipping model pull for '%s'", model_name)
+        return False
     if console_input.strip().lower() in ("y", "yes"):
         try:
             subprocess.run(
@@ -282,15 +281,19 @@ def _ensure_model_pulled(model_name: str) -> bool:
 def _restart_ollama() -> None:
     """既存 Ollama プロセスを終了し、GPU 向け設定で再起動する。"""
     with contextlib.suppress(Exception):
-        subprocess.run(["taskkill", "/F", "/IM", "ollama.exe"], capture_output=True, timeout=5)
+        if _IS_WINDOWS:
+            subprocess.run(["taskkill", "/F", "/IM", "ollama.exe"], capture_output=True, timeout=5)
+        else:
+            subprocess.run(["pkill", "-f", "ollama"], capture_output=True, timeout=5)
     time.sleep(2)
 
-    subprocess.Popen(
-        ["ollama", "serve"],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        creationflags=_CREATE_NO_WINDOW,
-    )
+    popen_kwargs: dict[str, Any] = {
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+    }
+    if _IS_WINDOWS:
+        popen_kwargs["creationflags"] = _CREATE_NO_WINDOW
+    subprocess.Popen(["ollama", "serve"], **popen_kwargs)
     time.sleep(5)
 
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum, StrEnum
 from typing import Any
 from uuid import uuid4
@@ -66,7 +66,7 @@ class Message(BaseModel):
     content: str
     content_type: str = "text/plain"
     state: str | None = None
-    metadata: dict = {}
+    metadata: dict = Field(default_factory=dict)
 
 
 class CommandInput(BaseModel):
@@ -102,5 +102,5 @@ class SessionInfo(BaseModel):
     identity: str = ""
     description: str = ""
     conn: Any | None = None
-    created_at: datetime = Field(default_factory=datetime.now)
-    last_activity: datetime = Field(default_factory=datetime.now)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    last_activity: datetime = Field(default_factory=lambda: datetime.now(UTC))

@@ -112,6 +112,7 @@ class LLMPipeline:
         model_role: str = "default",
         max_tokens: int | None = None,
     ) -> dict:
+        self._sysprompt_cache = None
         system_prompt = self._build_system_prompt(context_hint=context_hint)
         msgs: list[dict] = [{"role": "system", "content": system_prompt}, *messages]
 

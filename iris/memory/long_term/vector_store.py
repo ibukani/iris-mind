@@ -96,7 +96,7 @@ class VectorStore:
                 query_texts=[query],
                 n_results=max_results * 2,
             )
-        bm25_scores = self._bm25_search(query)
+            bm25_scores = self._bm25_search(query)
         merged: dict[str, dict] = {}
         if dense_results["ids"]:
             docs = dense_results["documents"]

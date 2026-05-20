@@ -190,31 +190,34 @@ class ExecutionManager:
             self._handle_monitor_flags(flags)
 
         def _post_process() -> None:
-            if run_reflexion and self._hippocampal:
-                self._msg_count_since_reflect = self._hippocampal.maybe_run(
-                    self._messages,
-                    self._msg_count_since_reflect,
-                )
-            if run_compression and self._context_window_mgr:
-                model_role = plan.get("model_role", "default")
-                effective_ctx = (
-                    self._model_config.get_effective_context_window(model_role)
-                    if self._model_config
-                    else self._context_window
-                )
-                model_name = self._model_config.get_model(model_role) if self._model_config else None
-                summary = self._context_window_mgr.check_and_summarize(
-                    self._messages,
-                    effective_ctx,
-                    model_name=model_name,
-                )
-                if summary and len(self._messages) > 6:
-                    keep = 6
-                    self._messages = [
-                        {"role": "system", "content": f"## Session Summary\n{summary}"},
-                        *self._messages[-keep:],
-                    ]
-                    logger.info("Auto-compacted: summary_len=%d, kept=%d", len(summary), keep)
+            try:
+                if run_reflexion and self._hippocampal:
+                    self._msg_count_since_reflect = self._hippocampal.maybe_run(
+                        self._messages,
+                        self._msg_count_since_reflect,
+                    )
+                if run_compression and self._context_window_mgr:
+                    model_role = plan.get("model_role", "default")
+                    effective_ctx = (
+                        self._model_config.get_effective_context_window(model_role)
+                        if self._model_config
+                        else self._context_window
+                    )
+                    model_name = self._model_config.get_model(model_role) if self._model_config else None
+                    summary = self._context_window_mgr.check_and_summarize(
+                        self._messages,
+                        effective_ctx,
+                        model_name=model_name,
+                    )
+                    if summary and len(self._messages) > 6:
+                        keep = 6
+                        self._messages = [
+                            {"role": "system", "content": f"## Session Summary\n{summary}"},
+                            *self._messages[-keep:],
+                        ]
+                        logger.info("Auto-compacted: summary_len=%d, kept=%d", len(summary), keep)
+            except Exception:
+                logger.exception("Post-process failed")
 
         if run_reflexion or run_compression:
             threading.Thread(target=_post_process, daemon=True).start()

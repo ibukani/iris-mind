@@ -78,22 +78,21 @@ class MemoryManager:
         )
 
     def _on_timer_tick(self, event: TimerTick) -> None:
-        session_id = ""
-        content = ""
         with self._pending_lock:
-            if self._pending_input:
-                session_id, content = self._pending_input.popitem()
+            pending = dict(self._pending_input)
+            self._pending_input.clear()
 
-        if content and session_id:
-            self._event_bus.publish(
-                InputReady(
-                    timestamp=None,
-                    source="memory",
-                    session_id=session_id,
-                    content=content,
-                    context={},
+        if pending:
+            for session_id, content in pending.items():
+                self._event_bus.publish(
+                    InputReady(
+                        timestamp=None,
+                        source="memory",
+                        session_id=session_id,
+                        content=content,
+                        context={},
+                    )
                 )
-            )
             return
 
         if self._proactive_config is not None:

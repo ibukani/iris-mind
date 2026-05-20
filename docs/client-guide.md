@@ -18,19 +18,19 @@ sequenceDiagram
     Note over C,K: gRPC メタデータによる認証を行い接続確立
     C->>K: BidirectionalStream 呼び出し
 
-    C->>K: ClientFrame (Message: "hello")
-    K-->>C: ServerFrame (Message: stream (thinking))
-    K-->>C: ServerFrame (Message: stream (speaking) "Hello! ")
-    K-->>C: ServerFrame (Message: stream (speaking) "How can I help?")
-    K-->>C: ServerFrame (Message: stream (done))
-    K-->>C: ServerFrame (Message: response "Hello! How can I help?")
+    C->>K: BidirectionalStreamRequest (Message: "hello")
+    K-->>C: BidirectionalStreamResponse (Message: stream (thinking))
+    K-->>C: BidirectionalStreamResponse (Message: stream (speaking) "Hello! ")
+    K-->>C: BidirectionalStreamResponse (Message: stream (speaking) "How can I help?")
+    K-->>C: BidirectionalStreamResponse (Message: stream (done))
+    K-->>C: BidirectionalStreamResponse (Message: response "Hello! How can I help?")
 
     Note over C,K: 時間経過
 
-    K-->>C: ServerFrame (Message: proactive "久しぶりですね")
+    K-->>C: BidirectionalStreamResponse (Message: proactive "久しぶりですね")
 
-    C->>K: ClientFrame (CommandInput: "/status")
-    K-->>C: ServerFrame (CommandOutput: "Status: IDLE...")
+    C->>K: BidirectionalStreamRequest (CommandInput: "/status")
+    K-->>C: BidirectionalStreamResponse (CommandOutput: "Status: IDLE...")
 ```
 
 ---
@@ -39,7 +39,7 @@ sequenceDiagram
 
 ### 2.1 通常の会話応答
 
-テキスト入力 に対する Iris の応答は以下の順序で届く（すべて `ServerFrame.message` として配信）:
+テキスト入力 に対する Iris の応答は以下の順序で届く（すべて `BidirectionalStreamResponse.message` として配信）:
 
 | 順 | msg_type | state | content | 意味 |
 |----|----------|-------|---------|------|
@@ -79,7 +79,7 @@ Iris が抑制状態（直近のユーザー活動直後・ネガティブムー
 
 ### 2.4 コマンド応答
 
-システムコマンドへの応答（`ServerFrame.command` として配信）:
+システムコマンドへの応答（`BidirectionalStreamResponse.command` として配信）:
 
 | 型 | content | 例 |
 |----------|---------|-----|
@@ -130,7 +130,7 @@ proactive:
 
 ## 4. コマンドリファレンス
 
-すべてのコマンドは `ClientFrame.command` で送信する。content は `/` で始める。
+すべてのコマンドは `BidirectionalStreamRequest.command` で送信する。content は `/` で始める。
 
 | コマンド | 説明 | 応答例 |
 |----------|------|--------|
@@ -158,7 +158,7 @@ proactive:
 |------|------|------|
 | 接続がすぐ閉じられる | 認証失敗 | メタデータの `access_token` が正しいか確認 |
 | 応答が返ってこない | セッションが無効 | メタデータを含めて再接続 |
-| メッセージが無視される | 不正な ClientFrame | `ClientFrame` に適切な `message` または `command` を格納しているか確認 |
+| メッセージが無視される | 不正な BidirectionalStreamRequest | `BidirectionalStreamRequest` に適切な `message` または `command` を格納しているか確認 |
 
 ### 5.2 セッション管理
 
@@ -185,11 +185,11 @@ proactive:
 ```
 1. gRPC dial (127.0.0.1:9876) に access_token, role 等のメタデータを付与して接続
 2. IrisService.BidirectionalStream を呼び出し、双方向ストリームを開く
-3. 送信: ClientFrame(message=Message(id="1", msg_type="chat", content="hello"))
-4. 受信: ServerFrame(message=Message(msg_type="stream", state="thinking"))
-5. 受信: ServerFrame(message=Message(msg_type="stream", state="speaking", content="Hello!"))
-6. 受信: ServerFrame(message=Message(msg_type="stream", state="done"))
-7. 受信: ServerFrame(message=Message(msg_type="response", content="Hello!"))
+3. 送信: BidirectionalStreamRequest(message=Message(id="1", msg_type="chat", content="hello"))
+4. 受信: BidirectionalStreamResponse(message=Message(msg_type="stream", state="thinking"))
+5. 受信: BidirectionalStreamResponse(message=Message(msg_type="stream", state="speaking", content="Hello!"))
+6. 受信: BidirectionalStreamResponse(message=Message(msg_type="stream", state="done"))
+7. 受信: BidirectionalStreamResponse(message=Message(msg_type="response", content="Hello!"))
 ```
 
 ### セッションライフサイクル

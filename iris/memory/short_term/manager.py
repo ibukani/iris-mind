@@ -12,7 +12,12 @@ _MAX_CONTEXT_CHARS = 600
 
 
 class ShortTermMemoryManager:
-    def __init__(self, max_turns: int = 10, max_topics: int = 5):
+    """短期記憶（ワーキングメモリ）の管理を行うクラス。
+
+    直近の会話履歴（ターン数制限あり）、現在の話題、参照されたエンティティを保持する。
+    """
+
+    def __init__(self, max_turns: int = 10, max_topics: int = 5) -> None:
         self._turns: list[dict[str, Any]] = []
         self._current_topics: list[str] = []
         self._active_references: set[str] = set()
@@ -20,6 +25,12 @@ class ShortTermMemoryManager:
         self._max_topics = max_topics
 
     def add_turn(self, role: str, content: str) -> None:
+        """会話の1ターンを追加し、エンティティの抽出と話題の更新を行う。
+
+        Args:
+            role: 発話者のロール（"user" または "assistant"）
+            content: 発話内容
+        """
         if not content:
             return
         truncated = content[:_MAX_TURN_LENGTH]
@@ -37,6 +48,10 @@ class ShortTermMemoryManager:
         logger.debug("ShortTerm: added %s turn, total=%d", role, len(self._turns))
 
     def _compute_importance(self, content: str) -> int:
+        """発話内容から重要度（0〜5）を算出する。
+
+        特定のキーワードの有無や感嘆符の数、大文字の連続などを判定材料とする。
+        """
         score = 0
         lower = content.lower()
         if any(w in lower for w in ["important", "大事", "覚えて", "remember", "注意", "critical", "urgent"]):
@@ -50,6 +65,7 @@ class ShortTermMemoryManager:
         return min(score, 5)
 
     def _extract_from_content(self, content: str) -> None:
+        """発話内容からエンティティの抽出と話題の更新を行う。"""
         for entity in self._extract_entities(content):
             self._active_references.add(entity)
         sentences = re.split(r"[。！？\.\!\?]", content)
@@ -61,6 +77,7 @@ class ShortTermMemoryManager:
             self._current_topics = self._current_topics[-self._max_topics :]
 
     def _extract_entities(self, content: str) -> list[str]:
+        """発話内からURL、ファイルパス、ハッシュタグ、メンション、引用句などのエンティティを抽出する。"""
         entities: list[str] = []
         entities.extend(re.findall(r"https?://[^\s]+", content))
         entities.extend(re.findall(r"(?:/[^\s/]+)+(?:/?)", content))
@@ -72,6 +89,7 @@ class ShortTermMemoryManager:
         return list({e for e in entities if len(e) > 2})
 
     def _compute_relevance(self, query: str, turn: dict[str, Any]) -> float:
+        """クエリと会話ターンの関連度スコアを算出する。"""
         if not query or not turn.get("content"):
             return 0.0
         q_words = set(re.findall(r"\w+", query.lower()))
@@ -82,6 +100,7 @@ class ShortTermMemoryManager:
         return overlap / len(q_words)
 
     def search(self, query: str, max_results: int = 5) -> list[dict[str, Any]]:
+        """クエリに関連する会話ターンを検索する。"""
         scored: list[tuple[float, int, dict[str, Any]]] = []
         for i, turn in enumerate(self._turns):
             relevance = self._compute_relevance(query, turn)
@@ -95,6 +114,7 @@ class ShortTermMemoryManager:
         return [s[2] for s in scored[:max_results]]
 
     def search_entities(self, entity_name: str) -> list[dict[str, Any]]:
+        """エンティティ名が含まれる会話ターンを検索する。"""
         entity_lower = entity_name.lower().strip()
         results: list[dict[str, Any]] = []
         for i, turn in enumerate(self._turns):
@@ -105,6 +125,7 @@ class ShortTermMemoryManager:
         return results[-5:]
 
     def render_context(self, max_chars: int = _MAX_CONTEXT_CHARS, query: str | None = None) -> str:
+        """短期記憶の内容をプロンプト注入用のテキストフォーマットに整形する。"""
         if not self._turns:
             return ""
         parts: list[str] = []
@@ -141,12 +162,15 @@ class ShortTermMemoryManager:
         return text
 
     def get_recent_turns(self, n: int = 4) -> list[dict[str, Any]]:
+        """直近のNターンを取得する。"""
         return self._turns[-n:]
 
     def get_unconsolidated_turns(self) -> list[dict[str, Any]]:
+        """まだ圧縮（長期記憶化）されていないターンの一覧を取得する。"""
         return [t for t in self._turns if not t.get("consolidated")]
 
     def mark_consolidated(self, up_to_index: int | None = None) -> None:
+        """指定されたインデックス（または全て）のターンを圧縮済みにマークする。"""
         if up_to_index is None:
             for t in self._turns:
                 t["consolidated"] = True
@@ -155,17 +179,28 @@ class ShortTermMemoryManager:
                 t["consolidated"] = True
 
     def clear(self) -> None:
+        """短期記憶のすべての状態をクリアする。"""
         self._turns.clear()
         self._current_topics.clear()
         self._active_references.clear()
 
     def should_consolidate(self) -> bool:
-        return len(self._turns) >= max(3, self._max_turns // 2)
+        """メモリの圧縮（要約化）が必要かどうかを判定する。
+
+        ターン数が上限（max_turns）の半分、または3ターン以上のいずれか大きい方に達した場合にTrueを返す。
+        ただし、max_turns自体が小さい場合はmax_turnsを超えないように閾値を調整する。
+        """
+        threshold = max(3, self._max_turns // 2)
+        if threshold > self._max_turns:
+            threshold = self._max_turns
+        return len(self._turns) >= threshold
 
     @property
     def current_topics(self) -> list[str]:
+        """現在の話題の一覧を取得する。"""
         return list(self._current_topics)
 
     @property
     def turn_count(self) -> int:
+        """現在のターン数を取得する。"""
         return len(self._turns)

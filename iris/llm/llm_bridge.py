@@ -26,6 +26,7 @@ _PROVIDER_CLASSES: dict[str, type[ProviderFactory]] = {
 
 
 def get_provider_class(provider_type: str) -> type[ProviderFactory]:
+    """指定されたプロバイダタイプに対応するファクトリクラスを取得する。"""
     cls = _PROVIDER_CLASSES.get(provider_type)
     if cls is None:
         msg = f"Unknown provider type: {provider_type!r}"
@@ -34,6 +35,8 @@ def get_provider_class(provider_type: str) -> type[ProviderFactory]:
 
 
 class LLMBridge:
+    """複数の LLM プロバイダへのアクセスを抽象化し、ルーティングを行うブリッジクラス。"""
+
     def __init__(self, model_config: ModelConfig) -> None:
         self._providers: dict[str, LLMProvider] = {}
         self._model_map: dict[str, str] = {}
@@ -48,6 +51,7 @@ class LLMBridge:
             self._entries[entry.name] = entry
 
     def _create_provider(self, entry: ModelEntry) -> LLMProvider:
+        """モデル設定に基づいてプロバイダインスタンスを生成する。"""
         if entry.provider == "openrouter":
             return OpenRouterProvider(
                 api_key=entry.api_key or "",
@@ -63,16 +67,20 @@ class LLMBridge:
 
     def chat(
         self,
-        messages: list[dict],
+        messages: list[dict[str, Any]],
         model: str | None = None,
         enable_thinking: bool = False,
         temperature: float = 0.7,
         max_tokens: int = 4096,
-        tools: list[dict] | None = None,
+        tools: list[dict[str, Any]] | None = None,
         on_token: Callable[[str], None] | None = None,
         interrupt_token: object | None = None,
         **kwargs: Any,
-    ) -> dict:
+    ) -> dict[str, Any]:
+        """指定されたモデルでチャット生成を実行する。
+
+        適切なプロバイダへルーティングし、設定されたコンテキスト上限やGPU数などのパラメータを適用する。
+        """
         model_name = model or self._get_default_model()
         provider = self._resolve_provider(model_name)
         entry = self._entries.get(model_name)
@@ -97,6 +105,7 @@ class LLMBridge:
         )
 
     def is_available(self) -> bool:
+        """登録されているプロバイダのいずれかが利用可能かどうかを判定する。"""
         any_ok = False
         for name, provider in self._providers.items():
             ok = provider.is_available()
@@ -106,12 +115,14 @@ class LLMBridge:
         return any_ok
 
     def unload_model(self, model_name: str | None = None) -> None:
+        """メモリ解放のため、指定されたモデルをプロバイダからアンロードする。"""
         if model_name:
             key = self._model_map.get(model_name)
             if key:
                 self._providers[key].unload_model(model_name)
 
     def _resolve_provider(self, model_name: str) -> LLMProvider:
+        """モデル名から対応するプロバイダインスタンスを解決する。"""
         key = self._model_map.get(model_name)
         if key:
             return self._providers[key]
@@ -120,6 +131,7 @@ class LLMBridge:
         return first
 
     def _get_default_model(self) -> str:
+        """デフォルトのモデル名を取得する（マップの最初のモデル）。"""
         for name in self._model_map:
             return name
         return ""

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 import logging
 import threading
+from typing import Any
 
 from iris.agency.bus import InternalBus, PlanDecided
 from iris.agency.execution.inhibition import InhibitionController
@@ -20,6 +21,12 @@ logger = logging.getLogger(__name__)
 
 
 class ExecutionManager:
+    """意思決定されたプランに基づいてLLMの実行、出力監視、記憶の更新を統合管理するクラス。
+
+    脳科学のアナロジー：
+        - 運動野・基底核に対応し、行動（LLM Pipelineの実行、ツール実行）を担当。
+    """
+
     def __init__(
         self,
         internal_bus: InternalBus,
@@ -45,11 +52,12 @@ class ExecutionManager:
         self._inhibition = inhibition
         self._session_roles_getter = session_roles_getter
         self._memory = memory
-        self._messages: list[dict] = []
+        self._messages: list[dict[str, Any]] = []
         self._msg_count_since_reflect = 0
         self._bus.subscribe("PlanDecided", self._on_plan)
 
     def _on_plan(self, event: PlanDecided) -> None:
+        """内部イベントバスからPlanDecidedを受信したときのコールバック。"""
         if self._monitor and event.plan.get("content", ""):
             self._monitor.record_user_input()
         self._apply_talkative_overrides(event.plan)
@@ -61,7 +69,8 @@ class ExecutionManager:
         self._execute_general(event.plan)
 
     @staticmethod
-    def _apply_talkative_overrides(plan: dict) -> None:
+    def _apply_talkative_overrides(plan: dict[str, Any]) -> None:
+        """多弁度（talkative_degree）に応じてプランパラメータを上書き調整する。"""
         degree = plan.pop("talkative_degree", 0)
         if degree <= 0:
             return
@@ -76,7 +85,8 @@ class ExecutionManager:
             plan["streaming"] = False
             plan["show_thinking"] = False
 
-    def _execute_general(self, plan: dict) -> None:
+    def _execute_general(self, plan: dict[str, Any]) -> None:
+        """プランに基づいてLLMの呼び出しと関連処理（ストリーミング、履歴保存、記憶連携など）を実行する。"""
         session_id = plan.get("session_id", "")
         content = plan.get("content", "")
         abbreviated = plan.get("abbreviated", False)
@@ -210,18 +220,21 @@ class ExecutionManager:
             threading.Thread(target=_post_process, daemon=True).start()
 
     def _handle_monitor_flags(self, flags: list[str]) -> None:
+        """モニターからのフラグ（多弁など）を基に、ペナルティ適用などの抑制制御を行う。"""
         if "talkative" in flags and self._monitor and self._inhibition:
             degree = self._monitor.talkative_degree
             self._inhibition.apply_frequency_penalty(degree)
             logger.debug("Applied frequency penalty: degree=%d", degree)
 
     def flush_memory(self) -> None:
+        """会話履歴から海馬反射（リフレクション）を強制実行し、記憶の永続化を行う。"""
         if self._hippocampal:
             self._hippocampal.force_run(self._messages)
         if self._memory:
             self._memory.flush()
 
     def compact_context(self) -> str:
+        """手動で会話履歴のコンテキスト圧縮を実行する。"""
         if self._context_window_mgr is None:
             return "Context manager not available"
         if len(self._messages) < 2:

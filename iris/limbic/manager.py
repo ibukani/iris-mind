@@ -5,6 +5,7 @@ import logging
 import time
 from typing import Any, Protocol, TypedDict, runtime_checkable
 
+from iris.event.event_bus import EventBus
 from iris.event.event_types import MessageEvent, TimerTick
 from iris.limbic.acc import AnteriorCingulateCortex
 from iris.limbic.amygdala import Amygdala
@@ -77,14 +78,14 @@ _MOOD_DESCRIPTIONS: list[_MoodEntry] = [
 
 
 class LimbicManager:
-    """大脳辺縁系: 感情状態管理、EventBus 連携、他層との統合。
+    """大脳辺縁系: 感情状態管理、EventBus 連携、他層との統合を行うクラス。
 
-    島皮質 (Insula) 相当の内部状態認識も兼ねる。
+    島皮質 (Insula) 相当の内部状態認識や、扁桃体（感情評価）、前帯状皮質（葛藤制御・調整）を統括する。
     """
 
     def __init__(
         self,
-        event_bus: Any,
+        event_bus: EventBus | None,
         amygdala: Amygdala | None = None,
         acc: AnteriorCingulateCortex | None = None,
         emotional_memory: EmotionalMemory | None = None,
@@ -103,6 +104,11 @@ class LimbicManager:
             event_bus.subscribe("TimerTick", self._on_timer_tick)
 
     def _on_message_event(self, event: MessageEvent) -> None:
+        """メッセージイベント受信時に感情評価を実行する。
+
+        メッセージの入力テキストに基づいて扁桃体で感情の変位（delta）を評価し、
+        前帯状皮質で性格特性などを加味して感情を調整・適用し、感情メモリへのタグ付けを行う。
+        """
         if not event.content:
             return
         if event.direction not in ("request", "event") or event.msg_type not in ("chat", "system"):
@@ -118,10 +124,15 @@ class LimbicManager:
         )
 
     def _on_timer_tick(self, event: TimerTick) -> None:
+        """タイマーイベント発生時に感情の自然減衰を実行する。
+
+        6回のTickごとに感情を減衰させる。
+        """
         if event.tick_count % 6 == 0:
             self._decay()
 
     def _decay(self) -> None:
+        """前回の更新からの経過時間に基づき感情状態を自然減衰（平穏へと近づける）させる。"""
         now = time.time()
         self._emotion.decay(now - self._last_decay_time)
         self._last_decay_time = now
@@ -129,6 +140,7 @@ class LimbicManager:
     # === 公開インターフェース ===
 
     def current_emotion(self) -> EmotionState:
+        """現在の感情状態を取得する。"""
         self._decay()
         return self._emotion
 
@@ -152,9 +164,9 @@ class LimbicManager:
         return ""
 
     def build_response_style(self) -> str:
-        """感情状態に基づく応答スタイル指示を生成する (Phase 4)。
+        """感情状態に基づく応答スタイル指示を生成する。
 
-        脳: 島皮質+前頭前野が感情状態を言語化し、応答のトーンを調整。
+        島皮質+前頭前野が感情状態を言語化し、応答のトーンを調整するための指示文。
         この指示文はシステムプロンプトに注入される。
 
         Returns:
@@ -191,7 +203,7 @@ class LimbicManager:
         return "## 応答スタイル\n" + "\n".join(f"- {h}" for h in hints)
 
     def search_by_emotion(self, max_results: int = 5) -> list[dict[str, Any]]:
-        """現在の感情状態に近い記憶を検索する。"""
+        """現在の感情状態に近い感情タグ付き記憶を検索する。"""
         return self._emotional_memory.search_by_emotion(self.current_emotion(), max_results)
 
     def get_emotion_report(self) -> dict[str, Any]:
@@ -204,12 +216,13 @@ class LimbicManager:
         }
 
     def _get_big_five_scores(self) -> dict[str, float] | None:
+        """Big Five プロバイダから性格スコアの辞書を取得する。"""
         if self._big_five_provider is not None:
             return self._big_five_provider.get_scores()
         return None
 
-    def set_big_five(self, big_five: BigFiveProvider | dict | None) -> None:
-        """Big Five 性格スコアソースを設定する (Phase 2)。"""
+    def set_big_five(self, big_five: BigFiveProvider | dict[str, float] | None) -> None:
+        """Big Five 性格スコアソースを設定する。"""
         if isinstance(big_five, dict):
 
             class _StaticProvider:

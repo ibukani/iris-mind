@@ -101,7 +101,6 @@ class PlanningManager:
                     negative_mood_score=self._inhibition.negative_mood_score,
                     outputs_since_input=self._inhibition.outputs_since_input,
                     frequency_exceeded=self._inhibition.frequency_exceeded,
-                    confirmation_mode=self._inhibition.confirmation_mode,
                 )
 
             context = {
@@ -289,7 +288,6 @@ class PlanningManager:
         negative_mood_score: float = 0.0,
         outputs_since_input: int = 0,
         frequency_exceeded: bool = False,
-        confirmation_mode: bool = False,
     ) -> str:
         now = time.localtime()
         hour = now.tm_hour
@@ -299,12 +297,10 @@ class PlanningManager:
 
         if ignore_count >= 1:
             parts.append(f"呼びかけに応答なし: {ignore_count}回")
-        if confirmation_mode:
-            parts.append("確認モード")
 
         if last_proactive_time > 0:
             elapsed = time.time() - last_proactive_time
-            parts.append(f"最終出力: {int(elapsed)}秒前")
+            parts.append(f"直前出力: {int(elapsed)}秒前")
         if last_user_activity > 0:
             elapsed = time.time() - last_user_activity
             if elapsed < 60:
@@ -313,12 +309,15 @@ class PlanningManager:
                 parts.append(f"最終ユーザー入力: {int(elapsed // 60)}分前")
         else:
             parts.append("最終ユーザー入力: --")
-        if negative_mood_score > 0.1:
-            parts.append(f"気分スコア: {negative_mood_score:.2f}")
+
         if outputs_since_input >= 2:
-            parts.append(f"連続出力: {outputs_since_input}回")
+            parts.append(f"出力: {outputs_since_input}回連続")
         if frequency_exceeded:
-            parts.append("出力頻度超過")
+            parts.append("出力頻度高")
+        if negative_mood_score > 0.3:
+            parts.append("気分: 不機嫌")
+        elif negative_mood_score > 0.1:
+            parts.append("気分: やや不機嫌")
 
         parts.append(f"時間帯: {time_str}")
         parts.append(f"トリガー: {trigger}")

@@ -93,7 +93,16 @@ class PlanningManager:
                     else:
                         context_hint = f"システムイベント: ロール {role} が接続しました。"
             else:
-                context_hint = self._build_context_hint(scores)
+                context_hint = self._build_context_hint(
+                    scores,
+                    ignore_count=self._inhibition.consecutive_ignores,
+                    last_user_activity=self._inhibition.last_user_activity,
+                    last_proactive_time=self._inhibition.last_proactive_time,
+                    negative_mood_score=self._inhibition.negative_mood_score,
+                    outputs_since_input=self._inhibition.outputs_since_input,
+                    frequency_exceeded=self._inhibition.frequency_exceeded,
+                    confirmation_mode=self._inhibition.confirmation_mode,
+                )
 
             context = {
                 "from_timer": True,
@@ -271,12 +280,48 @@ class PlanningManager:
             logger.debug("Working context failed", exc_info=True)
         return ""
 
-    def _build_context_hint(self, scores: dict[str, float]) -> str:
+    def _build_context_hint(
+        self,
+        scores: dict[str, float],
+        ignore_count: int = 0,
+        last_user_activity: float = 0.0,
+        last_proactive_time: float = 0.0,
+        negative_mood_score: float = 0.0,
+        outputs_since_input: int = 0,
+        frequency_exceeded: bool = False,
+        confirmation_mode: bool = False,
+    ) -> str:
         now = time.localtime()
         hour = now.tm_hour
         time_str = "午前" if hour < 12 else "午後" if hour < 17 else "夕方以降"
         trigger = max(scores, key=lambda k: scores[k])
-        parts = [f"時間帯: {time_str}", f"トリガー: {trigger}"]
+        parts: list[str] = []
+
+        if ignore_count >= 1:
+            parts.append(f"呼びかけに応答なし: {ignore_count}回")
+        if confirmation_mode:
+            parts.append("確認モード")
+
+        if last_proactive_time > 0:
+            elapsed = time.time() - last_proactive_time
+            parts.append(f"最終出力: {int(elapsed)}秒前")
+        if last_user_activity > 0:
+            elapsed = time.time() - last_user_activity
+            if elapsed < 60:
+                parts.append("最終ユーザー入力: たった今")
+            else:
+                parts.append(f"最終ユーザー入力: {int(elapsed // 60)}分前")
+        else:
+            parts.append("最終ユーザー入力: --")
+        if negative_mood_score > 0.1:
+            parts.append(f"気分スコア: {negative_mood_score:.2f}")
+        if outputs_since_input >= 2:
+            parts.append(f"連続出力: {outputs_since_input}回")
+        if frequency_exceeded:
+            parts.append("出力頻度超過")
+
+        parts.append(f"時間帯: {time_str}")
+        parts.append(f"トリガー: {trigger}")
 
         wc = self._build_working_context()
         if wc:

@@ -294,3 +294,15 @@ class InhibitionController:
     @property
     def consecutive_ignores(self) -> int:
         return self._consecutive_ignores
+
+    @property
+    def outputs_since_input(self) -> int:
+        return self._outputs_since_input
+
+    @property
+    def frequency_exceeded(self) -> bool:
+        return self._frequency_exceeded
+
+    @property
+    def confirmation_mode(self) -> bool:
+        return self._confirmation_mode

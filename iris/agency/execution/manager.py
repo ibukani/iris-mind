@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 import logging
 import threading
+import time
 from typing import Any
 
 from iris.agency.bus import InternalBus, PlanDecided
@@ -10,9 +11,9 @@ from iris.agency.execution.inhibition import InhibitionController
 from iris.agency.execution.monitor import OutputMonitor
 from iris.agency.execution.pipeline import LLMPipeline
 from iris.event.event_bus import EventBus
-from iris.event.event_types import MessageEvent
+from iris.event.event_types import MessageEvent, TimerTick
 from iris.io.models import StreamState
-from iris.kernel.config import ModelConfig
+from iris.kernel.config import Config, ModelConfig
 from iris.llm.context_window import LLMContextWindowManager
 from iris.memory.hippocampal.manager import HippocampalManager
 from iris.memory.manager import MemoryManager
@@ -40,6 +41,7 @@ class ExecutionManager:
         inhibition: InhibitionController | None = None,
         session_roles_getter: Callable[[], str] | None = None,
         memory: MemoryManager | None = None,
+        config: Config | None = None,
     ) -> None:
         self._bus = internal_bus
         self._event_bus = event_bus
@@ -52,9 +54,14 @@ class ExecutionManager:
         self._inhibition = inhibition
         self._session_roles_getter = session_roles_getter
         self._memory = memory
+        self._config = config
         self._messages: list[dict[str, Any]] = []
         self._msg_count_since_reflect = 0
+        self._last_activity_time = time.time()
+        self._reflect_lock = threading.Lock()
+        self._is_reflecting = False
         self._bus.subscribe("PlanDecided", self._on_plan)
+        self._event_bus.subscribe("TimerTick", self._on_timer_tick)
 
     def _on_plan(self, event: PlanDecided) -> None:
         """内部イベントバスからPlanDecidedを受信したときのコールバック。"""
@@ -100,6 +107,7 @@ class ExecutionManager:
 
         if record_history and content:
             self._messages.append({"role": "user", "content": content})
+            self._last_activity_time = time.time()
 
         if content and self._memory:
             self._memory.short_term.add_turn("user", content)
@@ -150,6 +158,7 @@ class ExecutionManager:
 
         if record_history:
             self._messages.append({"role": "assistant", "content": response_text})
+            self._last_activity_time = time.time()
             self._msg_count_since_reflect += 1
 
         if response_text and self._memory:
@@ -246,3 +255,44 @@ class ExecutionManager:
         keep = 6
         self._messages = [{"role": "system", "content": f"## Session Summary\n{summary}"}, *self._messages[-keep:]]
         return f"Compacted: {len(summary)} chars summary, kept last {keep} messages"
+
+    def _on_timer_tick(self, event: TimerTick) -> None:
+        """タイマーイベントを受信したときの処理。待機時間リフレクションをチェックする。"""
+        if self._msg_count_since_reflect <= 0:
+            return
+        if self._is_reflecting:
+            return
+
+        timeout = 180.0
+        if self._config and hasattr(self._config, "proactive"):
+            timeout = getattr(self._config.proactive, "idle_reflection_timeout_sec", 180.0)
+
+        elapsed = time.time() - self._last_activity_time
+        if elapsed >= timeout:
+            logger.info(
+                "ExecutionManager: idle reflection triggered. elapsed=%.1fs >= timeout=%.1fs, msg_count=%d",
+                elapsed,
+                timeout,
+                self._msg_count_since_reflect,
+            )
+            self._run_idle_reflection()
+
+    def _run_idle_reflection(self) -> None:
+        """非同期でリフレクション（強制実行）を行う。"""
+        with self._reflect_lock:
+            if self._is_reflecting:
+                return
+            self._is_reflecting = True
+
+        def _task() -> None:
+            try:
+                if self._hippocampal:
+                    self._hippocampal.force_run(self._messages)
+                    self._msg_count_since_reflect = 0
+            except Exception:
+                logger.exception("Idle reflection failed")
+            finally:
+                with self._reflect_lock:
+                    self._is_reflecting = False
+
+        threading.Thread(target=_task, daemon=True, name="idle-reflection").start()

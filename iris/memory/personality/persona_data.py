@@ -22,8 +22,9 @@ class PersonaData:
     speech_style と personality_traits を蓄積・集計する。
     """
 
-    def __init__(self, path: str = _DEFAULT_PATH):
+    def __init__(self, path: str = _DEFAULT_PATH, max_entries: int = 100):
         self.path = Path(path)
+        self.max_entries = max_entries
         self._data: dict = self._load()
 
     def _load(self) -> dict[str, list]:
@@ -66,6 +67,10 @@ class PersonaData:
                 "updated_at": now,
             }
         )
+        if len(entries) > self.max_entries:
+            entries.sort(key=lambda e: (e.get("count", 1), e.get("updated_at", "")), reverse=True)
+            entries = entries[: self.max_entries]
+            self._data[key] = entries
         self._save()
         logger.info("PersonaData: added %s entry (%d total)", category, len(entries))
 

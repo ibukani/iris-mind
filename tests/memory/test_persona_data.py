@@ -7,11 +7,11 @@ import tempfile
 from iris.memory.personality.persona_data import PersonaData
 
 
-def _make_data() -> PersonaData:
+def _make_data(max_entries: int = 100) -> PersonaData:
     fd, path = tempfile.mkstemp(suffix=".json")
     os.close(fd)
     os.unlink(path)
-    return PersonaData(path=path)
+    return PersonaData(path=path, max_entries=max_entries)
 
 
 def _clean(path: str | Path) -> None:
@@ -62,4 +62,29 @@ def test_empty_category() -> None:
     data = _make_data()
     assert data.get_top("nonexistent") == []
     assert data.get_all("nonexistent") == []
+    _clean(data.path)
+
+
+def test_max_entries_limit() -> None:
+    data = _make_data(max_entries=2)
+
+    # 頻度をバラけさせて追加
+    data.add_entry("speech_style", "style1")
+    data.add_entry("speech_style", "style1")  # count: 2
+
+    data.add_entry("speech_style", "style2")
+    data.add_entry("speech_style", "style2")  # count: 2
+
+    # 現在 max_entries=2 なので、style1, style2 で満杯
+    # 3件目(style3, count=1)を追加すると、頻度の低い style3 が即座に削られる
+    data.add_entry("speech_style", "style3")  # count: 1 になるが削られる
+
+    all_entries = data.get_all("speech_style")
+    assert len(all_entries) == 2
+    texts = [e["text"] for e in all_entries]
+
+    assert "style1" in texts
+    assert "style2" in texts
+    assert "style3" not in texts
+
     _clean(data.path)

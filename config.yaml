@@ -26,6 +26,7 @@ proactive:
     context: 0.15
     mood: 0.10
   speak_threshold: 0.20
+  idle_reflection_timeout_sec: 180.0
 
 # LLM モデル — プロバイダ・コンテキストサイズ・性能設定
 model:

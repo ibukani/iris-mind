@@ -158,6 +158,7 @@ class ProactiveConfig(BaseModel):
     trigger_weights: dict[str, float] = Field(default_factory=_default_trigger_weights)
     speak_threshold: float = 0.60
     abbreviated_threshold: float = 0.25
+    idle_reflection_timeout_sec: float = 180.0
 
 
 class PersonalityConfig(BaseModel):
@@ -173,6 +174,8 @@ class MemoryConfig(BaseModel):
     semantic_max_entries: int = 100
     agents_md_path: str = ".iris/data/iris_profile.md"
     agents_md_max_bytes: int = 2048
+    persona_data_path: str = ".iris/data/persona_data.json"
+    persona_data_max_entries: int = 100
 
 
 class ResponseReadinessConfig(BaseModel):

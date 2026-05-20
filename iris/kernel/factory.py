@@ -321,7 +321,7 @@ class KernelFactory:
 
         mem_cfg = config.memory
         agents_md_store = AgentsMdStore(path=mem_cfg.agents_md_path, max_bytes=mem_cfg.agents_md_max_bytes)
-        persona_data = PersonaData()
+        persona_data = PersonaData(path=mem_cfg.persona_data_path, max_entries=mem_cfg.persona_data_max_entries)
         persona_profile = PersonaProfile(persona_data=persona_data)
 
         reflexion = Reflexion(llm=llm, compact_model=config.model.get_model("default"))
@@ -374,6 +374,7 @@ class KernelFactory:
             inhibition=inhibition,
             session_roles_getter=session_mgr.get_sessions_summary,
             memory=memory,
+            config=config,
         )
 
         return AgencyManager(

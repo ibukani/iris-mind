@@ -45,11 +45,21 @@ class ProactiveScoring:
         stm_score = self._compute_short_term_score()
         urgency_score = self._compute_content_urgency(content)
         context_score = max(context_score, stm_score) if stm_score > 0 else context_score
+
+        if limbic_mood:
+            v = limbic_mood.get("valence", 0.0)
+            a = limbic_mood.get("arousal", 0.0)
+            d = limbic_mood.get("dominance", 0.5)
+            intensity = abs(v) * 0.5 + a * 0.3 + abs(d - 0.5) * 0.2
+            mood_weight = 0.10 + intensity * 0.25
+        else:
+            mood_weight = w.get("mood", 0.15)
+
         total = (
             w.get("time", 0.25) * time_score
             + w.get("memory", 0.45) * memory_score
             + w.get("context", 0.15) * context_score
-            + w.get("mood", 0.15) * mood_score
+            + mood_weight * mood_score
         )
         if sensory_score > 0:
             total = max(total, sensory_score * 0.3)
@@ -174,11 +184,12 @@ class ProactiveScoring:
             arousal = limbic_mood.get("arousal", 0.0)
             dominance = limbic_mood.get("dominance", 0.0)
 
-            mood_valence = max(0.0, valence)
+            mood_valence = valence * 0.5 if valence > 0 else valence * 1.5
+
             mood_arousal = 0.6 if arousal > 0.6 else (0.3 if arousal < 0.15 else 0.4)
             mood_dominance = dominance * 0.4
 
-            return min(1.0, mood_valence * 0.5 + mood_arousal + mood_dominance)
+            return max(0.0, min(1.0, mood_valence + mood_arousal + mood_dominance))
 
         if negative_mood_score >= 0.7:
             return 0.0

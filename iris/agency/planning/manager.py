@@ -139,6 +139,7 @@ class PlanningManager:
             }
             if limbic_mood:
                 self._apply_emotion_to_plan(plan, limbic_mood)
+            plan["current_emotion"] = limbic_mood
             return plan
 
         abbreviated = gate.suppressed or gate.score < self._cfg.abbreviated_threshold
@@ -195,6 +196,7 @@ class PlanningManager:
         }
         if limbic_mood:
             self._apply_emotion_to_plan(plan, limbic_mood)
+        plan["current_emotion"] = limbic_mood
         return plan
 
     @staticmethod

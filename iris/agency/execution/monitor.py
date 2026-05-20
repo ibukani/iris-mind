@@ -29,6 +29,36 @@ class OutputMonitor:
         self._window: deque[float] = deque()
         self._alert_count: int = 0
         self._outputs_since_input: int = 0
+        self._valence: float = 0.0
+        self._arousal: float = 0.0
+        self._dominance: float = 0.5
+
+    def set_emotion_state(self, valence: float, arousal: float, dominance: float) -> None:
+        self._valence = valence
+        self._arousal = arousal
+        self._dominance = dominance
+
+    def _get_effective_talkative_threshold(self) -> int:
+        t = self._talkative_threshold
+        if self._valence >= 0.3:
+            t += 2
+        elif self._valence <= -0.3:
+            t -= 1
+        if self._dominance < 0.3:
+            t -= 2
+        return max(1, t)
+
+    def _get_effective_max_per_5min(self) -> int:
+        m = self._max_per_5min
+        if self._valence >= 0.3:
+            m += 2
+        elif self._valence <= -0.3:
+            m -= 1
+        if self._dominance < 0.3:
+            m -= 2
+        if self._arousal > 0.6:
+            m = 999
+        return max(1, m)
 
     def record_user_input(self) -> None:
         self._outputs_since_input = 0
@@ -43,25 +73,30 @@ class OutputMonitor:
         self._outputs_since_input += 1
 
         flags: list[str] = []
-        if len(self._window) >= self._max_per_5min:
+        if len(self._window) >= self._get_effective_max_per_5min():
             flags.append("frequency_exceeded")
             self._alert_count += 1
             logger.warning(
-                "OutputMonitor: frequency exceeded (%d in 5min, alert #%d)",
+                "OutputMonitor: frequency exceeded (%d in 5min, alert #%d) emotion=(v=%.2f a=%.2f d=%.2f)",
                 len(self._window),
                 self._alert_count,
+                self._valence,
+                self._arousal,
+                self._dominance,
             )
-        if self._outputs_since_input >= self._talkative_threshold:
+        if self._outputs_since_input >= self._get_effective_talkative_threshold():
             flags.append("talkative")
             logger.info(
-                "OutputMonitor: talkative (%d outputs since last user input)",
+                "OutputMonitor: talkative (%d outputs since last user input, threshold=%d)",
                 self._outputs_since_input,
+                self._get_effective_talkative_threshold(),
             )
         return flags
 
     @property
     def talkative_degree(self) -> int:
-        degree = self._outputs_since_input - self._talkative_threshold + 1
+        threshold = self._get_effective_talkative_threshold()
+        degree = self._outputs_since_input - threshold + 1
         if degree < 0:
             return 0
         return min(degree, _MAX_SUPPRESSION_DEGREE)
@@ -89,7 +124,7 @@ class OutputMonitor:
 
     @property
     def frequency_exceeded(self) -> bool:
-        return self.output_count_5min >= self._max_per_5min
+        return self.output_count_5min >= self._get_effective_max_per_5min()
 
     @property
     def outputs_since_last_input(self) -> int:

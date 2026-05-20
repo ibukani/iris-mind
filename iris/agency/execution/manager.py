@@ -77,6 +77,14 @@ class ExecutionManager:
                     self._monitor.frequency_exceeded,
                 )
 
+            emotion = event.plan.get("current_emotion")
+            if emotion:
+                self._monitor.set_emotion_state(
+                    emotion.get("valence", 0.0),
+                    emotion.get("arousal", 0.0),
+                    emotion.get("dominance", 0.5),
+                )
+
         self._apply_talkative_overrides(event.plan)
 
         if self._should_skip_proactive(event.plan):

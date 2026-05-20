@@ -38,10 +38,12 @@ class OllamaProvider:
         base_url: str = "http://localhost:11434",
         num_gpu: int = 0,
         num_ctx: int = 8192,
+        keep_alive: str = "10m",
     ) -> None:
         self.model_name = model_name
         self.num_gpu = num_gpu
         self.num_ctx = num_ctx
+        self.keep_alive = keep_alive
         self.client = Client(host=base_url)
         self._chat_lock = threading.Lock()
 
@@ -111,6 +113,8 @@ class OllamaProvider:
             call_kwargs["tools"] = tools
         if kwargs.get("keep_alive") is not None:
             call_kwargs["keep_alive"] = kwargs.pop("keep_alive")
+        else:
+            call_kwargs["keep_alive"] = self.keep_alive
         if interrupt_token is not None:
             call_kwargs["interrupt_token"] = interrupt_token
         return call_kwargs

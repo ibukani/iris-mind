@@ -164,6 +164,7 @@ class LLMContextWindowManager:
                 model=self._compact_model,
                 temperature=0.3,
                 max_tokens=500,
+                num_ctx=4096,
             )
             return resp.get("message", {}).get("content", "").strip()  # type: ignore[no-any-return]
         except Exception as e:

@@ -29,8 +29,8 @@ proactive:
 
 # LLM モデル — プロバイダ・コンテキストサイズ・性能設定
 model:
-  default_context_window: 16384
-  default_num_ctx: 16384
+  default_context_window: 8192
+  default_num_ctx: 8192
   default_num_gpu: 99
   default_temperature: 0.85
   models:
@@ -40,6 +40,7 @@ model:
       performance_tier: balanced
       provider: ollama
       num_gpu: 99
+      keep_alive: 10m
       roles:
         - default
       tokenizer_repo_id: Qwen/Qwen3.5-9B

@@ -63,6 +63,7 @@ class ModelEntry(BaseModel):
     tokenizer_repo_id: str = ""
     tokenizer_local_path: str = ""
     tokenizer_hf_token: str = ""
+    keep_alive: str | None = None
 
     @field_validator("roles", mode="before")
     @classmethod

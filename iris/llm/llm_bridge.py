@@ -63,6 +63,7 @@ class LLMBridge:
             base_url=entry.base_url or "http://localhost:11434",
             num_gpu=entry.num_gpu if entry.num_gpu is not None else self._model_config.default_num_gpu,
             num_ctx=entry.num_ctx if entry.num_ctx is not None else self._model_config.default_num_ctx,
+            keep_alive=entry.keep_alive or "10m",
         )
 
     def chat(

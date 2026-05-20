@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 import json
 import logging
 from pathlib import Path
-import time
 from typing import Protocol
 
 from iris.memory.long_term.vector_store import VectorStore
@@ -36,16 +35,26 @@ class AgentsMdStore:
         self.path = Path(path)
         self.max_bytes = max_bytes
         self._cache: str | None = None
-        self._cache_time: float = 0
-        self._cache_ttl: float = cache_ttl
+        self._cache_mtime: float | None = None
 
     def load(self) -> str:
-        now = time.time()
-        if self._cache is not None and (now - self._cache_time) < self._cache_ttl:
-            return self._cache
         if self.path.exists():
-            self._cache = self.path.read_text(encoding="utf-8")
-            self._cache_time = now
+            try:
+                mtime = self.path.stat().st_mtime
+            except OSError:
+                mtime = None
+
+            if self._cache is not None and self._cache_mtime == mtime:
+                return self._cache
+
+            try:
+                self._cache = self.path.read_text(encoding="utf-8")
+                self._cache_mtime = mtime
+            except Exception as e:
+                logger.warning("AgentsMdStore: failed to load file: %s", e)
+                if self._cache is not None:
+                    return self._cache
+                return ""
             return self._cache
         return ""
 
@@ -54,7 +63,10 @@ class AgentsMdStore:
             new_content = self._truncate(new_content)
         self.path.write_text(new_content, encoding="utf-8")
         self._cache = new_content
-        self._cache_time = time.time()
+        try:
+            self._cache_mtime = self.path.stat().st_mtime
+        except OSError:
+            self._cache_mtime = None
         logger.info("AgentsMdStore: updated (%d bytes)", len(new_content.encode("utf-8")))
 
     def _truncate(self, content: str) -> str:

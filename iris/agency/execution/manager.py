@@ -67,7 +67,25 @@ class ExecutionManager:
         """内部イベントバスからPlanDecidedを受信したときのコールバック。"""
         if self._monitor and event.plan.get("content", ""):
             self._monitor.record_user_input()
+
+        if self._monitor:
+            talkative = self._monitor.talkative_degree
+            event.plan["talkative_degree"] = talkative
+            if self._inhibition:
+                self._inhibition.set_output_frequency_state(
+                    self._monitor.outputs_since_last_input,
+                    self._monitor.frequency_exceeded,
+                )
+
         self._apply_talkative_overrides(event.plan)
+
+        if self._should_skip_proactive(event.plan):
+            logger.info(
+                "ExecutionManager: suppressed proactive (talkative=%d), skipping LLM",
+                event.plan.get("talkative_degree", 0),
+            )
+            return
+
         logger.info(
             "ExecutionManager: executing plan session=%s abbreviated=%s",
             event.plan.get("session_id"),
@@ -91,6 +109,15 @@ class ExecutionManager:
         if degree >= 5:
             plan["streaming"] = False
             plan["show_thinking"] = False
+
+    def _should_skip_proactive(self, plan: dict[str, Any]) -> bool:
+        content = plan.get("content", "")
+        if content:
+            return False
+        if not self._monitor:
+            return False
+        talkative = plan.get("talkative_degree", 0) or self._monitor.talkative_degree
+        return talkative >= 2 or (self._monitor.frequency_exceeded and talkative >= 1)
 
     def _execute_general(self, plan: dict[str, Any]) -> None:
         """プランに基づいてLLMの呼び出しと関連処理（ストリーミング、履歴保存、記憶連携など）を実行する。"""
@@ -238,7 +265,16 @@ class ExecutionManager:
 
     def _handle_monitor_flags(self, flags: list[str]) -> None:
         """モニターからのフラグ（多弁など）を基に、ペナルティ適用などの抑制制御を行う。"""
-        if "talkative" in flags and self._monitor and self._inhibition:
+        if not self._monitor:
+            return
+
+        if self._inhibition:
+            self._inhibition.set_output_frequency_state(
+                self._monitor.outputs_since_last_input,
+                self._monitor.frequency_exceeded,
+            )
+
+        if "talkative" in flags and self._inhibition:
             degree = self._monitor.talkative_degree
             self._inhibition.apply_frequency_penalty(degree)
             logger.debug("Applied frequency penalty: degree=%d", degree)

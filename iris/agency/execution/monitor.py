@@ -88,6 +88,10 @@ class OutputMonitor:
         return sum(1 for t in self._window if now - t <= 300)
 
     @property
+    def frequency_exceeded(self) -> bool:
+        return self.output_count_5min >= self._max_per_5min
+
+    @property
     def outputs_since_last_input(self) -> int:
         return self._outputs_since_input
 

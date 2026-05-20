@@ -67,10 +67,16 @@ class InhibitionController:
         self._is_sleeping: bool = False
         self._ignore_recorded: bool = False
         self._generating: bool = False
+        self._outputs_since_input: int = 0
+        self._frequency_exceeded: bool = False
 
     def set_generating(self, generating: bool) -> None:
         self._generating = generating
         logger.debug("InhibitionController: generating state set to %s", generating)
+
+    def set_output_frequency_state(self, outputs_since_input: int, frequency_exceeded: bool) -> None:
+        self._outputs_since_input = outputs_since_input
+        self._frequency_exceeded = frequency_exceeded
 
     def notify_user_activity(self) -> None:
         self._last_user_activity = time.time()
@@ -119,6 +125,17 @@ class InhibitionController:
                 factors.append(("recent_activity", 0.5))
         else:
             factors.append(("recent_activity", 0.5))
+
+        if self._frequency_exceeded:
+            factors.append(("output_frequency", 0.3))
+        elif self._outputs_since_input >= 4:
+            factors.append(("output_frequency", 0.2))
+        elif self._outputs_since_input >= 3:
+            factors.append(("output_frequency", 0.5))
+        elif self._outputs_since_input >= 1:
+            factors.append(("output_frequency", 0.8))
+        else:
+            factors.append(("output_frequency", 1.0))
 
         score = min(f[1] for f in factors)
         low = [f[0] for f in factors if f[1] < 0.5]
@@ -228,6 +245,8 @@ class InhibitionController:
         self._cooldown_until = 0.0
         self._is_sleeping = False
         self._ignore_recorded = False
+        self._outputs_since_input = 0
+        self._frequency_exceeded = False
         logger.info("Inhibition state reset")
 
     def get_status(self) -> dict:

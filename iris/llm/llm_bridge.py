@@ -14,6 +14,7 @@ from typing import Any
 
 from iris.kernel.config import ModelConfig, ModelEntry
 
+from .google_provider import GoogleProvider
 from .ollama_provider import OllamaProvider
 from .openrouter_provider import OpenRouterProvider
 from .provider import LLMProvider, ProviderFactory
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 _PROVIDER_CLASSES: dict[str, type[ProviderFactory]] = {
     "ollama": OllamaProvider,
     "openrouter": OpenRouterProvider,
+    "google": GoogleProvider,
 }
 
 
@@ -58,6 +60,12 @@ class LLMBridge:
                 api_key=entry.api_key or "",
                 default_model=entry.name,
                 base_url=entry.base_url or "https://openrouter.ai/api/v1",
+            )
+        if entry.provider == "google":
+            return GoogleProvider(
+                api_key=entry.api_key or "",
+                default_model=entry.name,
+                base_url=entry.base_url or "https://generativelanguage.googleapis.com/v1beta/openai",
             )
         return OllamaProvider(
             model_name=entry.name,

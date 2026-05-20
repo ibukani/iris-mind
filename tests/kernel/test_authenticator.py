@@ -7,14 +7,14 @@ from iris.io.models import AuthMessage, Permission
 class TestAuthenticator:
     def test_authenticate_with_valid_message(self) -> None:
         auth = Authenticator()
-        msg = AuthMessage(role="cli", permissions=[Permission.SEND_CHAT])
+        msg = AuthMessage(role="cli", permissions=[Permission.PERMISSION_SEND_CHAT])
         success, error = auth.authenticate(msg)
         assert success is True
         assert error is None
 
     def test_authenticate_with_access_token(self) -> None:
         auth = Authenticator(access_token="my-secret")
-        msg = AuthMessage(access_token="my-secret", role="cli", permissions=[Permission.SEND_CHAT])
+        msg = AuthMessage(access_token="my-secret", role="cli", permissions=[Permission.PERMISSION_SEND_CHAT])
         success, error = auth.authenticate(msg)
         assert success is True
         assert error is None
@@ -35,7 +35,7 @@ class TestAuthenticator:
 
     def test_authenticate_with_permissions(self) -> None:
         auth = Authenticator()
-        msg = AuthMessage(role="cli", permissions=[Permission.SEND_CHAT, Permission.RECEIVE_CHAT])
+        msg = AuthMessage(role="cli", permissions=[Permission.PERMISSION_SEND_CHAT, Permission.PERMISSION_RECEIVE_CHAT])
         success, error = auth.authenticate(msg)
         assert success is True
         assert error is None

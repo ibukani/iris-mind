@@ -56,7 +56,7 @@ def test_grpc_server_auth_and_communication():
                 msg_type="chat",
                 content="Hello World",
             )
-            yield grpc_service_pb2.ClientFrame(message=msg)
+            yield grpc_service_pb2.BidirectionalStreamRequest(message=msg)
             time.sleep(0.2)
 
             # 2. コマンド送信
@@ -64,7 +64,7 @@ def test_grpc_server_auth_and_communication():
                 id="cmd_1",
                 content="/status",
             )
-            yield grpc_service_pb2.ClientFrame(command=cmd)
+            yield grpc_service_pb2.BidirectionalStreamRequest(command=cmd)
             time.sleep(0.2)
 
         _ = stub.BidirectionalStream(request_generator(), metadata=metadata)

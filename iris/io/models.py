@@ -12,13 +12,13 @@ PORT = 9876
 
 
 class Permission(Enum):
-    SEND_CHAT = "send_chat"
-    RECEIVE_CHAT = "receive_chat"
-    SEND_COMMAND = "send_command"
-    RECEIVE_COMMAND = "receive_command"
-    RECEIVE_LOG = "receive_log"
-    INTERRUPT = "interrupt"
-    EXECUTE_ACTION = "execute_action"
+    PERMISSION_SEND_CHAT = "send_chat"
+    PERMISSION_RECEIVE_CHAT = "receive_chat"
+    PERMISSION_SEND_COMMAND = "send_command"
+    PERMISSION_RECEIVE_COMMAND = "receive_command"
+    PERMISSION_RECEIVE_LOG = "receive_log"
+    PERMISSION_INTERRUPT = "interrupt"
+    PERMISSION_EXECUTE_ACTION = "execute_action"
 
 
 class Direction(Enum):

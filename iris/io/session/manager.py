@@ -34,22 +34,22 @@ class SessionConfig:
 
 
 _MSG_PERMISSION_MAP: dict[str, Permission] = {
-    "chat": Permission.RECEIVE_CHAT,
-    "execute": Permission.EXECUTE_ACTION,
-    "execute_result": Permission.EXECUTE_ACTION,
-    "ack": Permission.RECEIVE_CHAT,
-    "system": Permission.RECEIVE_CHAT,
-    "error": Permission.RECEIVE_CHAT,
-    "interrupt": Permission.INTERRUPT,
-    "command": Permission.RECEIVE_COMMAND,
+    "chat": Permission.PERMISSION_RECEIVE_CHAT,
+    "execute": Permission.PERMISSION_EXECUTE_ACTION,
+    "execute_result": Permission.PERMISSION_EXECUTE_ACTION,
+    "ack": Permission.PERMISSION_RECEIVE_CHAT,
+    "system": Permission.PERMISSION_RECEIVE_CHAT,
+    "error": Permission.PERMISSION_RECEIVE_CHAT,
+    "interrupt": Permission.PERMISSION_INTERRUPT,
+    "command": Permission.PERMISSION_RECEIVE_COMMAND,
 }
 
 _INPUT_PERMISSION_MAP: dict[str, Permission] = {
-    "chat": Permission.SEND_CHAT,
-    "system": Permission.SEND_CHAT,
-    "interrupt": Permission.INTERRUPT,
-    "execute_result": Permission.EXECUTE_ACTION,
-    "command": Permission.SEND_COMMAND,
+    "chat": Permission.PERMISSION_SEND_CHAT,
+    "system": Permission.PERMISSION_SEND_CHAT,
+    "interrupt": Permission.PERMISSION_INTERRUPT,
+    "execute_result": Permission.PERMISSION_EXECUTE_ACTION,
+    "command": Permission.PERMISSION_SEND_COMMAND,
 }
 
 
@@ -158,7 +158,7 @@ class SessionManager:
             return
         if session.conn is None:
             return
-        if Permission.RECEIVE_COMMAND not in session.permissions:
+        if Permission.PERMISSION_RECEIVE_COMMAND not in session.permissions:
             logger.warning("Command output denied for session=%s (no receive_command)", session_id)
             return
         self._send_to_session(session, msg)

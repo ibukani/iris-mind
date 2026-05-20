@@ -1,0 +1,93 @@
+syntax = "proto3";
+
+package iris.io.transport;
+
+// Defines permission types for access control over session capabilities.
+enum Permission {
+  PERMISSION_UNSPECIFIED = 0;
+  PERMISSION_SEND_CHAT = 1;
+  PERMISSION_RECEIVE_CHAT = 2;
+  PERMISSION_SEND_COMMAND = 3;
+  PERMISSION_RECEIVE_COMMAND = 4;
+  PERMISSION_RECEIVE_LOG = 5;
+  PERMISSION_INTERRUPT = 6;
+  PERMISSION_EXECUTE_ACTION = 7;
+}
+
+// A message exchanged between roles in the Iris system.
+message Message {
+  // Unique identifier for the message.
+  string id = 1;
+  // Optional correlation ID for linking related messages.
+  string correlation_id = 2;
+  // Session identifier this message belongs to.
+  string session_id = 3;
+  // Role of the sender.
+  string source_role = 4;
+  // Role of the intended recipient, or "*" for broadcast.
+  string target_role = 5;
+  // Direction of the message (request/response/stream/event).
+  string direction = 6;
+  // Message type (e.g. "chat", "command", "system").
+  string msg_type = 7;
+  // Message body content.
+  string content = 8;
+  // MIME type of the content (default "text/plain").
+  string content_type = 9;
+  // Processing state for streaming responses.
+  string state = 10;
+  // Arbitrary key-value metadata.
+  map<string, string> metadata = 11;
+}
+
+// A command input received from a client.
+message CommandInput {
+  // Message type discriminator.
+  string msg_type = 1;
+  // Unique command identifier.
+  string id = 2;
+  // Session identifier.
+  string session_id = 3;
+  // Role of the sender.
+  string source_role = 4;
+  // Command content (e.g. "/status").
+  string content = 5;
+}
+
+// A command output sent back to a client.
+message CommandOutput {
+  // Unique command identifier.
+  string id = 1;
+  // Correlation ID linking to the original command.
+  string correlation_id = 2;
+  // Session identifier.
+  string session_id = 3;
+  // Message type discriminator.
+  string msg_type = 4;
+  // Response content.
+  string content = 5;
+  // Processing state.
+  string state = 6;
+}
+
+// Client-to-server frame wrapping either a Message or a CommandInput.
+message BidirectionalStreamRequest {
+  oneof frame {
+    Message message = 1;
+    CommandInput command = 2;
+  }
+}
+
+// Server-to-client frame wrapping either a Message or a CommandOutput.
+message BidirectionalStreamResponse {
+  oneof frame {
+    Message message = 1;
+    CommandOutput command = 2;
+  }
+}
+
+// Service definition for bidirectional streaming between client and Iris.
+service IrisService {
+  // Bidirectional streaming RPC for real-time message exchange.
+  rpc BidirectionalStream(stream BidirectionalStreamRequest) returns (stream BidirectionalStreamResponse);
+}

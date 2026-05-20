@@ -120,7 +120,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
                 data = json.loads(raw.decode("utf-8"))
 
                 msg_type = data.get("msg_type", "")
-                frame = grpc_service_pb2.ServerFrame()  # type: ignore[attr-defined]
+                frame = grpc_service_pb2.BidirectionalStreamResponse()  # type: ignore[attr-defined]
 
                 if msg_type == "command":
                     cmd_out = grpc_service_pb2.CommandOutput(  # type: ignore[attr-defined]

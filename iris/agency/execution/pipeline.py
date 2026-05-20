@@ -24,7 +24,7 @@ _SITUATION_INSTRUCTIONS: dict[str, str] = {
 }
 
 _SITUATION_USER_MESSAGES: dict[str, str] = {
-    "proactive": "一声かけてください。",
+    "proactive": "...",
 }
 
 

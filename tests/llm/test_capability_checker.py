@@ -11,6 +11,8 @@ def _make_checker(
 ) -> CapabilityChecker:
     config = ModelConfig(
         models=[{"name": "test", "roles": [role], "capabilities": capabilities, "performance_tier": performance_tier}],  # pyright: ignore[reportArgumentType]
+        provider="ollama",
+        base_url="http://localhost:11434",
     )
     return CapabilityChecker(config)
 

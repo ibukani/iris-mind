@@ -1,6 +1,6 @@
 # Iris Client Guide
 
-このドキュメントは Iris Mind に gRPC 接続するクライアント開発者向けに、**Iris の動作**と**期待される入出力**を説明する。
+このドキュメントは Iris Mind に TCP 接続するクライアント開発者向けに、**Iris の動作**と**期待される入出力**を説明する。
 
 ワイヤー形式・メッセージ構造などは [`ipc-spec.md`](./ipc-spec.md) を参照。
 
@@ -15,22 +15,24 @@ sequenceDiagram
     participant C as Client
     participant K as Iris Mind
 
-    Note over C,K: gRPC メタデータによる認証を行い接続確立
-    C->>K: BidirectionalStream 呼び出し
+    C->>K: auth
+    K-->>C: auth_success
 
-    C->>K: ClientFrame (Message: "hello")
-    K-->>C: ServerFrame (Message: stream (thinking))
-    K-->>C: ServerFrame (Message: stream (speaking) "Hello! ")
-    K-->>C: ServerFrame (Message: stream (speaking) "How can I help?")
-    K-->>C: ServerFrame (Message: stream (done))
-    K-->>C: ServerFrame (Message: response "Hello! How can I help?")
+    C->>K: dispatch_text "hello"
+    K-->>C: stream (thinking)
+    K-->>C: stream (speaking) "Hello! "
+    K-->>C: stream (speaking) "How can I help?"
+    K-->>C: stream (done)
+    K-->>C: response "Hello! How can I help?"
 
     Note over C,K: 時間経過
 
-    K-->>C: ServerFrame (Message: proactive "久しぶりですね")
+    K-->>C: proactive "久しぶりですね"
 
-    C->>K: ClientFrame (CommandInput: "/status")
-    K-->>C: ServerFrame (CommandOutput: "Status: IDLE...")
+    C->>K: command "/status"
+    K-->>C: command "Status: IDLE..."
+    C->>K: ping
+    K-->>C: pong
 ```
 
 ---
@@ -39,7 +41,7 @@ sequenceDiagram
 
 ### 2.1 通常の会話応答
 
-テキスト入力 に対する Iris の応答は以下の順序で届く（すべて `ServerFrame.message` として配信）:
+テキスト入力 (`msg_type="dispatch_text"`) に対する Iris の応答は以下の順序で届く:
 
 | 順 | msg_type | state | content | 意味 |
 |----|----------|-------|---------|------|
@@ -79,13 +81,13 @@ Iris が抑制状態（直近のユーザー活動直後・ネガティブムー
 
 ### 2.4 コマンド応答
 
-システムコマンドへの応答（`ServerFrame.command` として配信）:
+スラッシュコマンド (`msg_type="command"`) への応答:
 
-| 型 | content | 例 |
+| msg_type | content | 例 |
 |----------|---------|-----|
-| `CommandOutput` | コマンド結果テキスト | `"Status: IDLE, uptime: 1h"` |
+| `command` | コマンド結果テキスト | `"Status: IDLE, uptime: 1h"` |
 
-コマンド応答は stream を経ず、1メッセージで完了する。
+コマンド応答は stream を経ず、`command` 1メッセージで完了する。
 
 ---
 
@@ -130,7 +132,7 @@ proactive:
 
 ## 4. コマンドリファレンス
 
-すべてのコマンドは `ClientFrame.command` で送信する。content は `/` で始める。
+すべてのコマンドは `msg_type="command"` で送信する。content は `/` で始める。
 
 | コマンド | 説明 | 応答例 |
 |----------|------|--------|
@@ -156,23 +158,24 @@ proactive:
 
 | 症状 | 原因 | 対処 |
 |------|------|------|
-| 接続がすぐ閉じられる | 認証失敗 | メタデータの `access_token` が正しいか確認 |
-| 応答が返ってこない | セッションが無効 | メタデータを含めて再接続 |
-| メッセージが無視される | 不正な ClientFrame | `ClientFrame` に適切な `message` または `command` を格納しているか確認 |
+| 接続がすぐ閉じられる | 認証失敗 | `access_token` が正しいか確認 |
+| 応答が返ってこない | session_id が無効 | 再接続して再認証 |
+| メッセージが無視される | 不正な msg_type | 入力は `dispatch_text` / `converse_text` / `system`、コマンドは `command` |
+| `msg_type` が `text` になっている | 外部向けに公開されていない内部形式 | `dispatch_text` または `converse_text` に変更 |
 
 ### 5.2 セッション管理
 
-- メタデータ認証成功後、同一 gRPC ストリームで入出力を行う
-- セッションは gRPC 接続断で自動的に削除される
-- セッションID は16文字のランダム文字列（サーバー側で採番）
+- 認証成功後、同一接続で入出力を行う
+- セッションは接続断で自動的に削除される
+- セッションID は16文字のランダム文字列
 - ACK メカニズム（`metadata.ack_required: true`）で到着確認が可能
 
 ### 5.3 制限事項
 
 | 項目 | 制限 |
 |------|------|
-| 最大メッセージサイズ | gRPC フレームサイズ上限に準拠 (デフォルト 4MB) |
-| 同時接続数 | 実質無制限（非同期スレッドベース） |
+| 最大メッセージサイズ | 32MB（ペイロード長フィールドの上限） |
+| 同時接続数 | 実質無制限（スレッドベース） |
 | 自発発話の最短間隔 | 60秒（`min_interval_sec`） |
 | 認証トークン | 設定時は必須。未設定時はスキップ |
 
@@ -183,30 +186,31 @@ proactive:
 ### 最小限の接続シーケンス
 
 ```
-1. gRPC dial (127.0.0.1:9876) に access_token, role 等のメタデータを付与して接続
-2. IrisService.BidirectionalStream を呼び出し、双方向ストリームを開く
-3. 送信: ClientFrame(message=Message(id="1", msg_type="chat", content="hello"))
-4. 受信: ServerFrame(message=Message(msg_type="stream", state="thinking"))
-5. 受信: ServerFrame(message=Message(msg_type="stream", state="speaking", content="Hello!"))
-6. 受信: ServerFrame(message=Message(msg_type="stream", state="done"))
-7. 受信: ServerFrame(message=Message(msg_type="response", content="Hello!"))
+1. TCP connect (127.0.0.1:9876)
+2. 送信: {"msg_type": "auth", "mode": "bidirectional"}
+3. 受信: {"msg_type": "auth_success", "session_id": "..."}
+4. 送信: {"msg_type": "dispatch_text", "session_id": "...", "source": "cli", "content": "hello"}
+5. 受信: {"msg_type": "stream", "state": "thinking", "content": ""}
+6. 受信: {"msg_type": "stream", "state": "speaking", "content": "Hello!"}
+7. 受信: {"msg_type": "stream", "state": "done", "content": ""}
+8. 受信: {"msg_type": "response", "content": "Hello!"}
 ```
 
 ### セッションライフサイクル
 
 ```mermaid
 stateDiagram-v2
-    [*] --> AUTH : gRPCメタデータ付き接続
-    AUTH --> ACTIVE : 認証成功 (双方向ストリーム確立)
-    ACTIVE --> ACTIVE : 双方向ストリームでのデータ交換
-    ACTIVE --> [*] : 切断/エラー
+    [*] --> AUTH : TCP接続
+    AUTH --> ACTIVE : 認証成功
+    ACTIVE --> ACTIVE : 双方向通信
+    ACTIVE --> [*] : 切断
 ```
 
 ### データフロー（内部）
 
 ```mermaid
 flowchart LR
-    C["Client"] -->|gRPC| IO["IOManager"]
+    C["Client"] -->|TCP| IO["IOManager"]
     IO -->|InputReceived| EB["EventBus"]
     EB -->|InputReceived| MEM["Memory"]
     MEM -->|InputReady| EB
@@ -216,5 +220,5 @@ flowchart LR
     EX --> LLM["LLM"]
     EX -->|OutputRequest| EB
     EB -->|OutputRequest| IO
-    IO -->|gRPC| C
+    IO -->|TCP| C
 ```git

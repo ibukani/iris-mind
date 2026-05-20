@@ -30,25 +30,20 @@ proactive:
 
 # LLM モデル — プロバイダ・コンテキストサイズ・性能設定
 model:
-  # プロバイダ接続設定（省略時はハードコードデフォルトを使用）
-  providers:
-    ollama:
-      base_url: http://localhost:11434
-
-  # 全体デフォルト
   default_context_window: 8192
   default_num_ctx: 8192
   default_num_gpu: 99
   default_temperature: 0.85
-
-  # モデル定義（接続情報は providers に集約）
   models:
-    - name: qwen3.5:9b
-      roles:
-        - default
+    - api_key: ""
+      base_url: http://localhost:11434
+      name: qwen3.5:9b
+      performance_tier: balanced
       provider: ollama
       num_gpu: 99
       keep_alive: 10m
+      roles:
+        - default
       tokenizer_repo_id: Qwen/Qwen3.5-9B
 
 # TCP サーバー — 外部クライアント接続の listen 設定

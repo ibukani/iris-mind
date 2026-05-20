@@ -12,7 +12,7 @@ from iris.io.models import (
     SessionState,
 )
 from iris.io.session.manager import SessionManager
-from iris.io.transport.grpc_server import GrpcListener
+from iris.io.transport.tcp_listener import TcpListener
 
 __all__ = [
     "AuthMessage",
@@ -20,7 +20,6 @@ __all__ = [
     "CommandOutput",
     "ControlMessage",
     "Direction",
-    "GrpcListener",
     "Message",
     "Permission",
     "PingMessage",
@@ -28,4 +27,5 @@ __all__ = [
     "SessionInfo",
     "SessionManager",
     "SessionState",
+    "TcpListener",
 ]

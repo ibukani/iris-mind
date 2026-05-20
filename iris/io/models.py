@@ -7,8 +7,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
-HOST = "127.0.0.1"
-PORT = 9876
+TCP_HOST = "127.0.0.1"
+TCP_PORT = 9876
 
 
 class Permission(Enum):

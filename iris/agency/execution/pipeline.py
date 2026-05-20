@@ -20,11 +20,11 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _SITUATION_INSTRUCTIONS: dict[str, str] = {
-    "proactive": ("## 状況: 自発的な一声\n時間帯や会話の流れに合わせて、自然に声をかけてください。"),
-}
-
-_SITUATION_USER_MESSAGES: dict[str, str] = {
-    "proactive": "...",
+    "proactive": (
+        "## 状況: 自発的な一声\n"
+        "時間帯や会話の流れに合わせて、自然に声をかけてください。\n"
+        "誰かと会話しているのではなく、自ら会話を始める場面です。"
+    ),
 }
 
 
@@ -188,8 +188,7 @@ class LLMPipeline:
         if content:
             msgs.append({"role": "user", "content": content})
         else:
-            user_msg = _SITUATION_USER_MESSAGES.get(situation, "")
-            msgs.append({"role": "user", "content": user_msg or "応答してください。"})
+            msgs.append({"role": "user", "content": "..."})
         try:
             resp = self._llm.chat(
                 messages=msgs,

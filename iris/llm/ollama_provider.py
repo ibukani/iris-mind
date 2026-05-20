@@ -247,7 +247,10 @@ def _get_available_models() -> set[str]:
         response = client.list()
         models: set[str] = set()
         for model in response.get("models", []):
-            name = model.get("name", "") if isinstance(model, dict) else getattr(model, "name", "")
+            if isinstance(model, dict):
+                name = model.get("model") or model.get("name") or ""
+            else:
+                name = getattr(model, "model", "") or getattr(model, "name", "")
             if name and ":" in name:
                 models.add(name.split(":")[0])
             elif name:

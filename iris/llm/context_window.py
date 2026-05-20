@@ -7,7 +7,8 @@ from iris.llm.tokenizer_manager import TokenizerManager
 
 logger = logging.getLogger(__name__)
 
-_COMPACT_PROMPT = """会話履歴を要約してください。作業継続に必要な情報のみ含めてください。
+_COMPACT_PROMPT = """これまでの会話要約（もしあれば）と、新規の会話履歴を統合し、最新の会話要約を更新・作成してください。
+作業継続に必要な情報のみを網羅し、冗長な内容は省いてください。
 
 必須項目:
 - 達成したこと / 進行中タスク
@@ -22,7 +23,8 @@ def estimate_tokens(text: str, tokenizer_mgr: TokenizerManager | None = None) ->
         return 0
     if tokenizer_mgr is not None:
         return tokenizer_mgr.estimate_tokens(text)
-    return max(1, len(text) // 2)
+    # 日本語等のマルチバイトを考慮し、安全側に倒す (1文字あたり約1.3トークン)
+    return int(len(text) * 1.3)
 
 
 def estimate_messages_tokens(messages: list[dict], tokenizer_mgr: TokenizerManager | None = None) -> int:
@@ -114,16 +116,44 @@ class LLMContextWindowManager:
         if self._llm is None or not messages:
             return self._summary
 
-        text = "\n".join(f"{m.get('role', '?')}: {str(m.get('content', ''))[:300]}" for m in messages[-6:])
+        # 過去のセッションサマリーを検出し、新規メッセージと分ける
+        previous_summary_from_msg = ""
+        new_messages = []
+        for m in messages:
+            role = m.get("role", "?")
+            content = str(m.get("content", ""))
+            if role == "system" and content.startswith("## Session Summary"):
+                previous_summary_from_msg = content.replace("## Session Summary\n", "", 1).strip()
+            else:
+                new_messages.append(m)
+
+        prev_summary = previous_summary_from_msg or self._summary
+
+        # 新規メッセージをフォーマット（長いメッセージは適宜切り詰め）
+        formatted_turns = []
+        for m in new_messages:
+            role = m.get("role", "?")
+            content = str(m.get("content", ""))
+            if len(content) > 1000:
+                content = content[:1000] + "... (省略)"
+            formatted_turns.append(f"{role}: {content}")
+
+        text = "\n".join(formatted_turns)
+
+        user_prompt = ""
+        if prev_summary:
+            user_prompt += f"■ 以前の会話要約:\n{prev_summary}\n\n"
+        user_prompt += f"■ 新規の会話履歴:\n{text}"
+
         try:
             resp = self._llm.chat(
                 messages=[
                     {"role": "system", "content": _COMPACT_PROMPT},
-                    {"role": "user", "content": f"会話履歴:\n{text}"},
+                    {"role": "user", "content": user_prompt},
                 ],
                 model=self._compact_model,
                 temperature=0.3,
-                max_tokens=300,
+                max_tokens=500,
             )
             return resp.get("message", {}).get("content", "").strip()  # type: ignore[no-any-return]
         except Exception as e:

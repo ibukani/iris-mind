@@ -55,7 +55,8 @@ class TokenizerManager:
             return 0
         if self._tokenizer is not None:
             return len(self._tokenizer.encode(text))
-        return max(1, len(text) // 2)
+        # 日本語等のマルチバイトを考慮し、安全側に倒す (1文字あたり約1.3トークン)
+        return int(len(text) * 1.3)
 
     def estimate_messages_tokens(self, messages: list[dict]) -> int:
         return sum(self.estimate_tokens(m.get("content", "")) for m in messages)

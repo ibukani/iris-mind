@@ -203,6 +203,7 @@ iris/
 │   ├── provider.py            LLMProvider / ProviderFactory Protocol
 │   ├── ollama_provider.py     Ollamaプロバイダ
 │   ├── openrouter_provider.py OpenRouterプロバイダ
+│   ├── google_provider.py     Googleプロバイダ
 │   ├── capability_checker.py
 │   ├── tokenizer_manager.py   TokenizerManager（tokenizersラッパー）
 │   └── context_window.py      LLMContextWindowManager（会話履歴圧縮）

@@ -33,9 +33,9 @@ Config
 |-----------|-----|-----------|------|
 | name | str | — | モデル名（Ollamaタグ形式 or OpenRouterモデルスラッグ） |
 | roles | list[str] | ["default"] | このモデルが担うロール一覧 |
-| provider | str | "ollama" | プロバイダ種別（"ollama" or "openrouter"） |
-| base_url | str | "http://localhost:11434" | API URL（Ollama or OpenRouter） |
-| api_key | str | "" | OpenRouter APIキー（${VAR_NAME}形式対応） |
+| provider | str | "ollama" | プロバイダ種別（"ollama" / "openrouter" / "google"） |
+| base_url | str | "http://localhost:11434" | API URL（Ollama / OpenRouter / Google） |
+| api_key | str | "" | APIキー（OpenRouter / Google用、${VAR_NAME}形式対応） |
 | max_tokens | int | 512 | 最大出力トークン数 |
 | temperature | float \| None | None | モデル個別の温度設定（上書き用） |
 | num_ctx | int \| None | None | モデル個別のコンテキスト長（上書き用） |
@@ -51,7 +51,7 @@ Config
 - `roles` は YAML上で1要素なら文字列でも記述可能: `roles: default`
 - モデルが1つだけの場合はシングルモードとなり、全処理にそのモデルを使用
 - 複数モデルがある場合は `get_model(role)` で role に合致するモデルを選択
-- 各モデルが独立した `provider` / `base_url` / `api_key` を持つため、OllamaとOpenRouterの混在が可能
+- 各モデルが独立した `provider` / `base_url` / `api_key` を持つため、Ollama、OpenRouter、Google の混在が可能
 - 同じ `(provider, base_url, api_key)` のモデルは1つの Provider インスタンスを共有
 - `temperature` / `num_ctx` / `num_gpu` / `context_window` が `None` の場合は `default_*` が使用される
 
@@ -163,7 +163,7 @@ model:
           max_tokens: 1024
           tokenizer_repo_id: Qwen/Qwen3.5-9B
 
-# マルチプロバイダモード（Ollama + OpenRouter 混在）
+# マルチプロバイダモード（Ollama + OpenRouter + Google 混在）
 # model:
 #     default_num_ctx: 8192
 #     default_context_window: 8192
@@ -184,6 +184,13 @@ model:
 #           max_tokens: 4096
 #           context_window: 128000
 #           tokenizer_repo_id: Xenova/gpt-4o
+#
+#         - name: gemini-2.5-flash
+#           roles: [default]
+#           provider: google
+#           base_url: https://generativelanguage.googleapis.com/v1beta/openai
+#           api_key: ${GEMINI_API_KEY}
+#           max_tokens: 4096
 
 proactive:
   check_interval_sec: 5.0

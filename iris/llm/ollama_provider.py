@@ -68,7 +68,6 @@ class OllamaProvider:
                 temperature=temperature,
                 max_tokens=max_tokens,
                 tools=tools,
-                interrupt_token=interrupt_token,
                 stream=on_token is not None,
                 kwargs=kwargs,
             )
@@ -88,7 +87,6 @@ class OllamaProvider:
         temperature: float,
         max_tokens: int,
         tools: list[dict] | None,
-        interrupt_token: object | None,
         stream: bool,
         kwargs: dict[str, Any],
     ) -> dict[str, Any]:
@@ -121,8 +119,6 @@ class OllamaProvider:
             call_kwargs["keep_alive"] = kwargs.pop("keep_alive")
         else:
             call_kwargs["keep_alive"] = self.keep_alive
-        if interrupt_token is not None:
-            call_kwargs["interrupt_token"] = interrupt_token
         return call_kwargs
 
     def _chat_with_retries(self, kwargs: dict) -> dict:

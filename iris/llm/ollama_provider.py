@@ -97,8 +97,14 @@ class OllamaProvider:
             "num_predict": max_tokens,
             "num_ctx": kwargs.pop("num_ctx", self.num_ctx),
             "num_gpu": kwargs.pop("num_gpu", self.num_gpu),
-            "repeat_penalty": 1.1,
+            "repeat_penalty": kwargs.pop("repeat_penalty", 1.1),
         }
+        presence_penalty = kwargs.pop("presence_penalty", None)
+        if presence_penalty is not None:
+            options["presence_penalty"] = presence_penalty
+        frequency_penalty = kwargs.pop("frequency_penalty", None)
+        if frequency_penalty is not None:
+            options["frequency_penalty"] = frequency_penalty
         main_gpu = kwargs.pop("main_gpu", None)
         if main_gpu is not None:
             options["main_gpu"] = main_gpu

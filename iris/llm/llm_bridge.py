@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import logging
+import re
 from typing import Any
 
 from iris.kernel.config import ModelConfig, ModelEntry
@@ -90,20 +91,92 @@ class LLMBridge:
                 kwargs.setdefault("num_ctx", entry.num_ctx)
             if entry.num_gpu is not None:
                 kwargs.setdefault("num_gpu", entry.num_gpu)
-            if entry.main_gpu is not None:
-                kwargs.setdefault("main_gpu", entry.main_gpu)
+            if entry.presence_penalty is not None:
+                kwargs.setdefault("presence_penalty", entry.presence_penalty)
+            if entry.frequency_penalty is not None:
+                kwargs.setdefault("frequency_penalty", entry.frequency_penalty)
+            if entry.repeat_penalty is not None:
+                kwargs.setdefault("repeat_penalty", entry.repeat_penalty)
 
-        return provider.chat(
+        # Resolve interrupt token
+        local_interrupt_token = interrupt_token
+        if local_interrupt_token is None:
+            from iris.agency.execution.interrupt_token import InterruptToken
+
+            local_interrupt_token = InterruptToken()
+
+        accumulated_text: list[str] = []
+
+        def wrapped_on_token(token: str) -> None:
+            if getattr(local_interrupt_token, "is_cancelled", False):
+                return
+            accumulated_text.append(token)
+            full_text = "".join(accumulated_text)
+            if self._detect_repetition(full_text):
+                logger.warning("Repetition loop detected in stream, interrupting.")
+                cancel_fn = getattr(local_interrupt_token, "cancel", None)
+                if cancel_fn and callable(cancel_fn):
+                    cancel_fn()
+                return
+            if on_token:
+                on_token(token)
+
+        resp = provider.chat(
             messages=messages,
             model=model_name,
             enable_thinking=enable_thinking,
             temperature=temperature,
             max_tokens=max_tokens,
             tools=tools,
-            on_token=on_token,
-            interrupt_token=interrupt_token,
+            on_token=wrapped_on_token if on_token else None,
+            interrupt_token=local_interrupt_token,
             **kwargs,
         )
+
+        # Check and trim repetition in final response
+        if "message" in resp and resp["message"].get("content"):
+            content = resp["message"]["content"]
+            if self._detect_repetition(content):
+                resp["message"]["content"] = self._trim_repetition(content)
+                logger.warning("Trimmed repetition loop from final LLM response.")
+
+        return resp
+
+    def _detect_repetition(self, text: str) -> bool:
+        """Detect abnormal repetitions in generated text."""
+        if not text:
+            return False
+        target = text[-150:] if len(text) > 150 else text
+
+        # Match 2-20 chars repeated 4+ times consecutively
+        # Skip if the pattern is composed of a single repeating character
+        for match in re.finditer(r"(.{2,20}?)\1{3,}", target):
+            pattern = match.group(1)
+            if len(set(pattern)) > 1:
+                return True
+
+        # Match single char repeated 10+ times consecutively
+        return bool(re.search(r"(.)\1{9,}", target))
+
+    def _trim_repetition(self, text: str) -> str:
+        """Trim detected repetition loops and append interruption note."""
+        # 2-20 chars repeated 4+ times (skip if single-character pattern)
+        for match_multi in re.finditer(r"((.{2,20}?)\2{3,})", text):
+            pattern = match_multi.group(2)
+            if len(set(pattern)) > 1:
+                start, _ = match_multi.span(1)
+                replacement = pattern * 2 + "… [繰り返し検知により中断]"
+                return text[:start] + replacement
+
+        # Single char repeated 10+ times
+        match_single = re.search(r"((.)\2{9,})", text)
+        if match_single:
+            start, _ = match_single.span(1)
+            char = match_single.group(2)
+            replacement = char * 3 + "… [繰り返し検知により中断]"
+            return text[:start] + replacement
+
+        return text
 
     def is_available(self) -> bool:
         """登録されているプロバイダのいずれかが利用可能かどうかを判定する。"""

@@ -64,6 +64,9 @@ class ModelEntry(BaseModel):
     tokenizer_local_path: str = ""
     tokenizer_hf_token: str = ""
     keep_alive: str | None = None
+    presence_penalty: float | None = None
+    frequency_penalty: float | None = None
+    repeat_penalty: float | None = None
 
     @field_validator("roles", mode="before")
     @classmethod

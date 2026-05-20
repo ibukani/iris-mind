@@ -85,6 +85,13 @@ class OpenRouterProvider:
             "max_tokens": max_tokens,
             "stream": on_token is not None,
         }
+        presence_penalty = kwargs.pop("presence_penalty", None)
+        if presence_penalty is not None:
+            body["presence_penalty"] = presence_penalty
+        frequency_penalty = kwargs.pop("frequency_penalty", None)
+        if frequency_penalty is not None:
+            body["frequency_penalty"] = frequency_penalty
+
         if tools:
             body["tools"] = tools
 

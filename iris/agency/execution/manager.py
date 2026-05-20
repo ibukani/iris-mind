@@ -152,7 +152,6 @@ class ExecutionManager:
                 MessageEvent(
                     timestamp=None,
                     source="execution",
-                    session_id=session_id,
                     msg_type="chat",
                     content="",
                     state=StreamState.THINKING.value,
@@ -171,7 +170,6 @@ class ExecutionManager:
                     MessageEvent(
                         timestamp=None,
                         source="execution",
-                        session_id=session_id,
                         msg_type="chat",
                         content=delta,
                         state=StreamState.SPEAKING.value,
@@ -215,7 +213,6 @@ class ExecutionManager:
                 MessageEvent(
                     timestamp=None,
                     source="execution",
-                    session_id=session_id,
                     msg_type="chat",
                     content="",
                     state=StreamState.DONE.value,
@@ -227,7 +224,6 @@ class ExecutionManager:
             MessageEvent(
                 timestamp=None,
                 source="execution",
-                session_id=session_id,
                 msg_type="chat",
                 content=response_text,
                 direction="response",

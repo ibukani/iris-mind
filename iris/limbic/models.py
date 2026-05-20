@@ -28,12 +28,18 @@ class EmotionState:
     def decay(self, dt: float | None = None) -> None:
         """時間経過による感情の自然減衰（指数関数的）。
         arousal は早く減衰し、valence は比較的持続する。
+        60分以上の経過で強制的に中立化する。
         """
         if dt is None:
             dt = time.time() - self.updated_at
         if dt <= 0:
             return
         minutes = dt / 60.0
+        if minutes >= 60:
+            self.valence = 0.0
+            self.arousal = 0.0
+            self.dominance = 0.5
+            return
         lambda_v = 0.05
         lambda_a = 0.10
         lambda_d = 0.03

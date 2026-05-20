@@ -35,6 +35,7 @@ class ProactiveScoring:
         limbic_mood: dict[str, float] | None = None,
         content: str = "",
         context: dict[str, Any] | None = None,
+        ignore_count: int = 0,
     ) -> tuple[float, dict[str, float]]:
         w = self._config.trigger_weights
         time_score = self._compute_time_score(now, last_proactive_time, last_user_activity)
@@ -65,12 +66,17 @@ class ProactiveScoring:
             total = max(total, sensory_score * 0.3)
         total = max(total, urgency_score * 0.15)
 
+        if ignore_count > 0:
+            ignore_penalty = max(0.2, 1.0 - ignore_count * 0.25)
+            total *= ignore_penalty
+
         is_system_event = context and context.get("system_event") == "connected"
         if is_system_event:
             total = max(total, self._config.speak_threshold + 0.1)
 
         logger.debug(
-            "Scores: time=%.3f mem=%.3f ctx=%.3f mood=%.3f sensory=%.3f stm=%.3f urg=%.3f total=%.3f (threshold=%.2f)",
+            "Scores: time=%.3f mem=%.3f ctx=%.3f mood=%.3f sensory=%.3f stm=%.3f urg=%.3f "
+            "ignore=%d total=%.3f (threshold=%.2f)",
             time_score,
             memory_score,
             context_score,
@@ -78,6 +84,7 @@ class ProactiveScoring:
             sensory_score,
             stm_score,
             urgency_score,
+            ignore_count,
             total,
             self._config.speak_threshold,
         )
@@ -89,6 +96,7 @@ class ProactiveScoring:
             "sensory": sensory_score,
             "short_term": stm_score,
             "urgency": urgency_score,
+            "ignore_penalty": ignore_penalty if ignore_count > 0 else 1.0,
         }
 
     def _compute_time_score(self, now: float, last_proactive_time: float, last_user_activity: float) -> float:

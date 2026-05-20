@@ -10,7 +10,7 @@ from iris.event.event_types import MessageEvent, TimerTick
 from iris.limbic.acc import AnteriorCingulateCortex
 from iris.limbic.amygdala import Amygdala
 from iris.limbic.emotional_memory import EmotionalMemory
-from iris.limbic.models import EmotionState
+from iris.limbic.models import EmotionDelta, EmotionState
 
 
 class _MoodEntry(TypedDict):
@@ -102,6 +102,7 @@ class LimbicManager:
         if event_bus is not None:
             event_bus.subscribe("MessageEvent", self._on_message_event)
             event_bus.subscribe("TimerTick", self._on_timer_tick)
+            event_bus.subscribe("MonitorFeedback", self._on_monitor_event)
 
     def _on_message_event(self, event: MessageEvent) -> None:
         """メッセージイベント受信時に感情評価を実行する。
@@ -136,6 +137,30 @@ class LimbicManager:
         now = time.time()
         self._emotion.decay(now - self._last_decay_time)
         self._last_decay_time = now
+
+    def _on_monitor_event(self, event: MessageEvent) -> None:
+        """OutputMonitor からのフィードバックイベントを処理する。
+        島皮質 (Insula) 相当: 内部状態（出力頻度・多弁）の認識と感情への反映。
+        """
+        content = event.content
+        if not content:
+            return
+        flags = content.split(",")
+        delta = EmotionDelta()
+        if "talkative" in flags:
+            delta.valence -= 0.15
+            delta.arousal += 0.2
+            delta.dominance -= 0.1
+        if "frequency_exceeded" in flags:
+            delta.valence -= 0.1
+            delta.arousal += 0.3
+            delta.dominance -= 0.15
+        if delta.valence == 0 and delta.arousal == 0 and delta.dominance == 0:
+            return
+        self._decay()
+        adjusted = self._acc.regulate(delta, self._emotion, self._get_big_five_scores())
+        self._emotion.apply(adjusted)
+        logger.debug("Limbic: monitor feedback applied -> emotion=%s", self._emotion.to_dict())
 
     # === 公開インターフェース ===
 
@@ -220,6 +245,28 @@ class LimbicManager:
         if self._big_five_provider is not None:
             return self._big_five_provider.get_scores()
         return None
+
+    def apply_stimulus(self, stimulus_type: str, intensity: float = 1.0) -> None:
+        """外部からの感情刺激を適用する（無視・過剰出力など）。
+        扁桃体をバイパスして直接感情に影響を与える。
+        """
+        delta = EmotionDelta()
+        if stimulus_type == "ignored":
+            decay = max(0.05, 0.15 - intensity * 0.02)
+            delta.valence -= decay
+            delta.dominance -= max(0.05, 0.12 - intensity * 0.015)
+            logger.debug(
+                "Limbic: ignore stimulus intensity=%d delta=(v=%.3f, d=%.3f)",
+                intensity,
+                delta.valence,
+                delta.dominance,
+            )
+        if delta.valence == 0 and delta.arousal == 0 and delta.dominance == 0:
+            return
+        self._decay()
+        adjusted = self._acc.regulate(delta, self._emotion, self._get_big_five_scores())
+        self._emotion.apply(adjusted)
+        logger.debug("Limbic: stimulus %s applied -> emotion=%s", stimulus_type, self._emotion.to_dict())
 
     def set_big_five(self, big_five: BigFiveProvider | dict[str, float] | None) -> None:
         """Big Five 性格スコアソースを設定する。"""

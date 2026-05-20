@@ -53,6 +53,7 @@ class InhibitionController:
     - confirmation（連続無視→確認モード→抑制）
     - recent_activity（直近のユーザー活動→活動直後は抑制）
     - cooldown/sleep（外部からの強制抑制）
+    - output_frequency（出力頻度→高いほど抑制）
 
     Go信号（直接路）は PlanningManager の ProactiveScoring と統合して判定。
     """
@@ -69,6 +70,7 @@ class InhibitionController:
         self._generating: bool = False
         self._outputs_since_input: int = 0
         self._frequency_exceeded: bool = False
+        self._last_ignore_proactive_time: float = 0.0
 
     def set_generating(self, generating: bool) -> None:
         self._generating = generating
@@ -81,18 +83,30 @@ class InhibitionController:
     def notify_user_activity(self) -> None:
         self._last_user_activity = time.time()
         self._ignore_recorded = False
-        logger.debug("User activity recorded: last_user_activity=%.3f", self._last_user_activity)
+        self._consecutive_ignores = 0
+        self._confirmation_mode = False
+        logger.debug(
+            "User activity recorded: last_user_activity=%.3f, ignores reset",
+            self._last_user_activity,
+        )
 
-    def check_ignore(self) -> None:
-        if self._last_proactive_time == 0 or self._ignore_recorded:
-            return
-        if self._last_proactive_time > self._last_user_activity:
+    def check_ignore(self) -> bool:
+        if self._last_proactive_time == 0:
+            return False
+        if self._last_proactive_time > self._last_user_activity and not self._ignore_recorded:
             self._consecutive_ignores += 1
             self._ignore_recorded = True
-            logger.debug("Ignore detected: consecutive_ignores=%d", self._consecutive_ignores)
             if self._consecutive_ignores >= 2:
                 self._confirmation_mode = True
                 logger.info("Entered confirmation mode (ignores=%d)", self._consecutive_ignores)
+            elif self._consecutive_ignores >= 3:
+                logger.info(
+                    "Extended ignore detected: %d consecutive ignores",
+                    self._consecutive_ignores,
+                )
+            logger.debug("Ignore detected: consecutive_ignores=%d", self._consecutive_ignores)
+            return True
+        return False
 
     def evaluate(self, now: float) -> GateVerdict:
         if self._generating:
@@ -105,13 +119,20 @@ class InhibitionController:
             )
             return GateVerdict(suppressed=True, score=0.0, reason="cooldown_or_sleep", go_signal=0.0)
 
+        if self._consecutive_ignores >= 3:
+            logger.debug("Gate suppressed: consecutive_ignores=%d >= 3", self._consecutive_ignores)
+            return GateVerdict(
+                suppressed=True, score=0.0, reason=f"ignored_x{self._consecutive_ignores}", go_signal=0.0
+            )
+
         factors: list[tuple[str, float]] = []
 
         mood_ok = 1.0 - self._negative_mood_score
         factors.append(("mood", max(0.0, mood_ok)))
 
         if self._confirmation_mode:
-            factors.append(("confirmation", 0.3))
+            c_factor = max(0.1, 0.4 - self._consecutive_ignores * 0.1)
+            factors.append(("confirmation", c_factor))
         else:
             factors.append(("confirmation", 1.0))
 
@@ -167,6 +188,7 @@ class InhibitionController:
 
     def record_proactive_attempt(self) -> None:
         self._last_proactive_time = time.time()
+        self._ignore_recorded = False
         logger.debug("Proactive attempt recorded: last_proactive_time=%.3f", self._last_proactive_time)
 
     def notify_positive_response(self) -> None:
@@ -268,3 +290,7 @@ class InhibitionController:
     @property
     def negative_mood_score(self) -> float:
         return self._negative_mood_score
+
+    @property
+    def consecutive_ignores(self) -> int:
+        return self._consecutive_ignores

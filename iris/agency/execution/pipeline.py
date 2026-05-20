@@ -161,10 +161,15 @@ class LLMPipeline:
                 max_tokens=max_tokens,
             )
         temperature = plan.get("temperature", 0.5)
-        return self._generate_without_tools(plan, max_tokens, temperature, model_role=model_role)
+        return self._generate_without_tools(plan, max_tokens, temperature, messages=messages, model_role=model_role)
 
     def _generate_without_tools(
-        self, plan: dict, max_tokens: int | None, temperature: float, model_role: str = "default"
+        self,
+        plan: dict,
+        max_tokens: int | None,
+        temperature: float,
+        messages: list[dict] | None = None,
+        model_role: str = "default",
     ) -> str:
         context_hint = plan.get("context_hint", "")
         system_prompt = self._build_system_prompt(context_hint=context_hint)
@@ -174,11 +179,17 @@ class LLMPipeline:
         if situation in _SITUATION_INSTRUCTIONS:
             parts.append(_SITUATION_INSTRUCTIONS[situation])
 
-        user_msg = _SITUATION_USER_MESSAGES.get(situation, "")
-        msgs = [
-            {"role": "system", "content": "\n\n".join(parts)},
-            {"role": "user", "content": user_msg} if user_msg else {"role": "user", "content": "応答してください。"},
-        ]
+        msgs: list[dict] = [{"role": "system", "content": "\n\n".join(parts)}]
+
+        content = plan.get("content", "")
+        if messages and content:
+            msgs.extend(messages)
+
+        if content:
+            msgs.append({"role": "user", "content": content})
+        else:
+            user_msg = _SITUATION_USER_MESSAGES.get(situation, "")
+            msgs.append({"role": "user", "content": user_msg or "応答してください。"})
         try:
             resp = self._llm.chat(
                 messages=msgs,

@@ -11,7 +11,7 @@ from iris.agency.execution.inhibition import InhibitionController
 from iris.agency.execution.monitor import OutputMonitor
 from iris.agency.execution.pipeline import LLMPipeline
 from iris.event.event_bus import EventBus
-from iris.event.event_types import MessageEvent, TimerTick
+from iris.event.event_types import MessageEvent, MonitorFeedback, TimerTick
 from iris.io.models import StreamState
 from iris.kernel.config import Config, ModelConfig
 from iris.llm.context_window import LLMContextWindowManager
@@ -282,6 +282,16 @@ class ExecutionManager:
             degree = self._monitor.talkative_degree
             self._inhibition.apply_frequency_penalty(degree)
             logger.debug("Applied frequency penalty: degree=%d", degree)
+
+        if flags:
+            self._event_bus.publish(
+                MonitorFeedback(
+                    timestamp=None,
+                    source="execution",
+                    flags=flags,
+                    content=",".join(flags),
+                )
+            )
 
     def flush_memory(self) -> None:
         """会話履歴から海馬反射（リフレクション）を強制実行し、記憶の永続化を行う。"""

@@ -105,6 +105,12 @@ class ClientSessionEvent(Event):
     offline_duration: str = ""
 
 
+@dataclass
+class MonitorFeedback(Event):
+    flags: list[str] | None = None
+    content: str = ""
+
+
 def new_trace_id() -> str:
     return _uuid.uuid4().hex[:12]
 
@@ -117,6 +123,7 @@ __all__ = [
     "InputReady",
     "MemoryUpdateEvent",
     "MessageEvent",
+    "MonitorFeedback",
     "TimerTick",
     "new_trace_id",
 ]

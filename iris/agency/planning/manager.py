@@ -61,7 +61,9 @@ class PlanningManager:
                 return
 
             if context.get("from_timer"):
-                self._inhibition.check_ignore()
+                ignore_detected = self._inhibition.check_ignore()
+                if ignore_detected and self._limbic:
+                    self._limbic.apply_stimulus("ignored", self._inhibition.consecutive_ignores)
 
             total, scores = self._scoring.compute(
                 now=time.time(),
@@ -71,6 +73,7 @@ class PlanningManager:
                 limbic_mood=limbic_mood,
                 content=event.content,
                 context=context,
+                ignore_count=self._inhibition.consecutive_ignores,
             )
             if total < self._cfg.speak_threshold:
                 logger.debug("Below speak_threshold: total=%.3f < threshold=%.2f", total, self._cfg.speak_threshold)

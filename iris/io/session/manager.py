@@ -70,6 +70,16 @@ class SessionManager:
             if not success:
                 return ControlMessage(msg_type="auth_failure", error_message=error)
 
+            if msg.identity:
+                for sid, s in list(self._sessions.items()):
+                    if s.identity == msg.identity and s.state == SessionState.ACTIVE:
+                        s.state = SessionState.CLOSED
+                        if s.conn is not None:
+                            with contextlib.suppress(Exception):
+                                s.conn.close()
+                        del self._sessions[sid]
+                        logger.info("SessionManager: replaced duplicate session %s (identity=%s)", sid, msg.identity)
+
             now = datetime.now()
             session_id = uuid4().hex[:16]
             session = SessionInfo(

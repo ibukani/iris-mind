@@ -6,10 +6,10 @@
 
 ## 責務
 
-- 外部からの入力を TCP で受け付け、Global EventBus に publish する
-- Global EventBus からのメッセージイベントを TCP で外部に送出する
+- 外部からの入力を gRPC で受け付け、Global EventBus に publish する
+- Global EventBus からのメッセージイベントを gRPC で外部に送出する
 - セッション管理（接続単位の識別・権限管理）
-- 認証（access_token 検証 + role/permission 付与）
+- 認証（gRPC メタデータの access_token 検証 + role/permission 付与）
 - コマンド入力の検出と処理（CommandInput → CommandHandler → CommandOutput）→ EventBus を経由せず直接処理
 
 ## 構成
@@ -21,7 +21,10 @@ iris/io/
 ├── models.py          Message, CommandInput, CommandOutput, Permission, Direction
 ├── transport/
 │   ├── __init__.py
-│   └── tcp_listener.py   ← Message と CommandInput を別コールバックで分岐
+│   ├── iris_service.proto    ← gRPC サービス・メッセージ定義 (proto/iris/io/)
+│   ├── grpc_service_pb2.py   ← 自動生成メッセージコード
+│   ├── grpc_service_pb2_grpc.py ← 自動生成サービスコード
+│   └── grpc_server.py        ← GrpcListener / GrpcServer 実装 (双方向ストリーミング)
 ├── session/
 │   ├── __init__.py
 │   └── manager.py     SessionManager
@@ -53,32 +56,32 @@ class IOManager:
 
 ```mermaid
 sequenceDiagram
-    participant TCP as 外部Client
+    participant gRPC as 外部Client
     participant IO as IOManager
-    participant TRANS as transport/TcpListener
+    participant TRANS as transport/GrpcListener
     participant SESS as session/SessionManager
     participant AUTH as auth/Authenticator
     participant EB as Global EventBus
     participant CMD as CommandHandler
 
-    Note over TCP,EB: 通常入力経路
+    Note over gRPC,EB: 通常入力経路
 
-    TCP->>TRANS: TCP接続 + AuthMessage
+    gRPC->>TRANS: gRPCメタデータ付き接続開始
     TRANS->>SESS: authenticate()
     SESS->>AUTH: verify()
     AUTH-->>SESS: ok
     SESS-->>TRANS: auth_success(role, permissions)
-    TRANS-->>TCP: auth_success
+    TRANS-->>gRPC: 接続確立 (双方向ストリーム開始)
 
-    TCP->>TRANS: Message (direction:request, target_role:mind)
+    gRPC->>TRANS: ClientFrame (Message: direction:request, target_role:mind)
     TRANS->>SESS: session確認 + source_role 設定
     SESS-->>TRANS: ok
     TRANS->>IO: on_message(msg)
     IO->>EB: MessageEvent(session_id, content, ...)
 
-    Note over TCP,CMD: コマンド入力経路
+    Note over gRPC,CMD: コマンド入力経路
 
-    TCP->>TRANS: CommandInput (msg_type: command)
+    gRPC->>TRANS: ClientFrame (CommandInput)
     TRANS->>SESS: session確認 + source_role 設定
     SESS-->>TRANS: ok
     TRANS->>IO: on_command(msg)
@@ -86,12 +89,12 @@ sequenceDiagram
     CMD-->>IO: result
     IO->>SESS: route_command_output(session_id, CommandOutput)
 
-    Note over TCP,EB: 出力経路
+    Note over gRPC,EB: 出力経路
 
     EB-->>IO: MessageEvent(session_id, msg_type, content, ...)
     IO->>SESS: route_message(msg)
     SESS->>TRANS: conn.send_bytes(Message JSON)
-    TRANS-->>TCP: Message
+    TRANS-->>gRPC: ServerFrame (Message)
 ```
 
 ## models.py
@@ -116,10 +119,10 @@ class SessionInfo(BaseModel)      # session_id, role, permissions, conn
 
 ## transport/
 
-### TcpListener
+### GrpcListener
 
 ```python
-class TcpListener:
+class GrpcListener:
     def __init__(self, session_manager, on_message, on_command)
     def set_on_message(self, on_message: Callable[[Message], None]) -> None
     def set_on_command(self, on_command: Callable[[CommandInput], None]) -> None
@@ -127,11 +130,9 @@ class TcpListener:
     def stop(self) -> None
 ```
 
-`msg_type` に応じてディスパッチ:
-- `auth` → 認証処理
-- `ping` → pong 応答
+双方向ストリームを通じて `ClientFrame` を受信し、`WhichOneof` に応じてディスパッチ:
+- `message` → Message として処理（`source_role` は認証済みセッションの role で上書き）
 - `command` → CommandInput として処理
-- その他 → Message として処理（`source_role` は認証済みセッションの role で上書き）
 
 ## session/
 
@@ -169,7 +170,7 @@ class Authenticator:
 
 | 方向 | 通信相手 | Event／型 | 説明 |
 |------|----------|-----------|------|
-| Inbound | TCP → IO | `MessageEvent` via EventBus | Message 入力（`direction=request`, `target_role=mind`） |
-| Inbound | TCP → IO | `CommandInput` → CommandHandler | コマンド入力、EventBus を経由せず直接処理 |
+| Inbound | gRPC → IO | `MessageEvent` via EventBus | Message 入力（`direction=request`, `target_role=mind`） |
+| Inbound | gRPC → IO | `CommandInput` → CommandHandler | コマンド入力、EventBus を経由せず直接処理 |
 | Outbound | IO ← EventBus | `MessageEvent(session_id, msg_type, content)` | 出力要求（mind→client） |
-| Outbound | IO → TCP | `CommandOutput` | コマンド応答、EventBus を経由せず直接送出 |
+| Outbound | IO → gRPC | `CommandOutput` | コマンド応答、EventBus を経由せず直接送出 |

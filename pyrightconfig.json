@@ -1,7 +1,7 @@
 {
   "pythonVersion": "3.13",
   "include": ["iris"],
-  "exclude": ["**/node_modules", "**/__pycache__", "**/.*", "build", "dist", "venv", ".venv", "tests"],
+  "exclude": ["**/node_modules", "**/__pycache__", "**/.*", "build", "dist", "venv", ".venv", "tests", "**/grpc_service_pb2*.py"],
   "venvPath": ".",
   "venv": "venv",
 

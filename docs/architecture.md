@@ -17,7 +17,7 @@ flowchart TD
 
     subgraph IO["io/ 視床"]
         IO_Manager["IOManager<br/>入出力中継"]
-        IO_Trans["transport/<br/>TcpListener"]
+        IO_Trans["transport/<br/>GrpcListener"]
         IO_Session["session/<br/>SessionManager"]
         IO_Auth["auth/<br/>Authenticator"]
     end
@@ -133,7 +133,10 @@ iris/
 │   ├── models.py              InputMessage, OutputMessage ...
 │   ├── transport/
 │   │   ├── __init__.py
-│   │   └── tcp_listener.py    TcpListener
+│   │   ├── iris_service.proto     gRPC Proto定義 (proto/iris/io/)
+│   │   ├── grpc_service_pb2.py    自動生成Protobuf
+│   │   ├── grpc_service_pb2_grpc.py 自動生成gRPCスタブ
+│   │   └── grpc_server.py        GrpcListener / GrpcServer
 │   ├── session/
 │   │   ├── __init__.py
 │   │   └── manager.py         SessionManager
@@ -203,6 +206,7 @@ iris/
 │   ├── provider.py            LLMProvider / ProviderFactory Protocol
 │   ├── ollama_provider.py     Ollamaプロバイダ
 │   ├── openrouter_provider.py OpenRouterプロバイダ
+│   ├── google_provider.py     Googleプロバイダ
 │   ├── capability_checker.py
 │   ├── tokenizer_manager.py   TokenizerManager（tokenizersラッパー）
 │   └── context_window.py      LLMContextWindowManager（会話履歴圧縮）
@@ -316,7 +320,7 @@ flowchart LR
 - 各層は直接の依存を持たず、EventBus を介して通信する
 - ただし Factory（DI コンテナ）は全層のインスタンスを生成するため、kernel/factory.py に集約
 - Agency の planning → execution は内部 EventBus を介する
-- IO 層は TCP への依存を持つが、`io/transport/` に閉じる
+- IO 層は gRPC への依存を持つが、`io/transport/` に閉じる
 - Limbic 層は以下のインターフェースで他層と統合する:
   - `build_mood_description()` → LLMPipeline がシステムプロンプトに注入
   - `apply_limbic_modulation(emotion)` → InhibitionController が感情による抑制変調に利用 (inhibition.py)

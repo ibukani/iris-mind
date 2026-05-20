@@ -14,6 +14,7 @@ from typing import Any
 
 from iris.kernel.config import ModelConfig, ModelEntry
 
+from .google_provider import GoogleProvider
 from .ollama_provider import OllamaProvider
 from .openrouter_provider import OpenRouterProvider
 from .provider import LLMProvider, ProviderFactory
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 _PROVIDER_CLASSES: dict[str, type[ProviderFactory]] = {
     "ollama": OllamaProvider,
     "openrouter": OpenRouterProvider,
+    "google": GoogleProvider,
 }
 
 
@@ -45,23 +47,42 @@ class LLMBridge:
         self._model_config = model_config
 
         for entry in model_config.models:
-            key = f"{entry.provider}|{entry.base_url}|{entry.api_key}"
+            base_url, api_key = self._resolve_connection(entry)
+            key = f"{entry.provider}|{base_url}|{api_key}"
             if key not in self._providers:
-                self._providers[key] = self._create_provider(entry)
+                self._providers[key] = self._create_provider(entry, base_url, api_key)
             self._model_map[entry.name] = key
             self._entries[entry.name] = entry
 
-    def _create_provider(self, entry: ModelEntry) -> LLMProvider:
+    def _resolve_connection(self, entry: ModelEntry) -> tuple[str, str]:
+        conn = self._model_config.providers.get(entry.provider)
+        base_url = conn.base_url if conn else ""
+        api_key = conn.api_key if conn else ""
+        if entry.provider == "ollama":
+            base_url = base_url or "http://localhost:11434"
+        elif entry.provider == "openrouter":
+            base_url = base_url or "https://openrouter.ai/api/v1"
+        elif entry.provider == "google":
+            base_url = base_url or "https://generativelanguage.googleapis.com/v1beta/openai"
+        return base_url, api_key
+
+    def _create_provider(self, entry: ModelEntry, base_url: str, api_key: str) -> LLMProvider:
         """モデル設定に基づいてプロバイダインスタンスを生成する。"""
         if entry.provider == "openrouter":
             return OpenRouterProvider(
-                api_key=entry.api_key or "",
+                api_key=api_key,
                 default_model=entry.name,
-                base_url=entry.base_url or "https://openrouter.ai/api/v1",
+                base_url=base_url,
+            )
+        if entry.provider == "google":
+            return GoogleProvider(
+                api_key=api_key,
+                default_model=entry.name,
+                base_url=base_url,
             )
         return OllamaProvider(
             model_name=entry.name,
-            base_url=entry.base_url or "http://localhost:11434",
+            base_url=base_url,
             num_gpu=entry.num_gpu if entry.num_gpu is not None else self._model_config.default_num_gpu,
             num_ctx=entry.num_ctx if entry.num_ctx is not None else self._model_config.default_num_ctx,
             keep_alive=entry.keep_alive or "10m",

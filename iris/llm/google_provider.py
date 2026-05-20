@@ -1,7 +1,7 @@
 """
-OpenRouter Provider — OpenAI 互換 API ラッパー。
+Google AI Studio Provider — OpenAI 互換 API ラッパー。
 
-OpenRouter REST API と httpx で通信し、ストリーミング・ツール呼び出しを提供する。
+Google AI Studio (Gemini) OpenAI 互換 REST API と httpx で通信し、ストリーミング・ツール呼び出しを提供する。
 """
 
 from __future__ import annotations
@@ -20,19 +20,19 @@ from iris.kernel.config import ModelConfig, ModelEntry
 logger = logging.getLogger(__name__)
 
 
-class OpenRouterProvider:
-    """OpenRouter バックエンド向け LLM プロバイダ。"""
+class GoogleProvider:
+    """Google AI Studio バックエンド向け LLM プロバイダ。"""
 
     def __init__(
         self,
         api_key: str,
-        default_model: str = "qwen/qwen-3.5-9b",
-        base_url: str = "https://openrouter.ai/api/v1",
+        default_model: str = "gemini-2.5-flash",
+        base_url: str = "https://generativelanguage.googleapis.com/v1beta/openai",
         http_client: httpx.Client | None = None,
         max_retries: int = 5,
     ) -> None:
         if not api_key:
-            raise ValueError("api_key is required for OpenRouter")
+            raise ValueError("api_key is required for Google AI Studio")
         self.api_key = api_key
         self.default_model = default_model
         self.base_url = base_url.rstrip("/")
@@ -53,7 +53,7 @@ class OpenRouterProvider:
 
             retry_after = _parse_retry_after(resp, attempt)
             logger.warning(
-                "OpenRouter 429 (attempt %d/%d): waiting %.1fs, error=%s",
+                "Google API 429 (attempt %d/%d): waiting %.1fs, error=%s",
                 attempt + 1,
                 self._max_retries,
                 retry_after,
@@ -61,7 +61,7 @@ class OpenRouterProvider:
             )
             time.sleep(retry_after)
 
-        raise RuntimeError(f"OpenRouter API エラー (429 リトライ超過 {self._max_retries}回)")
+        raise RuntimeError(f"Google API エラー (429 リトライ超過 {self._max_retries}回)")
 
     def chat(
         self,
@@ -98,8 +98,6 @@ class OpenRouterProvider:
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://github.com/anomalyco/iris-mind",
-            "X-Title": "Iris",
         }
 
         try:
@@ -111,7 +109,7 @@ class OpenRouterProvider:
         except httpx.HTTPStatusError as e:
             code = e.response.status_code
             msg = _extract_error_text(e.response)
-            raise RuntimeError(f"OpenRouter API エラー ({code}): {msg}") from e
+            raise RuntimeError(f"Google API エラー ({code}): {msg}") from e
 
     def _stream_chat(
         self,
@@ -133,7 +131,7 @@ class OpenRouterProvider:
                 if stream.status_code == 429:
                     retry_after = _parse_retry_after(stream, attempt)
                     logger.warning(
-                        "OpenRouter 429 stream (attempt %d/%d): waiting %.1fs, error=%s",
+                        "Google API 429 stream (attempt %d/%d): waiting %.1fs, error=%s",
                         attempt + 1,
                         self._max_retries,
                         retry_after,
@@ -144,11 +142,11 @@ class OpenRouterProvider:
 
                 if stream.status_code != 200:
                     error_msg = _extract_error_text(stream)
-                    raise RuntimeError(f"OpenRouter API エラー ({stream.status_code}): {error_msg}")
+                    raise RuntimeError(f"Google API エラー ({stream.status_code}): {error_msg}")
 
                 for line in stream.iter_lines():
                     if interrupt_token is not None and getattr(interrupt_token, "is_cancelled", False):
-                        logger.debug("OpenRouterProvider: interrupted")
+                        logger.debug("GoogleProvider: interrupted")
                         break
                     if not line or not line.startswith("data: "):
                         continue
@@ -190,7 +188,7 @@ class OpenRouterProvider:
                                     existing["function"]["arguments"] += fn["arguments"]
                 break
         else:
-            raise RuntimeError("OpenRouter stream failed after max retries")
+            raise RuntimeError("Google API stream failed after max retries")
 
         full_content = "".join(content_parts)
         msg: dict = {"role": "assistant", "content": full_content}
@@ -203,18 +201,20 @@ class OpenRouterProvider:
         return bool(self.api_key)
 
     def unload_model(self, model_name: str) -> None:
-        """OpenRouter にアンロード概念はない。"""
+        """Google API にアンロード概念はない。"""
         return
 
     @classmethod
     def ensure_environment(cls, entries: list[ModelEntry], model_config: ModelConfig) -> bool:
-        """OpenRouter 環境を確認する（API キー検証 → モデル存在確認）。"""
+        """Google API 環境を確認する（API キー検証 → モデル存在確認）。"""
         if not entries:
             return True
         provider_name = entries[0].provider
         conn = model_config.providers.get(provider_name)
         api_key = conn.api_key if (conn and conn.api_key) else ""
-        base_url = ((conn.base_url if conn else "") or "https://openrouter.ai/api/v1").rstrip("/")
+        base_url = (
+            (conn.base_url if conn else "") or "https://generativelanguage.googleapis.com/v1beta/openai"
+        ).rstrip("/")
 
         if not api_key or api_key.startswith("${"):
             print(
@@ -233,14 +233,14 @@ class OpenRouterProvider:
             data = resp.json()
             remote_ids = {m["id"] for m in data.get("data", [])}
         except Exception as e:
-            print(f"OpenRouter への接続に失敗しました: {e}", file=sys.stderr)
+            print(f"Google API への接続に失敗しました: {e}", file=sys.stderr)
             return False
 
         ok = True
         for m in entries:
             if m.name not in remote_ids:
                 print(
-                    f"  警告: モデル '{m.name}' が OpenRouter のモデル一覧に見つかりません。"
+                    f"  警告: モデル '{m.name}' が Google AI Studio のモデル一覧に見つかりません。"
                     f" モデル名を確認してください。",
                     file=sys.stderr,
                 )
@@ -251,7 +251,7 @@ class OpenRouterProvider:
 
 
 def _extract_error_text(resp: httpx.Response) -> str:
-    """OpenRouter のエラーレスポンスボディからメッセージを抽出する。"""
+    """Google API のエラーレスポンスボディからメッセージを抽出する。"""
     try:
         body = resp.json()
         error = body.get("error", {})

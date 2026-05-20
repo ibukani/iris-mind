@@ -10,7 +10,7 @@ from iris.io.session.manager import SessionConfig, SessionManager
 
 def _get_session_id(manager: SessionManager) -> str:
     conn = MagicMock()
-    msg = AuthMessage(role="cli", permissions=[Permission.RECEIVE_CHAT, Permission.SEND_CHAT])
+    msg = AuthMessage(role="cli", permissions=[Permission.PERMISSION_RECEIVE_CHAT, Permission.PERMISSION_SEND_CHAT])
     response = manager.authenticate(conn, msg)
     assert response.session_id is not None
     return response.session_id
@@ -23,7 +23,7 @@ class TestSessionManager:
 
     def test_authenticate_generates_session_id(self, manager: SessionManager) -> None:
         conn = MagicMock()
-        msg = AuthMessage(role="cli", permissions=[Permission.RECEIVE_CHAT])
+        msg = AuthMessage(role="cli", permissions=[Permission.PERMISSION_RECEIVE_CHAT])
         response = manager.authenticate(conn, msg)
 
         assert response.msg_type == "auth_success"
@@ -42,7 +42,7 @@ class TestSessionManager:
 
     def test_authenticate_stores_conn(self, manager: SessionManager) -> None:
         conn = MagicMock()
-        msg = AuthMessage(role="cli", permissions=[Permission.RECEIVE_CHAT])
+        msg = AuthMessage(role="cli", permissions=[Permission.PERMISSION_RECEIVE_CHAT])
         response = manager.authenticate(conn, msg)
         assert response.session_id is not None
 
@@ -61,7 +61,7 @@ class TestSessionManager:
 
     def test_route_message_delivers_to_conn(self, manager: SessionManager) -> None:
         conn = MagicMock()
-        msg = AuthMessage(role="cli", permissions=[Permission.RECEIVE_CHAT])
+        msg = AuthMessage(role="cli", permissions=[Permission.PERMISSION_RECEIVE_CHAT])
         response = manager.authenticate(conn, msg)
         assert response.session_id is not None
 
@@ -79,8 +79,8 @@ class TestSessionManager:
     def test_route_message_broadcasts_to_all_active_sessions(self, manager: SessionManager) -> None:
         conn1 = MagicMock()
         conn2 = MagicMock()
-        r1 = manager.authenticate(conn1, AuthMessage(role="cli", permissions=[Permission.RECEIVE_CHAT]))
-        r2 = manager.authenticate(conn2, AuthMessage(role="cli", permissions=[Permission.RECEIVE_CHAT]))
+        r1 = manager.authenticate(conn1, AuthMessage(role="cli", permissions=[Permission.PERMISSION_RECEIVE_CHAT]))
+        r2 = manager.authenticate(conn2, AuthMessage(role="cli", permissions=[Permission.PERMISSION_RECEIVE_CHAT]))
         assert r1.session_id is not None
         assert r2.session_id is not None
 
@@ -141,7 +141,7 @@ class TestSessionManager:
     def test_route_message_clears_conn_on_disconnect(self, manager: SessionManager) -> None:
         conn = MagicMock()
         conn.send_bytes.side_effect = BrokenPipeError
-        msg = AuthMessage(role="cli", permissions=[Permission.RECEIVE_CHAT])
+        msg = AuthMessage(role="cli", permissions=[Permission.PERMISSION_RECEIVE_CHAT])
         response = manager.authenticate(conn, msg)
         assert response.session_id is not None
 
@@ -161,19 +161,19 @@ class TestSessionManager:
 
     def test_authenticate_stores_permissions(self, manager: SessionManager) -> None:
         conn = MagicMock()
-        msg = AuthMessage(role="cli", permissions=[Permission.RECEIVE_LOG])
+        msg = AuthMessage(role="cli", permissions=[Permission.PERMISSION_RECEIVE_LOG])
         response = manager.authenticate(conn, msg)
         assert response.session_id is not None
 
         info = manager._sessions[response.session_id]
         assert info.role == "cli"
-        assert info.permissions == [Permission.RECEIVE_LOG]
+        assert info.permissions == [Permission.PERMISSION_RECEIVE_LOG]
 
     def test_authenticate_stores_identity_and_description(self, manager: SessionManager) -> None:
         conn = MagicMock()
         msg = AuthMessage(
             role="cli",
-            permissions=[Permission.RECEIVE_CHAT],
+            permissions=[Permission.PERMISSION_RECEIVE_CHAT],
             identity="debug-console",
             description="Debug console on Mac mini",
         )
@@ -193,7 +193,7 @@ class TestSessionManager:
             conn,
             AuthMessage(
                 role="cli",
-                permissions=[Permission.RECEIVE_CHAT, Permission.RECEIVE_LOG],
+                permissions=[Permission.PERMISSION_RECEIVE_CHAT, Permission.PERMISSION_RECEIVE_LOG],
             ),
         )
         summary = manager.get_sessions_summary()

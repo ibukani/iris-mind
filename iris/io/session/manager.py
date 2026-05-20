@@ -4,9 +4,8 @@ import contextlib
 from dataclasses import dataclass
 from datetime import datetime
 import logging
-from multiprocessing.connection import Connection
 import threading
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from iris.io.auth.authenticator import Authenticator
@@ -35,22 +34,22 @@ class SessionConfig:
 
 
 _MSG_PERMISSION_MAP: dict[str, Permission] = {
-    "chat": Permission.RECEIVE_CHAT,
-    "execute": Permission.EXECUTE_ACTION,
-    "execute_result": Permission.EXECUTE_ACTION,
-    "ack": Permission.RECEIVE_CHAT,
-    "system": Permission.RECEIVE_CHAT,
-    "error": Permission.RECEIVE_CHAT,
-    "interrupt": Permission.INTERRUPT,
-    "command": Permission.RECEIVE_COMMAND,
+    "chat": Permission.PERMISSION_RECEIVE_CHAT,
+    "execute": Permission.PERMISSION_EXECUTE_ACTION,
+    "execute_result": Permission.PERMISSION_EXECUTE_ACTION,
+    "ack": Permission.PERMISSION_RECEIVE_CHAT,
+    "system": Permission.PERMISSION_RECEIVE_CHAT,
+    "error": Permission.PERMISSION_RECEIVE_CHAT,
+    "interrupt": Permission.PERMISSION_INTERRUPT,
+    "command": Permission.PERMISSION_RECEIVE_COMMAND,
 }
 
 _INPUT_PERMISSION_MAP: dict[str, Permission] = {
-    "chat": Permission.SEND_CHAT,
-    "system": Permission.SEND_CHAT,
-    "interrupt": Permission.INTERRUPT,
-    "execute_result": Permission.EXECUTE_ACTION,
-    "command": Permission.SEND_COMMAND,
+    "chat": Permission.PERMISSION_SEND_CHAT,
+    "system": Permission.PERMISSION_SEND_CHAT,
+    "interrupt": Permission.PERMISSION_INTERRUPT,
+    "execute_result": Permission.PERMISSION_EXECUTE_ACTION,
+    "command": Permission.PERMISSION_SEND_COMMAND,
 }
 
 
@@ -64,7 +63,7 @@ class SessionManager:
         self._event_bus = event_bus
         self._last_disconnect_times: dict[str, datetime] = {}
 
-    def authenticate(self, conn: Connection, msg: AuthMessage) -> ControlMessage:
+    def authenticate(self, conn: Any, msg: AuthMessage) -> ControlMessage:
         offline_duration = ""
         with self._lock:
             success, error = self._authenticator.authenticate(msg)
@@ -159,7 +158,7 @@ class SessionManager:
             return
         if session.conn is None:
             return
-        if Permission.RECEIVE_COMMAND not in session.permissions:
+        if Permission.PERMISSION_RECEIVE_COMMAND not in session.permissions:
             logger.warning("Command output denied for session=%s (no receive_command)", session_id)
             return
         self._send_to_session(session, msg)

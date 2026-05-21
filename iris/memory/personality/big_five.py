@@ -97,6 +97,12 @@ class BigFiveProfile:
             "evolution_history": self.evolution_history[-50:],
         }
 
+    def get_state(self) -> dict:
+        return {
+            "scores": self.get_scores(),
+            "recent_changes": self.evolution_history[-10:],
+        }
+
     def get_scores(self) -> dict[str, float]:
         return {k: round(getattr(self, k), 1) for k in _default_ocean()}
 

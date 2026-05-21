@@ -4,7 +4,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 import logging
 import math
-from typing import Any
+from typing import Any, TypedDict
 
 from iris.limbic.models import EmotionState
 from iris.memory.long_term.stores import EpisodicStore, SemanticStore
@@ -12,6 +12,12 @@ from iris.memory.long_term.stores import EpisodicStore, SemanticStore
 logger = logging.getLogger(__name__)
 
 _EMOTION_INTENSITY_THRESHOLD = 0.15
+
+
+class EmotionTag(TypedDict):
+    content: str
+    emotion: dict[str, float]
+    intensity: float
 
 
 class EmotionalMemory:
@@ -30,7 +36,7 @@ class EmotionalMemory:
     ) -> None:
         self._episodic_store = episodic_store
         self._semantic_store = semantic_store
-        self._recent_tags: list[dict[str, Any]] = []
+        self._recent_tags: list[EmotionTag] = []
 
     def tag(self, content: str, emotion: EmotionState) -> None:
         """会話内容に感情タグを付与して記録する。
@@ -43,7 +49,7 @@ class EmotionalMemory:
         """
         emotion_dict = emotion.to_dict()
         intensity = abs(emotion.valence) * emotion.arousal
-        tag = {
+        tag: EmotionTag = {
             "content": content[:100],
             "emotion": emotion_dict,
             "intensity": round(intensity, 4),
@@ -77,7 +83,7 @@ class EmotionalMemory:
 
         logger.debug("EmotionalMemory tagged: intensity=%.3f label=%s", intensity, _emotion_label(emotion))
 
-    def get_recent_tags(self, n: int = 5) -> list[dict[str, Any]]:
+    def get_recent_tags(self, n: int = 5) -> list[EmotionTag]:
         """最近の感情タグを強度順で返す。"""
         sorted_tags = sorted(
             self._recent_tags,

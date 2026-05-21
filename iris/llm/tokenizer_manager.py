@@ -3,8 +3,10 @@ from __future__ import annotations
 import logging
 import os
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from tokenizers import Tokenizer
+if TYPE_CHECKING:
+    from tokenizers import Tokenizer
 
 logger = logging.getLogger(__name__)
 
@@ -28,25 +30,29 @@ class TokenizerManager:
         self._load(repo_id, local_path, hf_token)
 
     def _load(self, repo_id: str, local_path: str, hf_token: str) -> None:
+        from tokenizers import Tokenizer
+
+        loaded = False
         if local_path:
             p = Path(local_path)
             if p.exists():
                 try:
                     self._tokenizer = Tokenizer.from_file(str(p))
                     logger.info("Tokenizer loaded from local: %s", local_path)
-                    return
+                    loaded = True
                 except Exception as e:
                     logger.warning("Failed to load tokenizer from %s: %s", local_path, e)
             else:
                 logger.warning("Tokenizer local_path not found: %s", local_path)
 
-        if repo_id:
+        if not loaded and repo_id:
             if hf_token:
                 os.environ.setdefault("HF_TOKEN", hf_token)
             try:
-                self._tokenizer = Tokenizer.from_pretrained(repo_id)
-                assert self._tokenizer is not None
-                logger.info("Tokenizer loaded from HF Hub: %s (vocab=%d)", repo_id, self._tokenizer.get_vocab_size())
+                t = Tokenizer.from_pretrained(repo_id)
+                if t is not None:
+                    self._tokenizer = t
+                    logger.info("Tokenizer loaded from HF Hub: %s (vocab=%d)", repo_id, t.get_vocab_size())
             except Exception as e:
                 logger.warning("Failed to load tokenizer from %s: %s", repo_id, e)
 

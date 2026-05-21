@@ -5,9 +5,6 @@ import math
 import threading
 from typing import cast
 
-import chromadb
-from chromadb.utils import embedding_functions as ef
-
 logger = logging.getLogger(__name__)
 
 
@@ -15,6 +12,9 @@ class VectorStore:
     """ChromaDB + BM25 ハイブリッド検索エンジン"""
 
     def __init__(self, path: str = ".iris/data/chroma_db"):
+        import chromadb
+        from chromadb.utils import embedding_functions as ef
+
         self.client = chromadb.PersistentClient(path=path)
         self.dense_ef = cast(chromadb.EmbeddingFunction, ef.ONNXMiniLM_L6_V2())
         self.collection = self.client.get_or_create_collection(

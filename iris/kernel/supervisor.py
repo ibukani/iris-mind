@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 import logging
 import signal
 import sys
@@ -15,10 +16,15 @@ logger = logging.getLogger(__name__)
 class Supervisor:
     """Kernel プロセスのライフサイクルを管理し、管理コンソールを提供する。"""
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, debug: bool = False) -> None:
         self._config = config
+        self._debug = debug
         self._kernel: KernelProcessProtocol | None = None
         self._shutdown_requested = False
+        self._cmd_handler: Callable[[str, str], str] | None = None
+
+    def set_cmd_handler(self, handler: Callable[[str, str], str]) -> None:
+        self._cmd_handler = handler
 
     def run(self) -> None:
         self.start()
@@ -27,8 +33,14 @@ class Supervisor:
     def start(self) -> None:
         from iris.kernel.process import KernelProcess
 
-        self._kernel = KernelProcess(self._config)
-        self._kernel.start()
+        kernel = KernelProcess(self._config, debug=self._debug)
+        self._kernel = kernel
+        kernel.start()
+
+        # Wire up cmd_handler for mgmt-console command routing
+        handler = getattr(kernel, "cmd_handler", None)
+        if handler is not None and hasattr(handler, "handle"):
+            self._cmd_handler = handler.handle  # type: ignore[union-attr]
 
         signal.signal(signal.SIGINT, self._on_signal)
         if sys.platform != "win32":
@@ -79,6 +91,7 @@ class Supervisor:
             if line.startswith("/"):
                 parts = line[1:].strip().split(maxsplit=1)
                 name = parts[0].lower() if parts else ""
+                args = parts[1] if len(parts) > 1 else ""
                 if name == "shutdown":
                     self._cmd_shutdown()
                     break
@@ -86,6 +99,9 @@ class Supervisor:
                     self._cmd_status()
                 elif name == "help":
                     self._cmd_help()
+                elif self._cmd_handler is not None:
+                    result = self._cmd_handler(name, args)
+                    print(result)
                 else:
                     print(f"Unknown command: /{name}")
             else:
@@ -98,7 +114,7 @@ class Supervisor:
         print("  /shutdown           Graceful shutdown")
         print("  exit, quit          Stop supervisor")
         print()
-        print("Full kernel command set is available via Named Pipe.")
+        print("See /help for full kernel command set (debug, memory, emotion, etc.)")
 
     def _cmd_status(self) -> None:
         if self._kernel is None:

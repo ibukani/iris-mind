@@ -67,6 +67,13 @@ quasi_sync:
         tier1_min_fragments: 2
         tier1_question_detect: true
 
+# デバッグ基盤 — トレーサー・診断
+debug:
+    enabled: false
+    trace_max_entries: 500
+    emotion_history_enabled: true
+    personality_history_enabled: true
+
 # ログ出力 — レベル・保存先・ローテーション
 logging:
     backup_count: 14

@@ -21,8 +21,9 @@ class KernelProcessProtocol(Protocol):
 
 
 class KernelProcess:
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, debug: bool = False) -> None:
         self._config = config
+        self._debug = debug
         self._ctx: KernelContext | None = None
         self._timer_thread: threading.Thread | None = None
 
@@ -30,10 +31,14 @@ class KernelProcess:
     def shutdown_requested(self) -> bool:
         return self._ctx is not None and self._ctx.shutdown_requested
 
+    @property
+    def cmd_handler(self) -> object | None:
+        return self._ctx.cmd_handler if self._ctx else None
+
     def start(self) -> None:
         logger.info("KernelProcess: starting")
 
-        self._ctx = KernelFactory.build(self._config)
+        self._ctx = KernelFactory.build(self._config, debug=self._debug)
 
         host = self._config.session.host
         port = self._config.session.port
@@ -51,7 +56,8 @@ class KernelProcess:
             return
 
         ctx.shutdown_requested = True
-        ctx.agency.flush_memory()
+        if ctx.agency is not None:
+            ctx.agency.flush_memory()
         ctx.io.stop()
 
         logger.info("KernelProcess: shutdown complete")

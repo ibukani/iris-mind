@@ -111,6 +111,13 @@ class MonitorFeedback(Event):
     content: str = ""
 
 
+@dataclass
+class DebugSnapshotEvent(Event):
+    category: str = ""
+    data: dict | None = None
+    trigger: str = ""
+
+
 def new_trace_id() -> str:
     return _uuid.uuid4().hex[:12]
 
@@ -119,6 +126,7 @@ __all__ = [
     "AgentAnomalyEvent",
     "AgentStateChangeEvent",
     "ClientSessionEvent",
+    "DebugSnapshotEvent",
     "Event",
     "InputReady",
     "MemoryUpdateEvent",

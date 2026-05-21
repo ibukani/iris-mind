@@ -57,6 +57,13 @@ class KernelManager:
         if old != state:
             logger.info("KernelManager: %s state %s -> %s (global=%s)", layer, old or "NONE", state, self.global_state)
 
+    def get_state(self) -> dict:
+        return {
+            "global_state": self.global_state,
+            "layer_states": dict(self._layer_states),
+            "shutdown_requested": self._shutdown_requested,
+        }
+
     @property
     def shutdown_requested(self) -> bool:
         """シャットダウン要求の状態を返す。

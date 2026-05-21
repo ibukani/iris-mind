@@ -2,11 +2,12 @@
 Iris Kernel Debug CLI — gRPC接続による状態診断・トレース取得
 
 使い方:
-    python -m debug_tools.cli state [<path>] [--history] [--json]
-    python -m debug_tools.cli events [n] [--type=TYPE]
-    python -m debug_tools.cli health
-    python -m debug_tools.cli report
-    python -m debug_tools.cli help
+    python -m debug_tools.cli state [<path>] [--history] [--json] [--spawn]
+    python -m debug_tools.cli events [n] [--type=TYPE] [--spawn]
+    python -m debug_tools.cli health [--spawn]
+    python -m debug_tools.cli report [--spawn]
+
+--spawn: Irisが未起動の場合、自動で起動する（要: python main.py）
 
 環境変数:
     IRIS_HOST        (default: 127.0.0.1)
@@ -19,16 +20,22 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import socket
+import subprocess
 import sys
+import time
 
 import grpc
 
 from iris.io.transport import grpc_service_pb2 as pb2
 from iris.io.transport import grpc_service_pb2_grpc as pb2_grpc
 
+SPAWN_TIMEOUT = 30
+
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="iris-debug", description="Iris Kernel Debug CLI")
+    parser.add_argument("--spawn", action="store_true", help="Auto-start Iris if not running")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_state = sub.add_parser("state", help="Show system state (dot-path supported)")
@@ -62,6 +69,42 @@ def _build_metadata(args: argparse.Namespace) -> list[tuple[str, str]]:
     return meta
 
 
+def _port_open(host: str, port: int) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=1):
+            return True
+    except (TimeoutError, OSError):
+        return False
+
+
+def _spawn_iris(host: str, port: int, timeout: int = SPAWN_TIMEOUT) -> subprocess.Popen | None:
+    """Iris をサブプロセスとして起動し、ポートが開くのを待つ。"""
+    print(f"Iris not running on {host}:{port}. Starting...", file=sys.stderr)
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    main_py = os.path.join(root, "main.py")
+    if not os.path.isfile(main_py):
+        print(f"Error: {main_py} not found", file=sys.stderr)
+        return None
+    proc = subprocess.Popen(
+        [sys.executable, main_py],
+        cwd=root,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+    )
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if _port_open(host, port):
+            print("Iris is ready.", file=sys.stderr)
+            return proc
+        if proc.poll() is not None:
+            print(f"Iris process exited unexpectedly (code={proc.returncode})", file=sys.stderr)
+            return None
+        time.sleep(0.5)
+    print(f"Timeout: Iris did not start within {timeout}s", file=sys.stderr)
+    proc.kill()
+    return None
+
+
 def _run_command(stub: pb2_grpc.IrisServiceStub, command: str, metadata: list, timeout: int = 10) -> str:
     cmd = pb2.CommandInput(  # type: ignore[attr-defined]
         msg_type="command",
@@ -92,12 +135,24 @@ def main() -> None:
     port = int(os.environ.get("IRIS_PORT", "9876"))
     target = f"{host}:{port}"
     metadata = _build_metadata(args)
+    spawned_proc: subprocess.Popen | None = None
+
+    if not _port_open(host, port):
+        if args.spawn:
+            spawned_proc = _spawn_iris(host, port)
+            if spawned_proc is None:
+                sys.exit(1)
+        else:
+            print(f"Error: Cannot connect to {target}\n  Use --spawn to auto-start Iris", file=sys.stderr)
+            sys.exit(1)
 
     channel = grpc.insecure_channel(target)
     try:
-        grpc.channel_ready_future(channel).result(timeout=3)
+        grpc.channel_ready_future(channel).result(timeout=5)
     except Exception:
-        print(f"Error: Cannot connect to {target}", file=sys.stderr)
+        print(f"Error: gRPC connection to {target} failed", file=sys.stderr)
+        if spawned_proc:
+            spawned_proc.kill()
         sys.exit(1)
 
     stub = pb2_grpc.IrisServiceStub(channel)
@@ -109,22 +164,24 @@ def main() -> None:
         if args.json:
             parts.append("--json")
         parts.append(f"--n={args.n}")
-        cmd = "state " + " ".join(parts) if parts else "state"
+        cmd = "debug " + " ".join(parts) if parts else "debug state"
     elif args.command == "events":
-        cmd = f"events --n={args.n}"
+        cmd = f"debug events --n={args.n}"
         if args.type_filter:
             cmd += f" --type={args.type_filter}"
     elif args.command == "health":
-        cmd = "health"
+        cmd = "debug health"
     elif args.command == "report":
-        cmd = "report"
+        cmd = "debug report"
     else:
-        cmd = "help"
+        cmd = "debug help"
 
     try:
         output = _run_command(stub, cmd, metadata)
     except grpc.RpcError as e:
         print(f"gRPC error: {e.code()} {e.details()}", file=sys.stderr)
+        if spawned_proc:
+            spawned_proc.kill()
         sys.exit(1)
 
     if args.json and args.command == "state":

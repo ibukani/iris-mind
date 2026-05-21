@@ -158,13 +158,11 @@ class CommandHandler:
             "  /tools               List registered tools\n"
             "  /llm                Show LLM config\n"
             "  /personality        Show Big Five personality scores\n"
-            "  /state [<path>]     Show system state (dot-path, e.g. limbic.emotion)\n"
-            "  /state <path> --history  Show state history\n"
-            "  /state <path> --json     JSON format\n"
-            "  /events [n]         Show recent events\n"
-            "  /health             Health check all components\n"
-            "  /report             Generate debug report (markdown)\n"
-            "  /debug [on|off|...] Debug prompt/response capture"
+            "  /state [<path>]     System state (alias: /debug state)\n"
+            "  /events [n]         Recent events (alias: /debug events)\n"
+            "  /health             Health check (alias: /debug health)\n"
+            "  /report             Debug report (alias: /debug report)\n"
+            "  /debug              Debug subsystem (/debug help for subcommands)"
         )
 
     def _status(self) -> str:
@@ -360,21 +358,35 @@ class CommandHandler:
         return diag.generate_report()
 
     def _debug(self, args: str) -> str:
-        dc = self._debug_capture
-        if dc is None:
-            return "DebugCapture not available"
         parts = args.strip().split(maxsplit=1)
         sub = parts[0].lower() if parts else ""
 
-        if sub == "on":
-            dc.set_enabled(True)
-            return "Debug capture enabled"
-        if sub == "off":
+        if sub in ("state",):
+            return self._state_cmd(parts[1] if len(parts) > 1 else "")
+        if sub == "events":
+            return self._events_cmd(parts[1] if len(parts) > 1 else "")
+        if sub == "health":
+            return self._health_cmd()
+        if sub == "report":
+            return self._report_cmd()
+
+        dc = self._debug_capture
+        if sub in ("on", "off"):
+            if dc is None:
+                return "DebugCapture not available"
+            if sub == "on":
+                dc.set_enabled(True)
+                return "Debug capture enabled"
             dc.set_enabled(False)
             return "Debug capture disabled"
 
+        if sub == "help" or not sub:
+            return self._debug_help()
+
+        if dc is None:
+            return "DebugCapture not available. Available: state, events, health, report"
         if not dc.enabled:
-            return "Debug capture is disabled (use /debug on first)"
+            return "Debug capture is disabled (use /debug on first). Available: state, events, health, report"
 
         if sub == "list":
             return dc.list_captures()
@@ -396,14 +408,16 @@ class CommandHandler:
                 return f"Wrote {len(written)} file(s):\n" + "\n".join(str(p) for p in written)
             return "No captures to dump"
 
+        return self._debug_help()
+
+    def _debug_help(self) -> str:
         return (
-            "Usage:\n"
-            "  /debug on              Enable capture\n"
-            "  /debug off             Disable capture\n"
-            "  /debug list            List captured entries\n"
-            "  /debug last            Show most recent capture(s)\n"
-            "  /debug show <id>       Show specific capture\n"
-            "  /debug dump            Write all captures to logs/debug/"
+            "Debug subcommands:\n"
+            "  state [<path>] [--history] [--json]   System state query\n"
+            "  events [n] [--type=TYPE]              Recent events\n"
+            "  health                                 Health check\n"
+            "  report                                 Generate Markdown report\n"
+            "  capture on|off|list|last|show|dump     LLM prompt/response capture"
         )
 
     def _emotion(self) -> str:

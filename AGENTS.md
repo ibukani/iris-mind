@@ -73,7 +73,6 @@ iris/                             ← アプリケーションコア
 │       ├── inhibition.py         ← InhibitionController（基底核抑制）
 │       ├── monitor.py            ← OutputMonitor
 │       ├── tool_executor.py      ← ToolExecutionEngine
-│       └── interrupt_token.py    ← InterruptToken
 ├── llm/                          ← LLM基盤 + ContextWindow管理
 │   ├── llm_bridge.py             ← LLMBridge（マルチプロバイダルーター）
 │   ├── provider.py               ← LLMProvider / ProviderFactory Protocol
@@ -82,7 +81,8 @@ iris/                             ← アプリケーションコア
 │   ├── capability_checker.py
 │   ├── tokenizer_manager.py      ← TokenizerManager（tokenizersラッパー）
 │   ├── context_window.py         ← LLMContextWindowManager（会話履歴圧縮）
-│   └── prompt_builder.py         ← システムプロンプト構築（テンプレートエンジン）
+│   ├── prompt_builder.py         ← システムプロンプト構築（テンプレートエンジン）
+│   └── interrupt_token.py        ← InterruptToken（LLM生成の中断制御）
 └── tools/                        ← @tool, ToolRegistry, ビルトイン実装
 
 docs/                             ← 設計ドキュメント

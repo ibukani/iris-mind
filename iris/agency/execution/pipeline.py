@@ -5,12 +5,12 @@ import datetime
 import logging
 from typing import Any
 
-from iris.agency.execution.interrupt_token import InterruptToken
 from iris.agency.execution.tool_executor import ToolExecutionEngine
 from iris.kernel.config import ModelConfig
 from iris.kernel.debug_capture import CaptureEntry, DebugCapture
 from iris.limbic.manager import LimbicManager
 from iris.llm.capability_checker import CapabilityChecker
+from iris.llm.interrupt_token import InterruptToken
 from iris.llm.llm_bridge import LLMBridge
 from iris.llm.prompt_builder import Personality
 from iris.memory.long_term.stores import AgentsMdStore

@@ -196,7 +196,6 @@ iris/
 │       ├── inhibition.py      InhibitionController（基底核抑制, GateVerdict）
 │       ├── monitor.py         OutputMonitor（発話頻度監視）
 │       ├── tool_executor.py   ToolExecutionEngine
-│       └── interrupt_token.py InterruptToken
 │
 ├── llm/                       # LLM 基盤
 │   ├── __init__.py
@@ -208,7 +207,8 @@ iris/
 │   ├── capability_checker.py
 │   ├── tokenizer_manager.py   TokenizerManager（tokenizersラッパー）
 │   ├── context_window.py      LLMContextWindowManager（会話履歴圧縮）
-│   └── prompt_builder.py      Personality（システムプロンプト構築）
+│   ├── prompt_builder.py      Personality（システムプロンプト構築）
+│   └── interrupt_token.py     InterruptToken（LLM生成の中断制御）
 │
 └── tools/                     # @tool, ToolRegistry, ビルトイン
     ├── __init__.py

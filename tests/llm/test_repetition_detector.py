@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from iris.agency.execution.interrupt_token import InterruptToken
 from iris.kernel.config import ModelConfig
+from iris.llm.interrupt_token import InterruptToken
 from iris.llm.llm_bridge import LLMBridge
 
 

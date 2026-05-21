@@ -5,209 +5,175 @@
 
 # Iris プロジェクトルール（コーディングエージェント向け）
 
-## プロジェクト概要
-Iris は自律的に行動・進化できるAIアシスタント。Python製でOllamaまたはOpenRouter上で動作する。モデル構成は柔軟で、1モデルのシングルモード（全処理に同一モデルを使用）と、複数モデルのマルチモード（roleベースの使い分け）を設定可能。
+## 0. エージェント行動原則
 
-## 重要な用語の区別
-- **Iris** → このプロジェクトで製作中のAI（作る対象）
-- **コーディングエージェント** → プロジェクトを支援するAI（あなた = 現在の会話相手）
+- **推論と実行の分離**: 考察は内部思考で完結。応答は行動（ツール呼び出し）か簡潔な結果のみ
+- **並列調査優先**: 関連ファイルは複数同時に読む。逐次読みは非推奨
+- **段階的検証**: 1ファイル編集後は即座にテスト・lint実行を推奨。大量変更後の一括検証は避ける
+- **コンテキスト予算**: 1ターンのファイル読みは最大5個まで。各行2000文字を超える場合はgrepで絞り込む
+- **最小変更**: 要件を満たす最小の差分。リファクタは別タスク
 
-## ディレクトリ構成
+## 1. プロジェクト概要
 
-```
-.iris/
-├── config/
-│   └── personality_default.md   ← 静的テンプレート（git追跡）
-└── data/
-    ├── iris_profile.md           ← Irisの自己プロフィール（人格テンプレート、上限2KB固定）
-    ├── episodes.jsonl            ← エピソード記憶
-    ├── semantic.jsonl            ← 意味記憶
-    ├── persona_data.json         ← 話し方・性格（動的管理）
-    └── chroma_db/                ← ChromaDBベクトルストア
+Iris = Python製の自律AIアシスタントKernel。Ollama/OpenRouter上で動作。神経科学ベースの層アーキテクチャ。
 
-debug_tools/                      ← デバッグ用ツール
-├── __init__.py
-├── cli.py                        ← gRPC経由のデバッグCLI
-└── tcp_input/                    ← TCP Input アダプター（未実装）
+- **シングルモード**: modelsが1つ。全処理で同一モデル
+- **マルチモード**: modelsが2つ以上。`get_model(role)` で選択。未知roleは`models[0]`フォールバック
+- 設定は `config.yaml`。`model.provider` でプロバイダ切替
 
-iris/                             ← アプリケーションコア
-├── kernel/                       ← 脳幹: プロセス管理 + DI + コマンド処理
-│   ├── manager.py                ← KernelManager（全体状態集約）
-│   ├── process.py                ← KernelProcess（起動・停止, TimerTick発行）
-│   ├── supervisor.py             ← Supervisor（シグナル管理）
-│   ├── factory.py                ← DIコンテナ（全層構築）
-│   └── commands/                 ← CommandHandler（/shutdown 等）
-├── io/                           ← 視床: 入出力中継
-│   ├── manager.py                ← IOManager
-│   ├── models.py                 ← Message, CommandInput, CommandOutput, Permission, Direction
-│   ├── transport/                ← GrpcListener
-│   ├── session/                  ← SessionManager
-│   └── auth/                     ← Authenticator
-├── event/                        ← 神経路: Global EventBus
-│   ├── bus.py                    ← EventBus（kernel から分離）
-│   └── event_types.py            ← イベント型定義
-├── limbic/                       ← 大脳辺縁系: 感情処理 (NEW)
-│   ├── manager.py                ← LimbicManager（感情状態管理, EventBus連携）
-│   ├── models.py                 ← EmotionState（PAD 3次元モデル）
-│   ├── amygdala.py               ← 扁桃体（感情評価・価値判断）
-│   ├── acc.py                    ← 前帯状皮質（感情制御・葛藤調整）
-│   └── emotional_memory.py       ← 扁桃体-海馬相互作用（感情タグ付け）
-├── memory/                       ← 記憶系: 感覚野+海馬+皮質（3層構造）
-│   ├── manager.py                ← MemoryManager（ディスパッチャ+イベント処理）
-│   ├── sensory/                  ← SensoryMemoryManager（断片+生入力 2系統）
-│   ├── short_term/               ← ShortTermMemoryManager（ワーキングメモリ）
-│   ├── long_term/                ← LongTermMemoryManager + stores + VectorStore
-│   ├── hippocampal/              ← Reflexion + HippocampalManager
-│   └── personality/              ← 人格: 性格特性・話し方（記憶から形成）
-│       └── big_five.py           ← BigFiveProfile + 性格進化
-├── agency/                       ← 高度認知: PFC+基底核+運動野
-│   ├── manager.py                ← AgencyManager（compact_context中継）
-│   ├── bus.py                    ← 内部 EventBus（planning→execution）
-│   ├── planning/                 ← 前頭前野: 意思決定 + PFCスコアリング
-│   │   ├── manager.py            ← PlanningManager
-│   │   └── scoring.py            ← ProactiveScoring
-│   └── execution/                ← 基底核+運動野: 行動実行 + 抑制制御
-│       ├── manager.py            ← ExecutionManager（action分岐なし）
-│       ├── pipeline.py           ← LLMPipeline（LLM+ツールループ）
-│       ├── inhibition.py         ← InhibitionController（基底核抑制）
-│       ├── monitor.py            ← OutputMonitor
-│       ├── tool_executor.py      ← ToolExecutionEngine
-│       └── interrupt_token.py    ← InterruptToken
-├── llm/                          ← LLM基盤 + ContextWindow管理
-│   ├── llm_bridge.py             ← LLMBridge（マルチプロバイダルーター）
-│   ├── provider.py               ← LLMProvider / ProviderFactory Protocol
-│   ├── ollama_provider.py        ← Ollamaプロバイダ
-│   ├── openrouter_provider.py    ← OpenRouterプロバイダ
-│   ├── capability_checker.py
-│   ├── tokenizer_manager.py      ← TokenizerManager（tokenizersラッパー）
-│   └── context_window.py         ← LLMContextWindowManager（会話履歴圧縮）
-└── tools/                        ← @tool, ToolRegistry, ビルトイン実装
+## 2. 用語区別
 
-docs/                             ← 設計ドキュメント
-├── adr/                          ← Architecture Decision Records
-.agents/                          ← コーディングエージェント用導線・Skills
-config.yaml                       ← Irisの設定ファイル
-main.py                           ← エントリーポイント
+- **Iris** → 製作対象のAI
+- **コーディングエージェント** → あなた（現在の会話相手）
+
+## 3. 標準開発ワークフロー
+
+```text
+1. 要件確認（不明点があれば即座に質問）
+2. 影響範囲調査（glob + grepで関連ファイルを特定）
+3. テスト・既存実装の読込（並列で実行）
+4. 実装（1論理変更 = 1ファイル編集単位を推奨）
+5. 検証（pytest → ruff → mypy の順）
+6. ドキュメント同期（`doc-sync` skillで確認）
+7. gitコミット（日本語メッセージ、コード+docs同時）
 ```
 
-## コンポーネント間依存関係（神経科学ベース層分割）
+## 4. コード規約
 
+### 型ヒント（Python 3.13+）
+- `from __future__ import annotations` を各ファイル先頭に配置
+- `Optional[X]` → `X | None`
+- `List[X]`, `Dict[K,V]` → `list[X]`, `dict[K,V]`
+- `Union[X,Y]` → `X | Y`
+- 戻り値のない関数は `-> None` を明示
+
+### インポート順
+1. `from __future__ import annotations`
+2. stdlib
+3. 3rd party
+4. `iris.`（絶対インポート優先、相対は同層内のみ可）
+
+### 命名
+- 関数・変数: `snake_case`
+- クラス: `PascalCase`
+- 定数: `UPPER_SNAKE_CASE`
+- プライベート: `_leading_underscore`
+
+### エラー処理
+- ベア `except:` は禁止。`except Exception:` も最小限
+- 捕捉する例外は可能な限り具象クラスを指定
+- リソースは `with` 文で管理
+
+### その他
+- docstringは既存ファイルのスタイルに従う（ファイル内での統一を優先）
+- コメントは「なぜ」ではなく「意図が不明瞭な箇所」のみ
+- f-string優先。`%` フォーマット禁止
+
+## 5. アーキテクチャ要約
+
+### 層構造（脳科学対応）
+
+| 層 | 責務 |
+|---|---|
+| `kernel/` | プロセス管理、DI、Command |
+| `io/` | 入出力中継（TCP、セッション） |
+| `event/` | グローバルEventBus（全層間通信） |
+| `limbic/` | 感情評価・状態管理・制御 |
+| `memory/` | 感覚→短期→長期記憶、人格 |
+| `agency/` | 意思決定（planning）と実行（execution） |
+| `llm/` | LLMプロバイダ、ContextWindow管理 |
+| `tools/` | @toolデコレータ、ビルトイン実装 |
+
+### 依存ルール
+- 全層は `event/` を介して疎結合。直接依存禁止
+- `kernel/factory.py` のみ全層のインスタンス生成を行う
+- `debug_tools/` → `iris/` のみ。逆方向は物理禁止
+- `limbic/` → `memory/`（感情タグ）、`limbic/` → `agency/`（感情変調）のインターフェースあり
+
+詳細は `docs/architecture.md` と `docs/adr/` を参照。
+
+## 6. 記憶体系
+
+| 種別 | 永続化 | 上限 | 備考 |
+|---|---|---|---|
+| 自己プロフィール | `.iris/data/iris_profile.md` | 2KB | テンプレート、`{name}`プレースホルダ可 |
+| エピソード記憶 | `episodes.jsonl` | 30エントリ | 古いものをマージ圧縮 |
+| 意味記憶 | `semantic.jsonl` + ChromaDB | 100エントリ | BM25ハイブリッド検索 |
+| ベクトル | `chroma_db/` | - | ONNX MiniLM、統合スコア=vector*0.6+bm25*0.4 |
+
+## 7. ツールチェーン
+
+実行順序の推奨:
+
+```powershell
+# 1. テスト（最優先）
+pytest tests/ -q
+
+# 2. lint + auto-fix
+ruff check --fix .
+
+# 3. format確認
+ruff format --check .
+
+# 4. type check（mypy or pyright）
+mypy .
+# または
+npx pyright .
 ```
-debug_tools/       ──→ iris/ (全層)
-(デバッグ用)
 
-iris/event/ (神経路: グローバルEventBus)
-    ↑ subscribe / publish（全層が利用）
-    │
-iris/kernel/  ──→ EventBus
-iris/io/      ──→ EventBus     (io/transport/ → TCP)
-iris/limbic/  ──→ EventBus     (感情評価, 記憶タグ)
-iris/memory/  ──→ EventBus
-iris/agency/  ──→ EventBus     (agency/bus/ → 内部通信)
-iris/llm/     ──→ EventBus     (LLM provider ファサード)
-```
-- 全層は EventBus を介して疎結合。直接の依存を持たない
-- Factory (kernel/factory.py) のみ全層のインスタンス生成を行う
-- LimbicManager は以下のインターフェースで他層と統合:
-  - `build_mood_description()` → LLMPipeline（システムプロンプト注入）
-  - `apply_limbic_modulation(emotion)` → InhibitionController（感情による抑制変調）
-  - `current_emotion()` → ProactiveScoring（自発発話スコアリング）
-- `debug_tools/` は `iris/` に依存してよいが、逆方向は物理禁止
+※ 設定は `pyproject.toml` に集約
+※ テストはFake実装。LLM実通信なし。ChromaDB/ONNXは初回DL
 
-## v2 アーキテクチャ（神経科学ベース）
+## 8. Capability追加ルール
 
-脳科学・神経科学の構造を参考にした層分割。詳細は `docs/architecture.md` を参照。
-
-| 層 | 脳科学対応 | 責務 |
-|----|-----------|------|
-| `kernel/` | 脳幹+視床下部 | プロセス管理、状態集約、Command、DI |
-| `io/` | 視床 | 入出力中継（TCP、セッション、認証） |
-| `event/` | 神経路 | グローバル EventBus（全層間通信） |
-| `limbic/` | 大脳辺縁系 | 感情評価、感情状態管理、感情制御、感情タグ付け |
-| `memory/` | 感覚野+海馬+皮質 | 感覚バッファ、エピソード/意味記憶、Reflexion、圧縮、人格 |
-| `agency/` | PFC+基底核+運動野 | 意思決定（planning）と行動実行（execution） |
-
-## Iris の記憶体系
-- `.iris/data/iris_profile.md`: Irisの自己プロフィール（人格テンプレート、上限2KB固定）※`{name}` プレースホルダ可。話し方・性格は別JSONで動的管理
-- EpisodicStore: JSONLベースの作業記憶（上限30エントリ、古いものをマージ圧縮）
-- SemanticStore: JSONL永続化 + ChromaDB + BM25 ハイブリッド検索（上限100エントリ）
-- VectorStore: ONNXMiniLM_L6_V2 埋め込み、cosine類似度、統合スコア = vector*0.6 + bm25*0.4
-
-## capability の追加ルール
 1. `iris/tools/builtins/<name>/server.py` に配置
-2. `@tool()` デコレータでツール定義（型ヒント→JSON Schema 自動生成）
-3. `register(registry)` 関数で `registry.register_decorated(fn)` をエクスポート（`discover_modules()` 用）
-4. `allowed_roles` パラメータで利用可能なモデルロールを制限（デフォルトは全てのロールで利用可）
-6. `side_effect=True` で作用系ツール（結果を会話に戻さず短絡）
-7. 新しいcapabilityを追加したら `.iris/data/iris_profile.md` の該当セクションも更新する
-8. テンプレート化されたワークフローは `.agents/skills/capability-pattern/SKILL.md` を参照（`skill` ツールでロード可能）
+2. `@tool()` デコレータで定義（型ヒント→JSON Schema自動生成）
+3. `register(registry)` で `registry.register_decorated(fn)` をエクスポート
+4. `allowed_roles` でモデルロール制限（デフォルト全ロール可）
+5. `side_effect=True` で作用系ツール（結果を会話に戻さない）
+6. 追加後は `.iris/data/iris_profile.md` の該当セクションを更新
+7. テンプレート: `.agents/skills/capability-pattern/SKILL.md`
 
-## ドキュメント更新
-機能変更時のドキュメント更新手順は `.agents/skills/doc-sync/SKILL.md` を参照（`skill` ツールでロード可能）
-- 設計ドキュメント (`docs/*.md`)
-- Architecture Decision Records (`docs/adr/*.md`)
+## 9. ドキュメント更新
+
+機能変更時は以下を確認:
+
+- 設計文書 (`docs/*.md`)
+- ADR (`docs/adr/*.md`)
 - 自己プロフィール (`.iris/data/iris_profile.md`)
-- プロジェクトルール (`AGENTS.md`)
-- エージェント導線 (`.agents/README.md`, `.agents/project.md`)
+- `AGENTS.md`, `.agents/README.md`, `.agents/project.md`
 - Skills (`.agents/skills/*/SKILL.md`)
 
-## コーディングエージェントのコンテキスト運用
-- 常時読む情報はこの `AGENTS.md` と `.agents/README.md` を基本とする
-- `.agents/project.md` は責務境界やプロジェクト概要が必要な場合だけ読む
-- `.agents/skills/*/SKILL.md` は該当ワークフローを実行する場合だけ読む
-- 詳細設計は `docs/` の関連ファイルを必要範囲だけ参照し、`.agents/` に重複要約しない
-- 完了済みタスク、ブランチ状態、過去ログは Git / Issue / PR を一次情報とし、常設コンテキストに含めない
+詳細: `.agents/skills/doc-sync/SKILL.md`
 
-## コーディング規約
-- 変更差分はユーザーに提示→承認を得てから適用
-- lint/typecheck は必須
-- 既存のコードスタイル・パターンに従う（インポート順、型ヒント、docstring等）
-- 新機能追加時は既存のcapabilityパターンを参考にする
-- Python 3.13+ の型ヒントを積極的に使用
-- コメントは最小限に
+## 10. コンテキスト運用
 
-## lint / typecheck コマンド
-```powershell
-ruff check .                          # lint
-ruff format --check .                 # format check
-ruff check --fix .                    # lint + auto-fix
-mypy .                                # type check (mypy)
-mypy --install-types                  # 型スタブ初回インストール
-npx pyright .                         # type check (pyright)
-pytest tests/                         # 全テスト実行（252 tests, ~9秒）
-pytest tests/kernel/ -q              # kernelテストのみ
-pytest tests/memory/ -q              # memoryテストのみ
-```
-※ ruff / mypy / pytest の設定は `pyproject.toml` に集約済み
-※ テストはFake実装ベースでLLM実通信なし。ChromaDB/ONNXは初回DLあり
+- 常時読む: `AGENTS.md` + `.agents/README.md`
+- 責務境界確認時: `.agents/project.md`
+- ワークフロー実行時: `.agents/skills/*/SKILL.md`
+- 設計判断時: `docs/` の該当ファイルのみ
+- Git履歴・テスト結果・過去ログは必要範囲だけ取得。`.agents/` への複製禁止
 
-## モデル構成
-- 設定されたモデル数によって動作モードが自動判定される
-- **シングルモード**（`models` が1つ）: 全処理にその1モデルを使用
-- **マルチモード**（`models` が2つ以上）: `get_model(role)` で role ベースのモデル選択
-  - 未知の role が指定された場合は `models[0]` にフォールバック
-- `config.yaml` の `model.provider` で Ollama / OpenRouter を切り替え可能
-- 会話履歴は `context_window`（トークン数）を超えた場合、`compaction_threshold` に基づき自動要約（LLMContextWindowManager → `iris/llm/context_window.py`）
-- 要約は `## Session Summary` としてシステムプロンプトに注入。`/compact` コマンドで手動トリガー可能
-- 要約時のモデルは `ModelConfig.get_model("default")` を使用（単一モデルも複数モデルも同じインターフェース）
+## 11. Gitルール
 
+- 1タスク完了ごとにコミット
+- メッセージは日本語で変更内容が一目でわかるように
+  - 例: `feat: ファイル検索capabilityを追加`
+  - 例: `fix: ReflexionのJSONパースエラーを修正`
+- コード変更とドキュメント更新は同一コミットに含める
 
-## git コミットルール
-- 1タスク完了ごとに必ずgitコミットを行う
-- コミットメッセージは日本語で、変更内容が一目でわかるように書く
-  - 良い例: 「feat: ファイル検索capabilityを追加」「fix: ReflexionのJSONパースエラーを修正」「docs: アーキテクチャ図を最新化」
-- コード変更とドキュメント更新は同一コミットに含める（不整合防止）
+## 12. デバッグ基盤
 
-## デバッグ基盤
-- **DebugSnapshotEvent**: `category` + `data` で全状態変化を表現する1種類のイベント
-- **EventTracer**: EventBus に結合したリングバッファ（デフォルト500件）。`category` インデックス付き
-- **SystemDiagnostics**: `get_state()` 命名規約による自動発見 + パスベース階層クエリ
-- **debug_tools/cli.py**: gRPC経由で外部AIエージェント（Codex等）がデバッグ操作可能
-- **詳細**: `.agents/skills/iris-debug/SKILL.md`
-- 新しい状態値を追加する場合 → `get_state()` + `DebugSnapshotEvent publish` のみ。コマンド変更不要
+- **DebugSnapshotEvent**: `category` + `data` で状態変化を表現
+- **EventTracer**: EventBus上のリングバッファ（500件）。categoryインデックス付き
+- **SystemDiagnostics**: `get_state()` 命名規約による自動発見
+- 新状態追加 → `get_state()` + `DebugSnapshotEvent publish` のみ
 
-## 技術スタック
+詳細: `.agents/skills/iris-debug/SKILL.md`
+
+## 13. 技術スタック
+
 - Python 3.13+, ollama, httpx, pydantic, pyyaml, rich, prompt_toolkit
-- ChromaDB + ONNX（ベクトル検索）
+- ChromaDB + ONNX
 - OS: Windows 11, GPU: RTX 4070 SUPER (12GB VRAM)
-- 使用モデル: Qwen3.5:9b（デフォルト、Ollama/OpenRouter経由）
+- デフォルトモデル: Qwen3.5:9b

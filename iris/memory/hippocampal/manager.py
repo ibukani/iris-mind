@@ -2,23 +2,36 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import TYPE_CHECKING
-
-from iris.memory.hippocampal.reflexion import Reflexion
-from iris.memory.manager import MemoryManager
-from iris.memory.personality.persona_profile import PersonaProfile
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
+    from iris.memory.manager import MemoryManagerProtocol
     from iris.memory.personality.big_five import BigFiveProfile
+    from iris.memory.personality.persona_profile import PersonaProfile
+
+from iris.memory.hippocampal.reflexion import ReflexionProtocol
 
 logger = logging.getLogger(__name__)
+
+
+class HippocampalManagerProtocol(Protocol):
+    """海馬マネージャーのインターフェース。
+
+    なぜこの設計にしたか:
+    短期記憶から長期記憶への定着（コンソリデーション）および省察処理をモック化または
+    別のアプローチで差し替え可能にし、テスト容易性と柔軟性を向上させるため。
+    """
+
+    def maybe_run(self, messages: list[dict], msg_count_since_reflect: int) -> int: ...
+    def force_run(self, messages: list[dict]) -> None: ...
+    def run_session(self, messages: list[dict], memory: MemoryManagerProtocol | None = None) -> None: ...
 
 
 class HippocampalManager:
     def __init__(
         self,
-        reflexion: Reflexion | None = None,
-        memory: MemoryManager | None = None,
+        reflexion: ReflexionProtocol | None = None,
+        memory: MemoryManagerProtocol | None = None,
         persona_profile: PersonaProfile | None = None,
         big_five: BigFiveProfile | None = None,
         reflect_interval: int = 3,
@@ -51,38 +64,36 @@ class HippocampalManager:
         try:
             result = self._reflexion.quick_reflect(messages)
 
-            if result.get("speech_style") and self._memory:
-                self._memory.add_semantic_by_type(
-                    entry_type="trait",
-                    content=f"Irisの話し方: {result['speech_style']}",
-                    tags=["speech_style"],
-                )
-            if result.get("expressed_traits") and self._memory:
-                self._memory.add_semantic_by_type(
-                    entry_type="trait",
-                    content=f"Irisの性格特性: {result['expressed_traits']}",
-                    tags=["personality_trait"],
-                )
-            if result.get("user_reaction") and self._memory:
-                self._memory.add_semantic_by_type(
-                    entry_type="preference",
-                    content=f"ユーザーの反応傾向: {result['user_reaction']}",
-                    tags=["user_reaction"],
-                )
+            if self._memory:
+                if result.get("speech_style"):
+                    self._memory.add_semantic_by_type(
+                        entry_type="trait",
+                        content=f"Iris’s speech style: {result['speech_style']}",
+                        tags=["speech_style"],
+                    )
+                if result.get("expressed_traits"):
+                    self._memory.add_semantic_by_type(
+                        entry_type="trait",
+                        content=f"Iris’s personality traits: {result['expressed_traits']}",
+                        tags=["personality_trait"],
+                    )
+                if result.get("user_reaction"):
+                    self._memory.add_semantic_by_type(
+                        entry_type="preference",
+                        content=f"User reaction tendency: {result['user_reaction']}",
+                        tags=["user_reaction"],
+                    )
+
             if self._persona_profile is not None:
                 self._persona_profile.update_from_reflection(result)
 
             if self._big_five is not None:
                 bf_raw = result.get("big_five_estimate")
-                if bf_raw:
-                    try:
-                        estimate = bf_raw if isinstance(bf_raw, dict) else json.loads(bf_raw)
-                        if isinstance(estimate, dict):
-                            changes = self._big_five.update_from_estimate(estimate)
-                            if changes:
-                                logger.info("Big Five updated: %s", changes)
-                    except (json.JSONDecodeError, TypeError):
-                        logger.debug("Could not parse big_five_estimate: %s", bf_raw)
+                estimate = self._parse_big_five_estimate(bf_raw)
+                if estimate:
+                    changes = self._big_five.update_from_estimate(estimate)
+                    if changes:
+                        logger.info("Big Five updated: %s", changes)
 
             self._consolidate_short_term(force=force)
 
@@ -94,6 +105,19 @@ class HippocampalManager:
             )
         except Exception as e:
             logger.exception("Quick reflect failed: %s", e)
+
+    def _parse_big_five_estimate(self, bf_raw: Any) -> dict[str, float] | None:
+        if not bf_raw:
+            return None
+        if isinstance(bf_raw, dict):
+            return bf_raw  # type: ignore[no-any-return]
+        try:
+            estimate = json.loads(bf_raw)
+            if isinstance(estimate, dict):
+                return estimate  # type: ignore[no-any-return]
+        except (json.JSONDecodeError, TypeError):
+            logger.debug("Could not parse big_five_estimate: %s", bf_raw)
+        return None
 
     def _consolidate_short_term(self, force: bool = False) -> None:
         if self._memory is None:
@@ -117,32 +141,34 @@ class HippocampalManager:
         self._memory.short_term.mark_consolidated()
         logger.info("Hippocampal: consolidated %d turns, %d topics", len(unconsolidated), len(topics))
 
-    def run_session(self, messages: list[dict], memory: MemoryManager | None = None) -> None:
+    def run_session(self, messages: list[dict], memory: MemoryManagerProtocol | None = None) -> None:
         if self._reflexion is None:
             return
         if len(messages) < 2:
             return
 
         mem = memory or self._memory
+        if not mem:
+            return
+
         try:
             result = self._reflexion.reflect(messages)
-            if result.get("summary") and mem:
+            if result.get("summary"):
                 mem.add_episodic(
                     content=f"[session summary] {result['summary']}",
                     kind="system",
                 )
-            if mem:
-                for key, entry_type in [
-                    ("lesson", "lesson"),
-                    ("preference", "preference"),
-                    ("improvement", "lesson"),
-                ]:
-                    val = result.get(key, "")
-                    if val:
-                        mem.add_semantic_by_type(
-                            entry_type=entry_type,
-                            content=val,
-                        )
+            for key, entry_type in [
+                ("lesson", "lesson"),
+                ("preference", "preference"),
+                ("improvement", "lesson"),
+            ]:
+                val = result.get(key, "")
+                if val:
+                    mem.add_semantic_by_type(
+                        entry_type=entry_type,
+                        content=val,
+                    )
             logger.info("Session reflect completed")
         except Exception as e:
             logger.exception("Session reflect failed: %s", e)

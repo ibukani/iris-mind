@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import datetime
 import logging
 from typing import TYPE_CHECKING
 
@@ -15,6 +16,7 @@ from iris.memory.personality.persona_profile import PersonaProfile
 from iris.memory.personality.personality import Personality
 
 if TYPE_CHECKING:
+    from iris.kernel.debug_capture import DebugCapture
     from iris.limbic.manager import LimbicManager
 
 logger = logging.getLogger(__name__)
@@ -41,6 +43,7 @@ class LLMPipeline:
         tool_executor: ToolExecutionEngine | None = None,
         capability_checker: CapabilityChecker | None = None,
         governance_principles: str = "",
+        debug_capture: DebugCapture | None = None,
     ) -> None:
         self._llm = llm
         self._model_config = model_config
@@ -52,6 +55,7 @@ class LLMPipeline:
         self._tool_executor = tool_executor
         self._capability_checker = capability_checker
         self._governance_principles = governance_principles
+        self._debug_capture = debug_capture
         self._session_roles_summary: str = ""
         self._max_tool_iterations: int = 3
         self._sysprompt_cache: str | None = None
@@ -83,8 +87,6 @@ class LLMPipeline:
 
         if dynamic_personality:
             prompt += f"\n\n{dynamic_personality}"
-
-        import datetime
 
         dt_now = datetime.datetime.now()
         weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
@@ -122,6 +124,8 @@ class LLMPipeline:
     ) -> dict:
         self._sysprompt_cache = None
         system_prompt = self._build_system_prompt(context_hint=context_hint)
+        self._last_system_prompt = system_prompt
+        self._last_call_model_role = model_role
         msgs: list[dict] = [{"role": "system", "content": system_prompt}, *messages]
 
         return self._llm.chat(
@@ -189,6 +193,7 @@ class LLMPipeline:
             msgs.append({"role": "user", "content": content})
         else:
             msgs.append({"role": "user", "content": "..."})
+        text = ""
         try:
             resp = self._llm.chat(
                 messages=msgs,
@@ -197,11 +202,39 @@ class LLMPipeline:
                 temperature=temperature,
             )
             text = str((resp.get("message", {}) or {}).get("content", "")).strip()
-            if text:
-                return text
         except Exception as e:
             logger.debug("Short generation failed: %s", e)
-        return "お疲れさまです！何かお手伝いしましょうか？"
+
+        if not text:
+            text = "お疲れさまです！何かお手伝いしましょうか？"
+
+        dc = self._debug_capture
+        if dc and dc.enabled:
+            model_name = self._model_config.get_model(model_role)
+            history_msgs = [m for m in msgs if m.get("role") != "system"]
+            tc = {
+                "system": dc.count_tokens(system_prompt),
+                "history": dc.count_tokens(" ".join(m.get("content", "") or "" for m in history_msgs)),
+                "tools": 0,
+                "response": dc.count_tokens(text),
+            }
+            tc["total"] = sum(tc.values())
+            from iris.kernel.debug_capture import CaptureEntry
+
+            dc.capture(
+                CaptureEntry(
+                    id=0,
+                    timestamp=datetime.datetime.now(),
+                    model_name=model_name,
+                    system_prompt=system_prompt,
+                    messages=history_msgs,
+                    tools=None,
+                    response=text,
+                    token_counts=tc,
+                )
+            )
+
+        return text
 
     def _generate_with_tools(
         self,
@@ -218,6 +251,8 @@ class LLMPipeline:
 
         iteration = 0
         final_text = ""
+        tool_iters: list[dict] = []
+        dc = self._debug_capture
 
         while iteration < self._max_tool_iterations:
             if interrupt_token and interrupt_token.is_cancelled:
@@ -239,6 +274,8 @@ class LLMPipeline:
             if msg.get("tool_calls") and self._tool_executor is not None:
                 messages.append(msg)
                 results = self._tool_executor.execute_all(messages)
+                if dc and dc.enabled:
+                    tool_iters.append({"tool_calls": msg["tool_calls"], "results": results})
 
                 if self._tool_executor.all_side_effects(results):
                     break
@@ -251,5 +288,32 @@ class LLMPipeline:
             final_text = msg.get("content", "")
             if final_text:
                 break
+
+        if dc and dc.enabled:
+            sys_prompt = getattr(self, "_last_system_prompt", "")
+            model_name = self._model_config.get_model(model_role)
+            history_msgs = [m for m in messages if m.get("role") != "system"]
+            tc = {
+                "system": dc.count_tokens(sys_prompt),
+                "history": dc.count_tokens(" ".join(m.get("content", "") or "" for m in history_msgs)),
+                "tools": dc.count_tokens(str(tools)) if tools else 0,
+                "response": dc.count_tokens(final_text),
+            }
+            tc["total"] = sum(tc.values())
+            from iris.kernel.debug_capture import CaptureEntry
+
+            dc.capture(
+                CaptureEntry(
+                    id=0,
+                    timestamp=datetime.datetime.now(),
+                    model_name=model_name,
+                    system_prompt=sys_prompt,
+                    messages=history_msgs,
+                    tools=tools,
+                    response=final_text,
+                    token_counts=tc,
+                    tool_iterations=tool_iters,
+                )
+            )
 
         return final_text

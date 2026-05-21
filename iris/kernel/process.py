@@ -30,6 +30,10 @@ class KernelProcess:
     def shutdown_requested(self) -> bool:
         return self._ctx is not None and self._ctx.shutdown_requested
 
+    @property
+    def cmd_handler(self) -> object | None:
+        return self._ctx.cmd_handler if self._ctx else None
+
     def start(self) -> None:
         logger.info("KernelProcess: starting")
 

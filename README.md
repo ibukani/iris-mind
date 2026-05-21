@@ -1,12 +1,98 @@
-# Iris — Autonomous AI Assistant
+# Iris — Autonomous AI Assistant _(iris-kernel)_
 
-Iris は自律的に行動・進化できるAIアシスタント。Python 製で Ollama または OpenRouter 上で動作する。
+自律的に行動・進化できるAIアシスタント
+
+Iris は自律的に行動・進化できるAIアシスタント。Python 製で Ollama または OpenRouter 上で動作する。脳科学・神経科学の構造を参考にした層分割アーキテクチャを採用する。
+
+## Table of Contents
+
+- [Background](#background)
+- [Install](#install)
+- [Usage](#usage)
+- [Architecture](#architecture)
+- [Client Guide](#client-guide)
+- [Features](#features)
+- [Project Structure](#project-structure)
+- [Development](#development)
+- [Documentation](#documentation)
+- [API](#api)
+- [Tech Stack](#tech-stack)
+- [Maintainers](#maintainers)
+- [Contributing](#contributing)
+- [License](#license)
+
+## Background
 
 脳科学・神経科学の構造を参考にした層分割アーキテクチャを採用する（詳細は [`docs/`](./docs/README.md)）。
 
 > **注記**: 脳科学マッピングは AI による文献調査を参考にした設計指針であり、厳密な解剖学的正確性を保証するものではありません。
 
-## アーキテクチャ
+## Install
+
+### Prerequisites
+
+- Python 3.13+
+- Ollama（ローカル LLM 利用時）— `qwen3.5:9b` 等のモデルを事前に pull
+- OpenRouter API Key（OpenRouter 利用時）
+
+### Setup
+
+```powershell
+git clone https://github.com/your-org/iris-mind.git
+cd iris-mind
+
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+
+pip install -e .
+pip install -e ".[dev]"
+```
+
+## Usage
+
+### Configuration
+
+`config.yaml` でプロバイダーとモデルを設定:
+
+```yaml
+model:
+  provider: ollama
+  base_url: http://localhost:11434
+  models:
+    - name: qwen3.5:9b
+      roles: [default]
+session:
+  host: 127.0.0.1
+  port: 9876
+  access_token: ""
+```
+
+OpenRouter 利用時は `.env` ファイルを作成:
+
+```env
+OPENROUTER_API_KEY=sk-or-...
+```
+
+### Starting Iris
+
+```powershell
+python main.py
+python main.py --verbose
+```
+
+### Slash Commands
+
+| コマンド | 説明 |
+|---|---|
+| `/help` | ヘルプ表示 |
+| `/sleep` | スリープ |
+| `/wakeup` | ウェイクアップ |
+| `/compact` | 会話履歴圧縮 |
+| `/clear` | 履歴クリア |
+| `/status` | 状態表示 |
+| `/reflect` | 自己反省実行 |
+
+## Architecture
 
 ```mermaid
 flowchart TD
@@ -56,7 +142,7 @@ flowchart TD
     IB --- EX
 ```
 
-- **Supervisor** — Kernel プロセスの起動・監視・管理コンソール (`main.py`)
+- **Supervisor** — Kernel プロセスの起動・監視・管理コンソール（`main.py`）
 - **Kernel 層** — 脳幹+視床下部。プロセス管理、DIコンテナ、スラッシュコマンド。TimerTick(5秒) 発行
 - **IO 層** — 視床。gRPC入出力、セッション管理
 - **Memory 層** — 感覚野+海馬+皮質。断片的入力の統合、エピソード/意味記憶、Reflexion、人格
@@ -64,12 +150,7 @@ flowchart TD
 - **LLM 層** — 言語処理基盤。LLM接続、ContextWindow圧縮
 - **Event 層** — 神経路。全層を疎結合するグローバルEventBus
 
-シャットダウンは Supervisor の管理コンソール (`/shutdown`) または Ctrl+C で行う。
-gRPC 経由でも `/shutdown` コマンドを送信可能。
-
-詳細な設計は [`docs/`](./docs/README.md) を参照。
-
-## 外部開発者向け（Client接続）
+## Client Guide
 
 Iris に gRPC 接続して会話するクライアントを開発する場合:
 
@@ -93,7 +174,7 @@ flowchart LR
     EV --> IO --> GRPC --> CLI
 ```
 
-## 機能
+## Features
 
 - **LLM 会話** — Ollama / OpenRouter 経由でローカルまたはクラウド LLM と会話
 - **自律発話 (Proactive)** — PFCスコアリング（時間×記憶×文脈×感情）＋基底核抑制制御で適切なタイミングに自発発話
@@ -101,64 +182,9 @@ flowchart LR
 - **動的ツール拡張** — 実行時にツールを追加可能
 - **記憶システム** — エピソード記憶 (JSONL)、意味記憶 (ChromaDB + BM25 ハイブリッド検索)、動的パーソナリティ
 - **会話履歴圧縮** — LLMContextWindowManager が token window 超過時に自動要約
-- **スラッシュコマンド** — `/help`, `/sleep`, `/wakeup`, `/compact`, `/clear`, `/status`, `/reflect`
 - **シングル / マルチモデルモード** — 設定したモデル数に応じて自動切替
 
-## クイックスタート
-
-### 必要条件
-
-- Python 3.13+
-- Ollama (ローカル LLM 利用時) — `qwen3.5:9b` 等のモデルを事前に pull
-- OpenRouter API Key (OpenRouter 利用時)
-
-### インストール
-
-```powershell
-# リポジトリをクローン
-git clone https://github.com/your-org/iris-mind.git
-cd iris-mind
-
-# 仮想環境を作成
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-
-# 依存関係をインストール
-pip install -e .
-pip install -e ".[dev]"   # 開発用依存 (ruff, mypy, pytest...)
-```
-
-### 設定
-
-1. `config.yaml` でプロバイダーとモデルを設定
-
-```yaml
-model:
-  provider: ollama              # "ollama" or "openrouter"
-  base_url: http://localhost:11434
-  models:
-    - name: qwen3.5:9b
-      roles: [default]
-session:
-  host: 127.0.0.1
-  port: 9876
-  access_token: ""              # 空文字の場合は検証スキップ
-```
-
-2. OpenRouter 利用時は `.env` ファイルを作成
-
-```env
-OPENROUTER_API_KEY=sk-or-...
-```
-
-### 起動
-
-```powershell
-python main.py                          # Supervisor 起動
-python main.py --verbose                # 診断ログを stderr に出力
-```
-
-## プロジェクト構成
+## Project Structure
 
 ```
 iris-mind/
@@ -201,9 +227,9 @@ iris-mind/
 └── main.py                      # Supervisor エントリーポイント
 ```
 
-## 開発
+## Development
 
-### lint / typecheck / test
+### Lint / Typecheck / Test
 
 ```powershell
 ruff check .                          # lint
@@ -213,7 +239,7 @@ mypy .                                # type check
 pytest tests/                         # 全テスト実行
 ```
 
-### Capability 追加
+### Capability Additions
 
 1. `iris/tools/builtins/<name>/server.py` に配置
 2. `@tool()` デコレータでツール定義（型ヒント→JSON Schema 自動生成）
@@ -222,7 +248,7 @@ pytest tests/                         # 全テスト実行
 
 詳細は `.agents/skills/capability-pattern/SKILL.md` を参照。
 
-## ドキュメント
+## Documentation
 
 設計ドキュメントは [`docs/README.md`](./docs/README.md) から参照できます。
 
@@ -236,15 +262,29 @@ pytest tests/                         # 全テスト実行
 | [config.md](./docs/config.md) | Config 設定一覧 |
 | [ipc-spec.md](./docs/ipc-spec.md) | IPC プロトコル仕様 (gRPC) |
 
-## 技術スタック
+## API
+
+外部 Client は gRPC（127.0.0.1:9876）で Iris に接続する。プロトコル仕様は [IPC Protocol Spec](./docs/ipc-spec.md) を参照。
+
+各層の内部インターフェースについては設計ドキュメントを参照。
+
+## Tech Stack
 
 - **言語**: Python 3.13+
-- **LLM**: Ollama / OpenRouter (Qwen3.5:9b 他)
+- **LLM**: Ollama / OpenRouter（Qwen3.5:9b 他）
 - **ベクトル検索**: ChromaDB + ONNX MiniLM-L6-v2
-- **IPC**: gRPC (HTTP/2) — 1ポート多重
-- **UI**: Rich (TUI), prompt_toolkit
-- **テスト**: pytest (138 tests), ruff, mypy
+- **IPC**: gRPC（HTTP/2）— 1ポート多重
+- **UI**: Rich（TUI）, prompt_toolkit
+- **テスト**: pytest（138 tests）, ruff, mypy
 
-## ライセンス
+## Maintainers
 
-MIT
+- [ibuibu](https://github.com/your-org)
+
+## Contributing
+
+PR 歓迎。 [Issues](https://github.com/your-org/iris-mind/issues) で提案してからお送りください。
+
+## License
+
+[MIT](./LICENSE) © ibuibu

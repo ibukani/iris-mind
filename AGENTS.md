@@ -46,20 +46,20 @@ iris/                             ← アプリケーションコア
 ├── event/                        ← 神経路: Global EventBus
 │   ├── bus.py                    ← EventBus（kernel から分離）
 │   └── event_types.py            ← イベント型定義
-├── limbic/                       ← 大脳辺縁系: 感情処理 (NEW)
+├── limbic/                       ← 大脳辺縁系: 感情処理 + 性格特性
 │   ├── manager.py                ← LimbicManager（感情状態管理, EventBus連携）
 │   ├── models.py                 ← EmotionState（PAD 3次元モデル）
 │   ├── amygdala.py               ← 扁桃体（感情評価・価値判断）
 │   ├── acc.py                    ← 前帯状皮質（感情制御・葛藤調整）
-│   └── emotional_memory.py       ← 扁桃体-海馬相互作用（感情タグ付け）
+│   ├── emotional_memory.py       ← 扁桃体-海馬相互作用（感情タグ付け）
+│   └── big_five.py               ← BigFiveProfile + 性格進化（大脳辺縁系が性格を管理）
 ├── memory/                       ← 記憶系: 感覚野+海馬+皮質（3層構造）
 │   ├── manager.py                ← MemoryManager（ディスパッチャ+イベント処理）
 │   ├── sensory/                  ← SensoryMemoryManager（断片+生入力 2系統）
 │   ├── short_term/               ← ShortTermMemoryManager（ワーキングメモリ）
 │   ├── long_term/                ← LongTermMemoryManager + stores + VectorStore
 │   ├── hippocampal/              ← Reflexion + HippocampalManager
-│   └── personality/              ← 人格: 性格特性・話し方（記憶から形成）
-│       └── big_five.py           ← BigFiveProfile + 性格進化
+│   └── personality/              ← 人格: 話し方・自己状態（記憶から形成）
 ├── agency/                       ← 高度認知: PFC+基底核+運動野
 │   ├── manager.py                ← AgencyManager（compact_context中継）
 │   ├── bus.py                    ← 内部 EventBus（planning→execution）

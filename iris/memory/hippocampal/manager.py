@@ -5,8 +5,8 @@ import logging
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
+    from iris.limbic.big_five import BigFiveProfile
     from iris.memory.manager import MemoryManagerProtocol
-    from iris.memory.personality.big_five import BigFiveProfile
     from iris.memory.personality.persona_profile import PersonaProfile
 
 from iris.event.event_types import DebugSnapshotEvent

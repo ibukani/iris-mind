@@ -3,12 +3,87 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import logging
 import re
-from typing import Any
+from typing import Any, Protocol
 
 logger = logging.getLogger(__name__)
 
 _MAX_TURN_LENGTH = 500
 _MAX_CONTEXT_CHARS = 600
+
+
+class ImportanceScorer(Protocol):
+    """発話内容から重要度を算出するインターフェース。
+
+    なぜこの設計にしたか:
+    将来的にLLMを用いた重要度判定や、異なるヒューリスティックルールを容易に差し替え可能にするため。
+    """
+
+    def score(self, content: str) -> int: ...
+
+
+class DefaultImportanceScorer:
+    """ヒューリスティックに基づくデフォルトの重要度判定器。"""
+
+    def score(self, content: str) -> int:
+        score = 0
+        lower = content.lower()
+        if any(w in lower for w in ["important", "大事", "覚えて", "remember", "注意", "critical", "urgent"]):
+            score += 3
+        if any(w in lower for w in ["please", "お願い", "help", "assist", "question", "質問"]):
+            score += 1
+        if re.search(r"[A-Z]{3,}", content):
+            score += 1
+        if content.count("!") >= 2:
+            score += 1
+        return min(score, 5)
+
+
+class EntityExtractor(Protocol):
+    """テキストから特定の参照エンティティを抽出するインターフェース。
+
+    なぜこの設計にしたか:
+    正規表現による抽出だけでなく、NERモデルや外部NLPライブラリを用いた抽出エンジンへの差し替えをサポートするため。
+    """
+
+    def extract(self, content: str) -> list[str]: ...
+
+
+class RegexEntityExtractor:
+    """正規表現に基づくデフォルトのエンティティ抽出器。"""
+
+    def extract(self, content: str) -> list[str]:
+        entities: list[str] = []
+        entities.extend(re.findall(r"https?://[^\s]+", content))
+        entities.extend(re.findall(r"(?:/[^\s/]+)+(?:/?)", content))
+        entities.extend(re.findall(r"#\w+", content))
+        entities.extend(re.findall(r"@\w+", content))
+        entities.extend(re.findall(r"「([^」]+)」", content))
+        entities.extend(re.findall(r'"([^"]{3,})"', content))
+        entities.extend(re.findall(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)*\b", content))
+        return list({e for e in entities if len(e) > 2})
+
+
+class ShortTermMemoryProtocol(Protocol):
+    """短期記憶マネージャーのインターフェース。
+
+    なぜこの設計にしたか:
+    他のレイヤーが具象クラスである ShortTermMemoryManager に直接依存するのを防ぎ、
+    モック化やテスト用の代替実装を容易にするため。
+    """
+
+    def add_turn(self, role: str, content: str) -> None: ...
+    def search(self, query: str, max_results: int = 5) -> list[dict[str, Any]]: ...
+    def search_entities(self, entity_name: str) -> list[dict[str, Any]]: ...
+    def render_context(self, max_chars: int = _MAX_CONTEXT_CHARS, query: str | None = None) -> str: ...
+    def get_recent_turns(self, n: int = 4) -> list[dict[str, Any]]: ...
+    def get_unconsolidated_turns(self) -> list[dict[str, Any]]: ...
+    def mark_consolidated(self, up_to_index: int | None = None) -> None: ...
+    def clear(self) -> None: ...
+    def should_consolidate(self) -> bool: ...
+    @property
+    def current_topics(self) -> list[str]: ...
+    @property
+    def turn_count(self) -> int: ...
 
 
 class ShortTermMemoryManager:
@@ -17,12 +92,21 @@ class ShortTermMemoryManager:
     直近の会話履歴（ターン数制限あり）、現在の話題、参照されたエンティティを保持する。
     """
 
-    def __init__(self, max_turns: int = 10, max_topics: int = 5) -> None:
+    def __init__(
+        self,
+        max_turns: int = 10,
+        max_topics: int = 5,
+        *,
+        importance_scorer: ImportanceScorer | None = None,
+        entity_extractor: EntityExtractor | None = None,
+    ) -> None:
         self._turns: list[dict[str, Any]] = []
         self._current_topics: list[str] = []
         self._active_references: set[str] = set()
         self._max_turns = max_turns
         self._max_topics = max_topics
+        self._importance_scorer = importance_scorer or DefaultImportanceScorer()
+        self._entity_extractor = entity_extractor or RegexEntityExtractor()
 
     def add_turn(self, role: str, content: str) -> None:
         """会話の1ターンを追加し、エンティティの抽出と話題の更新を行う。
@@ -39,7 +123,7 @@ class ShortTermMemoryManager:
             "content": truncated,
             "timestamp": datetime.now(UTC).isoformat(),
             "consolidated": False,
-            "importance": self._compute_importance(truncated),
+            "importance": self._importance_scorer.score(truncated),
         }
         self._turns.append(entry)
         if len(self._turns) > self._max_turns:
@@ -47,26 +131,9 @@ class ShortTermMemoryManager:
         self._extract_from_content(truncated)
         logger.debug("ShortTerm: added %s turn, total=%d", role, len(self._turns))
 
-    def _compute_importance(self, content: str) -> int:
-        """発話内容から重要度（0〜5）を算出する。
-
-        特定のキーワードの有無や感嘆符の数、大文字の連続などを判定材料とする。
-        """
-        score = 0
-        lower = content.lower()
-        if any(w in lower for w in ["important", "大事", "覚えて", "remember", "注意", "critical", "urgent"]):
-            score += 3
-        if any(w in lower for w in ["please", "お願い", "help", "assist", "question", "質問"]):
-            score += 1
-        if re.search(r"[A-Z]{3,}", content):
-            score += 1
-        if content.count("!") >= 2:
-            score += 1
-        return min(score, 5)
-
     def _extract_from_content(self, content: str) -> None:
         """発話内容からエンティティの抽出と話題の更新を行う。"""
-        for entity in self._extract_entities(content):
+        for entity in self._entity_extractor.extract(content):
             self._active_references.add(entity)
         sentences = re.split(r"[。！？\.\!\?]", content)
         for s in sentences[:2]:
@@ -75,18 +142,6 @@ class ShortTermMemoryManager:
                 self._current_topics.append(s)
         if len(self._current_topics) > self._max_topics:
             self._current_topics = self._current_topics[-self._max_topics :]
-
-    def _extract_entities(self, content: str) -> list[str]:
-        """発話内からURL、ファイルパス、ハッシュタグ、メンション、引用句などのエンティティを抽出する。"""
-        entities: list[str] = []
-        entities.extend(re.findall(r"https?://[^\s]+", content))
-        entities.extend(re.findall(r"(?:/[^\s/]+)+(?:/?)", content))
-        entities.extend(re.findall(r"#\w+", content))
-        entities.extend(re.findall(r"@\w+", content))
-        entities.extend(re.findall(r"「([^」]+)」", content))
-        entities.extend(re.findall(r'"([^"]{3,})"', content))
-        entities.extend(re.findall(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)*\b", content))
-        return list({e for e in entities if len(e) > 2})
 
     def _compute_relevance(self, query: str, turn: dict[str, Any]) -> float:
         """クエリと会話ターンの関連度スコアを算出する。"""
@@ -101,15 +156,23 @@ class ShortTermMemoryManager:
 
     def search(self, query: str, max_results: int = 5) -> list[dict[str, Any]]:
         """クエリに関連する会話ターンを検索する。"""
+        if not query:
+            return []
+
         scored: list[tuple[float, int, dict[str, Any]]] = []
         for i, turn in enumerate(self._turns):
             relevance = self._compute_relevance(query, turn)
-            if relevance > 0 or (query and query.lower() in turn.get("content", "").lower()):
-                if relevance == 0:
-                    relevance = 0.01
-                scored.append((relevance, turn.get("importance", 0), dict(turn)))
-                scored[-1][2]["relevance"] = relevance
-                scored[-1][2]["index"] = i
+            content = turn.get("content", "")
+            if relevance == 0 and query.lower() not in content.lower():
+                continue
+
+            actual_relevance = relevance if relevance > 0 else 0.01
+            turn_copy = dict(turn)
+            turn_copy["relevance"] = actual_relevance
+            turn_copy["index"] = i
+
+            scored.append((actual_relevance, turn.get("importance", 0), turn_copy))
+
         scored.sort(key=lambda x: (-x[0], -x[1]))
         return [s[2] for s in scored[:max_results]]
 
@@ -133,9 +196,8 @@ class ShortTermMemoryManager:
         if query:
             parts.append("### 直近の会話（関連）")
             relevant = self.search(query, max_results=3)
-            shown_indices: set[int] = set()
+            shown_indices = {r.get("index", -1) for r in relevant}
             for r in relevant:
-                shown_indices.add(r.get("index", -1))
                 label = "User" if r["role"] == "user" else "Iris"
                 parts.append(f"- {label}: 「{r['content'][:100]}」(関連度 {r.get('relevance', 0):.2f})")
             for t in reversed(self._turns[-4:]):

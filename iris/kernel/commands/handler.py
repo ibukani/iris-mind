@@ -397,7 +397,7 @@ class CommandHandler:
             entries = dc.last()
             if not entries:
                 return "No captures"
-            return "\n---\n".join(e.format_as_markdown() for e in entries)
+            return "\n\n".join(e.format() for e in entries)
         if sub in ("show", "get"):
             try:
                 entry_id = int(rest)

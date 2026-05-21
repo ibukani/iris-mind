@@ -238,6 +238,20 @@ class ExecutionManager:
     ) -> None:
         """実行後に履歴・短期記憶へ応答を追加し、DONEイベントを送信、モニターフラグを処理する。"""
         session_id = plan.get("session_id", "")
+        if not response_text:
+            if show_thinking:
+                self._event_bus.publish(
+                    MessageEvent(
+                        timestamp=None,
+                        source="execution",
+                        msg_type="chat",
+                        content="",
+                        state=StreamState.DONE.value,
+                        direction="stream",
+                    )
+                )
+            return
+
         if record_history:
             self._messages.append({"role": "assistant", "content": response_text})
             self._last_activity_time = time.time()

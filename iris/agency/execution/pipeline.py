@@ -222,7 +222,7 @@ class LLMPipeline:
             logger.debug("Short generation failed: %s", e)
 
         if not text:
-            text = "お疲れさまです！何かお手伝いしましょうか？"
+            text = "" if situation == "proactive" else "…"
 
         self._capture_debug(
             model_role=model_role,

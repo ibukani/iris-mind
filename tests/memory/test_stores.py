@@ -93,7 +93,7 @@ def test_semantic_store_duplicate_prevention() -> None:
         store = SemanticStore(path=path, max_entries=100, vector_db_path=os.path.join(tmpdir, "chroma"))
         store.add({"content": "duplicate content", "tags": []})
         store.add({"content": "duplicate content", "tags": []})
-        entries = store.load_all()
+        entries = store._load_all()
         assert len(entries) == 1
     finally:
         import shutil
@@ -108,7 +108,7 @@ def test_semantic_store_clear() -> None:
         store = SemanticStore(path=path, max_entries=100, vector_db_path=os.path.join(tmpdir, "chroma"))
         store.add({"content": "test", "tags": []})
         store.clear()
-        assert store.load_all() == []
+        assert store._load_all() == []
     finally:
         import shutil
 
@@ -123,7 +123,7 @@ def test_semantic_store_persistence() -> None:
         store1.add({"content": "persisted data", "tags": ["test"]})
         del store1
         store2 = SemanticStore(path=path, max_entries=100, vector_db_path=os.path.join(tmpdir, "chroma"))
-        entries = store2.load_all()
+        entries = store2._load_all()
         assert len(entries) == 1
         assert entries[0]["content"] == "persisted data"
     finally:
@@ -138,7 +138,7 @@ def test_semantic_store_adds_default_fields() -> None:
         path = os.path.join(tmpdir, "semantic.jsonl")
         store = SemanticStore(path=path, max_entries=100, vector_db_path=os.path.join(tmpdir, "chroma"))
         store.add({"content": "test"})
-        entries = store.load_all()
+        entries = store._load_all()
         assert entries[0]["id"] is not None
         assert entries[0]["timestamp"] is not None
         assert entries[0]["tags"] is not None

@@ -17,19 +17,15 @@ class AgentsMdStoreProtocol(Protocol):
 
 
 class EpisodicStoreProtocol(Protocol):
-    @property
-    def max_entries(self) -> int: ...
-    def add(self, summary: str, metadata: dict | None = None) -> None: ...
+    def add(self, summary: str) -> None: ...
     def get_recent(self, n: int = 5) -> list[dict]: ...
     def clear(self) -> None: ...
-    def load_all(self) -> list[dict]: ...
 
 
 class SemanticStoreProtocol(Protocol):
     def add(self, entry: dict) -> None: ...
     def search(self, query: str, max_results: int = 3) -> list[dict]: ...
     def clear(self) -> None: ...
-    def load_all(self) -> list[dict]: ...
 
 
 class AgentsMdStore:
@@ -97,7 +93,7 @@ class EpisodicStore:
         logger.info("EpisodicStore: cleared")
 
     def add(self, summary: str, metadata: dict | None = None) -> None:
-        entries = self.load_all()
+        entries = self._load_all()
         entry: dict[str, object] = {"summary": summary, "timestamp": datetime.now(UTC).isoformat()}
         if metadata:
             entry["metadata"] = metadata
@@ -113,10 +109,10 @@ class EpisodicStore:
         logger.info("EpisodicStore: added entry, total=%d", len(entries))
 
     def get_recent(self, n: int = 5) -> list[dict]:
-        entries = self.load_all()
+        entries = self._load_all()
         return entries[-n:]
 
-    def load_all(self) -> list[dict]:
+    def _load_all(self) -> list[dict]:
         if not self.path.exists():
             return []
         entries: list[dict] = []
@@ -145,7 +141,7 @@ class SemanticStore:
         self._synced_count = 0
 
     def sync(self) -> None:
-        entries = self.load_all()
+        entries = self._load_all()
         unsynced = len(entries) - self._synced_count
         if unsynced <= 0:
             return
@@ -155,7 +151,7 @@ class SemanticStore:
         logger.info("SemanticStore: synced %d entries to vector store", unsynced)
 
     def add(self, entry: dict) -> None:
-        entries = self.load_all()
+        entries = self._load_all()
         if self._is_duplicate(entry.get("content", ""), entries):
             return
         entry["id"] = f"lesson_{len(entries) + 1:03d}"
@@ -185,7 +181,7 @@ class SemanticStore:
     def search(self, query: str, max_results: int = 3) -> list[dict]:
         return self.vector.search(query, max_results=max_results)
 
-    def load_all(self) -> list[dict]:
+    def _load_all(self) -> list[dict]:
         if not self.path.exists():
             return []
         entries: list[dict] = []

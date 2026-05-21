@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import Callable
 import contextlib
 import json
 import logging
@@ -72,8 +72,11 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             self._server = None
             logger.info("GrpcServer stopped")
 
-    def _parse_permissions(self, perms_str: str) -> list[Permission]:
-        """カンマ区切りの権限文字列をパースしてPermissionリストを返す。"""
+    async def BidirectionalStream(self, request_iterator: Any, context: Any) -> Any:
+        # 1. 認証 (Metadataの読み取り)
+        metadata = dict(context.invocation_metadata())
+
+        perms_str = metadata.get("permissions", "")
         permissions = []
         if perms_str:
             for p in perms_str.split(","):
@@ -83,12 +86,6 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
                         permissions.append(Permission(p))
                     except ValueError:
                         logger.warning("GrpcServer: invalid permission metadata %s", p)
-        return permissions
-
-    async def _authenticate(self, metadata: dict[str, str], grpc_conn: GrpcConnection, context: Any) -> tuple[str, str]:
-        """セッションの認証を行い、成功した場合は (session_id, session_role) を返す。"""
-        perms_str = metadata.get("permissions", "")
-        permissions = self._parse_permissions(perms_str)
 
         auth_msg = AuthMessage(
             msg_type="auth",
@@ -99,27 +96,19 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             description=metadata.get("description", ""),
         )
 
+        loop = asyncio.get_running_loop()
+        grpc_conn = GrpcConnection(loop)
+
         auth_res = self._session_manager.authenticate(grpc_conn, auth_msg)
         if auth_res.msg_type == "auth_failure":
             logger.warning("GrpcServer: authentication failed: %s", auth_res.error_message)
             await context.abort(grpc.StatusCode.UNAUTHENTICATED, auth_res.error_message or "Auth failed")
-            raise ConnectionError("Authentication failed")
+            return
 
         session_id = auth_res.session_id
         assert session_id is not None
         session_role = auth_msg.role or "external"
         logger.info("GrpcServer: session %s authenticated (role=%s)", session_id, session_role)
-        return session_id, session_role
-
-    async def BidirectionalStream(self, request_iterator: Any, context: Any) -> Any:
-        metadata = dict(context.invocation_metadata())
-        loop = asyncio.get_running_loop()
-        grpc_conn = GrpcConnection(loop)
-
-        try:
-            session_id, session_role = await self._authenticate(metadata, grpc_conn, context)
-        except ConnectionError:
-            return
 
         # 2. 認証成功をクライアントに通知（デッドロック防止）
         ack = grpc_service_pb2.Message(  # type: ignore[attr-defined]
@@ -136,7 +125,41 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
 
         try:
             # 3. 送信ループ (Server -> Client)
-            async for frame in self._stream_send_loop(grpc_conn):
+            while True:
+                raw = await grpc_conn.queue.get()
+                data = json.loads(raw.decode("utf-8"))
+
+                msg_type = data.get("msg_type", "")
+                frame = grpc_service_pb2.BidirectionalStreamResponse()  # type: ignore[attr-defined]
+
+                if msg_type == "command":
+                    cmd_out = grpc_service_pb2.CommandOutput(  # type: ignore[attr-defined]
+                        id=data.get("id", ""),
+                        correlation_id=data.get("correlation_id", ""),
+                        session_id=data.get("session_id", ""),
+                        msg_type=data.get("msg_type", ""),
+                        content=data.get("content", ""),
+                        state=data.get("state") or "",
+                    )
+                    frame.command.CopyFrom(cmd_out)
+                else:
+                    msg = grpc_service_pb2.Message(  # type: ignore[attr-defined]
+                        id=data.get("id", ""),
+                        correlation_id=data.get("correlation_id", ""),
+                        session_id=data.get("session_id", ""),
+                        source_role=data.get("source_role", ""),
+                        target_role=data.get("target_role", ""),
+                        direction=data.get("direction", ""),
+                        msg_type=data.get("msg_type", ""),
+                        content=data.get("content", ""),
+                        content_type=data.get("content_type", ""),
+                        state=data.get("state") or "",
+                    )
+                    meta = data.get("metadata", {})
+                    for k, v in meta.items():
+                        msg.metadata[k] = str(v)
+                    frame.message.CopyFrom(msg)
+
                 yield frame
 
         except asyncio.CancelledError:
@@ -149,45 +172,6 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
                 await asyncio.gather(receive_task, return_exceptions=True)
             self._session_manager.remove_session(session_id)
             logger.info("GrpcServer: session %s disconnected", session_id)
-
-    async def _stream_send_loop(self, grpc_conn: GrpcConnection) -> AsyncGenerator[Any]:
-        """内部の送信キューからデータを受け取り、gRPCのフレームとして yield する。"""
-        while True:
-            raw = await grpc_conn.queue.get()
-            data = json.loads(raw.decode("utf-8"))
-
-            msg_type = data.get("msg_type", "")
-            frame = grpc_service_pb2.BidirectionalStreamResponse()  # type: ignore[attr-defined]
-
-            if msg_type == "command":
-                cmd_out = grpc_service_pb2.CommandOutput(  # type: ignore[attr-defined]
-                    id=data.get("id", ""),
-                    correlation_id=data.get("correlation_id", ""),
-                    session_id=data.get("session_id", ""),
-                    msg_type=data.get("msg_type", ""),
-                    content=data.get("content", ""),
-                    state=data.get("state") or "",
-                )
-                frame.command.CopyFrom(cmd_out)
-            else:
-                msg = grpc_service_pb2.Message(  # type: ignore[attr-defined]
-                    id=data.get("id", ""),
-                    correlation_id=data.get("correlation_id", ""),
-                    session_id=data.get("session_id", ""),
-                    source_role=data.get("source_role", ""),
-                    target_role=data.get("target_role", ""),
-                    direction=data.get("direction", ""),
-                    msg_type=data.get("msg_type", ""),
-                    content=data.get("content", ""),
-                    content_type=data.get("content_type", ""),
-                    state=data.get("state") or "",
-                )
-                meta = data.get("metadata", {})
-                for k, v in meta.items():
-                    msg.metadata[k] = str(v)
-                frame.message.CopyFrom(msg)
-
-            yield frame
 
     async def _receive_loop(self, request_iterator: Any, session_id: str, session_role: str) -> None:
         try:
@@ -207,20 +191,15 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
         except Exception:
             logger.exception("GrpcServer error in receive loop for session %s", session_id)
 
-    def _parse_message_metadata(self, metadata_proto: Any) -> dict[str, Any]:
-        """gRPCのメッセージメタデータをPythonの辞書に変換・パースする。"""
+    async def _dispatch_message(self, msg_proto: Any, session_id: str, session_role: str) -> None:
         metadata = {}
-        for k, v in metadata_proto.items():
+        for k, v in msg_proto.metadata.items():
             if v.lower() == "true":
                 metadata[k] = True
             elif v.lower() == "false":
                 metadata[k] = False
             else:
                 metadata[k] = v
-        return metadata
-
-    async def _dispatch_message(self, msg_proto: Any, session_id: str, session_role: str) -> None:
-        metadata = self._parse_message_metadata(msg_proto.metadata)
 
         try:
             msg = Message(

@@ -2,53 +2,19 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from iris.event.event_bus import EventBus
-    from iris.kernel.config import ProactiveConfig
     from iris.limbic.models import EmotionState
 
 from iris.event.event_types import ClientSessionEvent, InputReady, MessageEvent, TimerTick
-from iris.memory.long_term.manager import LongTermMemoryManager, LongTermMemoryProtocol
+from iris.memory.long_term.manager import LongTermMemoryManager
 from iris.memory.long_term.stores import EpisodicStore, SemanticStore
 from iris.memory.long_term.vector_store import VectorStore
-from iris.memory.sensory.manager import SensoryMemoryManager, SensoryMemoryProtocol
-from iris.memory.short_term.manager import ShortTermMemoryManager, ShortTermMemoryProtocol
+from iris.memory.sensory.manager import SensoryMemoryManager
+from iris.memory.short_term.manager import ShortTermMemoryManager
 
 logger = logging.getLogger(__name__)
-
-
-class MemoryManagerProtocol(Protocol):
-    """記憶オーケストレーションマネージャーのインターフェース。
-
-    なぜこの設計にしたか:
-    他の脳機能レイヤー（Agency等）が具象クラスである MemoryManager に直接依存するのを防ぎ、
-    モック化や代替実装を容易にするため。
-    """
-
-    def set_sensory_buffer(self, buf: SensoryMemoryProtocol) -> None: ...
-    def store(self, stream: str, data: Any) -> None: ...
-    def retrieve(self, stream: str, **filters: Any) -> list[dict]: ...
-    def search(self, query: str, stream: str | None = None, **kwargs: Any) -> list[dict]: ...
-    def clear(self, stream: str | None = None) -> None: ...
-    def flush(self) -> None: ...
-    def get_user_preferences(self) -> list[dict[str, Any]]: ...
-    def add_episodic(self, content: str, kind: str = "", _metadata: dict | None = None) -> None: ...
-    def get_recent(self, n: int = 3) -> list[dict[str, Any]]: ...
-    def add_semantic(self, content: str, tags: list[str] | None = None) -> None: ...
-    def add_semantic_by_type(self, entry_type: str, content: str, tags: list[str] | None = None) -> None: ...
-    def search_semantic(self, query: str, max_results: int = 3) -> list[dict[str, Any]]: ...
-    def search_emotional(
-        self,
-        current_emotion: EmotionState | None = None,
-        max_results: int = 5,
-    ) -> list[dict[str, Any]]: ...
-
-    @property
-    def short_term(self) -> ShortTermMemoryProtocol: ...
-    @property
-    def long_term(self) -> LongTermMemoryProtocol: ...
 
 
 class MemoryManager:
@@ -68,25 +34,25 @@ class MemoryManager:
     def __init__(
         self,
         *,
-        event_bus: EventBus | None = None,
+        event_bus: Any = None,
         episodic: EpisodicStore | None = None,
         semantic: SemanticStore | None = None,
         vector_store: VectorStore | None = None,
-        sensory: SensoryMemoryProtocol | None = None,
-        short_term: ShortTermMemoryProtocol | None = None,
-        long_term: LongTermMemoryProtocol | None = None,
-        proactive_config: ProactiveConfig | None = None,
+        sensory: SensoryMemoryManager | None = None,
+        short_term: ShortTermMemoryManager | None = None,
+        long_term: LongTermMemoryManager | None = None,
+        proactive_config: Any = None,
     ) -> None:
-        self.sensory: SensoryMemoryProtocol = sensory or SensoryMemoryManager()
-        self.short_term: ShortTermMemoryProtocol = short_term or ShortTermMemoryManager()
-        self.long_term: LongTermMemoryProtocol = long_term or LongTermMemoryManager(
+        self.sensory: SensoryMemoryManager = sensory or SensoryMemoryManager()
+        self.short_term: ShortTermMemoryManager = short_term or ShortTermMemoryManager()
+        self.long_term: LongTermMemoryManager = long_term or LongTermMemoryManager(
             episodic=episodic,
             semantic=semantic,
             vector_store=vector_store,
         )
 
-        self._event_bus: EventBus | None = event_bus
-        self._proactive_config: ProactiveConfig | None = proactive_config
+        self._event_bus = event_bus
+        self._proactive_config = proactive_config
         self._pending_input: dict[str, str] = {}
         self._pending_lock: threading.Lock = threading.Lock()
 
@@ -95,7 +61,7 @@ class MemoryManager:
             event_bus.subscribe("TimerTick", self._on_timer_tick)
             event_bus.subscribe("ClientSessionEvent", self._on_client_session_event)
 
-    def set_sensory_buffer(self, buf: SensoryMemoryProtocol) -> None:
+    def set_sensory_buffer(self, buf: SensoryMemoryManager) -> None:
         self.sensory = buf
 
     def _on_message_event(self, event: MessageEvent) -> None:
@@ -113,8 +79,6 @@ class MemoryManager:
         )
 
     def _on_timer_tick(self, event: TimerTick) -> None:
-        if self._event_bus is None:
-            return
         with self._pending_lock:
             pending = dict(self._pending_input)
             self._pending_input.clear()
@@ -144,31 +108,27 @@ class MemoryManager:
             )
 
     def _on_client_session_event(self, event: ClientSessionEvent) -> None:
-        if event.action != "connected":
-            return
-        if self._event_bus is None:
-            return
-
-        logger.info(
-            "MemoryManager: client connected session=%s role=%s offline_duration=%s",
-            event.session_id,
-            event.role,
-            event.offline_duration,
-        )
-        self._event_bus.publish(
-            InputReady(
-                timestamp=None,
-                source="memory",
-                session_id=event.session_id,
-                content="",
-                context={
-                    "system_event": event.action,
-                    "offline_duration": event.offline_duration,
-                    "role": event.role,
-                    "identity": event.identity,
-                },
+        if event.action == "connected" and self._event_bus is not None:
+            logger.info(
+                "MemoryManager: client connected session=%s role=%s offline_duration=%s",
+                event.session_id,
+                event.role,
+                event.offline_duration,
             )
-        )
+            self._event_bus.publish(
+                InputReady(
+                    timestamp=None,
+                    source="memory",
+                    session_id=event.session_id,
+                    content="",
+                    context={
+                        "system_event": event.action,
+                        "offline_duration": event.offline_duration,
+                        "role": event.role,
+                        "identity": event.identity,
+                    },
+                )
+            )
 
     # ============================================================
     # ディスパッチャー
@@ -246,20 +206,17 @@ class MemoryManager:
         unconsolidated = self.short_term.get_unconsolidated_turns()
         if not unconsolidated:
             return
-
         user_turns = [t for t in unconsolidated if t.get("role") == "user"]
         if user_turns:
             combined = " | ".join(t["content"][:100] for t in user_turns[-3:])
             self.long_term.store_episodic(
                 {"content": f"[conversation] {combined}", "kind": "conversation"},
             )
-
         topics = self.short_term.current_topics
         for topic in topics:
             self.long_term.store_semantic(
                 {"content": topic, "type": "topic", "tags": ["short_term_topic"]},
             )
-
         self.short_term.mark_consolidated()
         logger.info("MemoryManager: flushed %d turns, %d topics", len(unconsolidated), len(topics))
 

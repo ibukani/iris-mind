@@ -72,40 +72,48 @@ class Supervisor:
 
     def _console_loop(self) -> None:
         while not self._shutdown_requested:
-            sys.stdout.write("> ")
-            sys.stdout.flush()
-            try:
-                text = sys.stdin.readline()
-            except (EOFError, KeyboardInterrupt):
+            line = self._read_line()
+            if line is None:
                 break
-            if not text:
+            if not line:
                 continue
-            text = text.rstrip("\r\n")
-            if not text.strip():
-                continue
-            line = text.strip()
-            if line.lower() in ("exit", "quit"):
-                self._shutdown_requested = True
-                self.shutdown()
+            if self._execute_line(line):
                 break
-            if line.startswith("/"):
-                parts = line[1:].strip().split(maxsplit=1)
-                name = parts[0].lower() if parts else ""
-                args = parts[1] if len(parts) > 1 else ""
-                if name == "shutdown":
-                    self._cmd_shutdown()
-                    break
-                if name == "status":
-                    self._cmd_status()
-                elif name == "help":
-                    self._cmd_help()
-                elif self._cmd_handler is not None:
-                    result = self._cmd_handler(name, args)
-                    print(result)
-                else:
-                    print(f"Unknown command: /{name}")
-            else:
-                print("Type /help for available commands")
+
+    def _read_line(self) -> str | None:
+        sys.stdout.write("> ")
+        sys.stdout.flush()
+        try:
+            text = sys.stdin.readline()
+        except (EOFError, KeyboardInterrupt):
+            return None
+        if not text:
+            return None
+        return text.strip()
+
+    def _execute_line(self, line: str) -> bool:
+        if line.lower() in ("exit", "quit"):
+            self._shutdown_requested = True
+            self.shutdown()
+            return True
+        if not line.startswith("/"):
+            print("Type /help for available commands")
+            return False
+        parts = line[1:].strip().split(maxsplit=1)
+        name = parts[0].lower() if parts else ""
+        args = parts[1] if len(parts) > 1 else ""
+        if name == "shutdown":
+            self._cmd_shutdown()
+            return True
+        if name == "status":
+            self._cmd_status()
+        elif name == "help":
+            self._cmd_help()
+        elif self._cmd_handler is not None:
+            print(self._cmd_handler(name, args))
+        else:
+            print(f"Unknown command: /{name}")
+        return False
 
     def _cmd_help(self) -> None:
         print("Available commands:")

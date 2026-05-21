@@ -247,42 +247,52 @@ class PlanningManager:
 
     @classmethod
     def _apply_emotion_to_plan(cls, plan: dict, limbic_mood: EmotionState) -> None:
-        v = limbic_mood.valence
-        a = limbic_mood.arousal
-        d = limbic_mood.dominance
+        temp: float = plan.get("temperature", cls.DEFAULT_TEMPERATURE)
+        temp = cls._apply_valence_temp(plan, limbic_mood, temp)
+        temp = cls._apply_arousal_temp(plan, limbic_mood, temp)
+        temp = cls._apply_dominance_temp(plan, limbic_mood, temp)
+        plan["temperature"] = max(0.2, min(1.0, temp))
 
-        temp = plan.get("temperature", cls.DEFAULT_TEMPERATURE)
-
+    @classmethod
+    def _apply_valence_temp(cls, plan: dict, mood: EmotionState, temp: float) -> float:
+        v = mood.valence
         if v < cls.VALENCE_LOW_THRESHOLD:
             current = plan.get("max_tokens", 0)
             if current > 0:
                 plan["max_tokens"] = min(current, 256)
             if plan.get("abbreviated", False) is False:
-                temp += cls.TEMP_ADJUST_NEGATIVE_VALENCE
                 plan["tools_allowed"] = False
                 plan["streaming"] = False
+                return temp + cls.TEMP_ADJUST_NEGATIVE_VALENCE
         elif v > cls.VALENCE_HIGH_THRESHOLD:
-            temp = max(temp + cls.TEMP_ADJUST_POSITIVE_VALENCE, 0.3)
+            return max(temp + cls.TEMP_ADJUST_POSITIVE_VALENCE, 0.3)
+        return temp
 
+    @classmethod
+    def _apply_arousal_temp(cls, plan: dict, mood: EmotionState, temp: float) -> float:
+        a = mood.arousal
         if a > cls.AROUSAL_HIGH_THRESHOLD:
-            temp = max(temp + cls.TEMP_ADJUST_HIGH_AROUSAL, 0.3)
             current = plan.get("max_tokens", 0)
             if current > 0:
                 plan["max_tokens"] = min(current, 256)
-        elif a < cls.AROUSAL_LOW_THRESHOLD:
-            temp = min(temp + cls.TEMP_ADJUST_LOW_AROUSAL, 1.0)
+            return max(temp + cls.TEMP_ADJUST_HIGH_AROUSAL, 0.3)
+        if a < cls.AROUSAL_LOW_THRESHOLD:
+            return min(temp + cls.TEMP_ADJUST_LOW_AROUSAL, 1.0)
+        return temp
 
+    @classmethod
+    def _apply_dominance_temp(cls, plan: dict, mood: EmotionState, temp: float) -> float:
+        d = mood.dominance
         if d < cls.DOMINANCE_LOW_THRESHOLD:
             if plan.get("abbreviated", False) and plan["max_tokens"] == 80:
                 plan["max_tokens"] = 50
-            temp += cls.TEMP_ADJUST_LOW_DOMINANCE
-        elif d > cls.DOMINANCE_HIGH_THRESHOLD:
-            temp = max(temp + cls.TEMP_ADJUST_HIGH_DOMINANCE, 0.2)
+            return temp + cls.TEMP_ADJUST_LOW_DOMINANCE
+        if d > cls.DOMINANCE_HIGH_THRESHOLD:
             current = plan.get("max_tokens", 0)
             if current > 0:
                 plan["max_tokens"] = min(current, 512)
-
-        plan["temperature"] = max(0.2, min(1.0, temp))
+            return max(temp + cls.TEMP_ADJUST_HIGH_DOMINANCE, 0.2)
+        return temp
 
     @staticmethod
     def _format_age(ts: str) -> str:
@@ -320,25 +330,24 @@ class PlanningManager:
             logger.debug("Working context failed", exc_info=True)
         return ""
 
-    def _build_context_hint(
-        self,
-        scores: dict[str, float],
-        ignore_count: int = 0,
-        last_user_activity: float = 0.0,
-        last_proactive_time: float = 0.0,
-        negative_mood_score: float = 0.0,
-        outputs_since_input: int = 0,
-        frequency_exceeded: bool = False,
-    ) -> str:
-        now = time.localtime()
-        hour = now.tm_hour
-        time_str = "午前" if hour < 12 else "午後" if hour < 17 else "夕方以降"
-        trigger = max(scores, key=lambda k: scores[k])
+    @staticmethod
+    def _build_time_label() -> str:
+        hour = time.localtime().tm_hour
+        if hour < 12:
+            return "午前"
+        if hour < 17:
+            return "午後"
+        return "夕方以降"
+
+    @staticmethod
+    def _build_ignore_context(ignore_count: int) -> str | None:
+        if ignore_count < 1:
+            return None
+        return f"呼びかけに応答なし: {ignore_count}回"
+
+    @staticmethod
+    def _build_timing_context(last_proactive_time: float, last_user_activity: float) -> list[str]:
         parts: list[str] = []
-
-        if ignore_count >= 1:
-            parts.append(f"呼びかけに応答なし: {ignore_count}回")
-
         if last_proactive_time > 0:
             elapsed = time.time() - last_proactive_time
             parts.append(f"直前出力: {int(elapsed)}秒前")
@@ -350,32 +359,102 @@ class PlanningManager:
                 parts.append(f"最終ユーザー入力: {int(elapsed // 60)}分前")
         else:
             parts.append("最終ユーザー入力: --")
+        return parts
 
+    @staticmethod
+    def _build_frequency_context(outputs_since_input: int, frequency_exceeded: bool) -> list[str]:
+        parts: list[str] = []
         if outputs_since_input >= 2:
             parts.append(f"出力: {outputs_since_input}回連続")
         if frequency_exceeded:
             parts.append("出力頻度高")
-        if negative_mood_score > 0.3:
-            parts.append("気分: 不機嫌")
-        elif negative_mood_score > 0.1:
-            parts.append("気分: やや不機嫌")
+        return parts
 
-        parts.append(f"時間帯: {time_str}")
+    @staticmethod
+    def _build_mood_context(negative_mood_score: float) -> str | None:
+        if negative_mood_score > 0.3:
+            return "気分: 不機嫌"
+        if negative_mood_score > 0.1:
+            return "気分: やや不機嫌"
+        return None
+
+    def _build_user_preferences_context(self) -> str | None:
+        if not self._memory:
+            return None
+        try:
+            prefs = self._memory.get_user_preferences()
+            if prefs:
+                return f"ユーザーの関心: {prefs[0].get('content', '')[:80]}"
+        except Exception:
+            logger.debug("Memory hint failed", exc_info=True)
+        return None
+
+    def _build_context_hint(
+        self,
+        scores: dict[str, float],
+        ignore_count: int = 0,
+        last_user_activity: float = 0.0,
+        last_proactive_time: float = 0.0,
+        negative_mood_score: float = 0.0,
+        outputs_since_input: int = 0,
+        frequency_exceeded: bool = False,
+    ) -> str:
+        parts: list[str] = []
+        trigger = max(scores, key=lambda k: scores[k])
+
+        ignore_ctx = self._build_ignore_context(ignore_count)
+        if ignore_ctx:
+            parts.append(ignore_ctx)
+
+        parts.extend(self._build_timing_context(last_proactive_time, last_user_activity))
+        parts.extend(self._build_frequency_context(outputs_since_input, frequency_exceeded))
+
+        mood_ctx = self._build_mood_context(negative_mood_score)
+        if mood_ctx:
+            parts.append(mood_ctx)
+
+        parts.append(f"時間帯: {self._build_time_label()}")
         parts.append(f"トリガー: {trigger}")
 
         wc = self._build_working_context()
         if wc:
             parts.append("ワーキングメモリ:\n" + wc)
 
-        if self._memory:
-            try:
-                prefs = self._memory.get_user_preferences()
-                if prefs:
-                    parts.append(f"ユーザーの関心: {prefs[0].get('content', '')[:80]}")
-            except Exception:
-                logger.debug("Memory hint failed", exc_info=True)
+        pref_ctx = self._build_user_preferences_context()
+        if pref_ctx:
+            parts.append(pref_ctx)
 
         return " / ".join(parts)
+
+    def _build_episodic_hint(self) -> str | None:
+        if not self._memory:
+            return None
+        recent = self._memory.get_recent(3)
+        for e in reversed(recent):
+            s = e.get("summary", "")
+            if not s:
+                continue
+            ts = self._format_age(e.get("timestamp", ""))
+            if ts:
+                label = "直前の話題" if ts == "たった今" else "過去の話題"
+                return f"{label}: {s[:60]}（{ts}）"
+            return f"話題: {s[:60]}"
+        return None
+
+    def _build_semantic_hint(self, content: str) -> str | None:
+        if not self._memory:
+            return None
+        results = self._memory.search_semantic(content, max_results=2)
+        if not results:
+            return None
+        best = max(results, key=lambda r: r.get("score", 0))
+        if best.get("score", 0) <= 0.5:
+            return None
+        ts = self._format_age(best.get("timestamp", ""))
+        label = f"関連記憶: {best.get('content', '')[:60]}"
+        if ts:
+            label += f"（{ts}）"
+        return label
 
     def _build_user_context_hint(self, content: str) -> str:
         if not self._memory or not content:
@@ -386,25 +465,13 @@ class PlanningManager:
             if wc:
                 parts.append(wc)
             else:
-                recent = self._memory.get_recent(3)
-                for e in reversed(recent):
-                    s = e.get("summary", "")
-                    ts = self._format_age(e.get("timestamp", ""))
-                    if s:
-                        label = "直前の話題" if ts == "たった今" else "過去の話題"
-                        text = f"{label}: {s[:60]}（{ts}）" if ts else f"話題: {s[:60]}"
-                        parts.append(text)
-                        break
+                ep_hint = self._build_episodic_hint()
+                if ep_hint:
+                    parts.append(ep_hint)
 
-            results = self._memory.search_semantic(content, max_results=2)
-            if results:
-                best = max(results, key=lambda r: r.get("score", 0))
-                if best.get("score", 0) > 0.5:
-                    ts = self._format_age(best.get("timestamp", ""))
-                    label = f"関連記憶: {best.get('content', '')[:60]}"
-                    if ts:
-                        label += f"（{ts}）"
-                    parts.append(label)
+            sem_hint = self._build_semantic_hint(content)
+            if sem_hint:
+                parts.append(sem_hint)
         except Exception:
             logger.debug("User context hint failed", exc_info=True)
         return " / ".join(parts)

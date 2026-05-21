@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 import datetime
 import logging
 from typing import Any
@@ -26,6 +27,15 @@ _SITUATION_INSTRUCTIONS: dict[str, str] = {
         "誰かと会話しているのではなく、自ら会話を始める場面です。"
     ),
 }
+
+
+@dataclass
+class _PersonalityContext:
+    agents_md: str
+    current_state: str
+    speech_style: str
+    personality_traits: str
+    user_prefs: str
 
 
 class LLMPipeline:
@@ -63,10 +73,30 @@ class LLMPipeline:
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
 
-    def _load_personality_data(self) -> tuple[str, str]:
+    def _load_personality_context(self) -> _PersonalityContext:
         agents_md = self._agents_md_store.load() if self._agents_md_store else ""
         current_state = self._persona_profile.get_current_state_section() if self._persona_profile else ""
-        return agents_md, current_state
+        speech_style = self._persona_profile.get_speech_style() if self._persona_profile else ""
+        personality_traits = self._persona_profile.get_traits() if self._persona_profile else ""
+        user_prefs = self._build_user_preferences_section()
+        return _PersonalityContext(
+            agents_md=agents_md,
+            current_state=current_state,
+            speech_style=speech_style,
+            personality_traits=personality_traits,
+            user_prefs=user_prefs,
+        )
+
+    def _build_user_preferences_section(self) -> str:
+        prefs_list = self._memory.get_user_preferences() if self._memory else []
+        seen: set[str] = set()
+        unique_prefs: list[str] = []
+        for p in prefs_list:
+            c = p.get("content", "").strip()
+            if c and c not in seen:
+                seen.add(c)
+                unique_prefs.append(f"- {c}")
+        return "\n".join(unique_prefs)
 
     @staticmethod
     def _build_time_string() -> str:
@@ -78,46 +108,27 @@ class LLMPipeline:
         if self._sysprompt_cache is not None and not response_style:
             return self._sysprompt_cache
 
-        agents_md, current_state = self._load_personality_data()
-
-        speech_style = self._persona_profile.get_speech_style() if self._persona_profile else ""
-        personality_traits = self._persona_profile.get_traits() if self._persona_profile else ""
-
-        # ユーザー情報（重複除去）
-        prefs_list = self._memory.get_user_preferences() if self._memory else []
-        seen: set[str] = set()
-        unique_prefs: list[str] = []
-        for p in prefs_list:
-            c = p.get("content", "").strip()
-            if c and c not in seen:
-                seen.add(c)
-                unique_prefs.append(f"- {c}")
-        user_prefs = "\n".join(unique_prefs)
-
-        # 接続セッション（クライアント接続時のみ）
-        session_roles = self._session_roles_summary if self._session_roles_summary else ""
+        pctx = self._load_personality_context()
 
         prompt = self._personality.build_system_prompt(
-            agents_md_content=agents_md,
-            user_preferences=user_prefs,
-            session_roles=session_roles,
+            agents_md_content=pctx.agents_md,
+            user_preferences=pctx.user_prefs,
+            session_roles=self._session_roles_summary,
             response_style=response_style,
-            speech_style=speech_style,
-            personality_traits=personality_traits,
+            speech_style=pctx.speech_style,
+            personality_traits=pctx.personality_traits,
             governance_principles=self._governance_principles,
         )
 
         prompt += f"\n\n## 現在日時\n{self._build_time_string()}"
 
-        # 現在の感情状態（limbic）
         if self._limbic:
             mood_desc = self._limbic.build_mood_description()
             if mood_desc:
                 prompt += f"\n\n## 現在の気分\n{mood_desc}"
 
-        # 現在のペルソナ状態（Reflexion 蓄積、空なら省略）
-        if current_state and "{speech_style}" not in self._personality.system_prompt_template:
-            prompt += f"\n\n{current_state}"
+        if pctx.current_state and "{speech_style}" not in self._personality.system_prompt_template:
+            prompt += f"\n\n{pctx.current_state}"
 
         if context_hint:
             prompt += f"\n\n## 会話コンテキスト\n{context_hint}"
@@ -159,13 +170,19 @@ class LLMPipeline:
             interrupt_token=interrupt_token,
         )
 
+    def _build_full_system_prompt(self, context_hint: str, response_style: str, situation: str) -> str:
+        prompt = self._build_system_prompt(context_hint=context_hint, response_style=response_style)
+        if situation in _SITUATION_INSTRUCTIONS:
+            prompt += "\n\n" + _SITUATION_INSTRUCTIONS[situation]
+        return prompt
+
     def generate(
         self, plan: dict[str, Any], messages: list[dict[str, Any]], on_token: Callable[[str], None] | None = None
     ) -> str:
         self._sysprompt_cache = None
-        model_role = plan.get("model_role", "default")
-        context_hint = plan.get("context_hint", "")
-        max_tokens = plan.get("max_tokens", 0) or None
+        model_role: str = plan.get("model_role", "default")
+        context_hint: str = plan.get("context_hint", "")
+        max_tokens: int | None = plan.get("max_tokens", 0) or None
         if plan.get("tools_allowed", True):
             return self._generate_with_tools(
                 messages,
@@ -174,41 +191,36 @@ class LLMPipeline:
                 model_role=model_role,
                 max_tokens=max_tokens,
             )
-        temperature = plan.get("temperature", 0.5)
-        return self._generate_without_tools(plan, max_tokens, temperature, messages=messages, model_role=model_role)
+        temperature: float = plan.get("temperature", 0.5)
+        return self._generate_without_tools(plan, messages, max_tokens, temperature, model_role=model_role)
 
     def _generate_without_tools(
         self,
         plan: dict[str, Any],
+        messages: list[dict[str, Any]],
         max_tokens: int | None,
         temperature: float,
-        messages: list[dict[str, Any]] | None = None,
         model_role: str = "default",
     ) -> str:
-        context_hint = plan.get("context_hint", "")
-        situation = plan.get("situation", "")
+        context_hint: str = plan.get("context_hint", "")
+        situation: str = plan.get("situation", "")
+        content: str = plan.get("content", "")
 
-        # プロアクティブトリガー時のみ limbic の応答スタイルを注入
         response_style = ""
         if situation == "proactive" and self._limbic:
             response_style = self._limbic.build_response_style()
 
-        system_prompt = self._build_system_prompt(context_hint=context_hint, response_style=response_style)
+        system_prompt = self._build_full_system_prompt(
+            context_hint=context_hint,
+            response_style=response_style,
+            situation=situation,
+        )
 
-        parts = [system_prompt]
-        if situation in _SITUATION_INSTRUCTIONS:
-            parts.append(_SITUATION_INSTRUCTIONS[situation])
-
-        msgs: list[dict[str, Any]] = [{"role": "system", "content": "\n\n".join(parts)}]
-
-        content = plan.get("content", "")
+        msgs: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
         if messages and content:
             msgs.extend(messages)
+        msgs.append({"role": "user", "content": content if content else "..."})
 
-        if content:
-            msgs.append({"role": "user", "content": content})
-        else:
-            msgs.append({"role": "user", "content": "..."})
         text = ""
         try:
             resp = self._llm.chat(

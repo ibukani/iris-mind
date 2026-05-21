@@ -8,6 +8,7 @@ from iris.agency.execution.inhibition import InhibitionController
 from iris.agency.execution.manager import ExecutionManager
 from iris.agency.execution.monitor import OutputMonitor
 from iris.agency.execution.pipeline import LLMPipeline
+from iris.agency.execution.post_processor import PostProcessor
 from iris.agency.execution.tool_executor import ToolExecutionEngine
 from iris.agency.manager import AgencyManager
 from iris.agency.planning.manager import PlanningManager
@@ -389,19 +390,25 @@ class KernelFactory:
             tokenizers=tokenizers,
             default_model_name=config.model.get_model("default"),
         )
+        post_processor = PostProcessor(
+            event_bus=event_bus,
+            messages_getter=lambda: execution._messages,
+            hippocampal=hippocampal,
+            context_window_mgr=context_window_mgr,
+            model_config=config.model,
+            context_window=config.model.default_context_window,
+            inhibition=inhibition,
+            config=config,
+        )
         execution = ExecutionManager(
             internal_bus=internal_bus,
             event_bus=event_bus,
             llm_pipeline=pipeline,
-            context_window_mgr=context_window_mgr,
-            context_window=config.model.default_context_window,
-            model_config=config.model,
-            hippocampal=hippocampal,
+            post_processor=post_processor,
             monitor=monitor,
             inhibition=inhibition,
             session_roles_getter=session_mgr.get_sessions_summary,
             memory=memory,
-            config=config,
         )
 
         return AgencyManager(

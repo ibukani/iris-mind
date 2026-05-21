@@ -38,26 +38,32 @@ class OutputMonitor:
         self._arousal = arousal
         self._dominance = dominance
 
-    def _get_effective_talkative_threshold(self) -> int:
-        t = self._talkative_threshold
+    def _get_emotion_adjustments(self) -> tuple[int, int]:
+        talkative_delta = 0
+        frequency_delta = 0
+
         if self._valence >= 0.3:
-            t += 2
+            talkative_delta += 2
+            frequency_delta += 2
         elif self._valence <= -0.3:
-            t -= 1
+            talkative_delta -= 1
+            frequency_delta -= 1
+
         if self._dominance < 0.3:
-            t -= 2
-        return max(1, t)
+            talkative_delta -= 2
+            frequency_delta -= 2
+
+        return talkative_delta, frequency_delta
+
+    def _get_effective_talkative_threshold(self) -> int:
+        delta, _ = self._get_emotion_adjustments()
+        return max(1, self._talkative_threshold + delta)
 
     def _get_effective_max_per_5min(self) -> int:
-        m = self._max_per_5min
-        if self._valence >= 0.3:
-            m += 2
-        elif self._valence <= -0.3:
-            m -= 1
-        if self._dominance < 0.3:
-            m -= 2
+        _, freq_delta = self._get_emotion_adjustments()
+        m = self._max_per_5min + freq_delta
         if self._arousal > 0.6:
-            m = 999
+            return 999
         return max(1, m)
 
     def record_user_input(self) -> None:

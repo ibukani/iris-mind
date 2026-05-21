@@ -75,6 +75,24 @@ class CommandHandler:
         self._big_five = big_five
         self._debug_capture = debug_capture
         self._diagnostics = diagnostics
+        self._commands: dict[str, Callable[[str], str]] = {
+            "help": lambda _: self._help(),
+            "status": lambda _: self._status(),
+            "shutdown": lambda _: self._shutdown(),
+            "compact": lambda _: self._compact(),
+            "memory": self._memory_cmd,
+            "emotion": lambda _: self._emotion(),
+            "sessions": lambda _: self._sessions(),
+            "ping": lambda _: self._ping(),
+            "tools": lambda _: self._tools(),
+            "llm": lambda _: self._llm_info(),
+            "personality": lambda _: self._personality(),
+            "state": self._state_cmd,
+            "events": self._events_cmd,
+            "health": lambda _: self._health_cmd(),
+            "report": lambda _: self._report_cmd(),
+            "debug": self._debug,
+        }
 
     def set_shutdown_handler(self, handler: Callable[[], None]) -> None:
         self._on_shutdown = handler
@@ -108,39 +126,10 @@ class CommandHandler:
 
     def handle(self, name: str, args: str = "") -> str:
         logger.info("CommandHandler: /%s %s", name, args[:100] if args else "")
-        if name == "help":
-            return self._help()
-        if name == "status":
-            return self._status()
-        if name == "shutdown":
-            return self._shutdown()
-        if name == "compact":
-            return self._compact()
-        if name == "memory":
-            return self._memory_cmd(args)
-        if name == "emotion":
-            return self._emotion()
-        if name == "sessions":
-            return self._sessions()
-        if name == "ping":
-            return self._ping()
-        if name == "tools":
-            return self._tools()
-        if name == "llm":
-            return self._llm_info()
-        if name == "personality":
-            return self._personality()
-        if name == "state":
-            return self._state_cmd(args)
-        if name == "events":
-            return self._events_cmd(args)
-        if name == "health":
-            return self._health_cmd()
-        if name == "report":
-            return self._report_cmd()
-        if name == "debug":
-            return self._debug(args)
-        return f"Unknown command: /{name}"
+        handler = self._commands.get(name)
+        if handler is None:
+            return f"Unknown command: /{name}"
+        return handler(args)
 
     def _help(self) -> str:
         return (
@@ -281,20 +270,10 @@ class CommandHandler:
                     n = int(p[4:])
             elif not p.startswith("--"):
                 path = p
+
         if history:
-            result = diag.query(path, history=True, n=n)
-            if result is None:
-                return "No history available (tracer not enabled)"
-            if not result:
-                return f"No history for '{path}'"
-            lines = []
-            for e in result:
-                ts = e.get("timestamp", "")
-                trigger = e.get("trigger", "")
-                data = e.get("data", {})
-                data_str = ", ".join(f"{k}={v}" for k, v in (data or {}).items())
-                lines.append(f"[{ts}] {trigger} → {data_str}")
-            return "\n".join(lines)
+            return self._format_state_history(diag, path, n)
+
         state = diag.query(path)
         if state is None:
             return f"Path not found: '{path}'" if path else "No state available"
@@ -303,6 +282,21 @@ class CommandHandler:
 
             return json.dumps(state, ensure_ascii=False, indent=2)
         return _format_state(state, path)
+
+    def _format_state_history(self, diag: SystemDiagnostics, path: str, n: int) -> str:
+        result = diag.query(path, history=True, n=n)
+        if result is None:
+            return "No history available (tracer not enabled)"
+        if not result:
+            return f"No history for '{path}'"
+        lines = []
+        for e in result:
+            ts = e.get("timestamp", "")
+            trigger = e.get("trigger", "")
+            data = e.get("data", {})
+            data_str = ", ".join(f"{k}={v}" for k, v in (data or {}).items())
+            lines.append(f"[{ts}] {trigger} → {data_str}")
+        return "\n".join(lines)
 
     def _events_cmd(self, args: str) -> str:
         diag = self._diagnostics
@@ -360,23 +354,28 @@ class CommandHandler:
     def _debug(self, args: str) -> str:
         parts = args.strip().split(maxsplit=1)
         sub = parts[0].lower() if parts else ""
+        rest = parts[1] if len(parts) > 1 else ""
 
-        if sub in ("state",):
-            return self._state_cmd(parts[1] if len(parts) > 1 else "")
-        if sub == "events":
-            return self._events_cmd(parts[1] if len(parts) > 1 else "")
-        if sub == "health":
-            return self._health_cmd()
-        if sub == "report":
-            return self._report_cmd()
+        delegations: dict[str, Callable[[str], str]] = {
+            "state": self._state_cmd,
+            "events": self._events_cmd,
+            "health": lambda _: self._health_cmd(),
+            "report": lambda _: self._report_cmd(),
+        }
+        handler = delegations.get(sub)
+        if handler is not None:
+            return handler(rest)
 
         dc = self._debug_capture
-        if sub in ("on", "off"):
+        if sub == "on":
             if dc is None:
                 return "DebugCapture not available"
-            if sub == "on":
-                dc.set_enabled(True)
-                return "Debug capture enabled"
+            dc.set_enabled(True)
+            return "Debug capture enabled"
+
+        if sub == "off":
+            if dc is None:
+                return "DebugCapture not available"
             dc.set_enabled(False)
             return "Debug capture disabled"
 
@@ -396,9 +395,8 @@ class CommandHandler:
                 return "No captures"
             return "\n---\n".join(e.format_as_markdown() for e in entries)
         if sub in ("show", "get"):
-            n_str = parts[1] if len(parts) > 1 else ""
             try:
-                entry_id = int(n_str)
+                entry_id = int(rest)
             except (ValueError, TypeError):
                 return "Usage: /debug show <id>"
             return dc.show(entry_id)

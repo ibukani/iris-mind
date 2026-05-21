@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from collections.abc import Iterator
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -37,6 +38,9 @@ def _flatten(tree: dict, prefix: str = "") -> dict[str, Any]:
     return result
 
 
+_LAYER_NAMES = ("kernel", "io", "memory", "limbic", "agency")
+
+
 class SystemDiagnostics:
     def __init__(
         self,
@@ -56,15 +60,13 @@ class SystemDiagnostics:
         self._limbic = limbic
         self._agency = agency
 
+    def _layer_objects(self) -> Iterator[tuple[str, Any]]:
+        for name in _LAYER_NAMES:
+            yield name, getattr(self, f"_{name}")
+
     def get_state(self) -> dict[str, Any]:
         tree: dict[str, Any] = {}
-        for name, obj in [
-            ("kernel", self._kernel),
-            ("io", self._io),
-            ("memory", self._memory),
-            ("limbic", self._limbic),
-            ("agency", self._agency),
-        ]:
+        for name, obj in self._layer_objects():
             if obj is not None and hasattr(obj, "get_state"):
                 try:
                     tree[name] = obj.get_state()
@@ -92,13 +94,7 @@ class SystemDiagnostics:
 
     def health(self) -> dict[str, str]:
         result: dict[str, str] = {}
-        for name, obj in [
-            ("kernel", self._kernel),
-            ("io", self._io),
-            ("memory", self._memory),
-            ("limbic", self._limbic),
-            ("agency", self._agency),
-        ]:
+        for name, obj in self._layer_objects():
             if obj is None:
                 result[name] = "NOT_LOADED"
             elif hasattr(obj, "health"):

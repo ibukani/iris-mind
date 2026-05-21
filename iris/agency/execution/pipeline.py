@@ -3,21 +3,19 @@ from __future__ import annotations
 from collections.abc import Callable
 import datetime
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from iris.agency.execution.interrupt_token import InterruptToken
 from iris.agency.execution.tool_executor import ToolExecutionEngine
 from iris.kernel.config import ModelConfig
+from iris.kernel.debug_capture import CaptureEntry, DebugCapture
+from iris.limbic.manager import LimbicManager
 from iris.llm.capability_checker import CapabilityChecker
 from iris.llm.llm_bridge import LLMBridge
 from iris.memory.long_term.stores import AgentsMdStore
 from iris.memory.manager import MemoryManager
 from iris.memory.personality.persona_profile import PersonaProfile
 from iris.memory.personality.personality import Personality
-
-if TYPE_CHECKING:
-    from iris.kernel.debug_capture import DebugCapture
-    from iris.limbic.manager import LimbicManager
 
 logger = logging.getLogger(__name__)
 
@@ -65,14 +63,25 @@ class LLMPipeline:
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
 
+    def _load_personality_data(self) -> tuple[str, str, str, str]:
+        agents_md = self._agents_md_store.load() if self._agents_md_store else ""
+        speech_style = self._persona_profile.get_speech_style() if self._persona_profile else ""
+        traits = self._persona_profile.get_traits() if self._persona_profile else ""
+        dynamic = self._persona_profile.get_dynamic_personality() if self._persona_profile else ""
+        return agents_md, speech_style, traits, dynamic
+
+    @staticmethod
+    def _build_time_string() -> str:
+        dt_now = datetime.datetime.now()
+        weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+        return f"{dt_now.strftime('%Y-%m-%d %H:%M:%S')} ({weekdays[dt_now.weekday()]})"
+
     def _build_system_prompt(self, context_hint: str = "") -> str:
         if self._sysprompt_cache is not None:
             return self._sysprompt_cache
 
-        agents_md = self._agents_md_store.load() if self._agents_md_store else ""
-        speech_style = self._persona_profile.get_speech_style() if self._persona_profile else ""
-        traits = self._persona_profile.get_traits() if self._persona_profile else ""
-        dynamic_personality = self._persona_profile.get_dynamic_personality() if self._persona_profile else ""
+        agents_md, speech_style, traits, dynamic = self._load_personality_data()
+
         prefs_list = self._memory.get_user_preferences() if self._memory else []
         user_prefs = "\n".join(f"- {p['content']}" for p in prefs_list) if prefs_list else ""
         governance = self._governance_principles or ""
@@ -86,15 +95,9 @@ class LLMPipeline:
             governance_principles=governance,
             session_roles=session_roles,
         )
-
-        if dynamic_personality:
-            prompt += f"\n\n{dynamic_personality}"
-
-        dt_now = datetime.datetime.now()
-        weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
-        weekday = weekdays[dt_now.weekday()]
-        current_time_str = f"{dt_now.strftime('%Y-%m-%d %H:%M:%S')} ({weekday})"
-        prompt += f"\n\n## 現在日時\n{current_time_str}"
+        if dynamic:
+            prompt += f"\n\n{dynamic}"
+        prompt += f"\n\n## 現在日時\n{self._build_time_string()}"
 
         if self._limbic:
             mood_desc = self._limbic.build_mood_description()
@@ -143,19 +146,6 @@ class LLMPipeline:
     def generate(
         self, plan: dict[str, Any], messages: list[dict[str, Any]], on_token: Callable[[str], None] | None = None
     ) -> str:
-        """計画に基づいて、会話メッセージからテキストを生成する（メイン公開メソッド）。
-
-        計画の tools_allowed フラグに基づいて、ツール使用の有無を判定し、
-        適切なパイプライン（ツール付き / なし）で生成する。
-
-        Args:
-            plan: PlanningManager が生成した計画辞書。
-            messages: 会話履歴。role/content のリスト。
-            on_token: トークンストリーミングコールバック（オプション）。
-
-        Returns:
-            生成されたテキスト。
-        """
         self._sysprompt_cache = None
         model_role = plan.get("model_role", "default")
         context_hint = plan.get("context_hint", "")
@@ -294,7 +284,6 @@ class LLMPipeline:
         response: str,
         tool_iterations: list[dict] | None = None,
     ) -> None:
-        """デバッグキャプチャ処理を行い、トークン数をカウントして記録する。"""
         dc = self._debug_capture
         if not (dc and dc.enabled):
             return
@@ -308,8 +297,6 @@ class LLMPipeline:
             "response": dc.count_tokens(response),
         }
         tc["total"] = sum(tc.values())
-
-        from iris.kernel.debug_capture import CaptureEntry
 
         dc.capture(
             CaptureEntry(

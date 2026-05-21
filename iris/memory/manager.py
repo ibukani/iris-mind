@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 import logging
 import threading
 from typing import TYPE_CHECKING, Any, Protocol
@@ -98,17 +99,14 @@ class MemoryManager:
     def get_state(self) -> dict:
         episodic_count = 0
         semantic_count = 0
-        if self.long_term is not None:
-            try:
-                if hasattr(self.long_term, "episodic") and self.long_term.episodic:
-                    episodic_count = len(self.long_term.episodic.load_all())
-            except Exception:
-                pass
-            try:
-                if hasattr(self.long_term, "semantic") and self.long_term.semantic:
-                    semantic_count = len(self.long_term.semantic.load_all())
-            except Exception:
-                pass
+        lt = self.long_term
+        if lt is not None:
+            if hasattr(lt, "episodic") and lt.episodic:
+                with suppress(Exception):
+                    episodic_count = len(lt.episodic.load_all())
+            if hasattr(lt, "semantic") and lt.semantic:
+                with suppress(Exception):
+                    semantic_count = len(lt.semantic.load_all())
         return {
             "episodic": episodic_count,
             "semantic": semantic_count,
@@ -190,10 +188,6 @@ class MemoryManager:
             )
         )
 
-    # ============================================================
-    # ディスパッチャー
-    # ============================================================
-
     def store(self, stream: str, data: Any) -> None:
         logger.info("MemoryManager: store stream=%s", stream)
         if stream == "sensory":
@@ -201,49 +195,50 @@ class MemoryManager:
                 self.sensory.store_raw(data["raw"])
             else:
                 self.sensory.add_fragment(str(data), is_final=True)
-        elif stream == "short_term":
+            return
+
+        if stream == "short_term":
             if isinstance(data, str):
                 self.short_term.add_turn("system", data)
             elif isinstance(data, dict):
                 role = data.get("role", "system")
                 content = data.get("content") or data.get("summary") or str(data)
                 self.short_term.add_turn(role, content)
-        elif stream == "episodic":
+            return
+
+        if stream == "episodic":
             self.long_term.store_episodic(data)
             if isinstance(data, dict):
                 self.short_term.add_turn(
                     "system",
                     data.get("content") or data.get("summary") or str(data),
                 )
-        elif stream == "semantic":
+            return
+
+        if stream == "semantic":
             self.long_term.store_semantic(data)
             if isinstance(data, dict):
                 content = data.get("content", "")
                 if content:
                     self.short_term.add_turn("system", content)
-        else:
-            logger.warning("MemoryManager: unknown stream=%s", stream)
+            return
+
+        logger.warning("MemoryManager: unknown stream=%s", stream)
 
     def retrieve(self, stream: str, **filters: Any) -> list[dict]:
         if stream == "sensory":
             result = self.sensory.retrieve()
             return [result] if result else []
         if stream == "short_term":
-            n = filters.get("n", 5)
-            if not isinstance(n, int):
-                n = 5
+            n = filters.get("n", 5) if isinstance(filters.get("n"), int) else 5
             return self.short_term.get_recent_turns(n)
         if stream == "episodic":
-            n = filters.get("n", 5)
-            if not isinstance(n, int):
-                n = 5
+            n = filters.get("n", 5) if isinstance(filters.get("n"), int) else 5
             return self.long_term.get_episodic_recent(n)
         return []
 
     def search(self, query: str, stream: str | None = None, **kwargs: Any) -> list[dict]:
-        max_results = kwargs.get("max_results", 3)
-        if not isinstance(max_results, int):
-            max_results = 3
+        max_results = kwargs.get("max_results", 3) if isinstance(kwargs.get("max_results"), int) else 3
         if stream == "short_term":
             return self.short_term.search(query, max_results=max_results)
         if stream == "semantic" or stream is None:
@@ -282,10 +277,6 @@ class MemoryManager:
 
         self.short_term.mark_consolidated()
         logger.info("MemoryManager: flushed %d turns, %d topics", len(unconsolidated), len(topics))
-
-    # ============================================================
-    # 後方互換 API
-    # ============================================================
 
     def get_user_preferences(self) -> list[dict[str, Any]]:
         return self.long_term.search_semantic("ユーザーの好み 興味 趣味", max_results=2)

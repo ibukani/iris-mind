@@ -104,31 +104,8 @@ class KernelContext:
 class KernelFactory:
     @staticmethod
     def build(config: Config, debug: bool = False) -> KernelContext:
-        """設定に基づいて Iris の全層を構築し、KernelContext で統合する。
-
-        ビルド順序：
-        1. InfraProvider: EventBus, IO, TCP
-        2. StorageLayer: ファイルベース記憶（Episodic, Semantic, Agents MD）
-        3. MemoryLayer: ベクトルストア、人格、感覚バッファ
-        4. LLMLayer: プロバイダ、ブリッジ、コンテキスト管理
-        5. AgencyLayer: 計画・実行エンジン（PlanningManager, ExecutionManager）
-        6. CommandHandler: シャットダウンなどのコマンド処理
-        7. KernelProcess: 全層のイベントループ管理
-
-        Args:
-            config: Config インスタンス。config.yaml から model_config, proactive, io 等を読む。
-
-        Returns:
-            KernelContext: 構築完了した全層へのアクセスポイント集約。
-
-        Raises:
-            LLMAvailabilityError: 指定プロバイダが利用不可な場合。
-        """
         _ensure_access_token(config)
 
-        # ============================================================
-        # Phase 1: インフラ基盤 (EventBus, IO, Debug)
-        # ============================================================
         tracer = EventTracer(max_entries=config.debug.trace_max_entries)
         tracer.set_enabled(config.debug.enabled)
         event_bus = EventBus(tracer=tracer)
@@ -145,152 +122,83 @@ class KernelFactory:
         )
 
         if debug:
-            # Debug mode: skip heavy initialization (LLM, ChromaDB, Agency)
-            memory_mgr = None
-            limbic: LimbicManager | None = None
-            big_five: BigFiveProfile | None = None
-            llm: LLMBridge | None = None
-            tokenizers: dict[str, TokenizerManager] = {}
-            debug_capture: DebugCapture | None = None
-            _registry: ToolRegistry | None = None
-            tool_exec: ToolExecutionEngine | None = None
-            agency: AgencyManager | None = None
-        else:
-            # ============================================================
-            # Phase 2: 記憶ストア構築（MemoryManager / EmotionalMemory で共用）
-            # ============================================================
-            mem_cfg = config.memory
-            episodic = EpisodicStore(path=mem_cfg.episodic_path, max_entries=mem_cfg.episodic_max_entries)
-            semantic = SemanticStore(
+            return KernelFactory._build_shared(
+                config,
+                event_bus,
+                tracer,
+                io_mgr,
+                session_mgr,
+                grpc_listener,
+                memory_mgr=None,
+                limbic=None,
+                llm=None,
+                debug_capture=None,
+                registry=None,
+                agency=None,
+                big_five=None,
+            )
+
+        (episodic, semantic) = KernelFactory._build_stores(config)
+        memory_mgr = KernelFactory._build_memory(event_bus, config, episodic=episodic, semantic=semantic)
+
+        big_five = BigFiveProfile.load()
+        limbic = LimbicManager(
+            event_bus=event_bus,
+            emotional_memory=EmotionalMemory(episodic_store=episodic, semantic_store=semantic),
+        )
+        limbic.set_big_five(big_five)
+
+        llm = KernelFactory._build_llm(config)
+        tokenizers: dict[str, TokenizerManager] = {
+            entry.name: TokenizerManager(
+                repo_id=entry.tokenizer_repo_id,
+                local_path=entry.tokenizer_local_path,
+                hf_token=config.model.hf_token,
+            )
+            for entry in config.model.models
+        }
+        debug_capture = DebugCapture(tokenizer_mgr=next(iter(tokenizers.values()), None))
+        _registry, tool_exec = KernelFactory._build_tools()
+        agency = KernelFactory._build_agency(
+            config,
+            event_bus,
+            llm,
+            memory_mgr,
+            tool_exec,
+            session_mgr,
+            limbic=limbic,
+            big_five=big_five,
+            tokenizers=tokenizers,
+            debug_capture=debug_capture,
+        )
+
+        return KernelFactory._build_shared(
+            config,
+            event_bus,
+            tracer,
+            io_mgr,
+            session_mgr,
+            grpc_listener,
+            memory_mgr=memory_mgr,
+            limbic=limbic,
+            llm=llm,
+            debug_capture=debug_capture,
+            registry=_registry,
+            agency=agency,
+            big_five=big_five,
+        )
+
+    @staticmethod
+    def _build_stores(config: Config) -> tuple[EpisodicStore, SemanticStore]:
+        mem_cfg = config.memory
+        return (
+            EpisodicStore(path=mem_cfg.episodic_path, max_entries=mem_cfg.episodic_max_entries),
+            SemanticStore(
                 path=mem_cfg.semantic_path,
                 max_entries=mem_cfg.semantic_max_entries,
                 vector_db_path=mem_cfg.vector_db_path,
-            )
-            memory_mgr = KernelFactory._build_memory(
-                event_bus,
-                config,
-                episodic=episodic,
-                semantic=semantic,
-            )
-
-            # ============================================================
-            # Phase 3: 大脳辺縁系 (感情エンジン)
-            # ============================================================
-            big_five = BigFiveProfile.load()
-            limbic = LimbicManager(
-                event_bus=event_bus,
-                emotional_memory=EmotionalMemory(
-                    episodic_store=episodic,
-                    semantic_store=semantic,
-                ),
-            )
-            limbic.set_big_five(big_five)
-
-            # ============================================================
-            # Phase 4: LLM・パーソナリティ
-            # ============================================================
-            llm = KernelFactory._build_llm(config)
-            tokenizers = {
-                entry.name: TokenizerManager(
-                    repo_id=entry.tokenizer_repo_id,
-                    local_path=entry.tokenizer_local_path,
-                    hf_token=config.model.hf_token,
-                )
-                for entry in config.model.models
-            }
-
-            debug_capture = DebugCapture(
-                tokenizer_mgr=next(iter(tokenizers.values()), None),
-            )
-
-            # ============================================================
-            # Phase 4: ケイパビリティ (ツール)
-            # ============================================================
-            _registry, tool_exec = KernelFactory._build_tools()
-
-            # ============================================================
-            # Phase 4.5: 基底核抑制
-            # ============================================================
-            inhibition = InhibitionController()
-
-            # ============================================================
-            # Phase 5: Agency 層 (PFC planning + 基底核 execution)
-            # ============================================================
-            internal_bus = InternalBus()
-            scoring = ProactiveScoring(config=config.proactive, memory=memory_mgr)
-            agency = KernelFactory._build_agency(
-                config,
-                event_bus,
-                internal_bus,
-                llm,
-                memory_mgr,
-                tool_exec,
-                session_mgr,
-                inhibition=inhibition,
-                scoring=scoring,
-                limbic=limbic,
-                big_five=big_five,
-                tokenizers=tokenizers,
-                debug_capture=debug_capture,
-            )
-
-        # ============================================================
-        # Phase 6: KernelManager
-        # ============================================================
-        kernel_mgr = KernelManager()
-
-        # ============================================================
-        # Phase 7: Diagnostics
-        # ============================================================
-        diagnostics = SystemDiagnostics(
-            event_bus=event_bus,
-            tracer=tracer,
-            kernel=kernel_mgr,
-            io=io_mgr,
-            memory=memory_mgr,
-            limbic=limbic,
-            agency=agency,
+            ),
         )
-
-        # ============================================================
-        # Phase 8: コンテキスト組み立て
-        # ============================================================
-        ctx = KernelContext(
-            event_bus=event_bus,
-            kernel=kernel_mgr,
-            io=io_mgr,
-            limbic=limbic,
-            memory=memory_mgr,
-            agency=agency,
-            cmd_handler=None,  # type: ignore[arg-type]
-            grpc_listener=grpc_listener,
-            session_mgr=session_mgr,
-            diagnostics=diagnostics,
-        )
-
-        def _on_shutdown() -> None:
-            ctx.shutdown_requested = True
-
-        def _noop_compact() -> str:
-            return "Compact not available (debug mode)"
-
-        cmd_handler = CommandHandler(
-            config=config,
-            on_shutdown=_on_shutdown,
-            on_compact=ctx.agency.compact_context if ctx.agency else _noop_compact,
-            memory=memory_mgr,
-            limbic=limbic,
-            session_mgr=session_mgr,
-            llm=llm,
-            registry=_registry,
-            big_five=big_five,
-            debug_capture=debug_capture,
-            diagnostics=diagnostics,
-        )
-        ctx.cmd_handler = cmd_handler
-        ctx.io.set_command_handler(cmd_handler.handle)
-
-        return ctx
 
     @staticmethod
     def _build_memory(
@@ -347,21 +255,85 @@ class KernelFactory:
         return registry, tool_exec
 
     @staticmethod
+    def _build_shared(
+        config: Config,
+        event_bus: EventBus,
+        tracer: EventTracer,
+        io_mgr: IOManager,
+        session_mgr: SessionManager,
+        grpc_listener: GrpcListener,
+        memory_mgr: MemoryManager | None,
+        limbic: LimbicManager | None,
+        llm: LLMBridge | None,
+        debug_capture: DebugCapture | None,
+        registry: ToolRegistry | None,
+        agency: AgencyManager | None,
+        big_five: BigFiveProfile | None,
+    ) -> KernelContext:
+        kernel_mgr = KernelManager()
+        diagnostics = SystemDiagnostics(
+            event_bus=event_bus,
+            tracer=tracer,
+            kernel=kernel_mgr,
+            io=io_mgr,
+            memory=memory_mgr,
+            limbic=limbic,
+            agency=agency,
+        )
+
+        ctx = KernelContext(
+            event_bus=event_bus,
+            kernel=kernel_mgr,
+            io=io_mgr,
+            limbic=limbic,
+            memory=memory_mgr,
+            agency=agency,
+            cmd_handler=None,  # type: ignore[arg-type]
+            grpc_listener=grpc_listener,
+            session_mgr=session_mgr,
+            diagnostics=diagnostics,
+        )
+
+        def _on_shutdown() -> None:
+            ctx.shutdown_requested = True
+
+        def _noop_compact() -> str:
+            return "Compact not available (debug mode)"
+
+        cmd_handler = CommandHandler(
+            config=config,
+            on_shutdown=_on_shutdown,
+            on_compact=ctx.agency.compact_context if ctx.agency else _noop_compact,
+            memory=memory_mgr,
+            limbic=limbic,
+            session_mgr=session_mgr,
+            llm=llm,
+            registry=registry,
+            big_five=big_five,
+            debug_capture=debug_capture,
+            diagnostics=diagnostics,
+        )
+        ctx.cmd_handler = cmd_handler
+        ctx.io.set_command_handler(cmd_handler.handle)
+
+        return ctx
+
+    @staticmethod
     def _build_agency(
         config: Config,
         event_bus: EventBus,
-        internal_bus: InternalBus,
         llm: LLMBridge,
         memory: MemoryManager,
         tool_exec: ToolExecutionEngine,
         session_mgr: SessionManager,
-        inhibition: InhibitionController,
-        scoring: ProactiveScoring,
         limbic: LimbicManager | None = None,
         big_five: BigFiveProfile | None = None,
         tokenizers: dict[str, TokenizerManager] | None = None,
         debug_capture: DebugCapture | None = None,
     ) -> AgencyManager:
+        inhibition = InhibitionController()
+        internal_bus = InternalBus()
+
         personality = Personality(name=config.personality.name, prompt_file=config.personality.prompt_file)
         capability_checker = CapabilityChecker(config=config.model)
 
@@ -393,6 +365,7 @@ class KernelFactory:
             debug_capture=debug_capture,
         )
 
+        scoring = ProactiveScoring(config=config.proactive, memory=memory)
         planning = PlanningManager(
             internal_bus=internal_bus,
             event_bus=event_bus,

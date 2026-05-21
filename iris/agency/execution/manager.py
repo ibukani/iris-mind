@@ -21,6 +21,10 @@ from iris.memory.manager import MemoryManager
 logger = logging.getLogger(__name__)
 
 
+def _run_in_background(target: Callable[[], None], *, name: str = "bg-task") -> None:
+    threading.Thread(target=target, daemon=True, name=name).start()
+
+
 class ExecutionManager:
     """意思決定されたプランに基づいてLLMの実行、出力監視、記憶の更新を統合管理するクラス。
 
@@ -28,7 +32,6 @@ class ExecutionManager:
         - 運動野・基底核に対応し、行動（LLM Pipelineの実行、ツール実行）を担当。
     """
 
-    # 多弁度（talkative_degree）のしきい値
     TALKATIVE_ABBREVIATED_THRESHOLD = 1
     TALKATIVE_TOKEN_LIMIT_THRESHOLD = 2
     TALKATIVE_SKIP_POSTPROCESS_THRESHOLD = 3
@@ -79,49 +82,54 @@ class ExecutionManager:
         }
 
     def _on_plan(self, event: PlanDecided) -> None:
-        """内部イベントバスからPlanDecidedを受信したときのコールバック。"""
-        if self._monitor and event.plan.get("content", ""):
-            self._monitor.record_user_input()
-
+        plan = event.plan
         if self._monitor:
-            talkative = self._monitor.talkative_degree
-            event.plan["talkative_degree"] = talkative
-            if self._inhibition:
-                self._inhibition.set_output_frequency_state(
-                    self._monitor.outputs_since_last_input,
-                    self._monitor.frequency_exceeded,
-                )
+            if plan.get("content", ""):
+                self._monitor.record_user_input()
+            plan["talkative_degree"] = self._monitor.talkative_degree
+            self._update_inhibition_state()
+            self._apply_emotion_to_monitor(plan)
 
-            emotion = event.plan.get("current_emotion")
-            if emotion:
-                from iris.limbic.models import EmotionState
+        self._apply_talkative_overrides(plan)
 
-                if isinstance(emotion, EmotionState):
-                    self._monitor.set_emotion_state(
-                        emotion.valence,
-                        emotion.arousal,
-                        emotion.dominance,
-                    )
-
-        self._apply_talkative_overrides(event.plan)
-
-        if self._should_skip_proactive(event.plan):
+        if self._should_skip_proactive(plan):
             logger.info(
                 "ExecutionManager: suppressed proactive (talkative=%d), skipping LLM",
-                event.plan.get("talkative_degree", 0),
+                plan.get("talkative_degree", 0),
             )
             return
 
         logger.info(
             "ExecutionManager: executing plan session=%s abbreviated=%s",
-            event.plan.get("session_id"),
-            event.plan.get("abbreviated"),
+            plan.get("session_id"),
+            plan.get("abbreviated"),
         )
-        self._execute_general(event.plan)
+        self._execute_general(plan)
+
+    def _update_inhibition_state(self) -> None:
+        if self._monitor and self._inhibition:
+            self._inhibition.set_output_frequency_state(
+                self._monitor.outputs_since_last_input,
+                self._monitor.frequency_exceeded,
+            )
+
+    def _apply_emotion_to_monitor(self, plan: dict[str, Any]) -> None:
+        if not self._monitor:
+            return
+        emotion = plan.get("current_emotion")
+        if not emotion:
+            return
+        from iris.limbic.models import EmotionState
+
+        if isinstance(emotion, EmotionState):
+            self._monitor.set_emotion_state(
+                emotion.valence,
+                emotion.arousal,
+                emotion.dominance,
+            )
 
     @classmethod
     def _apply_talkative_overrides(cls, plan: dict[str, Any]) -> None:
-        """多弁度（talkative_degree）に応じてプランパラメータを上書き調整する。"""
         degree = plan.get("talkative_degree", 0)
         if degree <= 0:
             return
@@ -148,7 +156,6 @@ class ExecutionManager:
         return talkative >= 2 or (self._monitor.frequency_exceeded and talkative >= 1)
 
     def _execute_general(self, plan: dict[str, Any]) -> None:
-        """プランに基づいてLLMの呼び出しと関連処理（ストリーミング、履歴保存、記憶連携など）を実行する。"""
         content = plan.get("content", "")
         abbreviated = plan.get("abbreviated", False)
         streaming = plan.get("streaming", not abbreviated)
@@ -159,17 +166,11 @@ class ExecutionManager:
         if content:
             plan["tools_allowed"] = True
 
-        # 1. 実行前コンテキスト準備
         self._prepare_execution_context(plan, content, show_thinking, record_history)
-
-        # 2. LLM 生成処理
         on_token = self._create_stream_callback() if streaming else None
         response_text = self._run_llm_generation(plan, on_token)
-
-        # 3. 実行後コンテキスト確定
         self._finalize_execution(plan, response_text, show_thinking, record_history)
 
-        # 4. バックグラウンド後処理のトリガー
         if run_reflexion or run_compression:
             self._trigger_post_processes(plan, run_reflexion, run_compression)
 
@@ -200,8 +201,6 @@ class ExecutionManager:
             self._pipeline.set_session_roles_summary(self._session_roles_getter())
 
     def _create_stream_callback(self) -> Callable[[str], None]:
-        """ストリーミング出力用のトークン受信コールバックを作成する。"""
-
         def _on_token(delta: str) -> None:
             self._event_bus.publish(
                 MessageEvent(
@@ -280,39 +279,40 @@ class ExecutionManager:
             self._handle_monitor_flags(flags)
 
     def _trigger_post_processes(self, plan: dict[str, Any], run_reflexion: bool, run_compression: bool) -> None:
-        """海馬リフレクションおよびコンテキスト圧縮処理をバックグラウンドスレッドでトリガーする。"""
+        _run_in_background(
+            lambda: self._run_post_process(plan, run_reflexion, run_compression),
+            name="post-process",
+        )
 
-        def _post_process() -> None:
-            try:
-                if run_reflexion and self._hippocampal:
-                    self._msg_count_since_reflect = self._hippocampal.maybe_run(
-                        self._messages,
-                        self._msg_count_since_reflect,
-                    )
-                if run_compression and self._context_window_mgr:
-                    model_role = plan.get("model_role", "default")
-                    effective_ctx = (
-                        self._model_config.get_effective_context_window(model_role)
-                        if self._model_config
-                        else self._context_window
-                    )
-                    model_name = self._model_config.get_model(model_role) if self._model_config else None
-                    summary = self._context_window_mgr.check_and_summarize(
-                        self._messages,
-                        effective_ctx,
-                        model_name=model_name,
-                    )
-                    if summary and len(self._messages) > 6:
-                        keep = 6
-                        self._messages = [
-                            {"role": "system", "content": f"## Session Summary\n{summary}"},
-                            *self._messages[-keep:],
-                        ]
-                        logger.info("Auto-compacted: summary_len=%d, kept=%d", len(summary), keep)
-            except Exception:
-                logger.exception("Post-process failed")
-
-        threading.Thread(target=_post_process, daemon=True).start()
+    def _run_post_process(self, plan: dict[str, Any], run_reflexion: bool, run_compression: bool) -> None:
+        try:
+            if run_reflexion and self._hippocampal:
+                self._msg_count_since_reflect = self._hippocampal.maybe_run(
+                    self._messages,
+                    self._msg_count_since_reflect,
+                )
+            if run_compression and self._context_window_mgr:
+                model_role = plan.get("model_role", "default")
+                effective_ctx = (
+                    self._model_config.get_effective_context_window(model_role)
+                    if self._model_config
+                    else self._context_window
+                )
+                model_name = self._model_config.get_model(model_role) if self._model_config else None
+                summary = self._context_window_mgr.check_and_summarize(
+                    self._messages,
+                    effective_ctx,
+                    model_name=model_name,
+                )
+                if summary and len(self._messages) > 6:
+                    keep = 6
+                    self._messages = [
+                        {"role": "system", "content": f"## Session Summary\n{summary}"},
+                        *self._messages[-keep:],
+                    ]
+                    logger.info("Auto-compacted: summary_len=%d, kept=%d", len(summary), keep)
+        except Exception:
+            logger.exception("Post-process failed")
 
     def _handle_monitor_flags(self, flags: list[str]) -> None:
         """モニターからのフラグ（多弁など）を基に、ペナルティ適用などの抑制制御を行う。"""
@@ -359,10 +359,7 @@ class ExecutionManager:
         return f"Compacted: {len(summary)} chars summary, kept last {keep} messages"
 
     def _on_timer_tick(self, event: TimerTick) -> None:
-        """タイマーイベントを受信したときの処理。待機時間リフレクションをチェックする。"""
-        if self._msg_count_since_reflect <= 0:
-            return
-        if self._is_reflecting:
+        if self._msg_count_since_reflect <= 0 or self._is_reflecting:
             return
 
         timeout = 180.0
@@ -370,31 +367,32 @@ class ExecutionManager:
             timeout = getattr(self._config.proactive, "idle_reflection_timeout_sec", 180.0)
 
         elapsed = time.time() - self._last_activity_time
-        if elapsed >= timeout:
-            logger.info(
-                "ExecutionManager: idle reflection triggered. elapsed=%.1fs >= timeout=%.1fs, msg_count=%d",
-                elapsed,
-                timeout,
-                self._msg_count_since_reflect,
-            )
-            self._run_idle_reflection()
+        if elapsed < timeout:
+            return
+
+        logger.info(
+            "ExecutionManager: idle reflection triggered. elapsed=%.1fs >= timeout=%.1fs, msg_count=%d",
+            elapsed,
+            timeout,
+            self._msg_count_since_reflect,
+        )
+        self._run_idle_reflection()
 
     def _run_idle_reflection(self) -> None:
-        """非同期でリフレクション（強制実行）を行う。"""
         with self._reflect_lock:
             if self._is_reflecting:
                 return
             self._is_reflecting = True
 
-        def _task() -> None:
-            try:
-                if self._hippocampal:
-                    self._hippocampal.force_run(self._messages)
-                    self._msg_count_since_reflect = 0
-            except Exception:
-                logger.exception("Idle reflection failed")
-            finally:
-                with self._reflect_lock:
-                    self._is_reflecting = False
+        _run_in_background(self._idle_reflection_task, name="idle-reflection")
 
-        threading.Thread(target=_task, daemon=True, name="idle-reflection").start()
+    def _idle_reflection_task(self) -> None:
+        try:
+            if self._hippocampal:
+                self._hippocampal.force_run(self._messages)
+                self._msg_count_since_reflect = 0
+        except Exception:
+            logger.exception("Idle reflection failed")
+        finally:
+            with self._reflect_lock:
+                self._is_reflecting = False

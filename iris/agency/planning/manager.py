@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 import logging
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from iris.agency.bus import InternalBus, PlanDecided
 from iris.agency.execution.inhibition import GateVerdict, InhibitionController
@@ -21,7 +21,6 @@ logger = logging.getLogger(__name__)
 
 
 class PlanningManager:
-    # 雑談/タスク判定用キーワード
     TASK_KEYWORDS: frozenset[str] = frozenset(
         {
             "コード",
@@ -43,7 +42,6 @@ class PlanningManager:
         }
     )
 
-    # 感情状態（PAD）の閾値と調整定数
     VALENCE_LOW_THRESHOLD = -0.3
     VALENCE_HIGH_THRESHOLD = 0.5
     AROUSAL_HIGH_THRESHOLD = 0.6
@@ -88,133 +86,141 @@ class PlanningManager:
 
     def _on_input_ready(self, event: InputReady) -> None:
         context = event.context or {}
-
-        if self._limbic:
-            emotion = self._limbic.current_emotion()
-            self._inhibition.apply_limbic_modulation(emotion)
-            limbic_mood: EmotionState | None = emotion
-        else:
-            limbic_mood = None
+        limbic_mood = self._resolve_limbic_mood()
 
         gate = self._inhibition.evaluate(time.time())
 
-        is_system_event = "system_event" in context
+        if context.get("from_timer") or "system_event" in context:
+            self._handle_proactive_event(event, context, gate, limbic_mood)
+            return
 
-        if context.get("from_timer") or is_system_event:
-            if is_system_event:
-                self._inhibition.set_cooldown(30.0)
-
-            if gate.suppressed:
-                logger.debug("Proactive trigger suppressed by gate (system_event=%s)", context.get("system_event"))
-                return
-
-            if context.get("from_timer"):
-                ignore_detected = self._inhibition.check_ignore()
-                if ignore_detected and self._limbic:
-                    self._limbic.apply_stimulus("ignored", self._inhibition.consecutive_ignores)
-
-            total, scores = self._scoring.compute(
-                now=time.time(),
-                last_proactive_time=self._inhibition.last_proactive_time,
-                last_user_activity=self._inhibition.last_user_activity,
-                negative_mood_score=self._inhibition.negative_mood_score,
-                limbic_mood=limbic_mood,
-                content=event.content,
-                context=context,
-                ignore_count=self._inhibition.consecutive_ignores,
-            )
-            if total < self._cfg.speak_threshold:
-                logger.debug("Below speak_threshold: total=%.3f < threshold=%.2f", total, self._cfg.speak_threshold)
-                return
-            self._inhibition.record_proactive_attempt()
-
-            context_hint = ""
-            if is_system_event:
-                event_name = context.get("system_event")
-                offline_duration = context.get("offline_duration", "")
-                role = context.get("role", "")
-                if event_name == "connected":
-                    if offline_duration:
-                        context_hint = (
-                            f"システムイベント: ロール {role} が {offline_duration} の切断期間を経て再接続しました。"
-                        )
-                    else:
-                        context_hint = f"システムイベント: ロール {role} が接続しました。"
-            else:
-                context_hint = self._build_context_hint(
-                    scores,
-                    ignore_count=self._inhibition.consecutive_ignores,
-                    last_user_activity=self._inhibition.last_user_activity,
-                    last_proactive_time=self._inhibition.last_proactive_time,
-                    negative_mood_score=self._inhibition.negative_mood_score,
-                    outputs_since_input=self._inhibition.outputs_since_input,
-                    frequency_exceeded=self._inhibition.frequency_exceeded,
-                )
-
-            context = {
-                "from_timer": True,
-                "salience": total,
-                "scores": scores,
-                "context_hint": context_hint,
-            }
-            logger.debug("Proactive plan published: total=%.3f scores=%s hint=%s", total, scores, context_hint)
-        else:
-            self._inhibition.notify_user_activity()
-
-        plan = self._build_plan(event.content, context, gate, limbic_mood)
+        self._inhibition.notify_user_activity()
+        plan = self._build_response_plan(event.content, gate, limbic_mood)
         plan["session_id"] = event.session_id
         logger.info(
-            "PlanningManager: plan published session=%s from_timer=%s suppressed=%s",
+            "PlanningManager: plan published session=%s from_timer=%s",
             event.session_id,
-            context.get("from_timer", False),
-            gate.suppressed,
+            False,
         )
         self._bus.publish(PlanDecided(plan=plan))
 
-    def _build_plan(
-        self, content: str, context: dict, gate: GateVerdict, limbic_mood: EmotionState | None = None
-    ) -> dict:
-        from_timer = context.get("from_timer", False)
+    def _resolve_limbic_mood(self) -> EmotionState | None:
+        if not self._limbic:
+            return None
+        emotion = self._limbic.current_emotion()
+        self._inhibition.apply_limbic_modulation(emotion)
+        return emotion
 
-        if from_timer:
-            plan: dict = {
-                "content": "",
-                "situation": "proactive",
-                "model_role": "default",
-                "context_hint": context.get("context_hint", ""),
-                "abbreviated": False,
-                "tools_allowed": False,
-                "streaming": False,
-                "max_tokens": 512,
-                "temperature": 0.8,
-                "show_thinking": False,
-                "run_reflexion": False,
-                "run_compression": False,
-                "record_history": True,
-            }
-            if limbic_mood:
-                self._apply_emotion_to_plan(plan, limbic_mood)
-            plan["current_emotion"] = limbic_mood
-            return plan
+    def _handle_proactive_event(
+        self,
+        event: InputReady,
+        context: dict,
+        gate: GateVerdict,
+        limbic_mood: EmotionState | None,
+    ) -> None:
+        if "system_event" in context:
+            self._inhibition.set_cooldown(30.0)
 
+        if gate.suppressed:
+            logger.debug("Proactive trigger suppressed by gate (system_event=%s)", context.get("system_event"))
+            return
+
+        if context.get("from_timer"):
+            ignore_detected = self._inhibition.check_ignore()
+            if ignore_detected and self._limbic:
+                self._limbic.apply_stimulus("ignored", self._inhibition.consecutive_ignores)
+
+        total, scores = self._scoring.compute(
+            now=time.time(),
+            last_proactive_time=self._inhibition.last_proactive_time,
+            last_user_activity=self._inhibition.last_user_activity,
+            negative_mood_score=self._inhibition.negative_mood_score,
+            limbic_mood=limbic_mood,
+            content=event.content,
+            context=context,
+            ignore_count=self._inhibition.consecutive_ignores,
+        )
+        if total < self._cfg.speak_threshold:
+            logger.debug("Below speak_threshold: total=%.3f < threshold=%.2f", total, self._cfg.speak_threshold)
+            return
+        self._inhibition.record_proactive_attempt()
+
+        context_hint = self._build_proactive_context_hint(context, scores)
+        proactive_context = {
+            "from_timer": True,
+            "salience": total,
+            "scores": scores,
+            "context_hint": context_hint,
+        }
+        logger.debug("Proactive plan published: total=%.3f scores=%s hint=%s", total, scores, context_hint)
+        plan = self._build_proactive_plan(proactive_context, gate, limbic_mood)
+        plan["session_id"] = event.session_id
+        logger.info(
+            "PlanningManager: plan published session=%s from_timer=%s",
+            event.session_id,
+            True,
+        )
+        self._bus.publish(PlanDecided(plan=plan))
+
+    def _build_proactive_context_hint(self, context: dict, scores: dict[str, float]) -> str:
+        if "system_event" in context:
+            event_name = context.get("system_event")
+            offline_duration = context.get("offline_duration", "")
+            role = context.get("role", "")
+            if event_name == "connected":
+                if offline_duration:
+                    return f"システムイベント: ロール {role} が {offline_duration} の切断期間を経て再接続しました。"
+                return f"システムイベント: ロール {role} が接続しました。"
+            return ""
+        return self._build_context_hint(
+            scores,
+            ignore_count=self._inhibition.consecutive_ignores,
+            last_user_activity=self._inhibition.last_user_activity,
+            last_proactive_time=self._inhibition.last_proactive_time,
+            negative_mood_score=self._inhibition.negative_mood_score,
+            outputs_since_input=self._inhibition.outputs_since_input,
+            frequency_exceeded=self._inhibition.frequency_exceeded,
+        )
+
+    def _build_proactive_plan(self, context: dict, gate: GateVerdict, limbic_mood: EmotionState | None = None) -> dict:
+        plan: dict[str, Any] = {
+            "content": "",
+            "situation": "proactive",
+            "model_role": "default",
+            "context_hint": context.get("context_hint", ""),
+            "abbreviated": False,
+            "tools_allowed": False,
+            "streaming": False,
+            "max_tokens": 512,
+            "temperature": 0.8,
+            "show_thinking": False,
+            "run_reflexion": False,
+            "run_compression": False,
+            "record_history": True,
+        }
+        if limbic_mood:
+            self._apply_emotion_to_plan(plan, limbic_mood)
+        plan["current_emotion"] = limbic_mood
+        return plan
+
+    def _build_response_plan(self, content: str, gate: GateVerdict, limbic_mood: EmotionState | None = None) -> dict:
         abbreviated = gate.suppressed or gate.score < self._cfg.abbreviated_threshold
         context_hint = self._build_user_context_hint(content)
         logger.debug(
             "Plan built: abbreviated=%s suppressed=%s gate_score=%.3f", abbreviated, gate.suppressed, gate.score
         )
 
-        # 雑談判定とトークン制限
         is_task = self._is_task_content(content)
 
         if abbreviated:
             max_tokens = 80
         elif not is_task:
-            max_tokens = 120  # 雑談時は短文トークン制限
+            max_tokens = 120
             context_hint = f"雑談 / {context_hint}" if context_hint else "雑談"
         else:
-            max_tokens = 0  # タスク時は制限なし
+            max_tokens = 0
 
-        plan = {
+        plan: dict[str, Any] = {
             "content": content,
             "model_role": "fast" if abbreviated else "default",
             "context_hint": context_hint,
@@ -223,8 +229,8 @@ class PlanningManager:
             "streaming": not abbreviated,
             "max_tokens": max_tokens,
             "temperature": 0.5 if abbreviated else self.DEFAULT_TEMPERATURE,
-            "show_thinking": not abbreviated and is_task,  # 雑談時は思考表示をOFF
-            "run_reflexion": not abbreviated and is_task,  # 雑談時は振り返りもスキップ
+            "show_thinking": not abbreviated and is_task,
+            "run_reflexion": not abbreviated and is_task,
             "run_compression": not abbreviated,
             "record_history": True,
         }
@@ -234,7 +240,6 @@ class PlanningManager:
         return plan
 
     def _is_task_content(self, content: str) -> bool:
-        """入力コンテンツが雑談ではなくタスクであるかを判定する。"""
         if len(content) > 100 or content.startswith("/"):
             return True
         content_lower = content.lower()

@@ -25,27 +25,39 @@ class CaptureEntry:
     tool_iterations: list[dict] = field(default_factory=list)
 
     def format_as_markdown(self) -> str:
+        lines: list[str] = []
+        self._append_header(lines)
+        self._append_system_prompt(lines)
+        self._append_messages(lines)
+        self._append_tools(lines)
+        self._append_tool_iterations(lines)
+        self._append_response(lines)
+        return "\n".join(lines)
+
+    def _append_header(self, lines: list[str]) -> None:
         total = self.token_counts.get("total", 0)
-        lines = [
-            f"# Debug Capture #{self.id}",
-            f"**Time**: {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}",
-            f"**Model**: {self.model_name}",
+        lines.append(f"# Debug Capture #{self.id}")
+        lines.append(f"**Time**: {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')}")
+        lines.append(f"**Model**: {self.model_name}")
+        lines.append(
             f"**Tokens**: system={self.token_counts.get('system', 0)} "
             f"history={self.token_counts.get('history', 0)} "
             f"tools={self.token_counts.get('tools', 0)} "
             f"response={self.token_counts.get('response', 0)} "
             f"**total={total}**",
-        ]
+        )
         if self.tool_iterations:
             lines.append(f"**Tool iterations**: {len(self.tool_iterations)}")
-
         lines.append("")
+
+    def _append_system_prompt(self, lines: list[str]) -> None:
         lines.append("## System Prompt")
         lines.append("```markdown")
         lines.append(self.system_prompt)
         lines.append("```")
-
         lines.append("")
+
+    def _append_messages(self, lines: list[str]) -> None:
         lines.append(f"## Messages ({len(self.messages)})")
         for m in self.messages:
             role = m.get("role", "?")
@@ -55,34 +67,37 @@ class CaptureEntry:
                 ts = f" ({m['timestamp'][:8]})"
             lines.append(f"### {role}{ts}")
             lines.append(content)
-
-        if self.tools:
-            lines.append("")
-            lines.append(f"## Tools ({len(self.tools)} definitions)")
-            for t in self.tools:
-                fn = t.get("function", {})
-                name = fn.get("name", "?")
-                desc = fn.get("description", "")[:120]
-                lines.append(f"- **{name}**: {desc}")
-
-        if self.tool_iterations:
-            lines.append("")
-            lines.append("## Tool Iterations")
-            for i, it in enumerate(self.tool_iterations, 1):
-                lines.append(f"### Iteration {i}")
-                tc = it.get("tool_calls", [])
-                for call in tc:
-                    fn = call.get("function", {})
-                    lines.append(f"- CALL: {fn.get('name', '?')}({fn.get('arguments', {})})")
-                results = it.get("results", [])
-                for name, result, _is_side in results:
-                    lines.append(f"- RESULT: {name} → {str(result)[:200]}")
-
         lines.append("")
+
+    def _append_tools(self, lines: list[str]) -> None:
+        if not self.tools:
+            return
+        lines.append(f"## Tools ({len(self.tools)} definitions)")
+        for t in self.tools:
+            fn = t.get("function", {})
+            name = fn.get("name", "?")
+            desc = fn.get("description", "")[:120]
+            lines.append(f"- **{name}**: {desc}")
+        lines.append("")
+
+    def _append_tool_iterations(self, lines: list[str]) -> None:
+        if not self.tool_iterations:
+            return
+        lines.append("## Tool Iterations")
+        for i, it in enumerate(self.tool_iterations, 1):
+            lines.append(f"### Iteration {i}")
+            tc = it.get("tool_calls", [])
+            for call in tc:
+                fn = call.get("function", {})
+                lines.append(f"- CALL: {fn.get('name', '?')}({fn.get('arguments', {})})")
+            results = it.get("results", [])
+            for name, result, _is_side in results:
+                lines.append(f"- RESULT: {name} → {str(result)[:200]}")
+        lines.append("")
+
+    def _append_response(self, lines: list[str]) -> None:
         lines.append("## Response")
         lines.append(self.response)
-
-        return "\n".join(lines)
 
     def format_short(self) -> str:
         ts = self.timestamp.strftime("%H:%M:%S")

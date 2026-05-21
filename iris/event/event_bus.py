@@ -6,9 +6,12 @@ from contextlib import suppress
 from datetime import UTC, datetime
 import logging
 import threading
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from iris.event.event_types import Event, new_trace_id
+
+if TYPE_CHECKING:
+    from iris.event.tracer import EventTracer
 
 
 @runtime_checkable
@@ -28,9 +31,13 @@ class EventBus:
     スレッドセーフ。
     """
 
-    def __init__(self) -> None:
+    def __init__(self, tracer: EventTracer | None = None) -> None:
         self._subscribers: dict[str, list[Callable]] = defaultdict(list)
         self._lock: threading.Lock = threading.Lock()
+        self._tracer = tracer
+
+    def set_tracer(self, tracer: EventTracer | None) -> None:
+        self._tracer = tracer
 
     def publish(self, event: Event) -> None:
         """イベントを全購読者に配信する。
@@ -42,6 +49,8 @@ class EventBus:
             event.timestamp = datetime.now(UTC)
         if not event.trace_id:
             event.trace_id = new_trace_id()
+        if self._tracer is not None:
+            self._tracer.on_event(event)
         event_type = type(event).__name__
         with self._lock:
             handlers = list(self._subscribers.get(event_type, []))

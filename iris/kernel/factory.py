@@ -13,11 +13,13 @@ from iris.agency.manager import AgencyManager
 from iris.agency.planning.manager import PlanningManager
 from iris.agency.planning.scoring import ProactiveScoring
 from iris.event.event_bus import EventBus
+from iris.event.tracer import EventTracer
 from iris.io.manager import IOManager
 from iris.io.session.manager import SessionConfig, SessionManager
 from iris.io.transport.grpc_server import GrpcListener
 from iris.kernel.commands.handler import CommandHandler
 from iris.kernel.debug_capture import DebugCapture
+from iris.kernel.diagnostics import SystemDiagnostics
 from iris.limbic.emotional_memory import EmotionalMemory
 from iris.limbic.manager import LimbicManager
 from iris.llm.capability_checker import CapabilityChecker
@@ -95,6 +97,7 @@ class KernelContext:
     cmd_handler: CommandHandler
     grpc_listener: GrpcListener
     session_mgr: SessionManager
+    diagnostics: SystemDiagnostics | None = None
     shutdown_requested: bool = False
 
 
@@ -124,9 +127,11 @@ class KernelFactory:
         _ensure_access_token(config)
 
         # ============================================================
-        # Phase 1: インフラ基盤 (EventBus, IO)
+        # Phase 1: インフラ基盤 (EventBus, IO, Debug)
         # ============================================================
-        event_bus = EventBus()
+        tracer = EventTracer(max_entries=config.debug.trace_max_entries)
+        tracer.set_enabled(config.debug.enabled)
+        event_bus = EventBus(tracer=tracer)
         session_mgr = SessionManager(
             config=SessionConfig(**config.session.model_dump()),
             event_bus=event_bus,
@@ -223,7 +228,20 @@ class KernelFactory:
         kernel_mgr = KernelManager()
 
         # ============================================================
-        # Phase 7: コンテキスト組み立て
+        # Phase 7: Diagnostics
+        # ============================================================
+        diagnostics = SystemDiagnostics(
+            event_bus=event_bus,
+            tracer=tracer,
+            kernel=kernel_mgr,
+            io=io_mgr,
+            memory=memory_mgr,
+            limbic=limbic,
+            agency=agency,
+        )
+
+        # ============================================================
+        # Phase 8: コンテキスト組み立て
         # ============================================================
         ctx = KernelContext(
             event_bus=event_bus,
@@ -235,6 +253,7 @@ class KernelFactory:
             cmd_handler=None,  # type: ignore[arg-type]
             grpc_listener=grpc_listener,
             session_mgr=session_mgr,
+            diagnostics=diagnostics,
         )
 
         def _on_shutdown() -> None:
@@ -251,6 +270,7 @@ class KernelFactory:
             registry=_registry,
             big_five=big_five,
             debug_capture=debug_capture,
+            diagnostics=diagnostics,
         )
         ctx.cmd_handler = cmd_handler
         ctx.io.set_command_handler(cmd_handler.handle)
@@ -342,6 +362,7 @@ class KernelFactory:
             persona_profile=persona_profile,
             big_five=big_five,
             reflect_interval=3,
+            event_bus=event_bus,
         )
 
         pipeline = LLMPipeline(

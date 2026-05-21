@@ -26,7 +26,9 @@ Iris は自律的に行動・進化できるAIアシスタント。Python製でO
     └── chroma_db/                ← ChromaDBベクトルストア
 
 debug_tools/                      ← デバッグ用ツール
-└── tcp_input/                    ← TCP Input アダプター
+├── __init__.py
+├── cli.py                        ← gRPC経由のデバッグCLI
+└── tcp_input/                    ← TCP Input アダプター（未実装）
 
 iris/                             ← アプリケーションコア
 ├── kernel/                       ← 脳幹: プロセス管理 + DI + コマンド処理
@@ -195,6 +197,14 @@ pytest tests/memory/ -q              # memoryテストのみ
 - コミットメッセージは日本語で、変更内容が一目でわかるように書く
   - 良い例: 「feat: ファイル検索capabilityを追加」「fix: ReflexionのJSONパースエラーを修正」「docs: アーキテクチャ図を最新化」
 - コード変更とドキュメント更新は同一コミットに含める（不整合防止）
+
+## デバッグ基盤
+- **DebugSnapshotEvent**: `category` + `data` で全状態変化を表現する1種類のイベント
+- **EventTracer**: EventBus に結合したリングバッファ（デフォルト500件）。`category` インデックス付き
+- **SystemDiagnostics**: `get_state()` 命名規約による自動発見 + パスベース階層クエリ
+- **debug_tools/cli.py**: gRPC経由で外部AIエージェント（Codex等）がデバッグ操作可能
+- **詳細**: `.agents/skills/iris-debug/SKILL.md`
+- 新しい状態値を追加する場合 → `get_state()` + `DebugSnapshotEvent publish` のみ。コマンド変更不要
 
 ## 技術スタック
 - Python 3.13+, ollama, httpx, pydantic, pyyaml, rich, prompt_toolkit

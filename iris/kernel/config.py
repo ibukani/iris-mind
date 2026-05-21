@@ -209,6 +209,13 @@ class LoggingConfig(BaseModel):
     console_format: str = ""
 
 
+class DebugConfig(BaseModel):
+    enabled: bool = False
+    trace_max_entries: int = 500
+    emotion_history_enabled: bool = True
+    personality_history_enabled: bool = True
+
+
 class Config(BaseModel):
     model: ModelConfig = Field(default_factory=ModelConfig)
     personality: PersonalityConfig = Field(default_factory=PersonalityConfig)
@@ -217,6 +224,7 @@ class Config(BaseModel):
     session: SessionConfig = Field(default_factory=SessionConfig)
     quasi_sync: QuasiSyncConfig = Field(default_factory=QuasiSyncConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    debug: DebugConfig = Field(default_factory=DebugConfig)
 
     @classmethod
     def load(cls, path: str = "config.yaml") -> Config:

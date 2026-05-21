@@ -95,6 +95,26 @@ class MemoryManager:
             event_bus.subscribe("TimerTick", self._on_timer_tick)
             event_bus.subscribe("ClientSessionEvent", self._on_client_session_event)
 
+    def get_state(self) -> dict:
+        episodic_count = 0
+        semantic_count = 0
+        if self.long_term is not None:
+            try:
+                if hasattr(self.long_term, "episodic") and self.long_term.episodic:
+                    episodic_count = len(self.long_term.episodic.load_all())
+            except Exception:
+                pass
+            try:
+                if hasattr(self.long_term, "semantic") and self.long_term.semantic:
+                    semantic_count = len(self.long_term.semantic.load_all())
+            except Exception:
+                pass
+        return {
+            "episodic": episodic_count,
+            "semantic": semantic_count,
+            "short_term_turns": self.short_term.turn_count if self.short_term else 0,
+        }
+
     def set_sensory_buffer(self, buf: SensoryMemoryProtocol) -> None:
         self.sensory = buf
 

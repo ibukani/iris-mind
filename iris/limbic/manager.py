@@ -6,7 +6,7 @@ import time
 from typing import Any, Protocol, TypedDict, runtime_checkable
 
 from iris.event.event_bus import EventBus
-from iris.event.event_types import MessageEvent, TimerTick
+from iris.event.event_types import DebugSnapshotEvent, MessageEvent, TimerTick
 from iris.limbic.acc import AnteriorCingulateCortex
 from iris.limbic.amygdala import Amygdala
 from iris.limbic.emotional_memory import EmotionalMemory
@@ -119,6 +119,16 @@ class LimbicManager:
         adjusted = self._acc.regulate(delta, self._emotion, self._get_big_five_scores())
         self._emotion.apply(adjusted)
         self._emotional_memory.tag(event.content[:200], self._emotion)
+        if self._event_bus is not None:
+            self._event_bus.publish(
+                DebugSnapshotEvent(
+                    timestamp=None,
+                    source="limbic",
+                    category="limbic.emotion",
+                    data=self._emotion.to_dict(),
+                    trigger="message",
+                )
+            )
         logger.debug(
             "Limbic: input evaluated -> emotion=%s",
             self._emotion.to_dict(),
@@ -135,8 +145,19 @@ class LimbicManager:
     def _decay(self) -> None:
         """前回の更新からの経過時間に基づき感情状態を自然減衰（平穏へと近づける）させる。"""
         now = time.time()
+        old = self._emotion.to_dict()
         self._emotion.decay(now - self._last_decay_time)
         self._last_decay_time = now
+        if self._emotion.to_dict() != old and self._event_bus is not None:
+            self._event_bus.publish(
+                DebugSnapshotEvent(
+                    timestamp=None,
+                    source="limbic",
+                    category="limbic.emotion",
+                    data=self._emotion.to_dict(),
+                    trigger="decay",
+                )
+            )
 
     def _on_monitor_event(self, event: MessageEvent) -> None:
         """OutputMonitor からのフィードバックイベントを処理する。
@@ -160,9 +181,26 @@ class LimbicManager:
         self._decay()
         adjusted = self._acc.regulate(delta, self._emotion, self._get_big_five_scores())
         self._emotion.apply(adjusted)
+        if self._event_bus is not None:
+            self._event_bus.publish(
+                DebugSnapshotEvent(
+                    timestamp=None,
+                    source="limbic",
+                    category="limbic.emotion",
+                    data=self._emotion.to_dict(),
+                    trigger="monitor_feedback",
+                )
+            )
         logger.debug("Limbic: monitor feedback applied -> emotion=%s", self._emotion.to_dict())
 
     # === 公開インターフェース ===
+
+    def get_state(self) -> dict:
+        e = self.current_emotion()
+        return {
+            "emotion": e.to_dict(),
+            "mood": self.build_mood_description(style="short"),
+        }
 
     def current_emotion(self) -> EmotionState:
         """現在の感情状態を取得する。"""
@@ -266,6 +304,16 @@ class LimbicManager:
         self._decay()
         adjusted = self._acc.regulate(delta, self._emotion, self._get_big_five_scores())
         self._emotion.apply(adjusted)
+        if self._event_bus is not None:
+            self._event_bus.publish(
+                DebugSnapshotEvent(
+                    timestamp=None,
+                    source="limbic",
+                    category="limbic.emotion",
+                    data=self._emotion.to_dict(),
+                    trigger="stimulus",
+                )
+            )
         logger.debug("Limbic: stimulus %s applied -> emotion=%s", stimulus_type, self._emotion.to_dict())
 
     def set_big_five(self, big_five: BigFiveProvider | dict[str, float] | None) -> None:

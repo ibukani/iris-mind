@@ -69,6 +69,15 @@ class ExecutionManager:
         self._bus.subscribe("PlanDecided", self._on_plan)
         self._event_bus.subscribe("TimerTick", self._on_timer_tick)
 
+    def get_state(self) -> dict:
+        return {
+            "is_reflecting": self._is_reflecting,
+            "msg_count": len(self._messages),
+            "msg_count_since_reflect": self._msg_count_since_reflect,
+            "idle_seconds": time.time() - self._last_activity_time if self._last_activity_time else 0,
+            "talkative_degree": self._monitor.talkative_degree if self._monitor else 0,
+        }
+
     def _on_plan(self, event: PlanDecided) -> None:
         """内部イベントバスからPlanDecidedを受信したときのコールバック。"""
         if self._monitor and event.plan.get("content", ""):

@@ -20,6 +20,12 @@ class AgencyManager:
         self._execution = execution
         self._inhibition = inhibition
 
+    def get_state(self) -> dict:
+        return {
+            "planning": self._planning.get_state(),
+            "execution": self._execution.get_state(),
+        }
+
     def compact_context(self) -> str:
         return self._execution.compact_context()
 

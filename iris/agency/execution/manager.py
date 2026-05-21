@@ -28,12 +28,6 @@ class ExecutionManager:
         - 運動野・基底核に対応し、行動（LLM Pipelineの実行、ツール実行）を担当。
     """
 
-    # 多弁度（talkative_degree）のしきい値
-    TALKATIVE_ABBREVIATED_THRESHOLD = 1
-    TALKATIVE_TOKEN_LIMIT_THRESHOLD = 2
-    TALKATIVE_SKIP_POSTPROCESS_THRESHOLD = 3
-    TALKATIVE_DISABLE_STREAM_THRESHOLD = 5
-
     def __init__(
         self,
         internal_bus: InternalBus,
@@ -85,14 +79,11 @@ class ExecutionManager:
 
             emotion = event.plan.get("current_emotion")
             if emotion:
-                from iris.limbic.models import EmotionState
-
-                if isinstance(emotion, EmotionState):
-                    self._monitor.set_emotion_state(
-                        emotion.valence,
-                        emotion.arousal,
-                        emotion.dominance,
-                    )
+                self._monitor.set_emotion_state(
+                    emotion.get("valence", 0.0),
+                    emotion.get("arousal", 0.0),
+                    emotion.get("dominance", 0.5),
+                )
 
         self._apply_talkative_overrides(event.plan)
 
@@ -110,22 +101,22 @@ class ExecutionManager:
         )
         self._execute_general(event.plan)
 
-    @classmethod
-    def _apply_talkative_overrides(cls, plan: dict[str, Any]) -> None:
+    @staticmethod
+    def _apply_talkative_overrides(plan: dict[str, Any]) -> None:
         """多弁度（talkative_degree）に応じてプランパラメータを上書き調整する。"""
         degree = plan.get("talkative_degree", 0)
         if degree <= 0:
             return
-        if degree >= cls.TALKATIVE_ABBREVIATED_THRESHOLD:
+        if degree >= 1:
             plan["abbreviated"] = True
-        if degree >= cls.TALKATIVE_TOKEN_LIMIT_THRESHOLD:
+        if degree >= 2:
             current = plan.get("max_tokens", 0)
             if current > 0:
                 plan["max_tokens"] = min(current, 256)
-        if degree >= cls.TALKATIVE_SKIP_POSTPROCESS_THRESHOLD:
+        if degree >= 3:
             plan["run_reflexion"] = False
             plan["run_compression"] = False
-        if degree >= cls.TALKATIVE_DISABLE_STREAM_THRESHOLD:
+        if degree >= 5:
             plan["streaming"] = False
             plan["show_thinking"] = False
 
@@ -140,6 +131,7 @@ class ExecutionManager:
 
     def _execute_general(self, plan: dict[str, Any]) -> None:
         """プランに基づいてLLMの呼び出しと関連処理（ストリーミング、履歴保存、記憶連携など）を実行する。"""
+        session_id = plan.get("session_id", "")
         content = plan.get("content", "")
         abbreviated = plan.get("abbreviated", False)
         streaming = plan.get("streaming", not abbreviated)
@@ -150,24 +142,6 @@ class ExecutionManager:
         if content:
             plan["tools_allowed"] = True
 
-        # 1. 実行前コンテキスト準備
-        self._prepare_execution_context(plan, content, show_thinking, record_history)
-
-        # 2. LLM 生成処理
-        on_token = self._create_stream_callback() if streaming else None
-        response_text = self._run_llm_generation(plan, on_token)
-
-        # 3. 実行後コンテキスト確定
-        self._finalize_execution(plan, response_text, show_thinking, record_history)
-
-        # 4. バックグラウンド後処理のトリガー
-        if run_reflexion or run_compression:
-            self._trigger_post_processes(plan, run_reflexion, run_compression)
-
-    def _prepare_execution_context(
-        self, plan: dict[str, Any], content: str, show_thinking: bool, record_history: bool
-    ) -> None:
-        """実行前に履歴の記録、短期記憶への登録、および思考中イベントの送信を行う。"""
         if record_history and content:
             self._messages.append({"role": "user", "content": content})
             self._last_activity_time = time.time()
@@ -187,28 +161,26 @@ class ExecutionManager:
                 )
             )
 
-        if self._session_roles_getter and not plan.get("abbreviated", False):
+        if self._session_roles_getter and not abbreviated:
             self._pipeline.set_session_roles_summary(self._session_roles_getter())
 
-    def _create_stream_callback(self) -> Callable[[str], None]:
-        """ストリーミング出力用のトークン受信コールバックを作成する。"""
+        on_token: Callable[[str], None] | None = None
+        if streaming:
 
-        def _on_token(delta: str) -> None:
-            self._event_bus.publish(
-                MessageEvent(
-                    timestamp=None,
-                    source="execution",
-                    msg_type="chat",
-                    content=delta,
-                    state=StreamState.SPEAKING.value,
-                    direction="stream",
+            def _on_token(delta: str) -> None:
+                self._event_bus.publish(
+                    MessageEvent(
+                        timestamp=None,
+                        source="execution",
+                        msg_type="chat",
+                        content=delta,
+                        state=StreamState.SPEAKING.value,
+                        direction="stream",
+                    )
                 )
-            )
 
-        return _on_token
+            on_token = _on_token
 
-    def _run_llm_generation(self, plan: dict[str, Any], on_token: Callable[[str], None] | None) -> str:
-        """LLMの生成を実行し、生成結果のテキストを返す。"""
         try:
             if self._inhibition:
                 self._inhibition.set_generating(True)
@@ -223,13 +195,7 @@ class ExecutionManager:
         finally:
             if self._inhibition:
                 self._inhibition.set_generating(False)
-        return response_text
 
-    def _finalize_execution(
-        self, plan: dict[str, Any], response_text: str, show_thinking: bool, record_history: bool
-    ) -> None:
-        """実行後に履歴・短期記憶へ応答を追加し、DONEイベントを送信、モニターフラグを処理する。"""
-        session_id = plan.get("session_id", "")
         if record_history:
             self._messages.append({"role": "assistant", "content": response_text})
             self._last_activity_time = time.time()
@@ -270,9 +236,6 @@ class ExecutionManager:
             flags = self._monitor.record_output()
             self._handle_monitor_flags(flags)
 
-    def _trigger_post_processes(self, plan: dict[str, Any], run_reflexion: bool, run_compression: bool) -> None:
-        """海馬リフレクションおよびコンテキスト圧縮処理をバックグラウンドスレッドでトリガーする。"""
-
         def _post_process() -> None:
             try:
                 if run_reflexion and self._hippocampal:
@@ -303,7 +266,8 @@ class ExecutionManager:
             except Exception:
                 logger.exception("Post-process failed")
 
-        threading.Thread(target=_post_process, daemon=True).start()
+        if run_reflexion or run_compression:
+            threading.Thread(target=_post_process, daemon=True).start()
 
     def _handle_monitor_flags(self, flags: list[str]) -> None:
         """モニターからのフラグ（多弁など）を基に、ペナルティ適用などの抑制制御を行う。"""

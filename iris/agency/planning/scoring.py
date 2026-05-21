@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from iris.kernel.config import ProactiveConfig
 from iris.memory.manager import MemoryManager
-
-if TYPE_CHECKING:
-    from iris.limbic.models import EmotionState
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +32,7 @@ class ProactiveScoring:
         last_proactive_time: float,
         last_user_activity: float,
         negative_mood_score: float,
-        limbic_mood: EmotionState | None = None,
+        limbic_mood: dict[str, float] | None = None,
         content: str = "",
         context: dict[str, Any] | None = None,
         ignore_count: int = 0,
@@ -51,9 +48,9 @@ class ProactiveScoring:
         context_score = max(context_score, stm_score) if stm_score > 0 else context_score
 
         if limbic_mood:
-            v = limbic_mood.valence
-            a = limbic_mood.arousal
-            d = limbic_mood.dominance
+            v = limbic_mood.get("valence", 0.0)
+            a = limbic_mood.get("arousal", 0.0)
+            d = limbic_mood.get("dominance", 0.5)
             intensity = abs(v) * 0.5 + a * 0.3 + abs(d - 0.5) * 0.2
             mood_weight = 0.10 + intensity * 0.25
         else:
@@ -69,7 +66,6 @@ class ProactiveScoring:
             total = max(total, sensory_score * 0.3)
         total = max(total, urgency_score * 0.15)
 
-        ignore_penalty = 1.0
         if ignore_count > 0:
             ignore_penalty = max(0.2, 1.0 - ignore_count * 0.25)
             total *= ignore_penalty
@@ -190,11 +186,11 @@ class ProactiveScoring:
         return min(score, 0.8)
 
     @staticmethod
-    def _compute_mood_score(negative_mood_score: float, limbic_mood: EmotionState | None = None) -> float:
+    def _compute_mood_score(negative_mood_score: float, limbic_mood: dict[str, float] | None = None) -> float:
         if limbic_mood:
-            valence = limbic_mood.valence
-            arousal = limbic_mood.arousal
-            dominance = limbic_mood.dominance
+            valence = limbic_mood.get("valence", 0.0)
+            arousal = limbic_mood.get("arousal", 0.0)
+            dominance = limbic_mood.get("dominance", 0.5)
 
             mood_valence = valence * 0.5 if valence > 0 else valence * 1.5
 

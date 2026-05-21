@@ -3,20 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 import time
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from iris.limbic.models import EmotionState
 
 logger = logging.getLogger(__name__)
-
-
-class InhibitionStatus(TypedDict):
-    last_proactive_time: float
-    last_user_activity: float
-    consecutive_ignores: int
-    confirmation_mode: bool
-
 
 _NEGATIVE_RESPONSES = frozenset(
     {
@@ -279,7 +271,7 @@ class InhibitionController:
         self._frequency_exceeded = False
         logger.info("Inhibition state reset")
 
-    def get_status(self) -> InhibitionStatus:
+    def get_status(self) -> dict:
         return {
             "last_proactive_time": self._last_proactive_time,
             "last_user_activity": self._last_user_activity,

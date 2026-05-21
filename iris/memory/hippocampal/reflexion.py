@@ -2,23 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Protocol
+from typing import Any
 
 from iris.llm.provider import LLMProvider
 
 logger = logging.getLogger(__name__)
-
-
-class ReflexionProtocol(Protocol):
-    """省察エンジンのインターフェース。
-
-    なぜこの設計にしたか:
-    LLMを用いた省察処理をモック化または異なる省察ロジックで差し替え可能にし、
-    テスト容易性と柔軟性を向上させるため。
-    """
-
-    def reflect(self, conversation_history: list[dict]) -> dict[str, Any]: ...
-    def quick_reflect(self, conversation_slice: list[dict]) -> dict[str, Any]: ...
 
 
 class Reflexion:
@@ -70,13 +58,21 @@ class Reflexion:
             result: dict[str, Any] = json.loads(content)
             return result
         except (json.JSONDecodeError, TypeError):
-            fallback = self._empty()
-            fallback["summary"] = content[:100]
-            return fallback
+            return {
+                "summary": content[:100],
+                "lesson": "",
+                "preference": "",
+                "improvement": "",
+                "missing_capability": "",
+                "speech_style": "",
+                "expressed_traits": "",
+                "user_reaction": "",
+                "big_five_estimate": None,
+            }
 
     def quick_reflect(self, conversation_slice: list[dict]) -> dict[str, Any]:
         if len(conversation_slice) < 2:
-            return self._empty_quick()
+            return {"speech_style": "", "expressed_traits": "", "user_reaction": "", "big_five_estimate": None}
 
         msgs = [
             {
@@ -114,7 +110,7 @@ class Reflexion:
             result: dict[str, Any] = json.loads(content)
             return result
         except (json.JSONDecodeError, TypeError):
-            return self._empty_quick()
+            return {"speech_style": "", "expressed_traits": "", "user_reaction": "", "big_five_estimate": None}
 
     @staticmethod
     def should_add_capability(reflection: dict[str, str | None]) -> bool:
@@ -128,15 +124,6 @@ class Reflexion:
             "preference": "",
             "improvement": "",
             "missing_capability": "",
-            "speech_style": "",
-            "expressed_traits": "",
-            "user_reaction": "",
-            "big_five_estimate": None,
-        }
-
-    @staticmethod
-    def _empty_quick() -> dict[str, Any]:
-        return {
             "speech_style": "",
             "expressed_traits": "",
             "user_reaction": "",

@@ -208,9 +208,6 @@ class ShortTermMemoryManager:
                 label = "User" if t["role"] == "user" else "Iris"
                 parts.append(f"- {label}: 「{t['content'][:100]}」")
 
-        if self._current_topics:
-            parts.append("### 現在の話題")
-            parts.extend(f"- {topic}" for topic in self._current_topics[-3:])
         if self._active_references:
             refs = sorted(self._active_references, key=len, reverse=True)[:5]
             parts.append("### 参照エンティティ")

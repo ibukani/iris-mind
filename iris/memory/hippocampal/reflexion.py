@@ -40,13 +40,13 @@ class Reflexion:
                     "3. preference: user preference you noticed (日本語で、または空文字)\n"
                     "4. improvement: what you could have done better (日本語で、または空文字)\n"
                     "5. missing_capability: a tool you wished you had (日本語で、または空文字)\n"
-                    "6. speech_style: Irisの口調・話し方の特徴（日本語で、または空文字）\n"
-                    "7. expressed_traits: Irisがこの会話で発現させた性格特性（日本語で、または空文字）\n"
+                    "6. speech_style: この会話でIrisが実際に使った口調の特徴（日本語、簡潔に1文。変化がなければ空文字）\n"
+                    "7. expressed_traits: この会話でIrisが発現させた性格特性（日本語、簡潔に1文。変化がなければ空文字）\n"
                     "8. user_reaction: ユーザーの反応傾向（日本語で、または空文字）\n"
                     "9. big_five_estimate: JSON object with OCEAN scores (0-100, e.g. "
                     '{"openness":60,"conscientiousness":45,"extraversion":70,"agreeableness":55,"neuroticism":30}) '
                     "based on Iris's personality in this conversation. "
-                    "All other values must be in Japanese."
+                    "All other values must be in Japanese. Respond in JSON only."
                 ),
             },
             {
@@ -84,8 +84,8 @@ class Reflexion:
                 "content": (
                     "You are Iris's light-weight reflection engine. "
                     "Briefly analyze this short conversation and extract:\n"
-                    "1. speech_style: Irisの口調の特徴 (日本語、短く)\n"
-                    "2. expressed_traits: Irisが発現させた性格特性 (日本語、短く)\n"
+                    "1. speech_style: この会話でIrisが実際に使った口調の特徴 (日本語、簡潔に1文。変化がなければ空文字)\n"
+                    "2. expressed_traits: この会話でIrisが発現させた性格特性 (日本語、簡潔に1文。変化がなければ空文字)\n"
                     "3. user_reaction: ユーザーの反応傾向 (日本語、短く)\n"
                     "4. big_five_estimate: JSON for OCEAN scores (0-100, e.g. "
                     '{"openness":60,"conscientiousness":45,"extraversion":70,"agreeableness":55,"neuroticism":30}) '

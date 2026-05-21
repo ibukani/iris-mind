@@ -63,12 +63,10 @@ class LLMPipeline:
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
 
-    def _load_personality_data(self) -> tuple[str, str, str, str]:
+    def _load_personality_data(self) -> tuple[str, str]:
         agents_md = self._agents_md_store.load() if self._agents_md_store else ""
-        speech_style = self._persona_profile.get_speech_style() if self._persona_profile else ""
-        traits = self._persona_profile.get_traits() if self._persona_profile else ""
-        dynamic = self._persona_profile.get_dynamic_personality() if self._persona_profile else ""
-        return agents_md, speech_style, traits, dynamic
+        current_state = self._persona_profile.get_current_state_section() if self._persona_profile else ""
+        return agents_md, current_state
 
     @staticmethod
     def _build_time_string() -> str:
@@ -76,40 +74,49 @@ class LLMPipeline:
         weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         return f"{dt_now.strftime('%Y-%m-%d %H:%M:%S')} ({weekdays[dt_now.weekday()]})"
 
-    def _build_system_prompt(self, context_hint: str = "") -> str:
-        if self._sysprompt_cache is not None:
+    def _build_system_prompt(self, context_hint: str = "", response_style: str = "") -> str:
+        if self._sysprompt_cache is not None and not response_style:
             return self._sysprompt_cache
 
-        agents_md, speech_style, traits, dynamic = self._load_personality_data()
+        agents_md, current_state = self._load_personality_data()
 
+        # ユーザー情報（重複除去）
         prefs_list = self._memory.get_user_preferences() if self._memory else []
-        user_prefs = "\n".join(f"- {p['content']}" for p in prefs_list) if prefs_list else ""
-        governance = self._governance_principles or ""
-        session_roles = self._session_roles_summary or "（なし）"
+        seen: set[str] = set()
+        unique_prefs: list[str] = []
+        for p in prefs_list:
+            c = p.get("content", "").strip()
+            if c and c not in seen:
+                seen.add(c)
+                unique_prefs.append(f"- {c}")
+        user_prefs = "\n".join(unique_prefs)
+
+        # 接続セッション（クライアント接続時のみ）
+        session_roles = self._session_roles_summary if self._session_roles_summary else ""
 
         prompt = self._personality.build_system_prompt(
             agents_md_content=agents_md,
-            speech_style=speech_style,
-            personality_traits=traits,
             user_preferences=user_prefs,
-            governance_principles=governance,
             session_roles=session_roles,
+            response_style=response_style,
         )
-        if dynamic:
-            prompt += f"\n\n{dynamic}"
+
         prompt += f"\n\n## 現在日時\n{self._build_time_string()}"
 
+        # 現在の感情状態（limbic）
         if self._limbic:
             mood_desc = self._limbic.build_mood_description()
             if mood_desc:
                 prompt += f"\n\n## 現在の気分\n{mood_desc}"
-            style = self._limbic.build_response_style()
-            if style:
-                prompt += f"\n\n{style}"
+
+        # 現在のペルソナ状態（Reflexion 蓄積、空なら省略）
+        if current_state:
+            prompt += f"\n\n{current_state}"
 
         if context_hint:
             prompt += f"\n\n## 会話コンテキスト\n{context_hint}"
-        self._sysprompt_cache = prompt
+        if not response_style:
+            self._sysprompt_cache = prompt
         return prompt
 
     def _get_tools(self) -> list[dict[str, Any]] | None:
@@ -170,8 +177,14 @@ class LLMPipeline:
         model_role: str = "default",
     ) -> str:
         context_hint = plan.get("context_hint", "")
-        system_prompt = self._build_system_prompt(context_hint=context_hint)
         situation = plan.get("situation", "")
+
+        # プロアクティブトリガー時のみ limbic の応答スタイルを注入
+        response_style = ""
+        if situation == "proactive" and self._limbic:
+            response_style = self._limbic.build_response_style()
+
+        system_prompt = self._build_system_prompt(context_hint=context_hint, response_style=response_style)
 
         parts = [system_prompt]
         if situation in _SITUATION_INSTRUCTIONS:

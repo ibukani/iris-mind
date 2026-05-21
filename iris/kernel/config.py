@@ -176,7 +176,7 @@ class MemoryConfig(BaseModel):
     vector_db_path: str = ".iris/data/chroma_db"
     episodic_max_entries: int = 30
     semantic_max_entries: int = 100
-    agents_md_path: str = ".iris/data/iris_profile.md"
+    agents_md_path: str = ".iris/config/iris_profile.md"
     agents_md_max_bytes: int = 2048
     persona_data_path: str = ".iris/data/persona_data.json"
     persona_data_max_entries: int = 100

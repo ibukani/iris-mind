@@ -73,9 +73,9 @@ debug:
     trace_max_entries: 500
     emotion_history_enabled: true
     personality_history_enabled: true
-    capture_enabled: false      # LLM入出力キャプチャ（/debug on/off でも切替可）
-    capture_auto_dump: false    # キャプチャを自動で logs/debug/ にファイル保存
-    capture_max_entries: 10     # メモリ内保持数
+    capture_enabled: true # LLM入出力キャプチャ（/debug on/off でも切替可）
+    capture_auto_dump: true # キャプチャを自動で logs/debug/ にファイル保存
+    capture_max_entries: 10 # メモリ内保持数
 
 # ログ出力 — レベル・保存先・ローテーション
 logging:

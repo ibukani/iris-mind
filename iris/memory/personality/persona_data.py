@@ -10,30 +10,48 @@ logger = logging.getLogger(__name__)
 _DEFAULT_PATH = ".iris/data/persona_data.json"
 
 _PERSONA_CATEGORIES = {
-    "speech_style": "speech_styles",
-    "personality_traits": "personality_traits",
+    "speech_quirks": "speech_quirks",
+    "state_traits": "state_traits",
 }
+
+# 後方互換: 旧フィールド名のマッピング
+_LEGACY_FIELD_MAP = {
+    "speech_styles": "speech_quirks",
+    "personality_traits": "state_traits",
+}
+
+# カテゴリ別の最大保持エントリ数（上位N件 = 直近の状態のみ保持）
+_MAX_ENTRIES = 5
 
 
 class PersonaData:
-    """ペルソナデータを専用JSONで管理。
+    """ペルソナの現在状態データを専用JSONで管理。
 
     SemanticStore（Vector DB）を経由せず、軽量なJSONファイルで
-    speech_style と personality_traits を蓄積・集計する。
+    speech_quirks（話し方の現在状態）と state_traits（性格の現在状態）を管理する。
+    各カテゴリは最大5件のみ保持し、累積肥大化を防ぐ。
+    iris_profile.md（不変ベース）とは完全に分離。
     """
 
-    def __init__(self, path: str = _DEFAULT_PATH, max_entries: int = 100):
+    def __init__(self, path: str = _DEFAULT_PATH) -> None:
         self.path = Path(path)
-        self.max_entries = max_entries
-        self._data: dict = self._load()
+        self._data: dict[str, list] = self._load()
 
     def _load(self) -> dict[str, list]:
         if self.path.exists():
             try:
-                return json.loads(self.path.read_text(encoding="utf-8"))  # type: ignore[no-any-return]
+                raw: dict = json.loads(self.path.read_text(encoding="utf-8"))
+                # 旧フィールド名を新フィールド名にマイグレート
+                for old, new in _LEGACY_FIELD_MAP.items():
+                    if old in raw and new not in raw:
+                        raw[new] = raw.pop(old)
+                return {
+                    "speech_quirks": raw.get("speech_quirks", []),
+                    "state_traits": raw.get("state_traits", []),
+                }
             except (json.JSONDecodeError, Exception):
                 pass
-        return {"speech_styles": [], "personality_traits": []}
+        return {"speech_quirks": [], "state_traits": []}
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -43,15 +61,18 @@ class PersonaData:
         )
 
     def add_entry(self, category: str, text: str, source: str = "reflection") -> None:
+        """エントリを追加する。同一テキストがあれば count を増やす。上位 _MAX_ENTRIES 件のみ保持。"""
+        # 後方互換: 旧カテゴリ名を変換
+        category = _LEGACY_FIELD_MAP.get(category, category)
         key = _PERSONA_CATEGORIES.get(category)
         if key is None:
             return
         now = datetime.now().isoformat(timespec="minutes")
         entries = self._data.setdefault(key, [])
 
-        normalized = text.replace(" ", "").replace("　", "").replace("\n", "").replace("\r", "")
+        normalized = text.replace(" ", "").replace("\u3000", "").replace("\n", "").replace("\r", "")
         for e in entries:
-            en = e["text"].replace(" ", "").replace("　", "").replace("\n", "").replace("\r", "")
+            en = e["text"].replace(" ", "").replace("\u3000", "").replace("\n", "").replace("\r", "")
             if en == normalized:
                 e["count"] = e.get("count", 1) + 1
                 e["updated_at"] = now
@@ -67,14 +88,15 @@ class PersonaData:
                 "updated_at": now,
             }
         )
-        if len(entries) > self.max_entries:
-            entries.sort(key=lambda e: (e.get("count", 1), e.get("updated_at", "")), reverse=True)
-            entries = entries[: self.max_entries]
-            self._data[key] = entries
+        # count降順・updated_at降順でソートし上位 _MAX_ENTRIES 件のみ保持
+        entries.sort(key=lambda e: (e.get("count", 1), e.get("updated_at", "")), reverse=True)
+        self._data[key] = entries[:_MAX_ENTRIES]
         self._save()
-        logger.info("PersonaData: added %s entry (%d total)", category, len(entries))
+        logger.info("PersonaData: added %s entry (%d total)", category, len(self._data[key]))
 
     def get_top(self, category: str, n: int = 3) -> list[dict]:
+        # 後方互換: 旧カテゴリ名を変換
+        category = _LEGACY_FIELD_MAP.get(category, category)
         key = _PERSONA_CATEGORIES.get(category)
         if key is None:
             return []
@@ -86,6 +108,8 @@ class PersonaData:
         return entries[:n]
 
     def get_all(self, category: str) -> list[dict]:
+        # 後方互換: 旧カテゴリ名を変換
+        category = _LEGACY_FIELD_MAP.get(category, category)
         key = _PERSONA_CATEGORIES.get(category)
         if key is None:
             return []
@@ -96,5 +120,5 @@ class PersonaData:
         )
 
     def clear(self) -> None:
-        self._data = {"speech_styles": [], "personality_traits": []}
+        self._data = {"speech_quirks": [], "state_traits": []}
         self._save()

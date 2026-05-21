@@ -33,9 +33,9 @@ class SemanticStoreProtocol(Protocol):
 
 
 class AgentsMdStore:
-    """構造記憶。.iris/data/iris_profile.mdの読み書き。"""
+    """構造記憶。.iris/config/iris_profile.mdの読み込み（書き込み禁止）。"""
 
-    def __init__(self, path: str = ".iris/data/iris_profile.md", max_bytes: int = 2048, cache_ttl: float = 10.0):
+    def __init__(self, path: str = ".iris/config/iris_profile.md", max_bytes: int = 2048, cache_ttl: float = 10.0):
         self.path = Path(path)
         self.max_bytes = max_bytes
         self._cache: str | None = None

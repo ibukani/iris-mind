@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 import tempfile
 
-from iris.memory.personality.persona_data import _MAX_ENTRIES, PersonaData
+from iris.memory.persona_data import _MAX_ENTRIES, PersonaData
 
 
 def _make_data() -> PersonaData:

@@ -122,7 +122,7 @@ class LLMBridge:
         # Resolve interrupt token
         local_interrupt_token = interrupt_token
         if local_interrupt_token is None:
-            from iris.agency.execution.interrupt_token import InterruptToken
+            from iris.llm.interrupt_token import InterruptToken
 
             local_interrupt_token = InterruptToken()
 

@@ -21,11 +21,13 @@ from iris.io.transport.grpc_server import GrpcListener
 from iris.kernel.commands.handler import CommandHandler
 from iris.kernel.debug_capture import DebugCapture
 from iris.kernel.diagnostics import SystemDiagnostics
+from iris.limbic.big_five import BigFiveProfile
 from iris.limbic.emotional_memory import EmotionalMemory
 from iris.limbic.manager import LimbicManager
 from iris.llm.capability_checker import CapabilityChecker
 from iris.llm.context_window import LLMContextWindowManager
 from iris.llm.llm_bridge import LLMBridge
+from iris.llm.prompt_builder import Personality
 from iris.llm.tokenizer_manager import TokenizerManager
 from iris.memory.hippocampal.manager import HippocampalManager
 from iris.memory.hippocampal.reflexion import Reflexion
@@ -33,10 +35,8 @@ from iris.memory.long_term.manager import LongTermMemoryManager
 from iris.memory.long_term.stores import AgentsMdStore, EpisodicStore, SemanticStore
 from iris.memory.long_term.vector_store import VectorStore
 from iris.memory.manager import MemoryManager
-from iris.memory.personality.big_five import BigFiveProfile
-from iris.memory.personality.persona_data import PersonaData
-from iris.memory.personality.persona_profile import PersonaProfile
-from iris.memory.personality.personality import Personality
+from iris.memory.persona_data import PersonaData
+from iris.memory.persona_profile import PersonaProfile
 from iris.memory.sensory.manager import SensoryMemoryManager
 from iris.memory.sensory.readiness import ReadinessEvaluator
 from iris.memory.short_term.manager import ShortTermMemoryManager

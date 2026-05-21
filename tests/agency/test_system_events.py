@@ -11,8 +11,8 @@ from iris.event.event_types import ClientSessionEvent
 from iris.io.models import AuthMessage
 from iris.io.session.manager import SessionManager
 from iris.kernel.config import Config, SessionConfig
+from iris.llm.prompt_builder import Personality
 from iris.memory.manager import MemoryManager
-from iris.memory.personality.personality import Personality
 
 
 class DummyConnection:

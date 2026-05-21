@@ -4,6 +4,8 @@ from datetime import UTC, datetime
 import json
 import logging
 from pathlib import Path
+import threading
+import time
 from typing import Protocol
 
 from iris.memory.long_term.vector_store import VectorStore
@@ -90,6 +92,7 @@ class EpisodicStore:
     def __init__(self, path: str = ".iris/data/episodes.jsonl", max_entries: int = 30):
         self.path = Path(path)
         self.max_entries = max_entries
+        self._lock = threading.Lock()
 
     def clear(self) -> None:
         if self.path.exists():
@@ -97,20 +100,34 @@ class EpisodicStore:
         logger.info("EpisodicStore: cleared")
 
     def add(self, summary: str, metadata: dict | None = None) -> None:
-        entries = self.load_all()
-        entry: dict[str, object] = {"summary": summary, "timestamp": datetime.now(UTC).isoformat()}
-        if metadata:
-            entry["metadata"] = metadata
-        entries.append(entry)
-        if len(entries) > self.max_entries:
-            entries = entries[-self.max_entries :]
+        with self._lock:
+            entries = self.load_all()
+            entry: dict[str, object] = {"summary": summary, "timestamp": datetime.now(UTC).isoformat()}
+            if metadata:
+                entry["metadata"] = metadata
+            entries.append(entry)
+            if len(entries) > self.max_entries:
+                entries = entries[-self.max_entries :]
+            self._write_file(entries)
+            logger.info("EpisodicStore: added entry, total=%d", len(entries))
+
+    def _write_file(self, entries: list[dict]) -> None:
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(
             "\n".join(json.dumps(e) for e in entries),
             encoding="utf-8",
         )
-        tmp.replace(self.path)
-        logger.info("EpisodicStore: added entry, total=%d", len(entries))
+        self._replace_atomic(tmp)
+
+    def _replace_atomic(self, src: Path) -> None:
+        for attempt in range(3):
+            try:
+                src.replace(self.path)
+                return
+            except PermissionError:
+                if attempt == 2:
+                    raise
+                time.sleep(0.05 * (attempt + 1))
 
     def get_recent(self, n: int = 5) -> list[dict]:
         entries = self.load_all()
@@ -143,6 +160,7 @@ class SemanticStore:
         self.max_entries = max_entries
         self.vector = VectorStore(path=vector_db_path)
         self._synced_count = 0
+        self._lock = threading.Lock()
 
     def sync(self) -> None:
         entries = self.load_all()
@@ -155,25 +173,39 @@ class SemanticStore:
         logger.info("SemanticStore: synced %d entries to vector store", unsynced)
 
     def add(self, entry: dict) -> None:
-        entries = self.load_all()
-        if self._is_duplicate(entry.get("content", ""), entries):
-            return
-        entry["id"] = f"lesson_{len(entries) + 1:03d}"
-        entry.setdefault("timestamp", "")
-        entry.setdefault("tags", [])
-        entry.setdefault("type", "lesson")
-        entries.append(entry)
-        if len(entries) > self.max_entries:
-            entries = entries[-self.max_entries :]
+        with self._lock:
+            entries = self.load_all()
+            if self._is_duplicate(entry.get("content", ""), entries):
+                return
+            entry["id"] = f"lesson_{len(entries) + 1:03d}"
+            entry.setdefault("timestamp", "")
+            entry.setdefault("tags", [])
+            entry.setdefault("type", "lesson")
+            entries.append(entry)
+            if len(entries) > self.max_entries:
+                entries = entries[-self.max_entries :]
+            self._write_file(entries)
+            self.vector.add(entry)
+            self._synced_count = len(entries)
+            logger.info("SemanticStore: added entry, total=%d type=%s", len(entries), entry.get("type", "unknown"))
+
+    def _write_file(self, entries: list[dict]) -> None:
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(
             "\n".join(json.dumps(e) for e in entries),
             encoding="utf-8",
         )
-        tmp.replace(self.path)
-        self.vector.add(entry)
-        self._synced_count = len(entries)
-        logger.info("SemanticStore: added entry, total=%d type=%s", len(entries), entry.get("type", "unknown"))
+        self._replace_atomic(tmp)
+
+    def _replace_atomic(self, src: Path) -> None:
+        for attempt in range(3):
+            try:
+                src.replace(self.path)
+                return
+            except PermissionError:
+                if attempt == 2:
+                    raise
+                time.sleep(0.05 * (attempt + 1))
 
     def clear(self) -> None:
         if self.path.exists():

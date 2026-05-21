@@ -271,7 +271,7 @@ def _compute_mood_score(self, limbic: LimbicManager | None) -> float:
 
 ## Big Five 性格特性モデル
 
-`iris/memory/personality/big_five.py` で管理（感情処理とは分離）。
+`iris/limbic/big_five.py` で管理（大脳辺縁系が性格特性を管理）。
 
 ```python
 @dataclass

@@ -26,6 +26,63 @@ Iris = Python製の自律AIアシスタントKernel。Ollama/OpenRouter上で動
 - **Iris** → 製作対象のAI
 - **コーディングエージェント** → あなた（現在の会話相手）
 
+### ディレクトリ構成
+
+iris/                             ← アプリケーションコア
+├── kernel/                       ← 脳幹: プロセス管理 + DI + コマンド処理
+│   ├── manager.py                ← KernelManager（全体状態集約）
+│   ├── process.py                ← KernelProcess（起動・停止, TimerTick発行）
+│   ├── supervisor.py             ← Supervisor（シグナル管理）
+│   ├── factory.py                ← DIコンテナ（全層構築）
+│   └── commands/                 ← CommandHandler（/shutdown 等）
+├── io/                           ← 視床: 入出力中継
+│   ├── manager.py                ← IOManager
+│   ├── models.py                 ← Message, CommandInput, CommandOutput, Permission, Direction
+│   ├── transport/                ← GrpcListener
+│   ├── session/                  ← SessionManager
+│   └── auth/                     ← Authenticator
+├── event/                        ← 神経路: Global EventBus
+│   ├── bus.py                    ← EventBus（kernel から分離）
+│   └── event_types.py            ← イベント型定義
+├── limbic/                       ← 大脳辺縁系: 感情処理 + 性格特性
+│   ├── manager.py                ← LimbicManager（感情状態管理, EventBus連携）
+│   ├── models.py                 ← EmotionState（PAD 3次元モデル）
+│   ├── amygdala.py               ← 扁桃体（感情評価・価値判断）
+│   ├── acc.py                    ← 前帯状皮質（感情制御・葛藤調整）
+│   ├── emotional_memory.py       ← 扁桃体-海馬相互作用（感情タグ付け）
+│   └── big_five.py               ← BigFiveProfile + 性格進化（大脳辺縁系が性格を管理）
+├── memory/                       ← 記憶系: 感覚野+海馬+皮質（3層構造）
+│   ├── manager.py                ← MemoryManager（ディスパッチャ+イベント処理）
+│   ├── sensory/                  ← SensoryMemoryManager（断片+生入力 2系統）
+│   ├── short_term/               ← ShortTermMemoryManager（ワーキングメモリ）
+│   ├── long_term/                ← LongTermMemoryManager + stores + VectorStore
+│   ├── hippocampal/              ← Reflexion + HippocampalManager
+│   ├── persona_data.py           ← 話し方・自己状態の動的管理
+│   └── persona_profile.py        ← PersonaProfile（ペルソナ情報の統合IF）
+├── agency/                       ← 高度認知: PFC+基底核+運動野
+│   ├── manager.py                ← AgencyManager（compact_context中継）
+│   ├── bus.py                    ← 内部 EventBus（planning→execution）
+│   ├── planning/                 ← 前頭前野: 意思決定 + PFCスコアリング
+│   │   ├── manager.py            ← PlanningManager
+│   │   └── scoring.py            ← ProactiveScoring
+│   └── execution/                ← 基底核+運動野: 行動実行 + 抑制制御
+│       ├── manager.py            ← ExecutionManager（action分岐なし）
+│       ├── pipeline.py           ← LLMPipeline（LLM+ツールループ）
+│       ├── inhibition.py         ← InhibitionController（基底核抑制）
+│       ├── monitor.py            ← OutputMonitor
+│       ├── tool_executor.py      ← ToolExecutionEngine
+├── llm/                          ← LLM基盤 + ContextWindow管理
+│   ├── llm_bridge.py             ← LLMBridge（マルチプロバイダルーター）
+│   ├── provider.py               ← LLMProvider / ProviderFactory Protocol
+│   ├── ollama_provider.py        ← Ollamaプロバイダ
+│   ├── openrouter_provider.py    ← OpenRouterプロバイダ
+│   ├── capability_checker.py
+│   ├── tokenizer_manager.py      ← TokenizerManager（tokenizersラッパー）
+│   ├── context_window.py         ← LLMContextWindowManager（会話履歴圧縮）
+│   ├── prompt_builder.py         ← システムプロンプト構築（テンプレートエンジン）
+│   └── interrupt_token.py        ← InterruptToken（LLM生成の中断制御）
+└── tools/                        ← @tool, ToolRegistry, ビルトイン実装
+
 ## 3. 標準開発ワークフロー
 
 ```text

@@ -22,11 +22,12 @@ flowchart TD
         IO_Auth["auth/<br/>Authenticator"]
     end
 
-    subgraph Limbic["limbic/ 大脳辺縁系 (NEW)"]
+    subgraph Limbic["limbic/ 大脳辺縁系"]
         L_Manager["LimbicManager<br/>感情状態管理"]
         L_Amygdala["扁桃体<br/>感情評価"]
         L_ACC["前帯状皮質<br/>感情制御"]
         L_EM["感情記憶<br/>感情タグ付け"]
+        L_BF["BigFive<br/>性格特性"]
     end
 
     subgraph Memory["memory/ 感覚野+海馬+皮質"]
@@ -36,7 +37,7 @@ flowchart TD
         M_Semantic["semantic/<br/>意味記憶"]
         M_Hippocampal["hippocampal/<br/>Reflexion"]
         M_Vector["vector/<br/>埋め込み検索"]
-        M_BigFive["personality/<br/>BigFive+性格進化"]
+        M_Personality["personality/<br/>話し方・自己状態"]
     end
 
     subgraph Agency["agency/ 前頭前野+大脳基底核+運動野"]
@@ -149,13 +150,14 @@ iris/
 │   ├── bus.py                 EventBus
 │   └── event_types.py         イベント型定義
 │
-├── limbic/                    # 大脳辺縁系: 感情処理
+├── limbic/                    # 大脳辺縁系: 感情処理 + 性格特性
 │   ├── __init__.py
 │   ├── manager.py             LimbicManager（感情状態管理, EventBus連携）
 │   ├── models.py              EmotionState（PAD 3次元モデル）
 │   ├── amygdala.py            扁桃体（感情評価・価値判断）
 │   ├── acc.py                 前帯状皮質（感情制御・葛藤調整）
-│   └── emotional_memory.py    扁桃体-海馬相互作用（感情タグ付け）
+│   ├── emotional_memory.py    扁桃体-海馬相互作用（感情タグ付け）
+│   └── big_five.py            BigFiveProfile + 性格進化
 │
 ├── memory/                    # 記憶系: 感覚野 + 海馬 + 皮質（3層構造）
 │   ├── __init__.py
@@ -176,12 +178,8 @@ iris/
 │   │   ├── __init__.py
 │   │   ├── manager.py         HippocampalManager（Reflexionスケジューリング）
 │   │   └── reflexion.py       Reflexion（自己反省, 特性抽出）
-│   └── personality/           # 人格: 性格特性・話し方（記憶から形成）
-│       ├── __init__.py
-│       ├── personality.py     Personality（システムプロンプト構築）
-│       ├── persona_data.py    PersonaData（動的管理）
-│       ├── persona_profile.py PersonaProfile（話し方・性格）
-│       └── big_five.py        BigFiveProfile + 性格進化
+    │   ├── persona_data.py        PersonaData（話し方・自己状態の動的管理）
+    │   └── persona_profile.py     PersonaProfile（ペルソナ情報の統合IF）
 │
 ├── agency/                    # 高度認知: PFC + 基底核 + 運動野
 │   ├── __init__.py
@@ -198,7 +196,6 @@ iris/
 │       ├── inhibition.py      InhibitionController（基底核抑制, GateVerdict）
 │       ├── monitor.py         OutputMonitor（発話頻度監視）
 │       ├── tool_executor.py   ToolExecutionEngine
-│       └── interrupt_token.py InterruptToken
 │
 ├── llm/                       # LLM 基盤
 │   ├── __init__.py
@@ -209,7 +206,9 @@ iris/
 │   ├── google_provider.py     Googleプロバイダ
 │   ├── capability_checker.py
 │   ├── tokenizer_manager.py   TokenizerManager（tokenizersラッパー）
-│   └── context_window.py      LLMContextWindowManager（会話履歴圧縮）
+│   ├── context_window.py      LLMContextWindowManager（会話履歴圧縮）
+│   ├── prompt_builder.py      Personality（システムプロンプト構築）
+│   └── interrupt_token.py     InterruptToken（LLM生成の中断制御）
 │
 └── tools/                     # @tool, ToolRegistry, ビルトイン
     ├── __init__.py

@@ -36,6 +36,12 @@ _DEFAULT_THINKING_PROMPT = """## 思考モード ON
 class RecursiveFormatter(string.Formatter):
     """値の中の {placeholder} も再帰的に解決する Formatter。"""
 
+    def get_value(self, key: int | str, args: Sequence[object], kwargs: Mapping[str, object]) -> object:
+        try:
+            return super().get_value(key, args, kwargs)
+        except KeyError:
+            return ""
+
     def get_field(
         self, field_name: str, args: Sequence[object], kwargs: Mapping[str, object]
     ) -> tuple[object, str | None]:
@@ -69,6 +75,9 @@ class Personality:
         user_preferences: str = "",
         session_roles: str = "",
         response_style: str = "",
+        speech_style: str = "",
+        personality_traits: str = "",
+        governance_principles: str = "",
     ) -> str:
         """システムプロンプトを構築する。
 
@@ -77,20 +86,28 @@ class Personality:
             user_preferences: ユーザー情報（重複除去済み）。
             session_roles: 接続セッション情報（空ならセクション省略）。
             response_style: 応答スタイル指示（空ならセクション省略）。
+            speech_style: 話し方の現在状態（空なら省略）。
+            personality_traits: 性格の現在状態（空なら省略）。
+            governance_principles: 自己規律指示（空なら省略）。
         """
         prompt = RecursiveFormatter().format(
             self.system_prompt_template,
             name=self.name,
             agents_md_content=agents_md_content or "（なし）",
+            user_preferences=user_preferences or "（なし）",
+            session_roles=session_roles or "（なし）",
+            speech_style=speech_style or "（なし）",
+            personality_traits=personality_traits or "（なし）",
+            governance_principles=governance_principles or "（なし）",
         )
 
-        if user_preferences:
+        if user_preferences and "{user_preferences}" not in self.system_prompt_template:
             prompt += f"\n\n## ユーザー情報\n{user_preferences}"
 
-        if session_roles:
+        if session_roles and "{session_roles}" not in self.system_prompt_template:
             prompt += f"\n\n## 接続セッション\n{session_roles}"
 
-        if response_style:
+        if response_style and "{response_style}" not in self.system_prompt_template:
             prompt += f"\n\n## 応答スタイル\n{response_style}"
 
         return prompt

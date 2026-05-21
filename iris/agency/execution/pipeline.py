@@ -80,6 +80,9 @@ class LLMPipeline:
 
         agents_md, current_state = self._load_personality_data()
 
+        speech_style = self._persona_profile.get_speech_style() if self._persona_profile else ""
+        personality_traits = self._persona_profile.get_traits() if self._persona_profile else ""
+
         # ユーザー情報（重複除去）
         prefs_list = self._memory.get_user_preferences() if self._memory else []
         seen: set[str] = set()
@@ -99,6 +102,9 @@ class LLMPipeline:
             user_preferences=user_prefs,
             session_roles=session_roles,
             response_style=response_style,
+            speech_style=speech_style,
+            personality_traits=personality_traits,
+            governance_principles=self._governance_principles,
         )
 
         prompt += f"\n\n## 現在日時\n{self._build_time_string()}"
@@ -110,7 +116,7 @@ class LLMPipeline:
                 prompt += f"\n\n## 現在の気分\n{mood_desc}"
 
         # 現在のペルソナ状態（Reflexion 蓄積、空なら省略）
-        if current_state:
+        if current_state and "{speech_style}" not in self._personality.system_prompt_template:
             prompt += f"\n\n{current_state}"
 
         if context_hint:

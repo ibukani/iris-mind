@@ -79,11 +79,14 @@ class ExecutionManager:
 
             emotion = event.plan.get("current_emotion")
             if emotion:
-                self._monitor.set_emotion_state(
-                    emotion.get("valence", 0.0),
-                    emotion.get("arousal", 0.0),
-                    emotion.get("dominance", 0.5),
-                )
+                from iris.limbic.models import EmotionState
+
+                if isinstance(emotion, EmotionState):
+                    self._monitor.set_emotion_state(
+                        emotion.valence,
+                        emotion.arousal,
+                        emotion.dominance,
+                    )
 
         self._apply_talkative_overrides(event.plan)
 

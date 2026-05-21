@@ -15,6 +15,7 @@ from iris.memory.manager import MemoryManager
 
 if TYPE_CHECKING:
     from iris.limbic.manager import LimbicManager
+    from iris.limbic.models import EmotionState
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +45,7 @@ class PlanningManager:
         if self._limbic:
             emotion = self._limbic.current_emotion()
             self._inhibition.apply_limbic_modulation(emotion)
-            limbic_mood = emotion.to_dict()
+            limbic_mood: EmotionState | None = emotion
         else:
             limbic_mood = None
 
@@ -125,7 +126,7 @@ class PlanningManager:
         self._bus.publish(PlanDecided(plan=plan))
 
     def _build_plan(
-        self, content: str, context: dict, gate: GateVerdict, limbic_mood: dict[str, float] | None = None
+        self, content: str, context: dict, gate: GateVerdict, limbic_mood: EmotionState | None = None
     ) -> dict:
         from_timer = context.get("from_timer", False)
 
@@ -208,10 +209,10 @@ class PlanningManager:
         return plan
 
     @staticmethod
-    def _apply_emotion_to_plan(plan: dict, limbic_mood: dict[str, float]) -> None:
-        v = limbic_mood.get("valence", 0.0)
-        a = limbic_mood.get("arousal", 0.0)
-        d = limbic_mood.get("dominance", 0.5)
+    def _apply_emotion_to_plan(plan: dict, limbic_mood: EmotionState) -> None:
+        v = limbic_mood.valence
+        a = limbic_mood.arousal
+        d = limbic_mood.dominance
 
         if v < -0.3:
             current = plan.get("max_tokens", 0)

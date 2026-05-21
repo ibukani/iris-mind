@@ -28,7 +28,7 @@ class AnteriorCingulateCortex:
         self,
         delta: EmotionDelta,
         current: EmotionState,
-        big_five: dict | None = None,
+        big_five: dict[str, float] | None = None,
     ) -> EmotionDelta:
         """扁桃体からの感情変化量を調整する。
 

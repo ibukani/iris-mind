@@ -5,6 +5,8 @@ import threading
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
+    from iris.event.event_bus import EventBus
+    from iris.kernel.config import ProactiveConfig
     from iris.limbic.models import EmotionState
 
 from iris.event.event_types import ClientSessionEvent, InputReady, MessageEvent, TimerTick
@@ -34,14 +36,14 @@ class MemoryManager:
     def __init__(
         self,
         *,
-        event_bus: Any = None,
+        event_bus: EventBus | None = None,
         episodic: EpisodicStore | None = None,
         semantic: SemanticStore | None = None,
         vector_store: VectorStore | None = None,
         sensory: SensoryMemoryManager | None = None,
         short_term: ShortTermMemoryManager | None = None,
         long_term: LongTermMemoryManager | None = None,
-        proactive_config: Any = None,
+        proactive_config: ProactiveConfig | None = None,
     ) -> None:
         self.sensory: SensoryMemoryManager = sensory or SensoryMemoryManager()
         self.short_term: ShortTermMemoryManager = short_term or ShortTermMemoryManager()
@@ -51,8 +53,8 @@ class MemoryManager:
             vector_store=vector_store,
         )
 
-        self._event_bus = event_bus
-        self._proactive_config = proactive_config
+        self._event_bus: EventBus | None = event_bus
+        self._proactive_config: ProactiveConfig | None = proactive_config
         self._pending_input: dict[str, str] = {}
         self._pending_lock: threading.Lock = threading.Lock()
 
@@ -79,6 +81,8 @@ class MemoryManager:
         )
 
     def _on_timer_tick(self, event: TimerTick) -> None:
+        if self._event_bus is None:
+            return
         with self._pending_lock:
             pending = dict(self._pending_input)
             self._pending_input.clear()

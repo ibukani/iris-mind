@@ -66,6 +66,7 @@ class ProactiveScoring:
             total = max(total, sensory_score * 0.3)
         total = max(total, urgency_score * 0.15)
 
+        ignore_penalty = 1.0
         if ignore_count > 0:
             ignore_penalty = max(0.2, 1.0 - ignore_count * 0.25)
             total *= ignore_penalty

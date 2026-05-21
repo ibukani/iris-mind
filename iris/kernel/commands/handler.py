@@ -310,7 +310,16 @@ class CommandHandler:
             return "Config not available"
         lines = [f"Default model: {cfg.model.get_model('default')}"]
         for m in cfg.model.models:
-            info = f"  {m.name} [{m.provider}:{m.base_url}] ctx={m.num_ctx or cfg.model.default_num_ctx}"
+            conn = cfg.model.providers.get(m.provider)
+            base_url = conn.base_url if conn else ""
+            if not base_url:
+                if m.provider == "ollama":
+                    base_url = "http://localhost:11434"
+                elif m.provider == "openrouter":
+                    base_url = "https://openrouter.ai/api/v1"
+                elif m.provider == "google":
+                    base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+            info = f"  {m.name} [{m.provider}:{base_url}] ctx={m.num_ctx or cfg.model.default_num_ctx}"
             if m.num_gpu is not None:
                 info += f" gpu={m.num_gpu}"
             if m.main_gpu is not None:

@@ -8,6 +8,8 @@ Iris Kernel Debug CLI — gRPC接続による状態診断・トレース取得
     python -m debug_tools.cli report [--spawn]
 
 --spawn: Irisが未起動の場合、自動で起動する（要: python main.py）
+         デフォルトで終了時にIrisをシャットダウンする。
+--keep-alive: --spawn と併用、Irisを生かしたまま抜ける。
 
 環境変数:
     IRIS_HOST        (default: 127.0.0.1)
@@ -18,6 +20,7 @@ Iris Kernel Debug CLI — gRPC接続による状態診断・トレース取得
 from __future__ import annotations
 
 import argparse
+import atexit
 import json
 import os
 import socket
@@ -31,11 +34,14 @@ from iris.io.transport import grpc_service_pb2 as pb2
 from iris.io.transport import grpc_service_pb2_grpc as pb2_grpc
 
 SPAWN_TIMEOUT = 30
+_spawned_proc: subprocess.Popen | None = None
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog="iris-debug", description="Iris Kernel Debug CLI")
     parser.add_argument("--spawn", action="store_true", help="Auto-start Iris if not running")
+    parser.add_argument("--keep-alive", action="store_true", help="Keep Iris running after command")
+    parser.add_argument("--debug-mode", action="store_true", help="Start Iris in --debug mode (skip LLM/ChromaDB)")
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_state = sub.add_parser("state", help="Show system state (dot-path supported)")
@@ -54,7 +60,7 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _build_metadata(args: argparse.Namespace) -> list[tuple[str, str]]:
+def _build_metadata() -> list[tuple[str, str]]:
     token = os.environ.get("IRIS_ACCESS_TOKEN", "")
     meta = [
         ("access_token", token),
@@ -69,40 +75,84 @@ def _build_metadata(args: argparse.Namespace) -> list[tuple[str, str]]:
     return meta
 
 
-def _port_open(host: str, port: int) -> bool:
-    try:
-        with socket.create_connection((host, port), timeout=1):
-            return True
-    except (TimeoutError, OSError):
-        return False
+def _wait_port(host: str, port: int, timeout: int) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            with socket.create_connection((host, port), timeout=1):
+                return True
+        except TimeoutError:
+            continue
+        except OSError:
+            continue
+    return False
 
 
-def _spawn_iris(host: str, port: int, timeout: int = SPAWN_TIMEOUT) -> subprocess.Popen | None:
-    """Iris をサブプロセスとして起動し、ポートが開くのを待つ。"""
-    print(f"Iris not running on {host}:{port}. Starting...", file=sys.stderr)
+def _spawn_iris(host: str, port: int, debug_mode: bool, timeout: int = SPAWN_TIMEOUT) -> subprocess.Popen | None:
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     main_py = os.path.join(root, "main.py")
     if not os.path.isfile(main_py):
         print(f"Error: {main_py} not found", file=sys.stderr)
         return None
+
+    cmd = [sys.executable, main_py]
+    if debug_mode:
+        cmd.append("--debug")
     proc = subprocess.Popen(
-        [sys.executable, main_py],
+        cmd,
         cwd=root,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
     )
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        if _port_open(host, port):
-            print("Iris is ready.", file=sys.stderr)
-            return proc
-        if proc.poll() is not None:
-            print(f"Iris process exited unexpectedly (code={proc.returncode})", file=sys.stderr)
-            return None
-        time.sleep(0.5)
-    print(f"Timeout: Iris did not start within {timeout}s", file=sys.stderr)
-    proc.kill()
-    return None
+
+    global _spawned_proc
+    _spawned_proc = proc
+
+    if not _wait_port(host, port, timeout):
+        print(f"Timeout: Iris did not start within {timeout}s", file=sys.stderr)
+        proc.kill()
+        proc.wait(timeout=5)
+        return None
+    return proc
+
+
+def _shutdown_via_grpc(metadata: list) -> None:
+    if _spawned_proc is None:
+        return
+    host = os.environ.get("IRIS_HOST", "127.0.0.1")
+    port = int(os.environ.get("IRIS_PORT", "9876"))
+    if not _wait_port(host, port, 3):
+        return
+    try:
+        channel = grpc.insecure_channel(f"{host}:{port}")
+        grpc.channel_ready_future(channel).result(timeout=3)
+        stub = pb2_grpc.IrisServiceStub(channel)
+        cmd = pb2.CommandInput(  # type: ignore[attr-defined]
+            msg_type="command",
+            id="shutdown-1",
+            session_id="debug-cli",
+            source_role="debug_cli",
+            content="/shutdown",
+        )
+        req = pb2.BidirectionalStreamRequest(command=cmd)  # type: ignore[attr-defined]
+        list(stub.BidirectionalStream(iter([req]), metadata=metadata, timeout=5))
+    except Exception:
+        pass
+
+
+def _cleanup() -> None:
+    global _spawned_proc
+    if _spawned_proc is None:
+        return
+    if _spawned_proc.poll() is not None:
+        _spawned_proc = None
+        return
+    try:
+        _spawned_proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        _spawned_proc.kill()
+        _spawned_proc.wait(timeout=5)
+    _spawned_proc = None
 
 
 def _run_command(stub: pb2_grpc.IrisServiceStub, command: str, metadata: list, timeout: int = 10) -> str:
@@ -122,37 +172,35 @@ def _run_command(stub: pb2_grpc.IrisServiceStub, command: str, metadata: list, t
     result = ""
     for resp in responses:
         field = resp.WhichOneof("frame")
-        if field == "message":
-            continue
         if field == "command":
             result += resp.command.content
     return result.strip()
 
 
 def main() -> None:
+    global _spawned_proc
     args = _parse_args()
     host = os.environ.get("IRIS_HOST", "127.0.0.1")
     port = int(os.environ.get("IRIS_PORT", "9876"))
-    target = f"{host}:{port}"
-    metadata = _build_metadata(args)
-    spawned_proc: subprocess.Popen | None = None
+    metadata = _build_metadata()
 
-    if not _port_open(host, port):
+    if not _wait_port(host, port, 2):
         if args.spawn:
-            spawned_proc = _spawn_iris(host, port)
-            if spawned_proc is None:
+            spawned = _spawn_iris(host, port, args.debug_mode)
+            if spawned is None:
                 sys.exit(1)
         else:
-            print(f"Error: Cannot connect to {target}\n  Use --spawn to auto-start Iris", file=sys.stderr)
+            print(f"Error: Cannot connect to {host}:{port}\n  Use --spawn to auto-start Iris", file=sys.stderr)
             sys.exit(1)
 
-    channel = grpc.insecure_channel(target)
+    atexit.register(_cleanup)
+
+    channel = grpc.insecure_channel(f"{host}:{port}")
     try:
         grpc.channel_ready_future(channel).result(timeout=5)
     except Exception:
-        print(f"Error: gRPC connection to {target} failed", file=sys.stderr)
-        if spawned_proc:
-            spawned_proc.kill()
+        print(f"Error: gRPC connection to {host}:{port} failed", file=sys.stderr)
+        _cleanup()
         sys.exit(1)
 
     stub = pb2_grpc.IrisServiceStub(channel)
@@ -180,9 +228,12 @@ def main() -> None:
         output = _run_command(stub, cmd, metadata)
     except grpc.RpcError as e:
         print(f"gRPC error: {e.code()} {e.details()}", file=sys.stderr)
-        if spawned_proc:
-            spawned_proc.kill()
+        _cleanup()
         sys.exit(1)
+    except KeyboardInterrupt:
+        _shutdown_via_grpc(metadata)
+        _cleanup()
+        sys.exit(130)
 
     if args.json and args.command == "state":
         try:
@@ -193,6 +244,12 @@ def main() -> None:
             pass
 
     print(output)
+
+    if _spawned_proc is not None and not args.keep_alive:
+        print("Shutting down Iris...", file=sys.stderr)
+        _shutdown_via_grpc(metadata)
+        _cleanup()
+        print("Done.", file=sys.stderr)
 
 
 if __name__ == "__main__":

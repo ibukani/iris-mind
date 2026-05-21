@@ -141,7 +141,10 @@ class LLMPipeline:
         max_tokens: int | None = None,
     ) -> dict[str, Any]:
         self._sysprompt_cache = None
-        system_prompt = self._build_system_prompt(context_hint=context_hint)
+        response_style = ""
+        if self._limbic:
+            response_style = self._limbic.build_response_style()
+        system_prompt = self._build_system_prompt(context_hint=context_hint, response_style=response_style)
         self._last_system_prompt = system_prompt
         self._last_call_model_role = model_role
         msgs: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}, *messages]

@@ -241,20 +241,44 @@ class LimbicManager:
 
         hints: list[str] = []
 
+        # 快・不快 (Valence)
         if e.valence > 0.5:
             hints.append("明るく温かいトーンで応答してください")
+            if e.arousal > 0.4:
+                hints.append(
+                    "発話の冒頭や途中に、感情に合わせた感嘆詞（例：『やったー！』『わーい！』『やった！』）を自然に混ぜて、非常に嬉しそうに応答してください"
+                )
+            else:
+                hints.append(
+                    "発話の冒頭や途中に、穏やかな感嘆表現（例：『ふふっ』『そうだね』）を少し交えて嬉しそうに応答してください"
+                )
         elif e.valence > 0.2:
             hints.append("穏やかで親しみやすいトーンで応答してください")
+            hints.append("親しみやすく、優しい相槌や感嘆表現（例：『ふふっ』『そうだね』）を少し交えて応答してください")
         elif e.valence < -0.5:
             hints.append("簡潔に、1文以内の最小限の言葉で応答してください")
+            if e.arousal > 0.4:
+                hints.append(
+                    "発話の冒頭や途中に、イライラを表す感嘆詞（例：『はぁ…』『もう！』）を交え、不機嫌でぶっきらぼうに応答してください"
+                )
+            else:
+                hints.append(
+                    "発話の冒頭や途中に、落胆を表す感嘆表現（例：『はぁ…』『ふぅ』）を交えて、冷淡に応答してください"
+                )
         elif e.valence < -0.2:
             hints.append("やや控えめに、1文程度の短い言葉で応答してください")
+            hints.append(
+                "発話の冒頭や途中に、元気がなさそうな感嘆詞（例：『うう…』『え〜ん』『しゅん…』）を自然に交え、悲しそうに応答してください"
+            )
 
+        # 覚醒度 (Arousal)
         if e.arousal > 0.6:
             hints.append("テンポ良く、1〜2文の短い言葉で活発に応答してください")
+            hints.append("焦りや興奮を言葉の端々に表し、感嘆符『！』を多めに使ってテンポ良く応答してください")
         elif e.arousal < 0.2:
             hints.append("ゆったりとしたペースで、1〜2文程度で応答してください")
 
+        # 支配性 (Dominance)
         if e.dominance > 0.6:
             hints.append("自信を持って明確に応答してください")
         elif e.dominance < 0.3:

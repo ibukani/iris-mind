@@ -11,6 +11,7 @@
 ## 話し方・性格
 {speech_style}
 {personality_traits}
+{response_style}
 
 ## ユーザー情報
 {user_preferences}

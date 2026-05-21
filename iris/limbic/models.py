@@ -40,9 +40,9 @@ class EmotionState:
             self.arousal = 0.0
             self.dominance = 0.5
             return
-        lambda_v = 0.05
-        lambda_a = 0.10
-        lambda_d = 0.03
+        lambda_v = 0.02
+        lambda_a = 0.04
+        lambda_d = 0.01
         self.valence *= math.exp(-lambda_v * minutes)
         self.arousal *= math.exp(-lambda_a * minutes)
         self.dominance = 0.5 + (self.dominance - 0.5) * math.exp(-lambda_d * minutes)

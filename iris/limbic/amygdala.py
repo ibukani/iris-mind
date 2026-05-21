@@ -200,9 +200,9 @@ class Amygdala:
             return EmotionDelta()
 
         return EmotionDelta(
-            valence=valence * 0.5,
-            arousal=arousal * 0.5,
-            dominance=dominance * 0.4,
+            valence=valence * 0.8,
+            arousal=arousal * 0.8,
+            dominance=dominance * 0.6,
         )
 
     def evaluate_basic(self, text: str) -> str | None:

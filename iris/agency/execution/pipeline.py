@@ -12,10 +12,10 @@ from iris.kernel.debug_capture import CaptureEntry, DebugCapture
 from iris.limbic.manager import LimbicManager
 from iris.llm.capability_checker import CapabilityChecker
 from iris.llm.llm_bridge import LLMBridge
+from iris.llm.prompt_builder import Personality
 from iris.memory.long_term.stores import AgentsMdStore
 from iris.memory.manager import MemoryManager
-from iris.memory.personality.persona_profile import PersonaProfile
-from iris.memory.personality.personality import Personality
+from iris.memory.persona_profile import PersonaProfile
 
 logger = logging.getLogger(__name__)
 

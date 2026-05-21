@@ -178,11 +178,8 @@ iris/
 │   │   ├── __init__.py
 │   │   ├── manager.py         HippocampalManager（Reflexionスケジューリング）
 │   │   └── reflexion.py       Reflexion（自己反省, 特性抽出）
-    │   └── personality/           # 人格: 話し方・自己状態（記憶から形成）
-    │       ├── __init__.py
-    │       ├── personality.py     Personality（システムプロンプト構築）
-    │       ├── persona_data.py    PersonaData（動的管理）
-    │       └── persona_profile.py PersonaProfile（話し方・自己状態）
+    │   ├── persona_data.py        PersonaData（話し方・自己状態の動的管理）
+    │   └── persona_profile.py     PersonaProfile（ペルソナ情報の統合IF）
 │
 ├── agency/                    # 高度認知: PFC + 基底核 + 運動野
 │   ├── __init__.py
@@ -210,7 +207,8 @@ iris/
 │   ├── google_provider.py     Googleプロバイダ
 │   ├── capability_checker.py
 │   ├── tokenizer_manager.py   TokenizerManager（tokenizersラッパー）
-│   └── context_window.py      LLMContextWindowManager（会話履歴圧縮）
+│   ├── context_window.py      LLMContextWindowManager（会話履歴圧縮）
+│   └── prompt_builder.py      Personality（システムプロンプト構築）
 │
 └── tools/                     # @tool, ToolRegistry, ビルトイン
     ├── __init__.py

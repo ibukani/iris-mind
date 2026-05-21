@@ -59,7 +59,8 @@ iris/                             ← アプリケーションコア
 │   ├── short_term/               ← ShortTermMemoryManager（ワーキングメモリ）
 │   ├── long_term/                ← LongTermMemoryManager + stores + VectorStore
 │   ├── hippocampal/              ← Reflexion + HippocampalManager
-│   └── personality/              ← 人格: 話し方・自己状態（記憶から形成）
+│   ├── persona_data.py           ← 話し方・自己状態の動的管理
+│   └── persona_profile.py        ← PersonaProfile（ペルソナ情報の統合IF）
 ├── agency/                       ← 高度認知: PFC+基底核+運動野
 │   ├── manager.py                ← AgencyManager（compact_context中継）
 │   ├── bus.py                    ← 内部 EventBus（planning→execution）
@@ -80,7 +81,8 @@ iris/                             ← アプリケーションコア
 │   ├── openrouter_provider.py    ← OpenRouterプロバイダ
 │   ├── capability_checker.py
 │   ├── tokenizer_manager.py      ← TokenizerManager（tokenizersラッパー）
-│   └── context_window.py         ← LLMContextWindowManager（会話履歴圧縮）
+│   ├── context_window.py         ← LLMContextWindowManager（会話履歴圧縮）
+│   └── prompt_builder.py         ← システムプロンプト構築（テンプレートエンジン）
 └── tools/                        ← @tool, ToolRegistry, ビルトイン実装
 
 docs/                             ← 設計ドキュメント

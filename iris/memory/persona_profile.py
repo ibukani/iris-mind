@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from iris.memory.personality.persona_data import PersonaData
+from iris.memory.persona_data import PersonaData
 
 
 class PersonaProfile:

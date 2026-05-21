@@ -151,7 +151,11 @@ class CommandHandler:
             "  /events [n]         Recent events (alias: /debug events)\n"
             "  /health             Health check (alias: /debug health)\n"
             "  /report             Debug report (alias: /debug report)\n"
-            "  /debug              Debug subsystem (/debug help for subcommands)"
+            "  /debug              Debug subsystem (/debug help for subcommands)\n"
+            "  /debug on|off       Toggle LLM prompt/response capture\n"
+            "  /debug list|last    List or show latest LLM capture\n"
+            "  /debug show <id>    Show specific LLM capture\n"
+            "  /debug dump         Write all captures to files"
         )
 
     def _status(self) -> str:

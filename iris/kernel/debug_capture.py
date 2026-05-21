@@ -112,12 +112,14 @@ class DebugCapture:
         max_entries: int = 10,
         output_dir: str = "logs/debug",
         tokenizer_mgr: TokenizerManager | None = None,
+        auto_dump: bool = False,
     ) -> None:
         self._captures: list[CaptureEntry] = []
         self._max_entries = max_entries
         self._output_dir = Path(output_dir)
         self._tokenizer_mgr = tokenizer_mgr
         self._enabled = False
+        self._auto_dump = auto_dump
         self._next_id = 1
 
     @property
@@ -143,6 +145,8 @@ class DebugCapture:
         self._captures.append(entry)
         if len(self._captures) > self._max_entries:
             self._captures.pop(0)
+        if self._auto_dump:
+            self._write_file(entry)
         logger.info("DebugCapture: captured #%d (%d tok)", entry.id, entry.token_counts.get("total", 0))
 
     def last(self, n: int = 1) -> list[CaptureEntry]:

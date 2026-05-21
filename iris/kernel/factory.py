@@ -157,7 +157,13 @@ class KernelFactory:
             )
             for entry in config.model.models
         }
-        debug_capture = DebugCapture(tokenizer_mgr=next(iter(tokenizers.values()), None))
+        debug_capture = DebugCapture(
+            tokenizer_mgr=next(iter(tokenizers.values()), None),
+            auto_dump=config.debug.capture_auto_dump,
+            max_entries=config.debug.capture_max_entries,
+        )
+        if config.debug.capture_enabled:
+            debug_capture.set_enabled(True)
         _registry, tool_exec = KernelFactory._build_tools()
         agency = KernelFactory._build_agency(
             config,

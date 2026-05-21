@@ -214,6 +214,9 @@ class DebugConfig(BaseModel):
     trace_max_entries: int = 500
     emotion_history_enabled: bool = True
     personality_history_enabled: bool = True
+    capture_enabled: bool = False
+    capture_auto_dump: bool = False
+    capture_max_entries: int = 10
 
 
 class Config(BaseModel):

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import datetime
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from iris.agency.execution.interrupt_token import InterruptToken
 from iris.agency.execution.tool_executor import ToolExecutionEngine
@@ -15,6 +16,7 @@ from iris.memory.personality.persona_profile import PersonaProfile
 from iris.memory.personality.personality import Personality
 
 if TYPE_CHECKING:
+    from iris.kernel.debug_capture import DebugCapture
     from iris.limbic.manager import LimbicManager
 
 logger = logging.getLogger(__name__)
@@ -41,6 +43,7 @@ class LLMPipeline:
         tool_executor: ToolExecutionEngine | None = None,
         capability_checker: CapabilityChecker | None = None,
         governance_principles: str = "",
+        debug_capture: DebugCapture | None = None,
     ) -> None:
         self._llm = llm
         self._model_config = model_config
@@ -52,9 +55,12 @@ class LLMPipeline:
         self._tool_executor = tool_executor
         self._capability_checker = capability_checker
         self._governance_principles = governance_principles
+        self._debug_capture = debug_capture
         self._session_roles_summary: str = ""
         self._max_tool_iterations: int = 3
         self._sysprompt_cache: str | None = None
+        self._last_system_prompt: str = ""
+        self._last_call_model_role: str = "default"
 
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
@@ -84,8 +90,6 @@ class LLMPipeline:
         if dynamic_personality:
             prompt += f"\n\n{dynamic_personality}"
 
-        import datetime
-
         dt_now = datetime.datetime.now()
         weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         weekday = weekdays[dt_now.weekday()]
@@ -105,24 +109,26 @@ class LLMPipeline:
         self._sysprompt_cache = prompt
         return prompt
 
-    def _get_tools(self) -> list[dict] | None:
+    def _get_tools(self) -> list[dict[str, Any]] | None:
         if self._tool_executor is None:
             return None
         return self._tool_executor.registry.list_tools() or None
 
     def call(
         self,
-        messages: list[dict],
-        tools: list[dict] | None = None,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
         on_token: Callable[[str], None] | None = None,
         interrupt_token: InterruptToken | None = None,
         context_hint: str = "",
         model_role: str = "default",
         max_tokens: int | None = None,
-    ) -> dict:
+    ) -> dict[str, Any]:
         self._sysprompt_cache = None
         system_prompt = self._build_system_prompt(context_hint=context_hint)
-        msgs: list[dict] = [{"role": "system", "content": system_prompt}, *messages]
+        self._last_system_prompt = system_prompt
+        self._last_call_model_role = model_role
+        msgs: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}, *messages]
 
         return self._llm.chat(
             messages=msgs,
@@ -134,7 +140,9 @@ class LLMPipeline:
             interrupt_token=interrupt_token,
         )
 
-    def generate(self, plan: dict, messages: list[dict], on_token: Callable[[str], None] | None = None) -> str:
+    def generate(
+        self, plan: dict[str, Any], messages: list[dict[str, Any]], on_token: Callable[[str], None] | None = None
+    ) -> str:
         """計画に基づいて、会話メッセージからテキストを生成する（メイン公開メソッド）。
 
         計画の tools_allowed フラグに基づいて、ツール使用の有無を判定し、
@@ -165,10 +173,10 @@ class LLMPipeline:
 
     def _generate_without_tools(
         self,
-        plan: dict,
+        plan: dict[str, Any],
         max_tokens: int | None,
         temperature: float,
-        messages: list[dict] | None = None,
+        messages: list[dict[str, Any]] | None = None,
         model_role: str = "default",
     ) -> str:
         context_hint = plan.get("context_hint", "")
@@ -179,7 +187,7 @@ class LLMPipeline:
         if situation in _SITUATION_INSTRUCTIONS:
             parts.append(_SITUATION_INSTRUCTIONS[situation])
 
-        msgs: list[dict] = [{"role": "system", "content": "\n\n".join(parts)}]
+        msgs: list[dict[str, Any]] = [{"role": "system", "content": "\n\n".join(parts)}]
 
         content = plan.get("content", "")
         if messages and content:
@@ -189,6 +197,7 @@ class LLMPipeline:
             msgs.append({"role": "user", "content": content})
         else:
             msgs.append({"role": "user", "content": "..."})
+        text = ""
         try:
             resp = self._llm.chat(
                 messages=msgs,
@@ -197,11 +206,21 @@ class LLMPipeline:
                 temperature=temperature,
             )
             text = str((resp.get("message", {}) or {}).get("content", "")).strip()
-            if text:
-                return text
         except Exception as e:
             logger.debug("Short generation failed: %s", e)
-        return "お疲れさまです！何かお手伝いしましょうか？"
+
+        if not text:
+            text = "お疲れさまです！何かお手伝いしましょうか？"
+
+        self._capture_debug(
+            model_role=model_role,
+            system_prompt=system_prompt,
+            messages=msgs,
+            tools=None,
+            response=text,
+        )
+
+        return text
 
     def _generate_with_tools(
         self,
@@ -218,6 +237,7 @@ class LLMPipeline:
 
         iteration = 0
         final_text = ""
+        tool_iters: list[dict] = []
 
         while iteration < self._max_tool_iterations:
             if interrupt_token and interrupt_token.is_cancelled:
@@ -239,6 +259,7 @@ class LLMPipeline:
             if msg.get("tool_calls") and self._tool_executor is not None:
                 messages.append(msg)
                 results = self._tool_executor.execute_all(messages)
+                tool_iters.append({"tool_calls": msg["tool_calls"], "results": results})
 
                 if self._tool_executor.all_side_effects(results):
                     break
@@ -252,4 +273,54 @@ class LLMPipeline:
             if final_text:
                 break
 
+        sys_prompt = getattr(self, "_last_system_prompt", "")
+        self._capture_debug(
+            model_role=model_role,
+            system_prompt=sys_prompt,
+            messages=messages,
+            tools=tools,
+            response=final_text,
+            tool_iterations=tool_iters,
+        )
+
         return final_text
+
+    def _capture_debug(
+        self,
+        model_role: str,
+        system_prompt: str,
+        messages: list[dict],
+        tools: list[dict] | None,
+        response: str,
+        tool_iterations: list[dict] | None = None,
+    ) -> None:
+        """デバッグキャプチャ処理を行い、トークン数をカウントして記録する。"""
+        dc = self._debug_capture
+        if not (dc and dc.enabled):
+            return
+
+        model_name = self._model_config.get_model(model_role)
+        history_msgs = [m for m in messages if m.get("role") != "system"]
+        tc = {
+            "system": dc.count_tokens(system_prompt),
+            "history": dc.count_tokens(" ".join(m.get("content", "") or "" for m in history_msgs)),
+            "tools": dc.count_tokens(str(tools)) if tools else 0,
+            "response": dc.count_tokens(response),
+        }
+        tc["total"] = sum(tc.values())
+
+        from iris.kernel.debug_capture import CaptureEntry
+
+        dc.capture(
+            CaptureEntry(
+                id=0,
+                timestamp=datetime.datetime.now(),
+                model_name=model_name,
+                system_prompt=system_prompt,
+                messages=history_msgs,
+                tools=tools,
+                response=response,
+                token_counts=tc,
+                tool_iterations=tool_iterations or [],
+            )
+        )

@@ -2,17 +2,63 @@ from __future__ import annotations
 
 import logging
 import math
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from iris.limbic.models import EmotionState
 
-from iris.memory.long_term.stores import EpisodicStore, SemanticStore
+from iris.memory.long_term.stores import EpisodicStoreProtocol, SemanticStoreProtocol
 from iris.memory.long_term.vector_store import VectorStore
 
 logger = logging.getLogger(__name__)
+
+
+def _format_search_result(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """検索結果を統一された辞書フォーマットに整形する。
+
+    なぜこの設計にしたか:
+    意味検索とベクトル検索で返却形式を同一にし、将来的な項目追加時の変更を一箇所に閉じるため。
+    """
+    return [
+        {
+            "content": r.get("content", ""),
+            "tags": r.get("tags", []),
+            "type": r.get("type", "unknown"),
+            "score": round(r.get("score", 0.0), 4),
+            "timestamp": r.get("timestamp", ""),
+        }
+        for r in results
+    ]
+
+
+class LongTermMemoryProtocol(Protocol):
+    """長期記憶のインターフェース。
+
+    なぜこの設計にしたか:
+    他のレイヤーが具象クラスである LongTermMemoryManager に直接依存するのを防ぎ、
+    モック化やテスト用の代替実装を容易にするため。
+    """
+
+    @property
+    def episodic(self) -> EpisodicStoreProtocol | None: ...
+
+    @property
+    def semantic(self) -> SemanticStoreProtocol | None: ...
+
+    def store_episodic(self, data: Any, kind: str = "") -> None: ...
+    def get_episodic_recent(self, n: int = 5) -> list[dict[str, Any]]: ...
+    def clear_episodic(self) -> None: ...
+    def store_semantic(self, data: Any) -> None: ...
+    def search_semantic(self, query: str, max_results: int = 3) -> list[dict[str, Any]]: ...
+    def clear_semantic(self) -> None: ...
+    def search_vector(self, query: str, max_results: int = 3) -> list[dict[str, Any]]: ...
+    def search_emotional(
+        self,
+        current_emotion: EmotionState | None = None,
+        max_results: int = 5,
+    ) -> list[dict[str, Any]]: ...
 
 
 class LongTermMemoryManager:
@@ -28,8 +74,8 @@ class LongTermMemoryManager:
 
     def __init__(
         self,
-        episodic: EpisodicStore | None = None,
-        semantic: SemanticStore | None = None,
+        episodic: EpisodicStoreProtocol | None = None,
+        semantic: SemanticStoreProtocol | None = None,
         vector_store: VectorStore | None = None,
     ):
         self._episodic = episodic
@@ -73,28 +119,10 @@ class LongTermMemoryManager:
     def search_semantic(self, query: str, max_results: int = 3) -> list[dict[str, Any]]:
         if self._semantic is not None:
             results = self._semantic.search(query=query, max_results=max_results)
-            return [
-                {
-                    "content": r.get("content", ""),
-                    "tags": r.get("tags", []),
-                    "type": r.get("type", "unknown"),
-                    "score": round(r.get("score", 0.0), 4),
-                    "timestamp": r.get("timestamp", ""),
-                }
-                for r in results
-            ]
+            return _format_search_result(results)
         if self._vector_store is not None:
             results = self._vector_store.search(query=query, max_results=max_results)
-            return [
-                {
-                    "content": r.get("content", ""),
-                    "tags": r.get("tags", []),
-                    "type": r.get("type", "unknown"),
-                    "score": round(r.get("score", 0.0), 4),
-                    "timestamp": r.get("timestamp", ""),
-                }
-                for r in results
-            ]
+            return _format_search_result(results)
         return []
 
     def clear_semantic(self) -> None:
@@ -107,16 +135,7 @@ class LongTermMemoryManager:
         if self._vector_store is None:
             return []
         results = self._vector_store.search(query=query, max_results=max_results)
-        return [
-            {
-                "content": r.get("content", ""),
-                "tags": r.get("tags", []),
-                "type": r.get("type", "unknown"),
-                "score": round(r.get("score", 0.0), 4),
-                "timestamp": r.get("timestamp", ""),
-            }
-            for r in results
-        ]
+        return _format_search_result(results)
 
     # ---- 感情タグ検索 ----
 
@@ -131,29 +150,32 @@ class LongTermMemoryManager:
         emotion_entries = [e for e in all_entries if e.get("metadata", {}).get("type") == "emotion_tag"]
         if not emotion_entries:
             return []
-        if current_emotion is not None:
-            scored: list[tuple[float, dict]] = []
-            for e in emotion_entries:
-                meta = e.get("metadata", {})
-                meta_emotion = meta.get("emotion", {})
-                distance = _pad_distance(current_emotion, meta_emotion)
-                intensity = meta.get("intensity", 0)
-                score = intensity / max(distance, 0.01)
-                scored.append((score, e))
-            scored.sort(key=lambda x: x[0], reverse=True)
-            return [e for _, e in scored[:max_results]]
-        return sorted(
-            emotion_entries,
-            key=lambda e: e.get("metadata", {}).get("intensity", 0),
-            reverse=True,
-        )[:max_results]
+
+        if current_emotion is None:
+            return sorted(
+                emotion_entries,
+                key=lambda e: e.get("metadata", {}).get("intensity", 0),
+                reverse=True,
+            )[:max_results]
+
+        scored: list[tuple[float, dict]] = []
+        for e in emotion_entries:
+            meta = e.get("metadata", {})
+            meta_emotion = meta.get("emotion", {})
+            distance = _pad_distance(current_emotion, meta_emotion)
+            intensity = meta.get("intensity", 0)
+            score = intensity / max(distance, 0.01)
+            scored.append((score, e))
+
+        scored.sort(key=lambda x: x[0], reverse=True)
+        return [e for _, e in scored[:max_results]]
 
     @property
-    def episodic(self) -> EpisodicStore | None:
+    def episodic(self) -> EpisodicStoreProtocol | None:
         return self._episodic
 
     @property
-    def semantic(self) -> SemanticStore | None:
+    def semantic(self) -> SemanticStoreProtocol | None:
         return self._semantic
 
 

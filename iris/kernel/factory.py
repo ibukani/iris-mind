@@ -17,6 +17,7 @@ from iris.io.manager import IOManager
 from iris.io.session.manager import SessionConfig, SessionManager
 from iris.io.transport.grpc_server import GrpcListener
 from iris.kernel.commands.handler import CommandHandler
+from iris.kernel.debug_capture import DebugCapture
 from iris.limbic.emotional_memory import EmotionalMemory
 from iris.limbic.manager import LimbicManager
 from iris.llm.capability_checker import CapabilityChecker
@@ -181,6 +182,10 @@ class KernelFactory:
             for entry in config.model.models
         }
 
+        debug_capture = DebugCapture(
+            tokenizer_mgr=next(iter(tokenizers.values()), None),
+        )
+
         # ============================================================
         # Phase 4: ケイパビリティ (ツール)
         # ============================================================
@@ -209,6 +214,7 @@ class KernelFactory:
             limbic=limbic,
             big_five=big_five,
             tokenizers=tokenizers,
+            debug_capture=debug_capture,
         )
 
         # ============================================================
@@ -244,6 +250,7 @@ class KernelFactory:
             llm=llm,
             registry=_registry,
             big_five=big_five,
+            debug_capture=debug_capture,
         )
         ctx.cmd_handler = cmd_handler
         ctx.io.set_command_handler(cmd_handler.handle)
@@ -318,6 +325,7 @@ class KernelFactory:
         limbic: LimbicManager | None = None,
         big_five: BigFiveProfile | None = None,
         tokenizers: dict[str, TokenizerManager] | None = None,
+        debug_capture: DebugCapture | None = None,
     ) -> AgencyManager:
         personality = Personality(name=config.personality.name, prompt_file=config.personality.prompt_file)
         capability_checker = CapabilityChecker(config=config.model)
@@ -346,6 +354,7 @@ class KernelFactory:
             limbic=limbic,
             tool_executor=tool_exec,
             capability_checker=capability_checker,
+            debug_capture=debug_capture,
         )
 
         planning = PlanningManager(

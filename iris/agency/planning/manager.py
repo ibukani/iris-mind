@@ -15,11 +15,51 @@ from iris.memory.manager import MemoryManager
 
 if TYPE_CHECKING:
     from iris.limbic.manager import LimbicManager
+    from iris.limbic.models import EmotionState
 
 logger = logging.getLogger(__name__)
 
 
 class PlanningManager:
+    # 雑談/タスク判定用キーワード
+    TASK_KEYWORDS: frozenset[str] = frozenset(
+        {
+            "コード",
+            "ファイル",
+            "実装",
+            "作成",
+            "修正",
+            "テスト",
+            "実行",
+            "ディレクトリ",
+            "adr",
+            "ルール",
+            "ログ",
+            "詳しく",
+            "説明",
+            "なぜ",
+            "どうやって",
+            "設計",
+        }
+    )
+
+    # 感情状態（PAD）の閾値と調整定数
+    VALENCE_LOW_THRESHOLD = -0.3
+    VALENCE_HIGH_THRESHOLD = 0.5
+    AROUSAL_HIGH_THRESHOLD = 0.6
+    AROUSAL_LOW_THRESHOLD = 0.15
+    DOMINANCE_LOW_THRESHOLD = 0.3
+    DOMINANCE_HIGH_THRESHOLD = 0.6
+
+    TEMP_ADJUST_NEGATIVE_VALENCE = 0.15
+    TEMP_ADJUST_POSITIVE_VALENCE = -0.1
+    TEMP_ADJUST_HIGH_AROUSAL = -0.15
+    TEMP_ADJUST_LOW_AROUSAL = 0.2
+    TEMP_ADJUST_LOW_DOMINANCE = 0.05
+    TEMP_ADJUST_HIGH_DOMINANCE = -0.1
+
+    DEFAULT_TEMPERATURE = 0.7
+
     def __init__(
         self,
         internal_bus: InternalBus,
@@ -44,7 +84,7 @@ class PlanningManager:
         if self._limbic:
             emotion = self._limbic.current_emotion()
             self._inhibition.apply_limbic_modulation(emotion)
-            limbic_mood = emotion.to_dict()
+            limbic_mood: EmotionState | None = emotion
         else:
             limbic_mood = None
 
@@ -124,7 +164,7 @@ class PlanningManager:
         self._bus.publish(PlanDecided(plan=plan))
 
     def _build_plan(
-        self, content: str, context: dict, gate: GateVerdict, limbic_mood: dict[str, float] | None = None
+        self, content: str, context: dict, gate: GateVerdict, limbic_mood: EmotionState | None = None
     ) -> dict:
         from_timer = context.get("from_timer", False)
 
@@ -156,28 +196,7 @@ class PlanningManager:
         )
 
         # 雑談判定とトークン制限
-        is_task = False
-        task_keywords = [
-            "コード",
-            "ファイル",
-            "実装",
-            "作成",
-            "修正",
-            "テスト",
-            "実行",
-            "ディレクトリ",
-            "adr",
-            "ルール",
-            "ログ",
-            "詳しく",
-            "説明",
-            "なぜ",
-            "どうやって",
-            "設計",
-        ]
-        content_lower = content.lower()
-        if len(content) > 100 or any(kw in content_lower for kw in task_keywords) or content.startswith("/"):
-            is_task = True
+        is_task = self._is_task_content(content)
 
         if abbreviated:
             max_tokens = 80
@@ -195,8 +214,8 @@ class PlanningManager:
             "tools_allowed": not abbreviated,
             "streaming": not abbreviated,
             "max_tokens": max_tokens,
-            "temperature": 0.5 if abbreviated else 0.7,
-            "show_thinking": not abbreviated and is_task,  # 雑談時は思考表示をOFF（Neiroライク）
+            "temperature": 0.5 if abbreviated else self.DEFAULT_TEMPERATURE,
+            "show_thinking": not abbreviated and is_task,  # 雑談時は思考表示をOFF
             "run_reflexion": not abbreviated and is_task,  # 雑談時は振り返りもスキップ
             "run_compression": not abbreviated,
             "record_history": True,
@@ -206,42 +225,51 @@ class PlanningManager:
         plan["current_emotion"] = limbic_mood
         return plan
 
-    @staticmethod
-    def _apply_emotion_to_plan(plan: dict, limbic_mood: dict[str, float]) -> None:
-        v = limbic_mood.get("valence", 0.0)
-        a = limbic_mood.get("arousal", 0.0)
-        d = limbic_mood.get("dominance", 0.5)
+    def _is_task_content(self, content: str) -> bool:
+        """入力コンテンツが雑談ではなくタスクであるかを判定する。"""
+        if len(content) > 100 or content.startswith("/"):
+            return True
+        content_lower = content.lower()
+        return any(kw in content_lower for kw in self.TASK_KEYWORDS)
 
-        if v < -0.3:
+    @classmethod
+    def _apply_emotion_to_plan(cls, plan: dict, limbic_mood: EmotionState) -> None:
+        v = limbic_mood.valence
+        a = limbic_mood.arousal
+        d = limbic_mood.dominance
+
+        temp = plan.get("temperature", cls.DEFAULT_TEMPERATURE)
+
+        if v < cls.VALENCE_LOW_THRESHOLD:
             current = plan.get("max_tokens", 0)
             if current > 0:
                 plan["max_tokens"] = min(current, 256)
             if plan.get("abbreviated", False) is False:
-                plan["temperature"] = plan.get("temperature", 0.7) + 0.15
+                temp += cls.TEMP_ADJUST_NEGATIVE_VALENCE
                 plan["tools_allowed"] = False
                 plan["streaming"] = False
-        elif v > 0.5:
-            plan["temperature"] = max(plan.get("temperature", 0.7) - 0.1, 0.3)
+        elif v > cls.VALENCE_HIGH_THRESHOLD:
+            temp = max(temp + cls.TEMP_ADJUST_POSITIVE_VALENCE, 0.3)
 
-        if a > 0.6:
-            plan["temperature"] = max(plan.get("temperature", 0.7) - 0.15, 0.3)
+        if a > cls.AROUSAL_HIGH_THRESHOLD:
+            temp = max(temp + cls.TEMP_ADJUST_HIGH_AROUSAL, 0.3)
             current = plan.get("max_tokens", 0)
             if current > 0:
                 plan["max_tokens"] = min(current, 256)
-        elif a < 0.15:
-            plan["temperature"] = min(plan.get("temperature", 0.7) + 0.2, 1.0)
+        elif a < cls.AROUSAL_LOW_THRESHOLD:
+            temp = min(temp + cls.TEMP_ADJUST_LOW_AROUSAL, 1.0)
 
-        if d < 0.3:
+        if d < cls.DOMINANCE_LOW_THRESHOLD:
             if plan.get("abbreviated", False) and plan["max_tokens"] == 80:
                 plan["max_tokens"] = 50
-            plan["temperature"] = plan.get("temperature", 0.7) + 0.05
-        elif d > 0.6:
-            plan["temperature"] = max(plan.get("temperature", 0.7) - 0.1, 0.2)
+            temp += cls.TEMP_ADJUST_LOW_DOMINANCE
+        elif d > cls.DOMINANCE_HIGH_THRESHOLD:
+            temp = max(temp + cls.TEMP_ADJUST_HIGH_DOMINANCE, 0.2)
             current = plan.get("max_tokens", 0)
             if current > 0:
                 plan["max_tokens"] = min(current, 512)
 
-        plan["temperature"] = max(0.2, min(1.0, plan.get("temperature", 0.7)))
+        plan["temperature"] = max(0.2, min(1.0, temp))
 
     @staticmethod
     def _format_age(ts: str) -> str:

@@ -8,6 +8,7 @@ from iris.kernel.config import Config
 
 if TYPE_CHECKING:
     from iris.io.session.manager import SessionManager
+    from iris.kernel.debug_capture import DebugCapture
     from iris.limbic.manager import LimbicManager
     from iris.llm.llm_bridge import LLMBridge
     from iris.memory.manager import MemoryManager
@@ -29,6 +30,7 @@ class CommandHandler:
         llm: LLMBridge | None = None,
         registry: ToolRegistry | None = None,
         big_five: BigFiveProfile | None = None,
+        debug_capture: DebugCapture | None = None,
     ) -> None:
         self._config = config
         self._on_shutdown = on_shutdown
@@ -39,6 +41,7 @@ class CommandHandler:
         self._llm = llm
         self._registry = registry
         self._big_five = big_five
+        self._debug_capture = debug_capture
 
     def set_shutdown_handler(self, handler: Callable[[], None]) -> None:
         self._on_shutdown = handler
@@ -64,6 +67,9 @@ class CommandHandler:
     def set_big_five(self, big_five: BigFiveProfile) -> None:
         self._big_five = big_five
 
+    def set_debug_capture(self, debug_capture: DebugCapture) -> None:
+        self._debug_capture = debug_capture
+
     def handle(self, name: str, args: str = "") -> str:
         logger.info("CommandHandler: /%s %s", name, args[:100] if args else "")
         if name == "help":
@@ -88,6 +94,8 @@ class CommandHandler:
             return self._llm_info()
         if name == "personality":
             return self._personality()
+        if name == "debug":
+            return self._debug(args)
         return f"Unknown command: /{name}"
 
     def _help(self) -> str:
@@ -103,9 +111,10 @@ class CommandHandler:
             "  /emotion            Show current emotion state\n"
             "  /sessions           Show active sessions\n"
             "  /ping               Check LLM health\n"
-            "  /tools              List registered tools\n"
+            "  /tools               List registered tools\n"
             "  /llm                Show LLM config\n"
-            "  /personality        Show Big Five personality scores"
+            "  /personality        Show Big Five personality scores\n"
+            "  /debug [on|off|...] Debug prompt/response capture"
         )
 
     def _status(self) -> str:
@@ -198,12 +207,59 @@ class CommandHandler:
             return "Memory not available"
         lines = ["Memory stats:"]
         if self._memory.long_term.episodic:
-            entries = self._memory.long_term.episodic._load_all()
+            entries = self._memory.long_term.episodic.load_all()
             lines.append(f"  Episodic: {len(entries)} entries")
         if self._memory.long_term.semantic:
-            entries = self._memory.long_term.semantic._load_all()
+            entries = self._memory.long_term.semantic.load_all()
             lines.append(f"  Semantic: {len(entries)} entries")
         return "\n".join(lines)
+
+    def _debug(self, args: str) -> str:
+        dc = self._debug_capture
+        if dc is None:
+            return "DebugCapture not available"
+        parts = args.strip().split(maxsplit=1)
+        sub = parts[0].lower() if parts else ""
+
+        if sub == "on":
+            dc.set_enabled(True)
+            return "Debug capture enabled"
+        if sub == "off":
+            dc.set_enabled(False)
+            return "Debug capture disabled"
+
+        if not dc.enabled:
+            return "Debug capture is disabled (use /debug on first)"
+
+        if sub == "list":
+            return dc.list_captures()
+        if sub == "last":
+            entries = dc.last()
+            if not entries:
+                return "No captures"
+            return "\n---\n".join(e.format_as_markdown() for e in entries)
+        if sub in ("show", "get"):
+            n_str = parts[1] if len(parts) > 1 else ""
+            try:
+                entry_id = int(n_str)
+            except (ValueError, TypeError):
+                return "Usage: /debug show <id>"
+            return dc.show(entry_id)
+        if sub == "dump":
+            written = dc.dump_all()
+            if written:
+                return f"Wrote {len(written)} file(s):\n" + "\n".join(str(p) for p in written)
+            return "No captures to dump"
+
+        return (
+            "Usage:\n"
+            "  /debug on              Enable capture\n"
+            "  /debug off             Disable capture\n"
+            "  /debug list            List captured entries\n"
+            "  /debug last            Show most recent capture(s)\n"
+            "  /debug show <id>       Show specific capture\n"
+            "  /debug dump            Write all captures to logs/debug/"
+        )
 
     def _emotion(self) -> str:
         if not self._limbic:
@@ -254,7 +310,16 @@ class CommandHandler:
             return "Config not available"
         lines = [f"Default model: {cfg.model.get_model('default')}"]
         for m in cfg.model.models:
-            info = f"  {m.name} [{m.provider}:{m.base_url}] ctx={m.num_ctx or cfg.model.default_num_ctx}"
+            conn = cfg.model.providers.get(m.provider)
+            base_url = conn.base_url if conn else ""
+            if not base_url:
+                if m.provider == "ollama":
+                    base_url = "http://localhost:11434"
+                elif m.provider == "openrouter":
+                    base_url = "https://openrouter.ai/api/v1"
+                elif m.provider == "google":
+                    base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+            info = f"  {m.name} [{m.provider}:{base_url}] ctx={m.num_ctx or cfg.model.default_num_ctx}"
             if m.num_gpu is not None:
                 info += f" gpu={m.num_gpu}"
             if m.main_gpu is not None:

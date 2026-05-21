@@ -16,8 +16,9 @@ logger = logging.getLogger(__name__)
 class Supervisor:
     """Kernel プロセスのライフサイクルを管理し、管理コンソールを提供する。"""
 
-    def __init__(self, config: Config) -> None:
+    def __init__(self, config: Config, debug: bool = False) -> None:
         self._config = config
+        self._debug = debug
         self._kernel: KernelProcessProtocol | None = None
         self._shutdown_requested = False
         self._cmd_handler: Callable[[str, str], str] | None = None
@@ -32,7 +33,7 @@ class Supervisor:
     def start(self) -> None:
         from iris.kernel.process import KernelProcess
 
-        kernel = KernelProcess(self._config)
+        kernel = KernelProcess(self._config, debug=self._debug)
         self._kernel = kernel
         kernel.start()
 

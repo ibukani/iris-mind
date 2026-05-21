@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from contextlib import suppress
 import logging
 from typing import TYPE_CHECKING
 
@@ -9,6 +10,7 @@ from iris.kernel.config import Config
 if TYPE_CHECKING:
     from iris.io.session.manager import SessionManager
     from iris.kernel.debug_capture import DebugCapture
+    from iris.kernel.diagnostics import SystemDiagnostics
     from iris.limbic.manager import LimbicManager
     from iris.llm.llm_bridge import LLMBridge
     from iris.memory.manager import MemoryManager
@@ -16,6 +18,35 @@ if TYPE_CHECKING:
     from iris.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
+
+
+def _format_value(v: object, indent: int = 0) -> str:
+    prefix = "  " * indent
+    if isinstance(v, dict):
+        if not v:
+            return "{}"
+        lines = []
+        for k, val in v.items():
+            lines.append(f"{prefix}{k}: {_format_value(val, indent + 1)}")
+        return "\n".join(lines)
+    if isinstance(v, list):
+        if not v:
+            return "[]"
+        if all(isinstance(x, str) for x in v):
+            return ", ".join(str(x) for x in v)
+        return "\n" + "\n".join(f"{prefix}- {_format_value(x)}" for x in v)
+    return str(v)
+
+
+def _format_state(state: object, path: str = "") -> str:
+    if path:
+        return _format_value(state)
+    if isinstance(state, dict):
+        lines = []
+        for k, v in state.items():
+            lines.append(f"{k}: {_format_value(v, 1)}")
+        return "\n".join(lines)
+    return str(state)
 
 
 class CommandHandler:
@@ -31,6 +62,7 @@ class CommandHandler:
         registry: ToolRegistry | None = None,
         big_five: BigFiveProfile | None = None,
         debug_capture: DebugCapture | None = None,
+        diagnostics: SystemDiagnostics | None = None,
     ) -> None:
         self._config = config
         self._on_shutdown = on_shutdown
@@ -42,6 +74,7 @@ class CommandHandler:
         self._registry = registry
         self._big_five = big_five
         self._debug_capture = debug_capture
+        self._diagnostics = diagnostics
 
     def set_shutdown_handler(self, handler: Callable[[], None]) -> None:
         self._on_shutdown = handler
@@ -70,6 +103,9 @@ class CommandHandler:
     def set_debug_capture(self, debug_capture: DebugCapture) -> None:
         self._debug_capture = debug_capture
 
+    def set_diagnostics(self, diagnostics: SystemDiagnostics) -> None:
+        self._diagnostics = diagnostics
+
     def handle(self, name: str, args: str = "") -> str:
         logger.info("CommandHandler: /%s %s", name, args[:100] if args else "")
         if name == "help":
@@ -94,6 +130,14 @@ class CommandHandler:
             return self._llm_info()
         if name == "personality":
             return self._personality()
+        if name == "state":
+            return self._state_cmd(args)
+        if name == "events":
+            return self._events_cmd(args)
+        if name == "health":
+            return self._health_cmd()
+        if name == "report":
+            return self._report_cmd()
         if name == "debug":
             return self._debug(args)
         return f"Unknown command: /{name}"
@@ -114,7 +158,11 @@ class CommandHandler:
             "  /tools               List registered tools\n"
             "  /llm                Show LLM config\n"
             "  /personality        Show Big Five personality scores\n"
-            "  /debug [on|off|...] Debug prompt/response capture"
+            "  /state [<path>]     System state (alias: /debug state)\n"
+            "  /events [n]         Recent events (alias: /debug events)\n"
+            "  /health             Health check (alias: /debug health)\n"
+            "  /report             Debug report (alias: /debug report)\n"
+            "  /debug              Debug subsystem (/debug help for subcommands)"
         )
 
     def _status(self) -> str:
@@ -214,22 +262,131 @@ class CommandHandler:
             lines.append(f"  Semantic: {len(entries)} entries")
         return "\n".join(lines)
 
+    def _state_cmd(self, args: str) -> str:
+        diag = self._diagnostics
+        if diag is None:
+            return "Diagnostics not available"
+        parts = args.strip().split()
+        path = ""
+        history = False
+        as_json = False
+        n = 10
+        for p in parts:
+            if p == "--history":
+                history = True
+            elif p == "--json":
+                as_json = True
+            elif p.startswith("--n="):
+                with suppress(ValueError):
+                    n = int(p[4:])
+            elif not p.startswith("--"):
+                path = p
+        if history:
+            result = diag.query(path, history=True, n=n)
+            if result is None:
+                return "No history available (tracer not enabled)"
+            if not result:
+                return f"No history for '{path}'"
+            lines = []
+            for e in result:
+                ts = e.get("timestamp", "")
+                trigger = e.get("trigger", "")
+                data = e.get("data", {})
+                data_str = ", ".join(f"{k}={v}" for k, v in (data or {}).items())
+                lines.append(f"[{ts}] {trigger} → {data_str}")
+            return "\n".join(lines)
+        state = diag.query(path)
+        if state is None:
+            return f"Path not found: '{path}'" if path else "No state available"
+        if as_json:
+            import json
+
+            return json.dumps(state, ensure_ascii=False, indent=2)
+        return _format_state(state, path)
+
+    def _events_cmd(self, args: str) -> str:
+        diag = self._diagnostics
+        if diag is None:
+            return "Diagnostics not available"
+        parts = args.strip().split()
+        n = 10
+        type_filter = None
+        for p in parts:
+            if p.startswith("--type="):
+                type_filter = p[7:]
+            elif p.startswith("--n="):
+                with suppress(ValueError):
+                    n = int(p[4:])
+            elif p.isdigit():
+                n = int(p)
+        tracer = getattr(diag, "_tracer", None)
+        if tracer is None or not tracer.enabled:
+            return "Event tracing not enabled"
+        events = tracer.recent(n, type_filter=type_filter)
+        if not events:
+            return "No events"
+        lines = []
+        for e in events:
+            ts = e.get("timestamp", "")
+            et = e.get("type", "")
+            src = e.get("source", "")
+            cat = e.get("category", "")
+            extra = f" [{cat}]" if cat else ""
+            tid = e.get("trace_id", "")[:8]
+            lines.append(f"[{ts}] {et} <{src}>{extra} tid={tid}")
+        return "\n".join(lines)
+
+    def _health_cmd(self) -> str:
+        diag = self._diagnostics
+        if diag is None:
+            return "Diagnostics not available"
+        h = diag.health()
+        lines = []
+        for k, v in h.items():
+            if v.startswith("OK"):
+                lines.append(f"  ✓ {k}: {v}")
+            elif v == "NOT_LOADED":
+                lines.append(f"  ○ {k}: not loaded")
+            else:
+                lines.append(f"  ✗ {k}: {v}")
+        return "Health check:\n" + "\n".join(lines)
+
+    def _report_cmd(self) -> str:
+        diag = self._diagnostics
+        if diag is None:
+            return "Diagnostics not available"
+        return diag.generate_report()
+
     def _debug(self, args: str) -> str:
-        dc = self._debug_capture
-        if dc is None:
-            return "DebugCapture not available"
         parts = args.strip().split(maxsplit=1)
         sub = parts[0].lower() if parts else ""
 
-        if sub == "on":
-            dc.set_enabled(True)
-            return "Debug capture enabled"
-        if sub == "off":
+        if sub in ("state",):
+            return self._state_cmd(parts[1] if len(parts) > 1 else "")
+        if sub == "events":
+            return self._events_cmd(parts[1] if len(parts) > 1 else "")
+        if sub == "health":
+            return self._health_cmd()
+        if sub == "report":
+            return self._report_cmd()
+
+        dc = self._debug_capture
+        if sub in ("on", "off"):
+            if dc is None:
+                return "DebugCapture not available"
+            if sub == "on":
+                dc.set_enabled(True)
+                return "Debug capture enabled"
             dc.set_enabled(False)
             return "Debug capture disabled"
 
+        if sub == "help" or not sub:
+            return self._debug_help()
+
+        if dc is None:
+            return "DebugCapture not available. Available: state, events, health, report"
         if not dc.enabled:
-            return "Debug capture is disabled (use /debug on first)"
+            return "Debug capture is disabled (use /debug on first). Available: state, events, health, report"
 
         if sub == "list":
             return dc.list_captures()
@@ -251,14 +408,16 @@ class CommandHandler:
                 return f"Wrote {len(written)} file(s):\n" + "\n".join(str(p) for p in written)
             return "No captures to dump"
 
+        return self._debug_help()
+
+    def _debug_help(self) -> str:
         return (
-            "Usage:\n"
-            "  /debug on              Enable capture\n"
-            "  /debug off             Disable capture\n"
-            "  /debug list            List captured entries\n"
-            "  /debug last            Show most recent capture(s)\n"
-            "  /debug show <id>       Show specific capture\n"
-            "  /debug dump            Write all captures to logs/debug/"
+            "Debug subcommands:\n"
+            "  state [<path>] [--history] [--json]   System state query\n"
+            "  events [n] [--type=TYPE]              Recent events\n"
+            "  health                                 Health check\n"
+            "  report                                 Generate Markdown report\n"
+            "  capture on|off|list|last|show|dump     LLM prompt/response capture"
         )
 
     def _emotion(self) -> str:

@@ -9,6 +9,7 @@ if TYPE_CHECKING:
     from iris.memory.personality.big_five import BigFiveProfile
     from iris.memory.personality.persona_profile import PersonaProfile
 
+from iris.event.event_types import DebugSnapshotEvent
 from iris.memory.hippocampal.reflexion import ReflexionProtocol
 
 logger = logging.getLogger(__name__)
@@ -35,12 +36,14 @@ class HippocampalManager:
         persona_profile: PersonaProfile | None = None,
         big_five: BigFiveProfile | None = None,
         reflect_interval: int = 3,
+        event_bus: Any = None,
     ) -> None:
         self._reflexion = reflexion
         self._memory = memory
         self._persona_profile = persona_profile
         self._big_five = big_five
         self._reflect_interval = reflect_interval
+        self._event_bus = event_bus
 
     def maybe_run(self, messages: list[dict], msg_count_since_reflect: int) -> int:
         if self._reflexion is None:
@@ -92,6 +95,16 @@ class HippocampalManager:
                 estimate = self._parse_big_five_estimate(bf_raw)
                 if estimate:
                     changes = self._big_five.update_from_estimate(estimate)
+                    if changes and self._event_bus is not None:
+                        self._event_bus.publish(
+                            DebugSnapshotEvent(
+                                timestamp=None,
+                                source="hippocampal",
+                                category="personality.big_five",
+                                data=self._big_five.get_state(),
+                                trigger="reflection",
+                            )
+                        )
                     if changes:
                         logger.info("Big Five updated: %s", changes)
 

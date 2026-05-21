@@ -13,11 +13,13 @@ from iris.agency.manager import AgencyManager
 from iris.agency.planning.manager import PlanningManager
 from iris.agency.planning.scoring import ProactiveScoring
 from iris.event.event_bus import EventBus
+from iris.event.tracer import EventTracer
 from iris.io.manager import IOManager
 from iris.io.session.manager import SessionConfig, SessionManager
 from iris.io.transport.grpc_server import GrpcListener
 from iris.kernel.commands.handler import CommandHandler
 from iris.kernel.debug_capture import DebugCapture
+from iris.kernel.diagnostics import SystemDiagnostics
 from iris.limbic.emotional_memory import EmotionalMemory
 from iris.limbic.manager import LimbicManager
 from iris.llm.capability_checker import CapabilityChecker
@@ -89,18 +91,19 @@ class KernelContext:
     event_bus: EventBus
     kernel: KernelManager
     io: IOManager
-    limbic: LimbicManager
-    memory: MemoryManager
-    agency: AgencyManager
+    limbic: LimbicManager | None
+    memory: MemoryManager | None
+    agency: AgencyManager | None
     cmd_handler: CommandHandler
     grpc_listener: GrpcListener
     session_mgr: SessionManager
+    diagnostics: SystemDiagnostics | None = None
     shutdown_requested: bool = False
 
 
 class KernelFactory:
     @staticmethod
-    def build(config: Config) -> KernelContext:
+    def build(config: Config, debug: bool = False) -> KernelContext:
         """設定に基づいて Iris の全層を構築し、KernelContext で統合する。
 
         ビルド順序：
@@ -124,9 +127,11 @@ class KernelFactory:
         _ensure_access_token(config)
 
         # ============================================================
-        # Phase 1: インフラ基盤 (EventBus, IO)
+        # Phase 1: インフラ基盤 (EventBus, IO, Debug)
         # ============================================================
-        event_bus = EventBus()
+        tracer = EventTracer(max_entries=config.debug.trace_max_entries)
+        tracer.set_enabled(config.debug.enabled)
+        event_bus = EventBus(tracer=tracer)
         session_mgr = SessionManager(
             config=SessionConfig(**config.session.model_dump()),
             event_bus=event_bus,
@@ -139,83 +144,95 @@ class KernelFactory:
             grpc_listener=grpc_listener,
         )
 
-        # ============================================================
-        # Phase 2: 記憶ストア構築（MemoryManager / EmotionalMemory で共用）
-        # ============================================================
-        mem_cfg = config.memory
-        episodic = EpisodicStore(path=mem_cfg.episodic_path, max_entries=mem_cfg.episodic_max_entries)
-        semantic = SemanticStore(
-            path=mem_cfg.semantic_path,
-            max_entries=mem_cfg.semantic_max_entries,
-            vector_db_path=mem_cfg.vector_db_path,
-        )
-        memory_mgr = KernelFactory._build_memory(
-            event_bus,
-            config,
-            episodic=episodic,
-            semantic=semantic,
-        )
-
-        # ============================================================
-        # Phase 3: 大脳辺縁系 (感情エンジン)
-        # ============================================================
-        big_five = BigFiveProfile.load()
-        limbic = LimbicManager(
-            event_bus=event_bus,
-            emotional_memory=EmotionalMemory(
-                episodic_store=episodic,
-                semantic_store=semantic,
-            ),
-        )
-        limbic.set_big_five(big_five)
-
-        # ============================================================
-        # Phase 4: LLM・パーソナリティ
-        # ============================================================
-        llm = KernelFactory._build_llm(config)
-        tokenizers: dict[str, TokenizerManager] = {
-            entry.name: TokenizerManager(
-                repo_id=entry.tokenizer_repo_id,
-                local_path=entry.tokenizer_local_path,
-                hf_token=config.model.hf_token,
+        if debug:
+            # Debug mode: skip heavy initialization (LLM, ChromaDB, Agency)
+            memory_mgr = None
+            limbic: LimbicManager | None = None
+            big_five: BigFiveProfile | None = None
+            llm: LLMBridge | None = None
+            tokenizers: dict[str, TokenizerManager] = {}
+            debug_capture: DebugCapture | None = None
+            _registry: ToolRegistry | None = None
+            tool_exec: ToolExecutionEngine | None = None
+            agency: AgencyManager | None = None
+        else:
+            # ============================================================
+            # Phase 2: 記憶ストア構築（MemoryManager / EmotionalMemory で共用）
+            # ============================================================
+            mem_cfg = config.memory
+            episodic = EpisodicStore(path=mem_cfg.episodic_path, max_entries=mem_cfg.episodic_max_entries)
+            semantic = SemanticStore(
+                path=mem_cfg.semantic_path,
+                max_entries=mem_cfg.semantic_max_entries,
+                vector_db_path=mem_cfg.vector_db_path,
             )
-            for entry in config.model.models
-        }
+            memory_mgr = KernelFactory._build_memory(
+                event_bus,
+                config,
+                episodic=episodic,
+                semantic=semantic,
+            )
 
-        debug_capture = DebugCapture(
-            tokenizer_mgr=next(iter(tokenizers.values()), None),
-        )
+            # ============================================================
+            # Phase 3: 大脳辺縁系 (感情エンジン)
+            # ============================================================
+            big_five = BigFiveProfile.load()
+            limbic = LimbicManager(
+                event_bus=event_bus,
+                emotional_memory=EmotionalMemory(
+                    episodic_store=episodic,
+                    semantic_store=semantic,
+                ),
+            )
+            limbic.set_big_five(big_five)
 
-        # ============================================================
-        # Phase 4: ケイパビリティ (ツール)
-        # ============================================================
-        _registry, tool_exec = KernelFactory._build_tools()
+            # ============================================================
+            # Phase 4: LLM・パーソナリティ
+            # ============================================================
+            llm = KernelFactory._build_llm(config)
+            tokenizers = {
+                entry.name: TokenizerManager(
+                    repo_id=entry.tokenizer_repo_id,
+                    local_path=entry.tokenizer_local_path,
+                    hf_token=config.model.hf_token,
+                )
+                for entry in config.model.models
+            }
 
-        # ============================================================
-        # Phase 4.5: 基底核抑制
-        # ============================================================
-        inhibition = InhibitionController()
+            debug_capture = DebugCapture(
+                tokenizer_mgr=next(iter(tokenizers.values()), None),
+            )
 
-        # ============================================================
-        # Phase 5: Agency 層 (PFC planning + 基底核 execution)
-        # ============================================================
-        internal_bus = InternalBus()
-        scoring = ProactiveScoring(config=config.proactive, memory=memory_mgr)
-        agency = KernelFactory._build_agency(
-            config,
-            event_bus,
-            internal_bus,
-            llm,
-            memory_mgr,
-            tool_exec,
-            session_mgr,
-            inhibition=inhibition,
-            scoring=scoring,
-            limbic=limbic,
-            big_five=big_five,
-            tokenizers=tokenizers,
-            debug_capture=debug_capture,
-        )
+            # ============================================================
+            # Phase 4: ケイパビリティ (ツール)
+            # ============================================================
+            _registry, tool_exec = KernelFactory._build_tools()
+
+            # ============================================================
+            # Phase 4.5: 基底核抑制
+            # ============================================================
+            inhibition = InhibitionController()
+
+            # ============================================================
+            # Phase 5: Agency 層 (PFC planning + 基底核 execution)
+            # ============================================================
+            internal_bus = InternalBus()
+            scoring = ProactiveScoring(config=config.proactive, memory=memory_mgr)
+            agency = KernelFactory._build_agency(
+                config,
+                event_bus,
+                internal_bus,
+                llm,
+                memory_mgr,
+                tool_exec,
+                session_mgr,
+                inhibition=inhibition,
+                scoring=scoring,
+                limbic=limbic,
+                big_five=big_five,
+                tokenizers=tokenizers,
+                debug_capture=debug_capture,
+            )
 
         # ============================================================
         # Phase 6: KernelManager
@@ -223,7 +240,20 @@ class KernelFactory:
         kernel_mgr = KernelManager()
 
         # ============================================================
-        # Phase 7: コンテキスト組み立て
+        # Phase 7: Diagnostics
+        # ============================================================
+        diagnostics = SystemDiagnostics(
+            event_bus=event_bus,
+            tracer=tracer,
+            kernel=kernel_mgr,
+            io=io_mgr,
+            memory=memory_mgr,
+            limbic=limbic,
+            agency=agency,
+        )
+
+        # ============================================================
+        # Phase 8: コンテキスト組み立て
         # ============================================================
         ctx = KernelContext(
             event_bus=event_bus,
@@ -235,15 +265,19 @@ class KernelFactory:
             cmd_handler=None,  # type: ignore[arg-type]
             grpc_listener=grpc_listener,
             session_mgr=session_mgr,
+            diagnostics=diagnostics,
         )
 
         def _on_shutdown() -> None:
             ctx.shutdown_requested = True
 
+        def _noop_compact() -> str:
+            return "Compact not available (debug mode)"
+
         cmd_handler = CommandHandler(
             config=config,
             on_shutdown=_on_shutdown,
-            on_compact=ctx.agency.compact_context,
+            on_compact=ctx.agency.compact_context if ctx.agency else _noop_compact,
             memory=memory_mgr,
             limbic=limbic,
             session_mgr=session_mgr,
@@ -251,6 +285,7 @@ class KernelFactory:
             registry=_registry,
             big_five=big_five,
             debug_capture=debug_capture,
+            diagnostics=diagnostics,
         )
         ctx.cmd_handler = cmd_handler
         ctx.io.set_command_handler(cmd_handler.handle)
@@ -342,6 +377,7 @@ class KernelFactory:
             persona_profile=persona_profile,
             big_five=big_five,
             reflect_interval=3,
+            event_bus=event_bus,
         )
 
         pipeline = LLMPipeline(

@@ -78,6 +78,14 @@ class PlanningManager:
         self._cfg = config.proactive
         event_bus.subscribe("InputReady", self._on_input_ready)
 
+    def get_state(self) -> dict:
+        gate = self._inhibition.evaluate(time.time())
+        return {
+            "suppressed": gate.suppressed,
+            "reason": gate.reason,
+            "go_signal": round(gate.go_signal, 2),
+        }
+
     def _on_input_ready(self, event: InputReady) -> None:
         context = event.context or {}
 

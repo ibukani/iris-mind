@@ -24,6 +24,8 @@ class IOManager:
         self._session_mgr = session_manager
         self._grpc_listener = grpc_listener
         self._cmd_handler = command_handler
+        self._host: str = ""
+        self._port: int = 0
 
         self._event_bus.subscribe("MessageEvent", self._on_message_event)
         self._grpc_listener.set_on_message(self._on_grpc_message)
@@ -33,10 +35,19 @@ class IOManager:
         self._cmd_handler = handler
 
     def start(self, host: str, port: int) -> None:
+        self._host = host
+        self._port = port
         self._grpc_listener.start(host=host, port=port)
 
     def stop(self) -> None:
         self._grpc_listener.stop()
+
+    def get_state(self) -> dict:
+        sessions = self._session_mgr.get_sessions_summary() if self._session_mgr else ""
+        return {
+            "listening": f"{self._host}:{self._port}" if self._host else "not started",
+            "sessions": len(sessions.splitlines()) if sessions else 0,
+        }
 
     def _on_message_event(self, event: MessageEvent) -> None:
         session_info = self._session_mgr.get_session_info(event.session_id)

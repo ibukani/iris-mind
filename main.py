@@ -18,6 +18,7 @@ from iris.kernel.supervisor import Supervisor
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Iris Supervisor")
     parser.add_argument("--verbose", action="store_true", help="Kernel 診断ログを stderr に出力")
+    parser.add_argument("--debug", action="store_true", help="Debug daemon mode (skip LLM/ChromaDB/Agency)")
     return parser.parse_args()
 
 
@@ -58,10 +59,10 @@ def run() -> None:
         config.logging.console_level = "DEBUG"
     _setup_logging(config)
 
-    if not _check_environment(config):
+    if not args.debug and not _check_environment(config):
         return
 
-    Supervisor(config).run()
+    Supervisor(config, debug=args.debug).run()
 
 
 if __name__ == "__main__":

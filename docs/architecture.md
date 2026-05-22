@@ -253,11 +253,7 @@ iris/
     ├── decorator.py
     ├── models.py
     ├── registry.py
-    └── builtins/              # ツール実装
-        ├── file_ops/
-        ├── code_exec/
-        ├── output/
-        └── self_mod/
+    └── builtins/              # (空) ツール実装
 ```
 
 ## 4. グローバル EventBus 定義

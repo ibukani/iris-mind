@@ -94,7 +94,7 @@ iris/                             ← アプリケーションコア
 │   ├── context_window.py         ← LLMContextWindowManager（会話履歴圧縮）
 │   ├── prompt_builder.py         ← システムプロンプト構築（テンプレートエンジン）
 │   └── interrupt_token.py        ← InterruptToken（LLM生成の中断制御）
-└── tools/                        ← @tool, ToolRegistry, ビルトイン実装
+└── tools/                        ← @tool, ToolRegistry
 
 ## 3. 標準開発ワークフロー
 
@@ -152,7 +152,7 @@ iris/                             ← アプリケーションコア
 | `memory/` | 感覚→短期→長期記憶、人格 |
 | `agency/` | 意思決定（planning）と実行（execution） |
 | `llm/` | LLMプロバイダ、ContextWindow管理 |
-| `tools/` | @toolデコレータ、ビルトイン実装 |
+| `tools/` | @toolデコレータ、ToolRegistry |
 
 ### 依存ルール
 - 全層は `event/` を介して疎結合。直接依存禁止
@@ -194,15 +194,14 @@ npx pyright .
 ※ 設定は `pyproject.toml` に集約
 ※ テストはFake実装。LLM実通信なし。ChromaDB/ONNXは初回DL
 
-## 8. Capability追加ルール
+## 8. Tool追加ルール
 
-1. `iris/tools/builtins/<name>/server.py` に配置
-2. `@tool()` デコレータで定義（型ヒント→JSON Schema自動生成）
-3. `register(registry)` で `registry.register_decorated(fn)` をエクスポート
-4. `allowed_roles` でモデルロール制限（デフォルト全ロール可）
-5. `side_effect=True` で作用系ツール（結果を会話に戻さない）
-6. 追加後は `.iris/data/iris_profile.md` の該当セクションを更新
-7. テンプレート: `.agents/skills/capability-pattern/SKILL.md`
+1. `@tool()` デコレータで定義（型ヒント→JSON Schema自動生成）
+2. `register(registry)` で `registry.register_decorated(fn)` をエクスポート
+3. `allowed_roles` でモデルロール制限（デフォルト全ロール可）
+4. `side_effect=True` で作用系Tool（結果を会話に戻さない）
+5. 追加後は `.iris/data/iris_profile.md` の該当セクションを更新
+6. テンプレート: `.agents/skills/capability-pattern/SKILL.md`
 
 ## 9. ドキュメント更新
 

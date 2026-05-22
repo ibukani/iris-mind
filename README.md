@@ -258,6 +258,7 @@ pytest tests/                         # 全テスト実行
 | [agency-layer.md](./docs/agency-layer.md) | Agency 層 — 意思決定と行動実行 |
 | [io-layer.md](./docs/io-layer.md) | IO 層 — gRPC入出力・セッション管理 |
 | [kernel-layer.md](./docs/kernel-layer.md) | Kernel 層 — プロセス管理・DI |
+| [limbic-layer.md](./docs/limbic-layer.md) | Limbic 層 — PAD感情・制御・性格進化 |
 | [memory-layer.md](./docs/memory-layer.md) | Memory 層 — 感覚野+海馬+皮質記憶 |
 | [config.md](./docs/config.md) | Config 設定一覧 |
 | [ipc-spec.md](./docs/ipc-spec.md) | IPC プロトコル仕様 (gRPC) |

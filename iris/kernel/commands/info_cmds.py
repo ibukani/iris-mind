@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from iris.io.session.manager import SessionManager
     from iris.kernel.config import Config
-    from iris.limbic.big_five import BigFiveProfile
+    from iris.limbic.prefrontal.personality import BigFiveProfile
     from iris.limbic.manager import LimbicManager
     from iris.llm.bridge import LLMBridge
     from iris.tools.registry import ToolRegistry
@@ -46,7 +46,7 @@ class InfoCommands:
     def emotion(self) -> str:
         if not self._limbic:
             return "Limbic system not available"
-        report = self._limbic.get_emotion_report()
+        report = self._limbic.get_report()
         e = report.get("emotion", {})
         mood = report.get("mood_text", "")
         tags = report.get("recent_tags", [])

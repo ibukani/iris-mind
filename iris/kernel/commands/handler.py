@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from iris.io.session.manager import SessionManager
     from iris.kernel.debug_capture import DebugCapture
     from iris.kernel.diagnostics import SystemDiagnostics
-    from iris.limbic.big_five import BigFiveProfile
+    from iris.limbic.prefrontal.personality import BigFiveProfile
     from iris.limbic.manager import LimbicManager
     from iris.llm.bridge import LLMBridge
     from iris.memory.manager import MemoryManager
@@ -150,7 +150,7 @@ class CommandHandler:
         ]
         if self._limbic:
             e = self._limbic.current_emotion()
-            mood = self._limbic.build_mood_description(style="short")
+            mood = self._limbic.describe_mood(style="short")
             lines.append(f"Emotion: v={e.valence:.2f} a={e.arousal:.2f} d={e.dominance:.2f} ({mood})")
         return "\n".join(lines)
 

@@ -11,14 +11,14 @@ def test_proactive_result_success_feedback():
     limbic._emotion.dominance = -0.5
     limbic._drive.curiosity = 0.8
     initial_emotion = limbic.current_emotion().to_dict()
-    initial_drive = limbic.current_drive().to_dict()
+    initial_drive = limbic.current_needs().to_dict()
 
     # 成功イベントを発行したと仮定してハンドラを直接呼ぶ
     event = ProactiveResultEvent(timestamp=None, source="test", topic="test_topic", success=True, content="Success")
     limbic._on_proactive_result(event)
 
     new_emotion = limbic.current_emotion().to_dict()
-    new_drive = limbic.current_drive().to_dict()
+    new_drive = limbic.current_needs().to_dict()
 
     # valence, dominanceが増加し、arousalが減少しているはず
     assert new_emotion["valence"] > initial_emotion["valence"]

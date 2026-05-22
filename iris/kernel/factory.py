@@ -22,8 +22,8 @@ from iris.io.transport.grpc_server import GrpcListener
 from iris.kernel.commands.handler import CommandHandler
 from iris.kernel.debug_capture import DebugCapture
 from iris.kernel.diagnostics import SystemDiagnostics
-from iris.limbic.big_five import BigFiveProfile
-from iris.limbic.emotional_memory import EmotionalMemory
+from iris.limbic.hippocampus.binder import EmotionalMemory
+from iris.limbic.prefrontal.personality import BigFiveProfile
 from iris.limbic.manager import LimbicManager
 from iris.llm.bridge import LLMBridge
 from iris.llm.capability import CapabilityChecker

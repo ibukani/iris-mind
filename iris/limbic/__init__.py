@@ -1,9 +1,9 @@
-from iris.limbic.acc import AnteriorCingulateCortex
-from iris.limbic.amygdala import Amygdala
-from iris.limbic.big_five import BigFiveProfile
-from iris.limbic.emotional_memory import EmotionalMemory
+from iris.limbic.amygdala.evaluator import Amygdala
+from iris.limbic.cingulate.regulator import AnteriorCingulateCortex
+from iris.limbic.hippocampus.binder import EmotionalMemory
 from iris.limbic.manager import LimbicManager
 from iris.limbic.models import BASIC_EMOTIONS, EmotionDelta, EmotionState
+from iris.limbic.prefrontal.personality import BigFiveProfile
 
 __all__ = [
     "BASIC_EMOTIONS",

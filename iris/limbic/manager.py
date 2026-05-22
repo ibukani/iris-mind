@@ -11,9 +11,9 @@ from loguru import logger
 
 from iris.event.event_bus import EventBus
 from iris.event.event_types import DebugSnapshotEvent, MessageEvent, ProactiveResultEvent, TimerTick
-from iris.limbic.acc import AnteriorCingulateCortex
-from iris.limbic.amygdala import Amygdala
-from iris.limbic.emotional_memory import EmotionalMemory
+from iris.limbic.amygdala.evaluator import Amygdala
+from iris.limbic.cingulate.regulator import AnteriorCingulateCortex
+from iris.limbic.hippocampus.binder import EmotionalMemory
 from iris.limbic.models import DriveState, EmotionDelta, EmotionState
 
 
@@ -129,7 +129,7 @@ class LimbicManager:
 
     def _apply_emotion_change(self, delta: EmotionDelta, trigger: str) -> None:
         self._decay()
-        adjusted = self._acc.regulate(delta, self._emotion, self._get_big_five_scores())
+        adjusted = self._acc.modulate(delta, self._emotion, self._get_big_five_scores())
         self._emotion.apply(adjusted)
         self._publish_snapshot(trigger)
 
@@ -138,9 +138,9 @@ class LimbicManager:
             return
         if event.direction not in ("request", "event") or event.msg_type not in ("chat", "system"):
             return
-        delta = self._amygdala.evaluate(event.content)
+        delta = self._amygdala.assess(event.content)
         self._apply_emotion_change(delta, "message")
-        self._emotional_memory.tag(event.content[:200], self._emotion)
+        self._emotional_memory.encode(event.content[:200], self._emotion)
         logger.debug("Limbic: input evaluated -> emotion=%s", self._emotion.to_dict())
 
     def _on_timer_tick(self, event: TimerTick) -> None:
@@ -180,13 +180,11 @@ class LimbicManager:
     def _on_proactive_result(self, event: ProactiveResultEvent) -> None:
         delta = EmotionDelta()
         if event.success:
-            # 調査成功: 達成感・満足感
             delta.valence += 0.2
             delta.dominance += 0.1
             delta.arousal -= 0.1
-            self.satisfy_drive("curiosity", 0.3)
+            self.satisfy_need("curiosity", 0.3)
         else:
-            # 調査失敗: フラストレーション
             delta.valence -= 0.15
             delta.arousal += 0.2
             delta.dominance -= 0.1
@@ -203,7 +201,7 @@ class LimbicManager:
         return {
             "emotion": e.to_dict(),
             "drive": self._drive.to_dict(),
-            "mood": self.build_mood_description(style="short"),
+            "mood": self.describe_mood(style="short"),
         }
 
     def current_emotion(self) -> EmotionState:
@@ -211,11 +209,11 @@ class LimbicManager:
         self._decay()
         return self._emotion
 
-    def current_drive(self) -> DriveState:
+    def current_needs(self) -> DriveState:
         """現在の欲求状態を取得する。"""
         return self._drive
 
-    def satisfy_drive(self, need_type: str, amount: float) -> None:
+    def satisfy_need(self, need_type: str, amount: float) -> None:
         """特定の行動による欲求の解消を行う。"""
         self._drive.satisfy(need_type, amount)
         self._publish_snapshot(f"satisfy_{need_type}")
@@ -224,7 +222,7 @@ class LimbicManager:
     def _is_neutral(e: EmotionState) -> bool:
         return abs(e.valence) < 0.1 and e.arousal < 0.15 and abs(e.dominance - 0.5) < 0.1
 
-    def build_mood_description(self, style: str = "full") -> str:
+    def describe_mood(self, style: str = "full") -> str:
         e = self.current_emotion()
         if self._is_neutral(e):
             return ""
@@ -279,7 +277,7 @@ class LimbicManager:
         elif e.dominance < 0.3:
             hints.append("慎重に、確認しながら応答してください")
 
-    def build_response_style(self) -> str:
+    def generate_response_style(self) -> str:
         e = self.current_emotion()
         if self._is_neutral(e):
             return ""
@@ -294,16 +292,16 @@ class LimbicManager:
 
         return "## 応答スタイル\n" + "\n".join(f"- {h}" for h in hints)
 
-    def search_by_emotion(self, max_results: int = 5) -> list[dict[str, Any]]:
+    def retrieve_memories_by_affect(self, max_results: int = 5) -> list[dict[str, Any]]:
         """現在の感情状態に近い感情タグ付き記憶を検索する。"""
-        return self._emotional_memory.search_by_emotion(self.current_emotion(), max_results)
+        return self._emotional_memory.retrieve_by_affect(self.current_emotion(), max_results)
 
-    def get_emotion_report(self) -> dict[str, Any]:
+    def get_report(self) -> dict[str, Any]:
         """感情状態のレポートを返す（デバッグ/ステータス用）。"""
         e = self.current_emotion()
         return {
             "emotion": e.to_dict(),
-            "mood_text": self.build_mood_description(style="full"),
+            "mood_text": self.describe_mood(style="full"),
             "recent_tags": self._emotional_memory.get_recent_tags(3),
         }
 

@@ -73,7 +73,7 @@ class PlanningManager:
 
     def _on_proactive_event(self, event: InputReady, context: dict) -> None:
         limbic_mood = self._resolve_limbic_mood()
-        limbic_drive = self._limbic.current_drive() if self._limbic else None
+        limbic_drive = self._limbic.current_needs() if self._limbic else None
         gate = self._inhibition.evaluate(time.time())
 
         proactive_context = self._proactive_judge.decide(event, context, gate, limbic_mood, limbic_drive)

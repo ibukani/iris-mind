@@ -253,7 +253,7 @@ pytest tests/                         # 全テスト実行
 設計ドキュメントは [`docs/README.md`](./docs/README.md) から参照できます。
 
 | ドキュメント | 内容 |
-|---|---|
+|---|---|---|
 | [architecture.md](./docs/architecture.md) | 全体アーキテクチャ — 脳科学ベース層分割 |
 | [agency-layer.md](./docs/agency-layer.md) | Agency 層 — 意思決定と行動実行 |
 | [io-layer.md](./docs/io-layer.md) | IO 層 — gRPC入出力・セッション管理 |
@@ -261,6 +261,7 @@ pytest tests/                         # 全テスト実行
 | [memory-layer.md](./docs/memory-layer.md) | Memory 層 — 感覚野+海馬+皮質記憶 |
 | [config.md](./docs/config.md) | Config 設定一覧 |
 | [ipc-spec.md](./docs/ipc-spec.md) | IPC プロトコル仕様 (gRPC) |
+| [how-it-works/](./docs/how-it-works/index.md) | 動作原理の詳細 — 計算式・条件分岐・Mermaid図を網羅 |
 
 ## API
 

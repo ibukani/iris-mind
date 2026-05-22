@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from contextlib import suppress
 import logging
 import threading
@@ -91,6 +92,13 @@ class MemoryManager:
         self._pending_input: dict[str, str] = {}
         self._pending_lock: threading.Lock = threading.Lock()
 
+        self._store_handlers: dict[str, Callable[[Any], None]] = {
+            "sensory": self._store_sensory,
+            "short_term": self._store_short_term,
+            "episodic": self._store_episodic,
+            "semantic": self._store_semantic,
+        }
+
         if event_bus is not None:
             event_bus.subscribe("MessageEvent", self._on_message_event)
             event_bus.subscribe("TimerTick", self._on_timer_tick)
@@ -99,14 +107,15 @@ class MemoryManager:
     def get_state(self) -> dict:
         episodic_count = 0
         semantic_count = 0
-        lt = self.long_term
-        if lt is not None:
-            if hasattr(lt, "episodic") and lt.episodic:
+        if self.long_term is not None:
+            ep = self.long_term.episodic
+            if ep is not None:
                 with suppress(Exception):
-                    episodic_count = len(lt.episodic.load_all())
-            if hasattr(lt, "semantic") and lt.semantic:
+                    episodic_count = len(ep.load_all())
+            sm = self.long_term.semantic
+            if sm is not None:
                 with suppress(Exception):
-                    semantic_count = len(lt.semantic.load_all())
+                    semantic_count = len(sm.load_all())
         return {
             "episodic": episodic_count,
             "semantic": semantic_count,
@@ -150,16 +159,17 @@ class MemoryManager:
                 )
             return
 
-        if self._proactive_config is not None:
-            self._event_bus.publish(
-                InputReady(
-                    timestamp=None,
-                    source="memory",
-                    session_id="",
-                    content="",
-                    context={"from_timer": True},
-                )
+        if self._proactive_config is None:
+            return
+        self._event_bus.publish(
+            InputReady(
+                timestamp=None,
+                source="memory",
+                session_id="",
+                content="",
+                context={"from_timer": True},
             )
+        )
 
     def _on_client_session_event(self, event: ClientSessionEvent) -> None:
         if event.action != "connected":
@@ -190,40 +200,40 @@ class MemoryManager:
 
     def store(self, stream: str, data: Any) -> None:
         logger.info("MemoryManager: store stream=%s", stream)
-        if stream == "sensory":
-            if isinstance(data, dict) and data.get("raw"):
-                self.sensory.store_raw(data["raw"])
-            else:
-                self.sensory.add_fragment(str(data), is_final=True)
-            return
+        handler = self._store_handlers.get(stream)
+        if handler is not None:
+            handler(data)
+        else:
+            logger.warning("MemoryManager: unknown stream=%s", stream)
 
-        if stream == "short_term":
-            if isinstance(data, str):
-                self.short_term.add_turn("system", data)
-            elif isinstance(data, dict):
-                role = data.get("role", "system")
-                content = data.get("content") or data.get("summary") or str(data)
-                self.short_term.add_turn(role, content)
-            return
+    def _store_sensory(self, data: Any) -> None:
+        if isinstance(data, dict) and data.get("raw"):
+            self.sensory.store_raw(data["raw"])
+        else:
+            self.sensory.add_fragment(str(data), is_final=True)
 
-        if stream == "episodic":
-            self.long_term.store_episodic(data)
-            if isinstance(data, dict):
-                self.short_term.add_turn(
-                    "system",
-                    data.get("content") or data.get("summary") or str(data),
-                )
-            return
+    def _store_short_term(self, data: Any) -> None:
+        if isinstance(data, str):
+            self.short_term.add_turn("system", data)
+        elif isinstance(data, dict):
+            role = data.get("role", "system")
+            content = data.get("content") or data.get("summary") or str(data)
+            self.short_term.add_turn(role, content)
 
-        if stream == "semantic":
-            self.long_term.store_semantic(data)
-            if isinstance(data, dict):
-                content = data.get("content", "")
-                if content:
-                    self.short_term.add_turn("system", content)
-            return
+    def _store_episodic(self, data: Any) -> None:
+        self.long_term.store_episodic(data)
+        if isinstance(data, dict):
+            self.short_term.add_turn(
+                "system",
+                data.get("content") or data.get("summary") or str(data),
+            )
 
-        logger.warning("MemoryManager: unknown stream=%s", stream)
+    def _store_semantic(self, data: Any) -> None:
+        self.long_term.store_semantic(data)
+        if isinstance(data, dict):
+            content = data.get("content", "")
+            if content:
+                self.short_term.add_turn("system", content)
 
     def retrieve(self, stream: str, **filters: Any) -> list[dict]:
         if stream == "sensory":

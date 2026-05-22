@@ -53,6 +53,14 @@ class PersonaData:
                 pass
         return {"speech_quirks": [], "state_traits": []}
 
+    def _resolve_category(self, category: str) -> str | None:
+        category = _LEGACY_FIELD_MAP.get(category, category)
+        return _PERSONA_CATEGORIES.get(category)
+
+    @staticmethod
+    def _normalize(text: str) -> str:
+        return text.replace(" ", "").replace("\u3000", "").replace("\n", "").replace("\r", "")
+
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.path.write_text(
@@ -61,19 +69,15 @@ class PersonaData:
         )
 
     def add_entry(self, category: str, text: str, source: str = "reflection") -> None:
-        """エントリを追加する。同一テキストがあれば count を増やす。上位 _MAX_ENTRIES 件のみ保持。"""
-        # 後方互換: 旧カテゴリ名を変換
-        category = _LEGACY_FIELD_MAP.get(category, category)
-        key = _PERSONA_CATEGORIES.get(category)
+        key = self._resolve_category(category)
         if key is None:
             return
         now = datetime.now().isoformat(timespec="minutes")
         entries = self._data.setdefault(key, [])
 
-        normalized = text.replace(" ", "").replace("\u3000", "").replace("\n", "").replace("\r", "")
+        normalized = self._normalize(text)
         for e in entries:
-            en = e["text"].replace(" ", "").replace("\u3000", "").replace("\n", "").replace("\r", "")
-            if en == normalized:
+            if self._normalize(e["text"]) == normalized:
                 e["count"] = e.get("count", 1) + 1
                 e["updated_at"] = now
                 self._save()
@@ -88,16 +92,13 @@ class PersonaData:
                 "updated_at": now,
             }
         )
-        # count降順・updated_at降順でソートし上位 _MAX_ENTRIES 件のみ保持
         entries.sort(key=lambda e: (e.get("count", 1), e.get("updated_at", "")), reverse=True)
         self._data[key] = entries[:_MAX_ENTRIES]
         self._save()
         logger.info("PersonaData: added %s entry (%d total)", category, len(self._data[key]))
 
     def get_top(self, category: str, n: int = 3) -> list[dict]:
-        # 後方互換: 旧カテゴリ名を変換
-        category = _LEGACY_FIELD_MAP.get(category, category)
-        key = _PERSONA_CATEGORIES.get(category)
+        key = self._resolve_category(category)
         if key is None:
             return []
         entries = sorted(
@@ -108,9 +109,7 @@ class PersonaData:
         return entries[:n]
 
     def get_all(self, category: str) -> list[dict]:
-        # 後方互換: 旧カテゴリ名を変換
-        category = _LEGACY_FIELD_MAP.get(category, category)
-        key = _PERSONA_CATEGORIES.get(category)
+        key = self._resolve_category(category)
         if key is None:
             return []
         return sorted(

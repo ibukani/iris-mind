@@ -34,6 +34,50 @@ class SemanticStoreProtocol(Protocol):
     def load_all(self) -> list[dict]: ...
 
 
+class _JsonlStore:
+    """JSONLファイルの読み書きを提供する基底クラス。
+
+    なぜこの設計にしたか:
+    EpisodicStoreとSemanticStoreで重複していたJSONL入出力を統合し、
+    ファイル操作の一貫性を保ちながら保守箇所を一箇所に閉じるため。
+    """
+
+    def __init__(self, path: str) -> None:
+        self.path = Path(path)
+        self._lock = threading.Lock()
+
+    def load_all(self) -> list[dict]:
+        if not self.path.exists():
+            return []
+        entries: list[dict] = []
+        for line in self.path.read_text(encoding="utf-8").strip().split("\n"):
+            if not line.strip():
+                continue
+            try:
+                entries.append(json.loads(line))
+            except json.JSONDecodeError:
+                logger.warning("%s: skipping corrupt entry: %.80s", type(self).__name__, line)
+        return entries
+
+    def _write_file(self, entries: list[dict]) -> None:
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(
+            "\n".join(json.dumps(e) for e in entries),
+            encoding="utf-8",
+        )
+        self._replace_atomic(tmp)
+
+    def _replace_atomic(self, src: Path) -> None:
+        for attempt in range(3):
+            try:
+                src.replace(self.path)
+                return
+            except PermissionError:
+                if attempt == 2:
+                    raise
+                time.sleep(0.05 * (attempt + 1))
+
+
 class AgentsMdStore:
     """構造記憶。.iris/config/iris_profile.mdの読み込み（書き込み禁止）。"""
 
@@ -86,13 +130,12 @@ class AgentsMdStore:
         return "\n".join(lines)
 
 
-class EpisodicStore:
+class EpisodicStore(_JsonlStore):
     """エピソード記憶。上限到達時は古いものを削除。"""
 
     def __init__(self, path: str = ".iris/data/episodes.jsonl", max_entries: int = 30):
-        self.path = Path(path)
+        super().__init__(path)
         self.max_entries = max_entries
-        self._lock = threading.Lock()
 
     def clear(self) -> None:
         if self.path.exists():
@@ -111,43 +154,12 @@ class EpisodicStore:
             self._write_file(entries)
             logger.info("EpisodicStore: added entry, total=%d", len(entries))
 
-    def _write_file(self, entries: list[dict]) -> None:
-        tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(
-            "\n".join(json.dumps(e) for e in entries),
-            encoding="utf-8",
-        )
-        self._replace_atomic(tmp)
-
-    def _replace_atomic(self, src: Path) -> None:
-        for attempt in range(3):
-            try:
-                src.replace(self.path)
-                return
-            except PermissionError:
-                if attempt == 2:
-                    raise
-                time.sleep(0.05 * (attempt + 1))
-
     def get_recent(self, n: int = 5) -> list[dict]:
         entries = self.load_all()
         return entries[-n:]
 
-    def load_all(self) -> list[dict]:
-        if not self.path.exists():
-            return []
-        entries: list[dict] = []
-        for line in self.path.read_text(encoding="utf-8").strip().split("\n"):
-            if not line.strip():
-                continue
-            try:
-                entries.append(json.loads(line))
-            except json.JSONDecodeError:
-                logger.warning("EpisodicStore: skipping corrupt entry: %.80s", line)
-        return entries
 
-
-class SemanticStore:
+class SemanticStore(_JsonlStore):
     """意味記憶。JSONL永続化 + VectorStore によるハイブリッド検索。"""
 
     def __init__(
@@ -156,11 +168,10 @@ class SemanticStore:
         max_entries: int = 100,
         vector_db_path: str = ".iris/data/chroma_db",
     ):
-        self.path = Path(path)
+        super().__init__(path)
         self.max_entries = max_entries
         self.vector = VectorStore(path=vector_db_path)
         self._synced_count = 0
-        self._lock = threading.Lock()
 
     def sync(self) -> None:
         entries = self.load_all()
@@ -189,24 +200,6 @@ class SemanticStore:
             self._synced_count = len(entries)
             logger.info("SemanticStore: added entry, total=%d type=%s", len(entries), entry.get("type", "unknown"))
 
-    def _write_file(self, entries: list[dict]) -> None:
-        tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(
-            "\n".join(json.dumps(e) for e in entries),
-            encoding="utf-8",
-        )
-        self._replace_atomic(tmp)
-
-    def _replace_atomic(self, src: Path) -> None:
-        for attempt in range(3):
-            try:
-                src.replace(self.path)
-                return
-            except PermissionError:
-                if attempt == 2:
-                    raise
-                time.sleep(0.05 * (attempt + 1))
-
     def clear(self) -> None:
         if self.path.exists():
             self.path.unlink()
@@ -216,19 +209,6 @@ class SemanticStore:
 
     def search(self, query: str, max_results: int = 3) -> list[dict]:
         return self.vector.search(query, max_results=max_results)
-
-    def load_all(self) -> list[dict]:
-        if not self.path.exists():
-            return []
-        entries: list[dict] = []
-        for line in self.path.read_text(encoding="utf-8").strip().split("\n"):
-            if not line.strip():
-                continue
-            try:
-                entries.append(json.loads(line))
-            except json.JSONDecodeError:
-                logger.warning("SemanticStore: skipping corrupt entry: %.80s", line)
-        return entries
 
     def _is_duplicate(self, content: str, entries: list[dict]) -> bool:
         return any(e.get("content") == content for e in entries)

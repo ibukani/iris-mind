@@ -14,6 +14,12 @@ from iris.memory.hippocampal.reflexion import ReflexionProtocol
 
 logger = logging.getLogger(__name__)
 
+_REFLECTION_MEMORY_KEYS: list[tuple[str, str, str, list[str]]] = [
+    ("speech_style", "trait", "Iris's speech style", ["speech_style"]),
+    ("expressed_traits", "trait", "Iris's personality traits", ["personality_trait"]),
+    ("user_reaction", "preference", "User reaction tendency", ["user_reaction"]),
+]
+
 
 class HippocampalManagerProtocol(Protocol):
     """海馬マネージャーのインターフェース。
@@ -66,50 +72,11 @@ class HippocampalManager:
             return
         try:
             result = self._reflexion.quick_reflect(messages)
-
-            if self._memory:
-                if result.get("speech_style"):
-                    self._memory.add_semantic_by_type(
-                        entry_type="trait",
-                        content=f"Iris’s speech style: {result['speech_style']}",
-                        tags=["speech_style"],
-                    )
-                if result.get("expressed_traits"):
-                    self._memory.add_semantic_by_type(
-                        entry_type="trait",
-                        content=f"Iris’s personality traits: {result['expressed_traits']}",
-                        tags=["personality_trait"],
-                    )
-                if result.get("user_reaction"):
-                    self._memory.add_semantic_by_type(
-                        entry_type="preference",
-                        content=f"User reaction tendency: {result['user_reaction']}",
-                        tags=["user_reaction"],
-                    )
-
+            self._store_reflection_to_memory(result)
             if self._persona_profile is not None:
                 self._persona_profile.update_from_reflection(result)
-
-            if self._big_five is not None:
-                bf_raw = result.get("big_five_estimate")
-                estimate = self._parse_big_five_estimate(bf_raw)
-                if estimate:
-                    changes = self._big_five.update_from_estimate(estimate)
-                    if changes and self._event_bus is not None:
-                        self._event_bus.publish(
-                            DebugSnapshotEvent(
-                                timestamp=None,
-                                source="hippocampal",
-                                category="personality.big_five",
-                                data=self._big_five.get_state(),
-                                trigger="reflection",
-                            )
-                        )
-                    if changes:
-                        logger.info("Big Five updated: %s", changes)
-
+            self._update_big_five(result)
             self._consolidate_short_term(force=force)
-
             logger.info(
                 "Quick reflect stored: speech_style=%s traits=%s reaction=%s",
                 bool(result.get("speech_style")),
@@ -118,6 +85,40 @@ class HippocampalManager:
             )
         except Exception as e:
             logger.exception("Quick reflect failed: %s", e)
+
+    def _store_reflection_to_memory(self, result: dict[str, Any]) -> None:
+        if self._memory is None:
+            return
+        for key, entry_type, prefix, tags in _REFLECTION_MEMORY_KEYS:
+            val = result.get(key)
+            if val:
+                self._memory.add_semantic_by_type(
+                    entry_type=entry_type,
+                    content=f"{prefix}: {val}",
+                    tags=tags,
+                )
+
+    def _update_big_five(self, result: dict[str, Any]) -> None:
+        if self._big_five is None:
+            return
+        bf_raw = result.get("big_five_estimate")
+        estimate = self._parse_big_five_estimate(bf_raw)
+        if not estimate:
+            return
+        changes = self._big_five.update_from_estimate(estimate)
+        if not changes:
+            return
+        if self._event_bus is not None:
+            self._event_bus.publish(
+                DebugSnapshotEvent(
+                    timestamp=None,
+                    source="hippocampal",
+                    category="personality.big_five",
+                    data=self._big_five.get_state(),
+                    trigger="reflection",
+                )
+            )
+        logger.info("Big Five updated: %s", changes)
 
     def _parse_big_five_estimate(self, bf_raw: Any) -> dict[str, float] | None:
         if not bf_raw:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -8,7 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from tokenizers import Tokenizer
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class TokenizerManager:

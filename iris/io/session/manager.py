@@ -3,7 +3,6 @@ from __future__ import annotations
 import contextlib
 from dataclasses import dataclass
 from datetime import datetime
-import logging
 import threading
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -23,7 +22,7 @@ if TYPE_CHECKING:
     from iris.event.event_bus import EventBus
 
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 @dataclass

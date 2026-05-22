@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from iris.kernel.config import ProactiveConfig
@@ -9,7 +8,7 @@ from iris.memory.manager import MemoryManager
 if TYPE_CHECKING:
     from iris.limbic.models import DriveState, EmotionState
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class ProactiveScoring:

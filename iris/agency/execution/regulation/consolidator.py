@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-import logging
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -14,7 +13,7 @@ if TYPE_CHECKING:
     from iris.llm.context_window import LLMContextWindowManager
     from iris.memory.hippocampal.manager import HippocampalManager
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class Consolidator:

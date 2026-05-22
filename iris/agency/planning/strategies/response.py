@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from iris.agency.planning.emotion_temperature import EmotionTemperatureModulator
@@ -12,7 +11,7 @@ if TYPE_CHECKING:
     from iris.kernel.config import ProactiveConfig
     from iris.limbic.models import EmotionState
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class ResponsePlanStrategy:

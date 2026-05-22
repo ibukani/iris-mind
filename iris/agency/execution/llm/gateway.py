@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import datetime
-import logging
 from typing import Any
+
+from loguru import logger
 
 from iris.agency.execution.llm.prompt_builder import SystemPromptBuilder
 from iris.kernel.config import ModelConfig
@@ -16,8 +17,6 @@ from iris.llm.prompt_builder import Personality
 from iris.memory.long_term.stores import AgentsMdStore
 from iris.memory.manager import MemoryManager
 from iris.memory.persona_profile import PersonaProfile
-
-logger = logging.getLogger(__name__)
 
 
 class LLMGateway:

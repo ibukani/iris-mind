@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 from iris.agency.execution.state import ExecutionState
@@ -9,7 +8,7 @@ if TYPE_CHECKING:
     from iris.agency.execution.engine import ToolEngine
     from iris.agency.execution.regulation.consolidator import Consolidator
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class ToolRunNode:

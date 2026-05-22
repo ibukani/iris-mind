@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import logging
 import re
 
-from iris.llm.provider import LLMProvider
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from iris.llm.provider import LLMProvider
 
 _QUESTION_RE = re.compile(r"[？?]$")
 

@@ -2,13 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from datetime import UTC, datetime
-import logging
 import threading
 from typing import Protocol
 
-from iris.memory.sensory.readiness import ReadinessEvaluator
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from iris.memory.sensory.readiness import ReadinessEvaluator
 
 
 class SensoryMemoryProtocol(Protocol):

@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-import logging
 import threading
 from typing import Protocol
+
+from loguru import logger
 
 from iris.event.event_types import TimerTick
 
 from .config import Config
 from .factory import KernelContext, KernelFactory
-
-logger = logging.getLogger(__name__)
 
 
 class KernelProcessProtocol(Protocol):

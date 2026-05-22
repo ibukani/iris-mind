@@ -2,15 +2,14 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import json
-import logging
 from pathlib import Path
 import threading
 import time
 from typing import Protocol
 
-from iris.memory.long_term.vector_store import VectorStore
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from iris.memory.long_term.vector_store import VectorStore
 
 
 class AgentsMdStoreProtocol(Protocol):

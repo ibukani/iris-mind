@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-import logging
+
+from loguru import logger
 
 from iris.event.event_bus import EventBus
 from iris.event.event_types import MessageEvent
 from iris.io.models import CommandInput, CommandOutput, Direction, Message
 from iris.io.session.manager import SessionManager
 from iris.io.transport.grpc_server import GrpcListener
-
-logger = logging.getLogger(__name__)
 
 
 class IOManager:

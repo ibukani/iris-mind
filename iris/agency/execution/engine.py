@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import logging
+from loguru import logger
 
 from iris.tools.registry import ToolRegistry
-
-logger = logging.getLogger(__name__)
 
 
 class ToolEngine:

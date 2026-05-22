@@ -2,14 +2,13 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from datetime import UTC, datetime
-import logging
 import math
 from typing import Any, TypedDict
 
+from loguru import logger
+
 from iris.limbic.models import EmotionState
 from iris.memory.long_term.stores import EpisodicStore, SemanticStore
-
-logger = logging.getLogger(__name__)
 
 _EMOTION_INTENSITY_THRESHOLD = 0.15
 

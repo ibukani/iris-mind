@@ -4,17 +4,15 @@ import asyncio
 from collections.abc import AsyncGenerator, Callable
 import contextlib
 import json
-import logging
 import threading
 from typing import Any
 
 import grpc
+from loguru import logger
 
 from iris.io.models import AuthMessage, CommandInput, Direction, Message, Permission
 from iris.io.session.manager import SessionManager
 from iris.io.transport import grpc_service_pb2, grpc_service_pb2_grpc
-
-logger = logging.getLogger(__name__)
 
 
 class GrpcConnection:

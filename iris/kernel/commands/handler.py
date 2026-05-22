@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-import logging
 from typing import TYPE_CHECKING
 
 from iris.kernel.commands.debug_cmds import DebugCommands
@@ -19,7 +18,7 @@ if TYPE_CHECKING:
     from iris.memory.manager import MemoryManager
     from iris.tools.registry import ToolRegistry
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class CommandHandler:

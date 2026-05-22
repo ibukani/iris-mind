@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import asyncio
-import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from iris.llm.provider import LLMProvider
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class QuestionGenerator:

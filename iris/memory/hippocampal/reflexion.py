@@ -2,14 +2,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import json
-import logging
 from typing import Any, Protocol
 
+from loguru import logger
 from pydantic import BaseModel, Field
 
 from iris.llm.provider import LLMProvider
-
-logger = logging.getLogger(__name__)
 
 
 class QuickReflexionResult(BaseModel):

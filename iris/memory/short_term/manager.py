@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-import logging
 import re
 from typing import Any, Protocol
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 _MAX_TURN_LENGTH = 500
 _MAX_CONTEXT_CHARS = 600

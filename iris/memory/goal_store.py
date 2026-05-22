@@ -1,14 +1,12 @@
 from __future__ import annotations
 
 import json
-import logging
 from pathlib import Path
 import time
 import uuid
 
+from loguru import logger
 from pydantic import BaseModel, Field
-
-logger = logging.getLogger(__name__)
 
 
 class LongTermGoal(BaseModel):

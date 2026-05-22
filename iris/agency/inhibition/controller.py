@@ -1,14 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-import logging
 import time
 from typing import TYPE_CHECKING, TypedDict
 
 if TYPE_CHECKING:
     from iris.limbic.models import EmotionState
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class InhibitionStatus(TypedDict):

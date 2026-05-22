@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-import logging
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -10,7 +9,7 @@ from iris.memory.manager import MemoryManager
 if TYPE_CHECKING:
     from iris.agency.inhibition import InhibitionController
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class ContextHintBuilder:

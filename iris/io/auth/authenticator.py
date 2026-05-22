@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import logging
 import os
 import secrets
 
-from iris.io.models import AuthMessage
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from iris.io.models import AuthMessage
 
 
 class Authenticator:

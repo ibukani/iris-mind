@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from contextlib import suppress
-import logging
 import threading
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -11,6 +10,8 @@ if TYPE_CHECKING:
     from iris.kernel.config import ProactiveConfig
     from iris.limbic.models import EmotionState
 
+from loguru import logger
+
 from iris.event.event_types import ClientSessionEvent, InputReady, MessageEvent, TimerTick
 from iris.memory.goal_store import GoalStore
 from iris.memory.long_term.manager import LongTermMemoryManager, LongTermMemoryProtocol
@@ -18,8 +19,6 @@ from iris.memory.long_term.stores import EpisodicStore, SemanticStore
 from iris.memory.long_term.vector_store import VectorStore
 from iris.memory.sensory.manager import SensoryMemoryManager, SensoryMemoryProtocol
 from iris.memory.short_term.manager import ShortTermMemoryManager, ShortTermMemoryProtocol
-
-logger = logging.getLogger(__name__)
 
 
 class MemoryManagerProtocol(Protocol):

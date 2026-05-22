@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from iris.agency.execution.state import DynamicState, ExecutionState
@@ -10,7 +9,7 @@ if TYPE_CHECKING:
     from iris.agency.execution.llm.gateway import LLMGateway
     from iris.llm.capability_checker import CapabilityChecker
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class LLMCallNode:

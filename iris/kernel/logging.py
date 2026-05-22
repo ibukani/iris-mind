@@ -1,5 +1,5 @@
 """
-Kernel 診断ログ設定。
+Kernel 診断ログ設定 (loguru).
 
 - ファイル出力: 常に有効（file_level でレベル制御）
 - コンソール出力: console_level が設定されている場合のみ stderr へ
@@ -12,34 +12,18 @@ Kernel 診断ログ設定。
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import datetime
-import logging
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
 import re
 import sys
 
+from loguru import Record, logger
+
 from .config import LoggingConfig
 
-_CONSOLE_FORMAT = "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-_FILE_FORMAT = "%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s"
-_FILE_DATE = "%Y-%m-%d %H:%M:%S"
-
-
-class _ConsoleHandler(logging.StreamHandler):
-    """コンソール出力用ハンドラ。ログ行の前に \r を挿入し、直後にプロンプトを再表示する。
-
-    これにより ``input("> ")`` のプロンプト行にログが混入する問題を防ぐ。
-    """
-
-    def emit(self, record: logging.LogRecord) -> None:
-        try:
-            msg = self.format(record)
-            self.stream.write("\r" + msg + "\n> ")
-            self.flush()
-        except Exception:
-            self.handleError(record)
-
+_FILE_FORMAT = "{time:YYYY-MM-DD HH:mm:ss} [{level}] {name} ({file}:{line}): {message}"
+_CONSOLE_FORMAT = "{time:YYYY-MM-DD HH:mm:ss} [{level}] {name}: {message}"
 
 _LOG_PATTERN = re.compile(r"^iris_\d{8}_\d{6}\.log(?:\.\d+)?$")
 
@@ -63,47 +47,67 @@ def _cleanup_old_sessions(log_dir: Path, keep: int) -> None:
                 f.unlink(missing_ok=True)
 
 
-def setup_logging(cfg: LoggingConfig) -> None:
-    """ルートロガーを構成する。"""
-    root = logging.getLogger()
-    root.setLevel(cfg.file_level.upper())
+def _module_level_filter(levels: dict[str, str]) -> Callable[[Record], bool]:
+    """loguru フィルタ: 指定モジュールのログレベルを個別制御する。"""
+    _level_map = {name: logger.level(lvl).no for name, lvl in levels.items()}
 
-    # --- ファイルハンドラ（常に有効） ---
+    def _filter(record: Record) -> bool:
+        name = record["name"]
+        if not name:
+            return True
+        for prefix, lvl_no in _level_map.items():
+            if name.startswith(prefix):
+                return record["level"].no >= lvl_no
+        return True
+
+    return _filter
+
+
+def _console_sink(msg: object) -> None:
+    """コンソール出力: 行頭に \\r を挿入し、プロンプト再表示で追従する。"""
+    sys.stderr.write("\r" + str(msg) + "\n> ")
+    sys.stderr.flush()
+
+
+def setup_logging(cfg: LoggingConfig) -> None:
+    """loguru でログ構成を行う。"""
+    logger.remove()
+
     log_dir = Path(cfg.dir)
     log_dir.mkdir(parents=True, exist_ok=True)
 
     now = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_path = log_dir / f"iris_{now}.log"
 
-    file_handler = RotatingFileHandler(
-        filename=str(log_path),
-        maxBytes=cfg.max_bytes,
-        backupCount=3,
-        encoding="utf-8",
-    )
-    file_handler.setLevel(cfg.file_level.upper())
-    file_handler.setFormatter(logging.Formatter(_FILE_FORMAT, datefmt=_FILE_DATE))
-    root.addHandler(file_handler)
+    filter_fn = _module_level_filter(cfg.loggers) if cfg.loggers else None
 
-    # --- コンソールハンドラ（条件付き。Kernel 診断用、UI 表示とは無関係） ---
-    # カスタムハンドラ: ログ出力時に \r で行頭に戻り、ログ行を出力後、プロンプトを再表示する
+    # ファイル sink（常に有効）
+    logger.add(
+        sink=str(log_path),
+        level=cfg.file_level.upper(),
+        format=_FILE_FORMAT,
+        rotation=f"{cfg.max_bytes} bytes",
+        retention=3,
+        encoding="utf-8",
+        filter=filter_fn,
+    )
+
+    # コンソール sink（条件付き。Kernel 診断用、UI 表示とは無関係）
     if cfg.console_level:
         fmt = cfg.console_format or _CONSOLE_FORMAT
-        console_handler = _ConsoleHandler(sys.stderr)
-        console_handler.setLevel(cfg.console_level.upper())
-        console_handler.setFormatter(logging.Formatter(fmt))
-        root.addHandler(console_handler)
+        logger.add(
+            sink=_console_sink,
+            level=cfg.console_level.upper(),
+            format=fmt,
+            filter=filter_fn,
+        )
 
-    # --- 既存の起動世代クリーンアップ ---
+    # 起動世代クリーンアップ
     _cleanup_old_sessions(log_dir, cfg.backup_count)
 
-    # --- ロガー個別レベルの適用（config.loggers） ---
-    for name, level in cfg.loggers.items():
-        logging.getLogger(name).setLevel(level.upper())
-
     log_overrides = ", ".join(f"{k}={v}" for k, v in cfg.loggers.items()) or "(none)"
-    logging.info(
-        "Logging initialized: file_level=%s, console_level=%s, loggers=%s, file=%s",
+    logger.info(
+        "Logging initialized: file_level={}, console_level={}, loggers={}, file={}",
         cfg.file_level,
         cfg.console_level or "(none)",
         log_overrides,

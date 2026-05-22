@@ -2,13 +2,11 @@ from __future__ import annotations
 
 from collections import deque
 from collections.abc import Callable
-import logging
 import time
 
+from loguru import logger
+
 from iris.agency.bus import InternalBus
-
-logger = logging.getLogger(__name__)
-
 
 _TALKATIVE_THRESHOLD = 3
 _MAX_SUPPRESSION_DEGREE = 5

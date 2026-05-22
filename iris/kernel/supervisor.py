@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-import logging
 import signal
 import sys
 import threading
 import time
 
+from loguru import logger
+
 from iris.kernel.config import Config
 from iris.kernel.process import KernelProcessProtocol
-
-logger = logging.getLogger(__name__)
 
 
 class Supervisor:

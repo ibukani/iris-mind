@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-import logging
 from pathlib import Path
+
+from loguru import logger
 
 from iris.tools.decorator import get_tool_def, register_decorated_tools
 from iris.tools.models import ToolDef
 
-logger = logging.getLogger(__name__)
 _DEFAULT_ALLOWED_ROLES = {"base", "smart"}
 
 

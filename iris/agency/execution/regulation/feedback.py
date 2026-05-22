@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING, Any
 
 from iris.event.event_types import MonitorFeedback
@@ -11,7 +10,7 @@ if TYPE_CHECKING:
     from iris.event.event_bus import EventBus
     from iris.limbic.models import EmotionState
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class FeedbackCoordinator:

@@ -9,13 +9,11 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 import json
-import logging
 import time
 from typing import Any
 
 import httpx
-
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class OpenAICompatibleProvider:

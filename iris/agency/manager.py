@@ -1,12 +1,8 @@
 from __future__ import annotations
 
-import logging
-
 from iris.agency.execution.executor import FlowExecutor
 from iris.agency.inhibition import InhibitionController
 from iris.agency.planning.manager import PlanningManager
-
-logger = logging.getLogger(__name__)
 
 
 class AgencyManager:

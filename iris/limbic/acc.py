@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import logging
+from loguru import logger
 
 from iris.limbic.models import EmotionDelta, EmotionState
-
-logger = logging.getLogger(__name__)
 
 
 class AnteriorCingulateCortex:

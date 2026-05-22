@@ -4,8 +4,9 @@ from collections import defaultdict
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
-import logging
 import threading
+
+from loguru import logger
 
 
 @dataclass
@@ -26,8 +27,8 @@ class InternalBus:
             try:
                 handler(event)
             except Exception:
-                logging.getLogger(__name__).exception(
-                    "InternalBus handler error in %s for %s",
+                logger.exception(
+                    "InternalBus handler error in {} for {}",
                     handler.__qualname__,
                     event_type,
                 )

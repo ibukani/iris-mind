@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 import json
-import logging
 from pathlib import Path
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 _DEFAULT_PATH = ".iris/data/persona_data.json"
 

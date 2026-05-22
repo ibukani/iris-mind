@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import datetime
-import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -12,7 +11,6 @@ if TYPE_CHECKING:
     from iris.memory.manager import MemoryManager
     from iris.memory.persona_profile import PersonaProfile
 
-logger = logging.getLogger(__name__)
 
 _SITUATION_INSTRUCTIONS: dict[str, str] = {
     "proactive": (

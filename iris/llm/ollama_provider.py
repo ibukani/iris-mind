@@ -9,7 +9,6 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 import contextlib
-import logging
 import os
 import re
 import subprocess
@@ -19,11 +18,11 @@ import time
 from typing import Any
 
 import httpx
+from loguru import logger
 from ollama import Client
 
 from iris.kernel.config import ModelConfig, ModelEntry
 
-logger = logging.getLogger(__name__)
 _MAX_RETRIES = 3
 _RETRY_BACKOFF_SECONDS = 0.5
 _CREATE_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)

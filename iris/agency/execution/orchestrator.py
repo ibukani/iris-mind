@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-import logging
 from typing import TYPE_CHECKING, Any
 
 from langgraph.graph import END, StateGraph
@@ -25,7 +24,7 @@ if TYPE_CHECKING:
     from iris.llm.capability_checker import CapabilityChecker
     from iris.memory.manager import MemoryManager
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class ExecutionOrchestrator:

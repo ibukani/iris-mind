@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import logging
+
+from loguru import logger
 
 from iris.agency.bus import InternalBus
 from iris.agency.execution.engine import ToolEngine
@@ -44,8 +45,6 @@ from iris.tools.registry import ToolRegistry
 
 from .config import Config
 from .manager import KernelManager
-
-logger = logging.getLogger(__name__)
 
 
 def _ensure_access_token(config: Config) -> None:

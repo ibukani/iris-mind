@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-import logging
 from typing import TYPE_CHECKING
 
 from iris.agency.execution.regulation.talk_control import (
@@ -16,8 +15,6 @@ if TYPE_CHECKING:
     from iris.agency.execution.regulation.consolidator import Consolidator
     from iris.event.event_bus import EventBus
     from iris.memory.manager import MemoryManager
-
-logger = logging.getLogger(__name__)
 
 
 class SetupNode:

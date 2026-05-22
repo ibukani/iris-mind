@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-import logging
 from typing import Any
+
+from loguru import logger
 
 from iris.llm.provider import LLMProvider
 from iris.llm.tokenizer_manager import TokenizerManager
-
-logger = logging.getLogger(__name__)
 
 _COMPACT_PROMPT = """これまでの会話要約（もしあれば）と、新規の会話履歴を統合し、最新の会話要約を更新・作成してください。
 作業継続に必要な情報のみを網羅し、冗長な内容は省いてください。

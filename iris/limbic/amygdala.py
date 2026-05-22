@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import logging
 import re
 
-from iris.limbic.models import BASIC_EMOTIONS, EmotionDelta
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from iris.limbic.models import BASIC_EMOTIONS, EmotionDelta
 
 # キーワード辞書
 _POSITIVE_WORDS: frozenset[str] = frozenset(

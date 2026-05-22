@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import logging
+from loguru import logger
 
 from iris.kernel.config import ModelConfig
-
-logger = logging.getLogger(__name__)
 
 
 class CapabilityChecker:

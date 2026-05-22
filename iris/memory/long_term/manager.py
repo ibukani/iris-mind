@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import math
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -9,10 +8,9 @@ if TYPE_CHECKING:
 
     from iris.limbic.models import EmotionState
 
+
 from iris.memory.long_term.stores import EpisodicStoreProtocol, SemanticStoreProtocol
 from iris.memory.long_term.vector_store import VectorStore
-
-logger = logging.getLogger(__name__)
 
 
 def _format_search_result(results: list[dict[str, Any]]) -> list[dict[str, Any]]:

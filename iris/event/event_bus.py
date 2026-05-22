@@ -4,9 +4,10 @@ from collections import defaultdict
 from collections.abc import Callable
 from contextlib import suppress
 from datetime import UTC, datetime
-import logging
 import threading
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
+
+from loguru import logger
 
 from iris.event.event_types import Event, new_trace_id
 
@@ -58,8 +59,8 @@ class EventBus:
             try:
                 handler(event)
             except Exception:
-                logging.getLogger(__name__).exception(
-                    "EventBus handler error in %s for %s",
+                logger.exception(
+                    "EventBus handler error in {} for {}",
                     handler.__qualname__,
                     event_type,
                 )

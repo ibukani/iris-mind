@@ -8,9 +8,10 @@ ModelConfig に基づき複数の LLMProvider インスタンスを管理し、
 from __future__ import annotations
 
 from collections.abc import Callable
-import logging
 import re
 from typing import Any
+
+from loguru import logger
 
 from iris.kernel.config import ModelConfig, ModelEntry
 from iris.llm.priority_lock import PriorityLock
@@ -19,8 +20,6 @@ from .google_provider import GoogleProvider
 from .ollama_provider import OllamaProvider
 from .openrouter_provider import OpenRouterProvider
 from .provider import LLMProvider, ProviderFactory
-
-logger = logging.getLogger(__name__)
 
 _PROVIDER_CLASSES: dict[str, type[ProviderFactory]] = {
     "ollama": OllamaProvider,

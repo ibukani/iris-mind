@@ -2,14 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from iris.llm.tokenizer_manager import TokenizerManager
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 @dataclass

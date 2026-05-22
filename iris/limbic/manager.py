@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-import logging
 import time
 from typing import TYPE_CHECKING, Any, Protocol, TypedDict, runtime_checkable
 
 if TYPE_CHECKING:
     from iris.memory.persona_profile import PersonaProfile
+
+from loguru import logger
 
 from iris.event.event_bus import EventBus
 from iris.event.event_types import DebugSnapshotEvent, MessageEvent, ProactiveResultEvent, TimerTick
@@ -28,8 +29,6 @@ class BigFiveProvider(Protocol):
 
     def get_scores(self) -> dict[str, float]: ...
 
-
-logger = logging.getLogger(__name__)
 
 _MOOD_DESCRIPTIONS: list[_MoodEntry] = [
     {

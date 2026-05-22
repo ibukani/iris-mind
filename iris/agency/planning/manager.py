@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 import time
 from typing import TYPE_CHECKING
 
@@ -21,7 +20,7 @@ if TYPE_CHECKING:
     from iris.llm.provider import LLMProvider
     from iris.memory.persona_profile import PersonaProfile
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class PlanningManager:

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import logging
 from typing import TYPE_CHECKING, Any, Protocol
 
 if TYPE_CHECKING:
@@ -9,10 +8,10 @@ if TYPE_CHECKING:
     from iris.memory.manager import MemoryManagerProtocol
     from iris.memory.persona_profile import PersonaProfile
 
+from loguru import logger
+
 from iris.event.event_types import DebugSnapshotEvent
 from iris.memory.hippocampal.reflexion import ReflexionProtocol
-
-logger = logging.getLogger(__name__)
 
 _REFLECTION_MEMORY_KEYS: list[tuple[str, str, str, list[str]]] = [
     ("speech_style", "trait", "Iris's speech style", ["speech_style"]),

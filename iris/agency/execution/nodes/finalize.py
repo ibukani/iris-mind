@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 from iris.agency.execution.state import ExecutionState
@@ -14,7 +13,7 @@ if TYPE_CHECKING:
     from iris.event.event_bus import EventBus
     from iris.memory.manager import MemoryManager
 
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 class FinalizeNode:

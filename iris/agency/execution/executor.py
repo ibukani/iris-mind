@@ -19,7 +19,7 @@ from iris.agency.execution.state import ExecutionState
 from iris.agency.inhibition import InhibitionController
 from iris.event.event_bus import EventBus
 from iris.event.event_types import InputReady
-from iris.llm.capability_checker import CapabilityChecker
+from iris.llm.capability import CapabilityChecker
 from iris.llm.interrupt_token import InterruptToken
 
 if TYPE_CHECKING:

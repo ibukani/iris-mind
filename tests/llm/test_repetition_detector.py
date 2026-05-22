@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from iris.kernel.config import ModelConfig
+from iris.llm.bridge import LLMBridge
 from iris.llm.interrupt_token import InterruptToken
-from iris.llm.llm_bridge import LLMBridge
 
 
 def _make_bridge() -> LLMBridge:

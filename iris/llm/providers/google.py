@@ -11,7 +11,8 @@ import sys
 import httpx
 
 from iris.kernel.config import ModelConfig, ModelEntry
-from iris.llm.openai_compatible_provider import OpenAICompatibleProvider
+
+from .base import OpenAICompatibleProvider
 
 
 class GoogleProvider(OpenAICompatibleProvider):

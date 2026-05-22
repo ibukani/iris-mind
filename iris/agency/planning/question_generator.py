@@ -4,7 +4,7 @@ import asyncio
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from iris.llm.provider import LLMProvider
+    from iris.llm.protocol import LLMProvider
 
 from loguru import logger
 

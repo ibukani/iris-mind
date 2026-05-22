@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from iris.kernel.config import ModelConfig, ModelEntry, ProviderConnection
-from iris.llm.google_provider import GoogleProvider
+from iris.llm.providers import GoogleProvider
 
 
 def test_google_provider_init_error():
@@ -38,16 +38,17 @@ def test_google_provider_chat_success():
 
 
 def test_google_provider_chat_stream_success():
-    mock_stream = MagicMock()
-    mock_stream.status_code = 200
-    mock_stream.iter_lines.return_value = [
+    mock_response = MagicMock(spec=httpx.Response)
+    mock_response.status_code = 200
+    mock_response.iter_lines.return_value = [
         'data: {"choices": [{"delta": {"content": "Hello"}}]}',
         'data: {"choices": [{"delta": {"content": " world"}}]}',
         "data: [DONE]",
     ]
 
     mock_client = MagicMock(spec=httpx.Client)
-    mock_client.stream.return_value.__enter__.return_value = mock_stream
+    mock_client.send.return_value = mock_response
+    mock_client.build_request.return_value = MagicMock()
 
     provider = GoogleProvider(api_key="test_key", http_client=mock_client)
 

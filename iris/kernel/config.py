@@ -100,15 +100,23 @@ class ModelConfig(BaseModel):
     def model_names(self) -> list[str]:
         return [m.name for m in self.models]
 
+    def __init__(self, **data: object) -> None:
+        super().__init__(**data)
+        self._init_role_map()
+
+    def _init_role_map(self) -> None:
+        self._role_map: dict[str, ModelEntry] = {}
+        for m in self.models:
+            for role in m.roles:
+                self._role_map[role] = m
+        self._default_entry = self.models[0] if self.models else None
+
     def get_model(self, role: str = "default") -> str:
-        m = self._find_model(role)
-        return m.name if m else self.models[0].name
+        m = self._role_map.get(role, self._default_entry)
+        return m.name if m else ""
 
     def _find_model(self, role: str) -> ModelEntry | None:
-        for m in self.models:
-            if role in m.roles:
-                return m
-        return self.models[0] if self.models else None
+        return self._role_map.get(role, self._default_entry)
 
     def get_effective_temperature(self, role: str = "default") -> float:
         m = self._find_model(role)

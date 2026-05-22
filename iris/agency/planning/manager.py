@@ -17,7 +17,7 @@ from iris.memory.manager import MemoryManager
 if TYPE_CHECKING:
     from iris.limbic.manager import LimbicManager
     from iris.limbic.models import EmotionState
-    from iris.llm.provider import LLMProvider
+    from iris.llm.protocol import LLMProvider
     from iris.memory.persona_profile import PersonaProfile
 
 from loguru import logger

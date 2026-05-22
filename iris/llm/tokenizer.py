@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from tokenizers import Tokenizer
 
+from cachetools import LRUCache, cached
 from loguru import logger
 
 
@@ -55,6 +56,7 @@ class TokenizerManager:
             except Exception as e:
                 logger.warning("Failed to load tokenizer from %s: %s", repo_id, e)
 
+    @cached(cache=LRUCache(maxsize=2048))
     def estimate_tokens(self, text: str) -> int:
         if not text:
             return 0

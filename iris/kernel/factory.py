@@ -25,11 +25,11 @@ from iris.kernel.diagnostics import SystemDiagnostics
 from iris.limbic.big_five import BigFiveProfile
 from iris.limbic.emotional_memory import EmotionalMemory
 from iris.limbic.manager import LimbicManager
-from iris.llm.capability_checker import CapabilityChecker
-from iris.llm.context_window import LLMContextWindowManager
-from iris.llm.llm_bridge import LLMBridge
-from iris.llm.prompt_builder import Personality
-from iris.llm.tokenizer_manager import TokenizerManager
+from iris.llm.bridge import LLMBridge
+from iris.llm.capability import CapabilityChecker
+from iris.llm.context import LLMContextWindowManager
+from iris.llm.prompt import Personality
+from iris.llm.tokenizer import TokenizerManager
 from iris.memory.hippocampal.manager import HippocampalManager
 from iris.memory.hippocampal.reflexion import Reflexion
 from iris.memory.long_term.manager import LongTermMemoryManager

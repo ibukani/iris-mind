@@ -4,7 +4,7 @@ import re
 
 from loguru import logger
 
-from iris.llm.provider import LLMProvider
+from iris.llm.protocol import LLMProvider
 
 _QUESTION_RE = re.compile(r"[？?]$")
 

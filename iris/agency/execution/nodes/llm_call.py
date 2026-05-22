@@ -7,7 +7,7 @@ from iris.agency.execution.state import DynamicState, ExecutionState
 if TYPE_CHECKING:
     from iris.agency.execution.engine import ToolEngine
     from iris.agency.execution.llm.gateway import LLMGateway
-    from iris.llm.capability_checker import CapabilityChecker
+    from iris.llm.capability import CapabilityChecker
 
 from loguru import logger
 

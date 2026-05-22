@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from cachetools import LRUCache, cached
 from loguru import logger
 
 from iris.kernel.config import ModelConfig
@@ -10,11 +11,13 @@ class CapabilityChecker:
 
     設定された capabilities が明示的な場合はそれを尊重し、
     未設定の場合は performance_tier から推定する。
+    結果は role ごとにキャッシュされる。
     """
 
     def __init__(self, config: ModelConfig) -> None:
         self._config = config
 
+    @cached(cache=LRUCache(maxsize=32))
     def supports_tools(self, role: str = "default") -> bool:
         caps = self._config.get_model_capabilities(role)
         if caps:
@@ -26,6 +29,7 @@ class CapabilityChecker:
         logger.info("CapabilityChecker: tools=%s for role=%s (tier=%s)", result, role, tier)
         return result
 
+    @cached(cache=LRUCache(maxsize=32))
     def supports_thinking(self, role: str = "default") -> bool:
         caps = self._config.get_model_capabilities(role)
         if caps:

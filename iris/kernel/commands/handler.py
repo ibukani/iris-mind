@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from iris.kernel.diagnostics import SystemDiagnostics
     from iris.limbic.big_five import BigFiveProfile
     from iris.limbic.manager import LimbicManager
-    from iris.llm.llm_bridge import LLMBridge
+    from iris.llm.bridge import LLMBridge
     from iris.memory.manager import MemoryManager
     from iris.tools.registry import ToolRegistry
 

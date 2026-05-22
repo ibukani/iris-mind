@@ -21,6 +21,8 @@ dependencies = [
     "langgraph>=0.3",
     "instructor>=1.0",
     "loguru>=0.7",
+    "tenacity>=9.0",
+    "cachetools>=5.5",
 ]
 
 [project.optional-dependencies]

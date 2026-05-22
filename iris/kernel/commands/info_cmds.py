@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from iris.kernel.config import Config
     from iris.limbic.big_five import BigFiveProfile
     from iris.limbic.manager import LimbicManager
-    from iris.llm.llm_bridge import LLMBridge
+    from iris.llm.bridge import LLMBridge
     from iris.tools.registry import ToolRegistry
 
 

@@ -85,12 +85,27 @@ python main.py --verbose
 | コマンド | 説明 |
 |---|---|
 | `/help` | ヘルプ表示 |
-| `/sleep` | スリープ |
-| `/wakeup` | ウェイクアップ |
-| `/compact` | 会話履歴圧縮 |
-| `/clear` | 履歴クリア |
-| `/status` | 状態表示 |
-| `/reflect` | 自己反省実行 |
+| `/status` | カーネル状態表示 |
+| `/shutdown` | グレースフルシャットダウン |
+| `/compact` | コンテキスト圧縮 |
+| `/memory recent [n]` | 直近のエピソード記憶を n 件表示 |
+| `/memory search <q>` | 意味記憶を検索 |
+| `/memory clear [type]` | 記憶を消去（episodic/semantic） |
+| `/emotion` | 現在の感情状態（PAD） |
+| `/sessions` | アクティブセッション一覧 |
+| `/ping` | LLM ヘルスチェック |
+| `/tools` | 登録ツール一覧 |
+| `/llm` | LLM 設定情報 |
+| `/personality` | Big Five パーソナリティ |
+| `/state [path] [--history] [--json]` | システム状態クエリ |
+| `/events [n] [--type=TYPE]` | 最近のイベント一覧 |
+| `/health` | ヘルスチェック |
+| `/report` | デバッグレポート出力 |
+| `/debug help` | デバッグサブコマンド一覧 |
+| `/debug on\|off` | LLM 入出力キャプチャ切替 |
+| `/debug list\|last` | 直近の LLM キャプチャ |
+| `/debug show <id>` | 特定キャプチャ表示 |
+| `/debug dump` | 全キャプチャをファイル出力 |
 
 ## Architecture
 

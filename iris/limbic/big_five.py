@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-import json
 from pathlib import Path
 from typing import Any
 
 from loguru import logger
+import orjson
 
 _DEFAULT_PATH = ".iris/data/big_five.json"
 
@@ -61,7 +61,7 @@ class BigFiveProfile:
             logger.info("BigFiveProfile: created new profile")
             return profile
         try:
-            data = json.loads(p.read_text(encoding="utf-8"))
+            data = orjson.loads(p.read_bytes())
             logger.info("BigFiveProfile: loaded from %s", path)
             return cls(
                 openness=data.get("openness", 50.0),
@@ -72,7 +72,7 @@ class BigFiveProfile:
                 evolution_history=data.get("evolution_history", []),
                 _path=path,
             )
-        except (json.JSONDecodeError, Exception):
+        except (orjson.JSONDecodeError, Exception):
             return cls(_path=path)
 
     def save(self) -> None:
@@ -81,9 +81,8 @@ class BigFiveProfile:
     def _save(self) -> None:
         p = Path(self._path)
         p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_text(
-            json.dumps(self.to_dict(), ensure_ascii=False, indent=2),
-            encoding="utf-8",
+        p.write_bytes(
+            orjson.dumps(self.to_dict(), option=orjson.OPT_INDENT_2),
         )
 
     def to_dict(self) -> dict[str, Any]:

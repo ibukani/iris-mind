@@ -3,12 +3,12 @@ from __future__ import annotations
 import asyncio
 from collections.abc import AsyncGenerator, Callable
 import contextlib
-import json
 import threading
 from typing import Any
 
 import grpc
 from loguru import logger
+import orjson
 
 from iris.io.models import AuthMessage, CommandInput, Direction, Message, Permission
 from iris.io.session.manager import SessionManager
@@ -152,7 +152,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
         """内部の送信キューからデータを受け取り、gRPCのフレームとして yield する。"""
         while True:
             raw = await grpc_conn.queue.get()
-            data = json.loads(raw.decode("utf-8"))
+            data = orjson.loads(raw)
 
             msg_type = data.get("msg_type", "")
             frame = grpc_service_pb2.BidirectionalStreamResponse()  # type: ignore[attr-defined]

@@ -8,12 +8,12 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
-import json
 import logging
 from typing import Any
 
 import httpx
 from loguru import logger
+import orjson
 from tenacity import (
     before_sleep_log,
     retry,
@@ -148,8 +148,8 @@ class OpenAICompatibleProvider:
             if payload == "[DONE]":
                 break
             try:
-                chunk = json.loads(payload)
-            except json.JSONDecodeError:
+                chunk = orjson.loads(payload.encode("utf-8"))
+            except orjson.JSONDecodeError:
                 continue
 
             choices = chunk.get("choices", [])

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING, Any, Protocol
+
+import orjson
 
 if TYPE_CHECKING:
     from iris.limbic.big_five import BigFiveProfile
@@ -132,10 +133,10 @@ class HippocampalManager:
         if isinstance(bf_raw, dict):
             return bf_raw  # type: ignore[no-any-return]
         try:
-            estimate = json.loads(bf_raw)
+            estimate = orjson.loads(bf_raw.encode("utf-8"))
             if isinstance(estimate, dict):
                 return estimate  # type: ignore[no-any-return]
-        except (json.JSONDecodeError, TypeError):
+        except (orjson.JSONDecodeError, TypeError):
             logger.debug("Could not parse big_five_estimate: %s", bf_raw)
         return None
 

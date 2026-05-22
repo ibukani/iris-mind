@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 import time
 import uuid
 
 from loguru import logger
+import orjson
 from pydantic import BaseModel, Field
 
 
@@ -79,8 +79,8 @@ class GoalStore:
         path = Path(filepath)
         path.parent.mkdir(parents=True, exist_ok=True)
         data = [g.model_dump() for g in self._goals.values()]
-        with path.open("w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        with path.open("wb") as f:
+            f.write(orjson.dumps(data, option=orjson.OPT_INDENT_2))
         logger.debug("GoalStore: saved %d goals to %s", len(data), path)
 
     def load(self, filepath: Path | str) -> None:
@@ -88,8 +88,8 @@ class GoalStore:
         if not path.exists():
             return
         try:
-            with path.open("r", encoding="utf-8") as f:
-                data = json.load(f)
+            with path.open("rb") as f:
+                data = orjson.loads(f.read())
             self._goals.clear()
             for item in data:
                 goal = LongTermGoal.model_validate(item)

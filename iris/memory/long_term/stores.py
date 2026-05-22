@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-import json
 from pathlib import Path
 import threading
 from typing import Protocol
 
 from loguru import logger
+import orjson
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from iris.memory.long_term.vector_store import VectorStore
@@ -57,8 +57,8 @@ class _JsonlStore:
             if not line.strip():
                 continue
             try:
-                entries.append(json.loads(line))
-            except json.JSONDecodeError:
+                entries.append(orjson.loads(line.encode("utf-8")))
+            except orjson.JSONDecodeError:
                 logger.warning("%s: skipping corrupt entry: %.80s", type(self).__name__, line)
         self._load_cache = entries
         return entries
@@ -66,7 +66,7 @@ class _JsonlStore:
     def _write_file(self, entries: list[dict]) -> None:
         tmp = self.path.with_suffix(".tmp")
         tmp.write_text(
-            "\n".join(json.dumps(e) for e in entries),
+            "\n".join(orjson.dumps(e).decode("utf-8") for e in entries),
             encoding="utf-8",
         )
         self._replace_atomic(tmp)

@@ -4,6 +4,8 @@ from collections.abc import Callable
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
+import orjson
+
 from iris.kernel.commands.state_utils import _format_state, _parse_state_args
 
 if TYPE_CHECKING:
@@ -97,9 +99,7 @@ class DebugCommands:
         if state is None:
             return f"Path not found: '{sa.path}'" if sa.path else "No state available"
         if sa.as_json:
-            import json
-
-            return json.dumps(state, ensure_ascii=False, indent=2)
+            return orjson.dumps(state, option=orjson.OPT_INDENT_2).decode("utf-8")
         return _format_state(state, sa.path)
 
     def _format_state_history(self, diag: SystemDiagnostics, path: str, n: int) -> str:

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime
-import json
 from pathlib import Path
 
 from loguru import logger
+import orjson
 
 _DEFAULT_PATH = ".iris/data/persona_data.json"
 
@@ -40,7 +40,7 @@ class PersonaData:
     def _load(self) -> dict[str, list]:
         if self.path.exists():
             try:
-                raw: dict = json.loads(self.path.read_text(encoding="utf-8"))
+                raw: dict = orjson.loads(self.path.read_bytes())
                 # 旧フィールド名を新フィールド名にマイグレート
                 for old, new in _LEGACY_FIELD_MAP.items():
                     if old in raw and new not in raw:
@@ -50,7 +50,7 @@ class PersonaData:
                     "state_traits": raw.get("state_traits", []),
                     "interests": raw.get("interests", []),
                 }
-            except (json.JSONDecodeError, Exception):
+            except (orjson.JSONDecodeError, Exception):
                 pass
         return {"speech_quirks": [], "state_traits": [], "interests": []}
 
@@ -64,9 +64,8 @@ class PersonaData:
 
     def _save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            json.dumps(self._data, ensure_ascii=False, indent=2),
-            encoding="utf-8",
+        self.path.write_bytes(
+            orjson.dumps(self._data, option=orjson.OPT_INDENT_2),
         )
 
     def add_entry(self, category: str, text: str, source: str = "reflection") -> None:

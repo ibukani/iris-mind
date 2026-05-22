@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import argparse
 import atexit
-import json
 import os
 import socket
 import subprocess
@@ -29,6 +28,7 @@ import sys
 import time
 
 import grpc
+import orjson
 
 from iris.io.transport import grpc_service_pb2 as pb2
 from iris.io.transport import grpc_service_pb2_grpc as pb2_grpc
@@ -237,10 +237,10 @@ def main() -> None:
 
     if args.json and args.command == "state":
         try:
-            parsed = json.loads(output)
-            print(json.dumps(parsed, ensure_ascii=False, indent=2))
+            parsed = orjson.loads(output.encode("utf-8"))
+            print(orjson.dumps(parsed, option=orjson.OPT_INDENT_2).decode("utf-8"))
             return
-        except json.JSONDecodeError:
+        except orjson.JSONDecodeError:
             pass
 
     print(output)

@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-import json
 from typing import Any, Protocol
 
 from loguru import logger
+import orjson
 from pydantic import BaseModel, Field
 
 from iris.llm.protocol import LLMProvider
@@ -63,7 +63,7 @@ class Reflexion:
         self._compact_model = compact_model
 
     def evaluate_proactive_result(self, topic: str, content: str) -> dict[str, Any]:
-        schema_json = json.dumps(ProactiveEvaluationResult.model_json_schema(), ensure_ascii=False)
+        schema_json = orjson.dumps(ProactiveEvaluationResult.model_json_schema()).decode("utf-8")
         system_prompt = (
             "You are Iris's self-reflection engine evaluating a proactive investigation.\n"
             f"You must strictly output a valid JSON object matching this schema:\n{schema_json}\n"
@@ -77,7 +77,7 @@ class Reflexion:
         raw = resp.get("message", {}).get("content")
         content_str = raw if isinstance(raw, str) else ""
         try:
-            result = json.loads(content_str)
+            result = orjson.loads(content_str.encode("utf-8"))
             if isinstance(result, dict):
                 return dict(ProactiveEvaluationResult.model_validate(result).model_dump())
         except Exception as e:
@@ -85,7 +85,7 @@ class Reflexion:
         return {"satisfaction": 0.0, "summary": "調査結果の評価に失敗しました。", "next_interests": []}
 
     def reflect(self, conversation_history: list[dict]) -> dict[str, Any]:
-        schema_json = json.dumps(ReflexionResult.model_json_schema(), ensure_ascii=False)
+        schema_json = orjson.dumps(ReflexionResult.model_json_schema()).decode("utf-8")
         system_prompt = (
             "You are Iris's reflection engine. Analyze the conversation and extract the required fields.\n"
             f"You must strictly output a valid JSON object matching this schema:\n{schema_json}\n"
@@ -106,7 +106,7 @@ class Reflexion:
             return self._empty()
 
     def quick_reflect(self, conversation_slice: list[dict]) -> dict[str, Any]:
-        schema_json = json.dumps(QuickReflexionResult.model_json_schema(), ensure_ascii=False)
+        schema_json = orjson.dumps(QuickReflexionResult.model_json_schema()).decode("utf-8")
         system_prompt = (
             "You are Iris's light-weight reflection engine. Briefly analyze this short conversation.\n"
             f"You must strictly output a valid JSON object matching this schema:\n{schema_json}\n"
@@ -139,13 +139,12 @@ class Reflexion:
             {"role": "system", "content": system_prompt},
             {
                 "role": "user",
-                "content": json.dumps(
+                "content": orjson.dumps(
                     [
                         {"role": m["role"], "content": str(m.get("content", ""))[:200]}
                         for m in conversation[-max_history:]
                     ],
-                    ensure_ascii=False,
-                ),
+                ).decode("utf-8"),
             },
         ]
         import asyncio
@@ -156,11 +155,11 @@ class Reflexion:
         raw = resp.get("message", {}).get("content")
         content = raw if isinstance(raw, str) else ""
         try:
-            result = json.loads(content)
+            result = orjson.loads(content.encode("utf-8"))
             if isinstance(result, dict):
                 return result
             return fallback(content)
-        except (json.JSONDecodeError, TypeError):
+        except (orjson.JSONDecodeError, TypeError):
             return fallback(content)
 
     @staticmethod

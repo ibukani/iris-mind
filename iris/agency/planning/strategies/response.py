@@ -3,12 +3,12 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
-from iris.agency.planning.emotion_temp import EmotionTemperatureModulator
-from iris.agency.planning.task_classifier import is_task_content
+from iris.agency.planning.emotion_temperature import EmotionTemperatureModulator
+from iris.agency.planning.task_content import is_task_content
 
 if TYPE_CHECKING:
     from iris.agency.execution.inhibition import GateVerdict
-    from iris.agency.planning.context_hint import ContextHintBuilder
+    from iris.agency.planning.context_hint_builder import ContextHintBuilder
     from iris.kernel.config import ProactiveConfig
     from iris.limbic.models import EmotionState
 

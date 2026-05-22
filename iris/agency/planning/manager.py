@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING
 
 from iris.agency.bus import InternalBus, PlanDecided
 from iris.agency.execution.inhibition import GateVerdict, InhibitionController
-from iris.agency.planning.context_hint import ContextHintBuilder
+from iris.agency.planning.context_hint_builder import ContextHintBuilder
 from iris.agency.planning.decisions import ProactiveJudge, ProactiveScoring
-from iris.agency.planning.question_gen import QuestionGenerator
+from iris.agency.planning.question_generator import QuestionGenerator
 from iris.agency.planning.strategies import ProactivePlanStrategy, ResponsePlanStrategy
 from iris.event.event_bus import EventBus
 from iris.event.event_types import InputReady

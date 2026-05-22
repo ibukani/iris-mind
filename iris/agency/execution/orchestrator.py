@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from iris.agency.execution.regulation.output_tracker import OutputTracker
     from iris.agency.inhibition import InhibitionController
     from iris.event.event_bus import EventBus
-    from iris.llm.capability_checker import CapabilityChecker
+    from iris.llm.capability import CapabilityChecker
     from iris.memory.manager import MemoryManager
 
 from loguru import logger

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from iris.limbic.manager import LimbicManager
-    from iris.llm.prompt_builder import Personality
+    from iris.llm.prompt import Personality
     from iris.memory.long_term.stores import AgentsMdStore
     from iris.memory.manager import MemoryManager
     from iris.memory.persona_profile import PersonaProfile

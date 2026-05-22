@@ -31,7 +31,7 @@ def _setup_logging(config: Config) -> None:
 def _check_environment(config: Config) -> bool:
     from rich.console import Console
 
-    from iris.llm.llm_bridge import get_provider_class
+    from iris.llm.providers import get_provider_class
 
     console = Console()
     groups: dict[str, list[ModelEntry]] = {}

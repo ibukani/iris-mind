@@ -233,7 +233,7 @@ def _process_message(msg: dict) -> dict:
 
 
 def _retry_delay(attempt: int) -> float:
-    return _RETRY_BACKOFF_SECONDS * (2**attempt)  # type: ignore[no-any-return]
+    return _RETRY_BACKOFF_SECONDS * (2**attempt)
 
 
 def _log_retry(attempt: int) -> None:

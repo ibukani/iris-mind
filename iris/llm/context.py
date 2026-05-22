@@ -4,8 +4,8 @@ from typing import Any
 
 from loguru import logger
 
-from iris.llm.provider import LLMProvider
-from iris.llm.tokenizer_manager import TokenizerManager
+from .protocol import LLMProvider
+from .tokenizer import TokenizerManager
 
 _COMPACT_PROMPT = """これまでの会話要約（もしあれば）と、新規の会話履歴を統合し、最新の会話要約を更新・作成してください。
 作業継続に必要な情報のみを網羅し、冗長な内容は省いてください。
@@ -169,7 +169,7 @@ class LLMContextWindowManager:
                     num_ctx=4096,
                 )
             )
-            return resp.get("message", {}).get("content", "").strip()  # type: ignore[no-any-return]
+            return resp.get("message", {}).get("content", "").strip()
         except Exception as e:
             logger.exception("Summarization failed: %s", e)
             return self._summary

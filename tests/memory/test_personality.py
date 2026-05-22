@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 import tempfile
 
-from iris.llm.prompt_builder import Personality
+from iris.llm.prompt import Personality
 
 
 def test_default_prompt() -> None:

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from iris.kernel.config import ModelConfig
-from iris.llm.capability_checker import CapabilityChecker
+from iris.llm.capability import CapabilityChecker
 
 
 def _make_checker(

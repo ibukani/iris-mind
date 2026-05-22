@@ -10,7 +10,7 @@ from iris.event.event_types import ProactiveResultEvent, TimerTick
 
 if TYPE_CHECKING:
     from iris.kernel.config import Config, ModelConfig
-    from iris.llm.context_window import LLMContextWindowManager
+    from iris.llm.context import LLMContextWindowManager
     from iris.memory.hippocampal.manager import HippocampalManager
 
 from loguru import logger

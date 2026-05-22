@@ -221,7 +221,7 @@ def _extract_error_text(resp: httpx.Response) -> str:
         body = resp.json()
         error = body.get("error", {})
         if isinstance(error, dict):
-            return error.get("message", str(body))  # type: ignore[no-any-return]
+            return error.get("message", str(body))
         return str(error)
     except Exception:
         text = resp.text

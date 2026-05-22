@@ -7,7 +7,7 @@ from typing import Any, Protocol
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from iris.llm.provider import LLMProvider
+from iris.llm.protocol import LLMProvider
 
 
 class QuickReflexionResult(BaseModel):

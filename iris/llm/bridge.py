@@ -14,27 +14,10 @@ from typing import Any
 from loguru import logger
 
 from iris.kernel.config import ModelConfig, ModelEntry
-from iris.llm.priority_lock import PriorityLock
 
-from .google_provider import GoogleProvider
-from .ollama_provider import OllamaProvider
-from .openrouter_provider import OpenRouterProvider
-from .provider import LLMProvider, ProviderFactory
-
-_PROVIDER_CLASSES: dict[str, type[ProviderFactory]] = {
-    "ollama": OllamaProvider,
-    "openrouter": OpenRouterProvider,
-    "google": GoogleProvider,
-}
-
-
-def get_provider_class(provider_type: str) -> type[ProviderFactory]:
-    """指定されたプロバイダタイプに対応するファクトリクラスを取得する。"""
-    cls = _PROVIDER_CLASSES.get(provider_type)
-    if cls is None:
-        msg = f"Unknown provider type: {provider_type!r}"
-        raise ValueError(msg)
-    return cls
+from .priority_lock import PriorityLock
+from .protocol import LLMProvider
+from .providers import get_provider_class
 
 
 class LLMBridge:
@@ -69,19 +52,20 @@ class LLMBridge:
 
     def _create_provider(self, entry: ModelEntry, base_url: str, api_key: str) -> LLMProvider:
         """モデル設定に基づいてプロバイダインスタンスを生成する。"""
+        provider_cls = get_provider_class(entry.provider)
         if entry.provider == "openrouter":
-            return OpenRouterProvider(
+            return provider_cls(
                 api_key=api_key,
                 default_model=entry.name,
                 base_url=base_url,
             )
         if entry.provider == "google":
-            return GoogleProvider(
+            return provider_cls(
                 api_key=api_key,
                 default_model=entry.name,
                 base_url=base_url,
             )
-        return OllamaProvider(
+        return provider_cls(
             model_name=entry.name,
             base_url=base_url,
             num_gpu=entry.num_gpu if entry.num_gpu is not None else self._model_config.default_num_gpu,
@@ -124,7 +108,7 @@ class LLMBridge:
         # Resolve interrupt token
         local_interrupt_token = interrupt_token
         if local_interrupt_token is None:
-            from iris.llm.interrupt_token import InterruptToken
+            from .interrupt_token import InterruptToken
 
             local_interrupt_token = InterruptToken()
 

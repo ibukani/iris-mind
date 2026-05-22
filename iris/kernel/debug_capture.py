@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from iris.llm.tokenizer_manager import TokenizerManager
+    from iris.llm.tokenizer import TokenizerManager
 
 from loguru import logger
 

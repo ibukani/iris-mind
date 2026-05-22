@@ -4,7 +4,7 @@ import httpx
 import pytest
 
 from iris.kernel.config import ModelConfig, ModelEntry, ProviderConnection
-from iris.llm.google_provider import GoogleProvider
+from iris.llm.providers import GoogleProvider
 
 
 def test_google_provider_init_error():

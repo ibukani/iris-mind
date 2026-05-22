@@ -11,8 +11,8 @@ from iris.agency.execution.pipeline import LLMPipeline
 from iris.agency.execution.post_processor import PostProcessor
 from iris.agency.execution.tool_executor import ToolExecutionEngine
 from iris.agency.manager import AgencyManager
+from iris.agency.planning.decisions import ProactiveScoring
 from iris.agency.planning.manager import PlanningManager
-from iris.agency.planning.scoring import ProactiveScoring
 from iris.event.event_bus import EventBus
 from iris.event.tracer import EventTracer
 from iris.io.manager import IOManager

@@ -5,7 +5,7 @@ import time
 
 from iris.agency.execution.inhibition import InhibitionController
 from iris.agency.execution.pipeline import LLMPipeline
-from iris.agency.planning.scoring import ProactiveScoring
+from iris.agency.planning.decisions import ProactiveScoring
 from iris.event.event_bus import EventBus
 from iris.event.event_types import ClientSessionEvent
 from iris.io.models import AuthMessage

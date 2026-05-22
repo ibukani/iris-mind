@@ -174,10 +174,10 @@ class LLMPipeline:
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
 
-    def _get_tools(self) -> list[dict[str, Any]] | None:
+    def _get_tools(self, allow_side_effects: bool = True) -> list[dict[str, Any]] | None:
         if self._tool_executor is None:
             return None
-        return self._tool_executor.registry.list_tools() or None
+        return self._tool_executor.registry.list_tools(allow_side_effects=allow_side_effects) or None
 
     def call(
         self,
@@ -231,6 +231,9 @@ class LLMPipeline:
                 plan, messages, max_tokens, temperature, model_role=model_role, interrupt_token=interrupt_token
             )
 
+        allow_side_effects: bool = plan.get("allow_side_effects", True)
+        max_tool_iters = plan.get("max_tool_iterations")
+
         return self._generate_with_tools(
             messages,
             context_hint=context_hint,
@@ -238,6 +241,8 @@ class LLMPipeline:
             interrupt_token=interrupt_token,
             model_role=model_role,
             max_tokens=max_tokens,
+            allow_side_effects=allow_side_effects,
+            max_tool_iterations=max_tool_iters,
         )
 
     def _generate_without_tools(
@@ -303,8 +308,10 @@ class LLMPipeline:
         context_hint: str = "",
         model_role: str = "default",
         max_tokens: int | None = None,
+        allow_side_effects: bool = True,
+        max_tool_iterations: int | None = None,
     ) -> str:
-        tools = self._get_tools()
+        tools = self._get_tools(allow_side_effects=allow_side_effects)
         if tools and self._capability_checker and not self._capability_checker.supports_tools(model_role):
             tools = None
 
@@ -316,7 +323,7 @@ class LLMPipeline:
             llm=self._llm,
             model_config=self._model_config,
             tool_executor=self._tool_executor,
-            max_tool_iterations=self._max_tool_iterations,
+            max_tool_iterations=max_tool_iterations if max_tool_iterations is not None else self._max_tool_iterations,
             interrupt_token=interrupt_token,
             timeout=None,
         )

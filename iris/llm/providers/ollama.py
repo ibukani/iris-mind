@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 import contextlib
+import logging
 import os
 import re
 import subprocess
@@ -20,6 +21,13 @@ from typing import Any
 import httpx
 from loguru import logger
 from ollama import Client
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from iris.kernel.config import ModelConfig, ModelEntry
 
@@ -183,17 +191,15 @@ class OllamaProvider:
         final["message"] = _process_message(final["message"])
         return final
 
+    @retry(
+        stop=stop_after_attempt(_MAX_RETRIES),
+        wait=wait_exponential(multiplier=_RETRY_BACKOFF_SECONDS, min=_RETRY_BACKOFF_SECONDS),
+        retry=retry_if_exception_type(httpx.TransportError),
+        before_sleep=before_sleep_log(logger, logging.WARNING),
+        reraise=True,
+    )
     def _retry_transport_call(self, operation: Callable[[], dict], error_message: str) -> dict:
-        for attempt in range(_MAX_RETRIES):
-            try:
-                return operation()
-            except httpx.TransportError:
-                if attempt == _MAX_RETRIES - 1:
-                    raise
-                _log_retry(attempt)
-                time.sleep(_retry_delay(attempt))
-
-        raise RuntimeError(error_message)
+        return operation()
 
     def unload_model(self, model_name: str) -> None:
         """指定モデルを VRAM から解放する。"""

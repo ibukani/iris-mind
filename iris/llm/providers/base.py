@@ -9,11 +9,18 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 import json
-import time
+import logging
 from typing import Any
 
 import httpx
 from loguru import logger
+from tenacity import (
+    before_sleep_log,
+    retry,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 
 class OpenAICompatibleProvider:
@@ -46,28 +53,27 @@ class OpenAICompatibleProvider:
 
     def _request(self, body: dict[str, Any], headers: dict[str, str]) -> httpx.Response:
         """指数バックオフ付きリトライで POST する。"""
-        for attempt in range(self._max_retries):
+        _retryer = retry(
+            stop=stop_after_attempt(self._max_retries),
+            wait=wait_exponential(multiplier=1, min=1, max=60),
+            retry=retry_if_exception(
+                lambda e: isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 429,
+            ),
+            before_sleep=before_sleep_log(logger, logging.WARNING),
+            reraise=True,
+        )
+
+        @_retryer
+        def _do() -> httpx.Response:
             resp = self._client.post(
                 f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=body,
             )
-            if resp.status_code != 429:
-                resp.raise_for_status()
-                return resp
+            resp.raise_for_status()
+            return resp
 
-            retry_after = _parse_retry_after(resp, attempt)
-            logger.warning(
-                "%s 429 (attempt %d/%d): waiting %.1fs, error=%s",
-                self.provider_name,
-                attempt + 1,
-                self._max_retries,
-                retry_after,
-                _extract_error_text(resp),
-            )
-            time.sleep(retry_after)
-
-        raise RuntimeError(f"{self.provider_name} API エラー (429 リトライ超過 {self._max_retries}回)")
+        return _do()
 
     async def chat(
         self,
@@ -130,81 +136,87 @@ class OpenAICompatibleProvider:
         content_parts: list[str] = []
         tool_calls: list[dict[str, Any]] | None = None
 
-        for attempt in range(self._max_retries):
-            with self._client.stream(
-                "POST",
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=body,
-            ) as stream:
-                if stream.status_code == 429:
-                    retry_after = _parse_retry_after(stream, attempt)
-                    logger.warning(
-                        "%s 429 stream (attempt %d/%d): waiting %.1fs, error=%s",
-                        self.provider_name,
-                        attempt + 1,
-                        self._max_retries,
-                        retry_after,
-                        _extract_error_text(stream),
-                    )
-                    time.sleep(retry_after)
-                    continue
+        stream = self._open_stream(body, headers)
 
-                if stream.status_code != 200:
-                    error_msg = _extract_error_text(stream)
-                    raise RuntimeError(f"{self.provider_name} API エラー ({stream.status_code}): {error_msg}")
-
-                for line in stream.iter_lines():
-                    if interrupt_token is not None and getattr(interrupt_token, "is_cancelled", False):
-                        logger.debug("%sProvider: interrupted", self.provider_name)
-                        break
-                    if not line or not line.startswith("data: "):
-                        continue
-                    payload = line[6:].strip()
-                    if payload == "[DONE]":
-                        break
-                    try:
-                        chunk = json.loads(payload)
-                    except json.JSONDecodeError:
-                        continue
-
-                    choices = chunk.get("choices", [])
-                    if not choices:
-                        continue
-                    delta = choices[0].get("delta", {})
-
-                    content = delta.get("content", "")
-                    if content:
-                        content_parts.append(content)
-                        on_token(content)
-
-                    if delta.get("tool_calls"):
-                        if tool_calls is None:
-                            tool_calls = []
-                        for tc in delta["tool_calls"]:
-                            idx = tc.get("index", 0)
-                            while len(tool_calls) <= idx:
-                                tool_calls.append(
-                                    {"id": "", "type": "function", "function": {"name": "", "arguments": ""}},
-                                )
-                            existing = tool_calls[idx]
-                            if tc.get("id"):
-                                existing["id"] = tc["id"]
-                            if tc.get("function"):
-                                fn = tc["function"]
-                                if fn.get("name"):
-                                    existing["function"]["name"] += fn["name"]
-                                if fn.get("arguments"):
-                                    existing["function"]["arguments"] += fn["arguments"]
+        for line in stream.iter_lines():
+            if interrupt_token is not None and getattr(interrupt_token, "is_cancelled", False):
+                logger.debug("%sProvider: interrupted", self.provider_name)
                 break
-        else:
-            raise RuntimeError(f"{self.provider_name} API stream failed after max retries")
+            if not line or not line.startswith("data: "):
+                continue
+            payload = line[6:].strip()
+            if payload == "[DONE]":
+                break
+            try:
+                chunk = json.loads(payload)
+            except json.JSONDecodeError:
+                continue
+
+            choices = chunk.get("choices", [])
+            if not choices:
+                continue
+            delta = choices[0].get("delta", {})
+
+            content = delta.get("content", "")
+            if content:
+                content_parts.append(content)
+                on_token(content)
+
+            if delta.get("tool_calls"):
+                if tool_calls is None:
+                    tool_calls = []
+                for tc in delta["tool_calls"]:
+                    idx = tc.get("index", 0)
+                    while len(tool_calls) <= idx:
+                        tool_calls.append(
+                            {"id": "", "type": "function", "function": {"name": "", "arguments": ""}},
+                        )
+                    existing = tool_calls[idx]
+                    if tc.get("id"):
+                        existing["id"] = tc["id"]
+                    if tc.get("function"):
+                        fn = tc["function"]
+                        if fn.get("name"):
+                            existing["function"]["name"] += fn["name"]
+                        if fn.get("arguments"):
+                            existing["function"]["arguments"] += fn["arguments"]
+
+        stream.close()
 
         full_content = "".join(content_parts)
         msg: dict[str, Any] = {"role": "assistant", "content": full_content}
         if tool_calls:
             msg["tool_calls"] = tool_calls
         return {"message": _process_message(msg)}
+
+    def _open_stream(self, body: dict[str, Any], headers: dict[str, str]) -> httpx.Response:
+        @retry(
+            stop=stop_after_attempt(self._max_retries),
+            wait=wait_exponential(multiplier=1, min=1, max=60),
+            retry=retry_if_exception(
+                lambda e: isinstance(e, httpx.HTTPStatusError) and e.response.status_code == 429,
+            ),
+            before_sleep=before_sleep_log(logger, logging.WARNING),
+            reraise=True,
+        )
+        def _connect() -> httpx.Response:
+            req = self._client.build_request(
+                "POST",
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=body,
+            )
+            resp = self._client.send(req, stream=True)
+            if resp.status_code == 429:
+                resp.close()
+                raise httpx.HTTPStatusError("429 Too Many Requests", request=req, response=resp)
+            if resp.status_code != 200:
+                error = _extract_error_text(resp)
+                resp.close()
+                raise RuntimeError(f"{self.provider_name} API エラー ({resp.status_code}): {error}")
+            return resp
+
+        return _connect()
 
     def is_available(self) -> bool:
         """API キーが設定されていれば利用可能とみなす。"""

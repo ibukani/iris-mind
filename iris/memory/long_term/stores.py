@@ -4,10 +4,10 @@ from datetime import UTC, datetime
 import json
 from pathlib import Path
 import threading
-import time
 from typing import Protocol
 
 from loguru import logger
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from iris.memory.long_term.vector_store import VectorStore
 
@@ -44,9 +44,13 @@ class _JsonlStore:
     def __init__(self, path: str) -> None:
         self.path = Path(path)
         self._lock = threading.Lock()
+        self._load_cache: list[dict] | None = None
 
     def load_all(self) -> list[dict]:
+        if self._load_cache is not None:
+            return self._load_cache
         if not self.path.exists():
+            self._load_cache = []
             return []
         entries: list[dict] = []
         for line in self.path.read_text(encoding="utf-8").strip().split("\n"):
@@ -56,6 +60,7 @@ class _JsonlStore:
                 entries.append(json.loads(line))
             except json.JSONDecodeError:
                 logger.warning("%s: skipping corrupt entry: %.80s", type(self).__name__, line)
+        self._load_cache = entries
         return entries
 
     def _write_file(self, entries: list[dict]) -> None:
@@ -65,16 +70,16 @@ class _JsonlStore:
             encoding="utf-8",
         )
         self._replace_atomic(tmp)
+        self._load_cache = None
 
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=0.05, min=0.05, max=0.5),
+        retry=retry_if_exception_type(PermissionError),
+        reraise=True,
+    )
     def _replace_atomic(self, src: Path) -> None:
-        for attempt in range(3):
-            try:
-                src.replace(self.path)
-                return
-            except PermissionError:
-                if attempt == 2:
-                    raise
-                time.sleep(0.05 * (attempt + 1))
+        src.replace(self.path)
 
 
 class AgentsMdStore:

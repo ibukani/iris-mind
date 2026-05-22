@@ -11,6 +11,7 @@ from collections.abc import Callable
 import re
 from typing import Any
 
+from cachetools import LRUCache, cached
 from loguru import logger
 
 from iris.kernel.config import ModelConfig, ModelEntry
@@ -203,6 +204,7 @@ class LLMBridge:
             if key:
                 self._providers[key].unload_model(model_name)
 
+    @cached(cache=LRUCache(maxsize=32))
     def _resolve_provider(self, model_name: str) -> LLMProvider:
         """モデル名から対応するプロバイダインスタンスを解決する。"""
         key = self._model_map.get(model_name)
@@ -212,6 +214,7 @@ class LLMBridge:
         logger.warning("Model %r not found in provider map, using first provider", model_name)
         return first
 
+    @cached(cache=LRUCache(maxsize=1))
     def _get_default_model(self) -> str:
         """デフォルトのモデル名を取得する（マップの最初のモデル）。"""
         for name in self._model_map:

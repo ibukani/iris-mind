@@ -4,8 +4,8 @@ import time
 from unittest.mock import MagicMock
 
 from iris.agency.bus import InternalBus
+from iris.agency.execution.consolidator import Consolidator
 from iris.agency.execution.manager import ExecutionManager
-from iris.agency.execution.post_processor import PostProcessor
 from iris.event.event_bus import EventBus
 from iris.event.event_types import TimerTick
 from iris.kernel.config import Config, ProactiveConfig
@@ -21,7 +21,7 @@ def test_execution_manager_idle_reflection_triggers() -> None:
     proactive = ProactiveConfig(idle_reflection_timeout_sec=2.0)
     config.proactive = proactive
 
-    post_processor = PostProcessor(
+    consolidator = Consolidator(
         event_bus=event_bus,
         messages_getter=lambda: manager._messages,
         hippocampal=hippocampal,
@@ -31,12 +31,12 @@ def test_execution_manager_idle_reflection_triggers() -> None:
         internal_bus=internal_bus,
         event_bus=event_bus,
         llm_pipeline=llm_pipeline,
-        post_processor=post_processor,
+        consolidator=consolidator,
     )
 
     manager._messages.append({"role": "user", "content": "hello"})
-    manager._post_processor._msg_count_since_reflect = 1
-    manager._post_processor._last_activity_time = time.time() - 2.1
+    manager._consolidator._msg_count_since_reflect = 1
+    manager._consolidator._last_activity_time = time.time() - 2.1
 
     event_bus.publish(
         TimerTick(
@@ -49,7 +49,7 @@ def test_execution_manager_idle_reflection_triggers() -> None:
     time.sleep(0.1)
 
     hippocampal.force_run.assert_called_once()
-    assert manager._post_processor._msg_count_since_reflect == 0
+    assert manager._consolidator._msg_count_since_reflect == 0
 
 
 def test_execution_manager_idle_reflection_no_trigger_if_zero_count() -> None:
@@ -62,7 +62,7 @@ def test_execution_manager_idle_reflection_no_trigger_if_zero_count() -> None:
     proactive = ProactiveConfig(idle_reflection_timeout_sec=2.0)
     config.proactive = proactive
 
-    post_processor = PostProcessor(
+    consolidator = Consolidator(
         event_bus=event_bus,
         messages_getter=lambda: manager._messages,
         hippocampal=hippocampal,
@@ -72,11 +72,11 @@ def test_execution_manager_idle_reflection_no_trigger_if_zero_count() -> None:
         internal_bus=internal_bus,
         event_bus=event_bus,
         llm_pipeline=llm_pipeline,
-        post_processor=post_processor,
+        consolidator=consolidator,
     )
 
-    manager._post_processor._msg_count_since_reflect = 0
-    manager._post_processor._last_activity_time = time.time() - 2.1
+    manager._consolidator._msg_count_since_reflect = 0
+    manager._consolidator._last_activity_time = time.time() - 2.1
 
     event_bus.publish(TimerTick(timestamp=None, source="test", tick_count=1))
     time.sleep(0.1)
@@ -94,7 +94,7 @@ def test_execution_manager_idle_reflection_no_trigger_if_not_timeout() -> None:
     proactive = ProactiveConfig(idle_reflection_timeout_sec=2.0)
     config.proactive = proactive
 
-    post_processor = PostProcessor(
+    consolidator = Consolidator(
         event_bus=event_bus,
         messages_getter=lambda: manager._messages,
         hippocampal=hippocampal,
@@ -104,14 +104,14 @@ def test_execution_manager_idle_reflection_no_trigger_if_not_timeout() -> None:
         internal_bus=internal_bus,
         event_bus=event_bus,
         llm_pipeline=llm_pipeline,
-        post_processor=post_processor,
+        consolidator=consolidator,
     )
 
-    manager._post_processor._msg_count_since_reflect = 1
-    manager._post_processor._last_activity_time = time.time() - 1.0
+    manager._consolidator._msg_count_since_reflect = 1
+    manager._consolidator._last_activity_time = time.time() - 1.0
 
     event_bus.publish(TimerTick(timestamp=None, source="test", tick_count=1))
     time.sleep(0.1)
 
     hippocampal.force_run.assert_not_called()
-    assert manager._post_processor._msg_count_since_reflect == 1
+    assert manager._consolidator._msg_count_since_reflect == 1

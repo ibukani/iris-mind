@@ -4,15 +4,15 @@ from collections.abc import Callable
 import logging
 from typing import TYPE_CHECKING, Any
 
-from iris.agency.execution.modulation.coordinator import MonitorCoordinator
+from iris.agency.execution.regulation.coordinator import MonitorCoordinator
 from iris.event.event_types import MessageEvent, ProactiveResultEvent
 from iris.io.models import StreamState
 from iris.llm.interrupt_token import InterruptToken
 
 if TYPE_CHECKING:
-    from iris.agency.execution.monitor import OutputMonitor
-    from iris.agency.execution.pipeline import LLMPipeline
-    from iris.agency.execution.post_processor import PostProcessor
+    from iris.agency.execution.consolidator import Consolidator
+    from iris.agency.execution.generation.pipeline import LLMPipeline
+    from iris.agency.execution.regulation.monitor import OutputMonitor
     from iris.agency.inhibition import InhibitionController
     from iris.event.event_bus import EventBus
     from iris.memory.manager import MemoryManager
@@ -28,7 +28,7 @@ class ExecutionRunner:
         event_bus: EventBus,
         messages: list[dict[str, Any]],
         pipeline: LLMPipeline,
-        post_processor: PostProcessor,
+        consolidator: Consolidator,
         monitor: OutputMonitor | None = None,
         inhibition: InhibitionController | None = None,
         session_roles_getter: Callable[[], str] | None = None,
@@ -37,7 +37,7 @@ class ExecutionRunner:
         self._event_bus = event_bus
         self._messages = messages
         self._pipeline = pipeline
-        self._post_processor = post_processor
+        self._consolidator = consolidator
         self._monitor = monitor
         self._inhibition = inhibition
         self._session_roles_getter = session_roles_getter
@@ -83,7 +83,7 @@ class ExecutionRunner:
             self._interrupt_token = None
 
         if not silent and (run_reflexion or run_compression):
-            self._post_processor.trigger_post_processes(plan, run_reflexion, run_compression)
+            self._consolidator.trigger_post_processes(plan, run_reflexion, run_compression)
 
         if silent:
             success = bool(response_text and "[Error:" not in response_text)
@@ -103,7 +103,7 @@ class ExecutionRunner:
         if record_history and content:
             role = "thought" if silent else "user"
             self._messages.append({"role": role, "content": content})
-            self._post_processor.record_activity()
+            self._consolidator.record_activity()
 
         if content and self._memory:
             role = "thought" if silent else "user"
@@ -180,8 +180,8 @@ class ExecutionRunner:
         if record_history:
             role = "thought" if silent else "assistant"
             self._messages.append({"role": role, "content": response_text})
-            self._post_processor.record_activity()
-            self._post_processor.increment_reflect_count()
+            self._consolidator.record_activity()
+            self._consolidator.increment_reflect_count()
 
         if response_text and self._memory:
             role = "thought" if silent else "assistant"

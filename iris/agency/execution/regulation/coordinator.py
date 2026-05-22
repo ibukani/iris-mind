@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from iris.event.event_types import MonitorFeedback
 
 if TYPE_CHECKING:
-    from iris.agency.execution.monitor import OutputMonitor
+    from iris.agency.execution.regulation.monitor import OutputMonitor
     from iris.agency.inhibition import InhibitionController
     from iris.event.event_bus import EventBus
     from iris.limbic.models import EmotionState

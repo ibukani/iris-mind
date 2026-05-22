@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from iris.agency.execution.monitor import OutputMonitor
+    from iris.agency.execution.regulation.monitor import OutputMonitor
 
 
 TALKATIVE_ABBREVIATED_THRESHOLD = 1

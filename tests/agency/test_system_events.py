@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 import time
 
-from iris.agency.execution.pipeline import LLMPipeline
+from iris.agency.execution.generation.pipeline import LLMPipeline
 from iris.agency.inhibition import InhibitionController
 from iris.agency.planning.decisions import ProactiveScoring
 from iris.event.event_bus import EventBus

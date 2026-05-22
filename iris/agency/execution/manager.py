@@ -6,15 +6,15 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from iris.agency.bus import InternalBus, PlanDecided
-from iris.agency.execution.modulation.coordinator import MonitorCoordinator
-from iris.agency.execution.modulation.talkative import (
+from iris.agency.execution.consolidator import Consolidator
+from iris.agency.execution.generation.pipeline import LLMPipeline
+from iris.agency.execution.regulation.coordinator import MonitorCoordinator
+from iris.agency.execution.regulation.monitor import OutputMonitor
+from iris.agency.execution.regulation.talkative import (
     apply_talkative_overrides,
     should_skip_proactive,
 )
-from iris.agency.execution.monitor import OutputMonitor
-from iris.agency.execution.phases.runner import ExecutionRunner
-from iris.agency.execution.pipeline import LLMPipeline
-from iris.agency.execution.post_processor import PostProcessor
+from iris.agency.execution.runner import ExecutionRunner
 from iris.agency.inhibition import InhibitionController
 from iris.event.event_bus import EventBus
 from iris.event.event_types import InputReady
@@ -32,7 +32,7 @@ class ExecutionManager:
         internal_bus: InternalBus,
         event_bus: EventBus,
         llm_pipeline: LLMPipeline,
-        post_processor: PostProcessor,
+        consolidator: Consolidator,
         monitor: OutputMonitor | None = None,
         inhibition: InhibitionController | None = None,
         session_roles_getter: Callable[[], str] | None = None,
@@ -42,7 +42,7 @@ class ExecutionManager:
         self._bus = internal_bus
         self._event_bus = event_bus
         self._monitor = monitor
-        self._post_processor = post_processor
+        self._consolidator = consolidator
         self._memory = memory
         self._messages: list[dict[str, Any]] = messages if messages is not None else []
         self._interrupt_token: InterruptToken | None = None
@@ -51,7 +51,7 @@ class ExecutionManager:
             event_bus=event_bus,
             messages=self._messages,
             pipeline=llm_pipeline,
-            post_processor=post_processor,
+            consolidator=consolidator,
             monitor=monitor,
             inhibition=inhibition,
             session_roles_getter=session_roles_getter,
@@ -62,7 +62,7 @@ class ExecutionManager:
         self._event_bus.subscribe("InputReady", self._on_input_ready)
 
     def get_state(self) -> dict:
-        state = self._post_processor.get_state()
+        state = self._consolidator.get_state()
         state["msg_count"] = len(self._messages)
         state["talkative_degree"] = self._monitor.talkative_degree if self._monitor else 0
         return state
@@ -106,9 +106,9 @@ class ExecutionManager:
         task.add_done_callback(self._bg_tasks.discard)
 
     def flush_memory(self) -> None:
-        self._post_processor.flush_memory()
+        self._consolidator.flush_memory()
         if self._memory:
             self._memory.flush()
 
     def compact_context(self) -> str:
-        return self._post_processor.compact_context()
+        return self._consolidator.compact_context()

@@ -6,7 +6,6 @@ from loguru import logger
 
 from iris.limbic.models import BASIC_EMOTIONS, EmotionDelta
 
-# キーワード辞書
 _POSITIVE_WORDS: frozenset[str] = frozenset(
     {
         "ありがとう",
@@ -160,7 +159,7 @@ class Amygdala:
         self._appreciation = _KeywordCounter(_APPRECIATION_WORDS)
         self._criticism = _KeywordCounter(_CRITICISM_WORDS)
 
-    def evaluate(self, text: str) -> EmotionDelta:
+    def assess(self, text: str) -> EmotionDelta:
         if not text:
             return EmotionDelta()
 
@@ -196,11 +195,8 @@ class Amygdala:
             dominance=max(-1.0, min(1.0, dominance_score)) * 0.6,
         )
 
-    def evaluate_basic(self, text: str) -> str | None:
-        """テキストから最も近い基本感情ラベルを返す。
-        対応がない場合は None。
-        """
-        delta = self.evaluate(text)
+    def classify_emotion(self, text: str) -> str | None:
+        delta = self.assess(text)
         if delta.valence == 0 and delta.arousal == 0:
             return None
         return min(
@@ -210,7 +206,6 @@ class Amygdala:
 
     @staticmethod
     def _estimate_dominance(text: str) -> float:
-        """能動性/受動性から支配性を推定する。"""
         score = 0.0
         for pat, val in _AGENTIVE_PATTERNS:
             if pat.search(text):

@@ -64,7 +64,7 @@ class LLMGateway:
     ) -> dict[str, Any]:
         response_style = ""
         if self._prompt_builder._limbic:
-            response_style = self._prompt_builder._limbic.build_response_style()
+            response_style = self._prompt_builder._limbic.generate_response_style()
         system_prompt = self._prompt_builder.build(
             context_hint=context_hint,
             response_style=response_style,
@@ -101,7 +101,7 @@ class LLMGateway:
 
         response_style = ""
         if situation == "proactive" and self._prompt_builder._limbic:
-            response_style = self._prompt_builder._limbic.build_response_style()
+            response_style = self._prompt_builder._limbic.generate_response_style()
 
         system_prompt = self._prompt_builder.build_full(
             context_hint=context_hint,

@@ -68,7 +68,7 @@ class SystemPromptBuilder:
         prompt += f"\n\n## 現在日時\n{self._build_time_string()}"
 
         if self._limbic:
-            mood_desc = self._limbic.build_mood_description()
+            mood_desc = self._limbic.describe_mood()
             if mood_desc:
                 prompt += f"\n\n## 現在の気分\n{mood_desc}"
 

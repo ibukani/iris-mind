@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any, Protocol
 import orjson
 
 if TYPE_CHECKING:
-    from iris.limbic.big_five import BigFiveProfile
+    from iris.limbic.prefrontal.personality import BigFiveProfile
     from iris.memory.manager import MemoryManagerProtocol
     from iris.memory.persona_profile import PersonaProfile
 

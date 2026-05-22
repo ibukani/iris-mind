@@ -80,7 +80,7 @@ class EmotionalMemory:
             }
         )
 
-    def tag(self, content: str, emotion: EmotionState) -> None:
+    def encode(self, content: str, emotion: EmotionState) -> None:
         emotion_dict = emotion.to_dict()
         intensity = abs(emotion.valence) * emotion.arousal
         tag: EmotionTag = {
@@ -94,7 +94,7 @@ class EmotionalMemory:
             self._persist_episodic(content, emotion_dict, intensity)
             self._persist_semantic(content, emotion_dict, _emotion_label(emotion), intensity)
 
-        logger.debug("EmotionalMemory tagged: intensity=%.3f label=%s", intensity, _emotion_label(emotion))
+        logger.debug("Hippocampus encoded: intensity=%.3f label=%s", intensity, _emotion_label(emotion))
 
     def get_recent_tags(self, n: int = 5) -> list[EmotionTag]:
         sorted_tags = sorted(
@@ -104,7 +104,7 @@ class EmotionalMemory:
         )
         return sorted_tags[:n]
 
-    def salient_summary(self) -> str:
+    def summarize_salience(self) -> str:
         if not self._recent_tags:
             return ""
         n_positive = sum(1 for t in self._recent_tags if t["emotion"]["valence"] > 0.3)
@@ -116,7 +116,7 @@ class EmotionalMemory:
             parts.append(f"直近で{n_negative}件のネガティブな会話")
         return "、".join(parts) if parts else ""
 
-    def search_by_emotion(
+    def retrieve_by_affect(
         self,
         target: EmotionState,
         max_results: int = 5,

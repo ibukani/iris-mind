@@ -10,10 +10,8 @@ import orjson
 
 _DEFAULT_PATH = ".iris/data/big_five.json"
 
-# PEM: 指数移動平均の更新率
 _PEM_LAMBDA = 0.8
 
-# 性格変化検出の閾値
 _CHANGE_THRESHOLD = 1.0
 
 
@@ -109,15 +107,6 @@ class BigFiveProfile:
         return "## 性格特性 (Big Five)\n" + "\n".join(lines)
 
     def update_from_estimate(self, estimate: dict[str, float], source: str = "reflection") -> list[str]:
-        """PEM (Personality Evolution Mechanism) で性格スコアを更新する。
-
-        Args:
-            estimate: Reflexion が推定した OCEAN 値 (各キーのみ)
-            source: 推定ソース
-
-        Returns:
-            検出された変化の説明リスト（変化があった場合のみ）
-        """
         changes: list[str] = []
         now = datetime.now(UTC).isoformat(timespec="seconds")
 

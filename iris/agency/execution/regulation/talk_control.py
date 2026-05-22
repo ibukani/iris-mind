@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from iris.agency.execution.regulation.monitor import OutputMonitor
+    from iris.agency.execution.regulation.output_tracker import OutputTracker
 
 
 TALKATIVE_ABBREVIATED_THRESHOLD = 1
@@ -30,7 +30,7 @@ def apply_talkative_overrides(plan: dict[str, Any]) -> None:
         plan["show_thinking"] = False
 
 
-def should_skip_proactive(plan: dict[str, Any], monitor: OutputMonitor | None) -> bool:
+def should_skip_proactive(plan: dict[str, Any], monitor: OutputTracker | None) -> bool:
     content: str = plan.get("content", "")
     if content:
         return False

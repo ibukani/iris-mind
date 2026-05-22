@@ -163,7 +163,7 @@ class KernelFactory:
     def build(config: Config) -> KernelContext
         # 1. EventBus 生成
         # 2. MemoryManager + plugins 生成
-        # 3. PlanningManager + ExecutionManager 生成
+        # 3. PlanningManager + FlowExecutor 生成
         # 4. AgencyManager 生成（global↔internal 接続）
         # 5. IOManager + transport/session/auth 生成
         # 6. KernelManager 生成

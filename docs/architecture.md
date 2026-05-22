@@ -54,8 +54,8 @@ flowchart TD
         end
 
         subgraph Execution["execution/ 運動野"]
-            E_Manager["ExecutionManager<br/>行動実行"]
-            E_LLM["LLMPipeline<br/>LLM呼出+ツールループ"]
+            E_Exec["FlowExecutor<br/>行動実行"]
+            E_LLM["LLMGateway<br/>LLM呼出"]
         end
     end
 
@@ -211,12 +211,27 @@ iris/
 │   │   └── controller.py      InhibitionController（Gate評価, トピックcooldown）
 │   └── execution/             # 運動野: 行動実行
 │       ├── __init__.py
-│       ├── manager.py         ExecutionManager（行動実行, _execute_general統一）
-│       ├── pipeline.py        LLMPipeline（generate + ツールループ）
-│       ├── workflow.py        IrisExecutionWorkflow（パイプライン）
-│       ├── monitor.py         OutputMonitor（発話頻度監視）
-│       ├── tool_executor.py   ToolExecutionEngine
-│       └── post_processor.py  PostProcessor（出力後処理）
+│       ├── orchestrator.py         ExecutionOrchestrator（LangGraph グラフ）
+│       ├── executor.py             FlowExecutor（入口, Plan購読）
+│       ├── state.py                ExecutionState + DynamicState
+│       ├── engine.py               ToolEngine（ツール実行）
+│       ├── llm/
+│       │   ├── __init__.py
+│       │   ├── gateway.py          LLMGateway（LLM呼出）
+│       │   └── prompt_builder.py   SystemPromptBuilder
+│       ├── nodes/                  # LangGraph ノード
+│       │   ├── __init__.py
+│       │   ├── setup.py            SetupNode
+│       │   ├── llm_call.py         LLMCallNode
+│       │   ├── tool_run.py         ToolRunNode
+│       │   ├── finalize.py         FinalizeNode
+│       │   └── post_process.py     PostProcessNode
+│       └── regulation/             # 出力調整
+│           ├── __init__.py
+│           ├── consolidator.py     Consolidator（Reflexion + 圧縮）
+│           ├── feedback.py         FeedbackCoordinator
+│           ├── output_tracker.py   OutputTracker
+│           └── talk_control.py     talkative抑制制御
 │
 ├── llm/                       # LLM 基盤
 │   ├── __init__.py
@@ -384,7 +399,7 @@ flowchart LR
 - Agency の planning → execution は内部 EventBus を介する
 - IO 層は gRPC への依存を持つが、`io/transport/` に閉じる
 - Limbic 層は以下のインターフェースで他層と統合する:
-  - `build_mood_description()` → LLMPipeline がシステムプロンプトに注入
+  - `build_mood_description()` → LLMGateway がシステムプロンプトに注入
   - `apply_limbic_modulation(emotion)` → InhibitionController が感情による抑制変調に利用 (inhibition.py)
   - `tag_recent_memory()` → EmotionalMemory が EpisodicStore に感情タグを付与
   - `current_emotion()` → ProactiveScoring が自発発話スコアリングの mood 因子として利用

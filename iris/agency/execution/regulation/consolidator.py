@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import logging
-import threading
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -16,10 +15,6 @@ if TYPE_CHECKING:
     from iris.memory.hippocampal.manager import HippocampalManager
 
 logger = logging.getLogger(__name__)
-
-
-def _run_in_background(target: Callable[[], None], *, name: str = "bg-task") -> None:
-    threading.Thread(target=target, daemon=True, name=name).start()
 
 
 class Consolidator:
@@ -44,8 +39,6 @@ class Consolidator:
         self._config = config
         self._last_activity_time = time.time()
         self._msg_count_since_reflect = 0
-        self._reflect_lock = threading.Lock()
-        self._is_reflecting = False
         event_bus.subscribe("TimerTick", self._on_timer_tick)
         event_bus.subscribe("ProactiveResultEvent", self._on_proactive_result)
 
@@ -55,13 +48,7 @@ class Consolidator:
     def increment_reflect_count(self) -> None:
         self._msg_count_since_reflect += 1
 
-    def trigger_post_processes(self, plan: dict[str, Any], run_reflexion: bool, run_compression: bool) -> None:
-        _run_in_background(
-            lambda: self._run_post_process(plan, run_reflexion, run_compression),
-            name="post-process",
-        )
-
-    def _run_post_process(self, plan: dict[str, Any], run_reflexion: bool, run_compression: bool) -> None:
+    def run_post_process(self, plan: dict[str, Any], run_reflexion: bool, run_compression: bool) -> None:
         messages = self._get_messages()
         try:
             if run_reflexion and self._hippocampal:
@@ -113,7 +100,7 @@ class Consolidator:
         return f"Compacted: {len(summary)} chars summary, kept last {keep} messages"
 
     def _on_timer_tick(self, event: TimerTick) -> None:
-        if self._msg_count_since_reflect <= 0 or self._is_reflecting:
+        if self._msg_count_since_reflect <= 0:
             return
 
         timeout = 180.0
@@ -130,30 +117,12 @@ class Consolidator:
             timeout,
             self._msg_count_since_reflect,
         )
-        self._run_idle_reflection()
-
-    def _run_idle_reflection(self) -> None:
-        with self._reflect_lock:
-            if self._is_reflecting:
-                return
-            self._is_reflecting = True
-
-        _run_in_background(self._idle_reflection_task, name="idle-reflection")
-
-    def _idle_reflection_task(self) -> None:
-        try:
-            if self._hippocampal:
-                self._hippocampal.force_run(self._get_messages())
-                self._msg_count_since_reflect = 0
-        except Exception:
-            logger.exception("Idle reflection failed")
-        finally:
-            with self._reflect_lock:
-                self._is_reflecting = False
+        if self._hippocampal:
+            self._hippocampal.force_run(self._get_messages())
+            self._msg_count_since_reflect = 0
 
     def get_state(self) -> dict:
         return {
-            "is_reflecting": self._is_reflecting,
             "msg_count_since_reflect": self._msg_count_since_reflect,
             "idle_seconds": time.time() - self._last_activity_time if self._last_activity_time else 0,
         }
@@ -162,11 +131,11 @@ class Consolidator:
         hippocampal = self._hippocampal
         if hippocampal is None:
             return
-        _run_in_background(
-            lambda: hippocampal.process_proactive_result(
+        try:
+            hippocampal.process_proactive_result(
                 topic=event.topic,
                 success=event.success,
                 content=event.content,
-            ),
-            name="proactive-result-process",
-        )
+            )
+        except Exception:
+            logger.exception("Proactive result processing failed")

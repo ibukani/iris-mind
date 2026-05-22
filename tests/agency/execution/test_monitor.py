@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 import pytest
 
-from iris.agency.execution.regulation.monitor import OutputMonitor
+from iris.agency.execution.regulation.output_tracker import OutputTracker
 
 
 @pytest.fixture
@@ -21,21 +21,21 @@ def mock_time() -> Callable[[], float]:
 
 
 def test_record_output_tracks_window(mock_time: Callable[[], float]) -> None:
-    monitor = OutputMonitor(internal_bus=None, talkative_threshold=5, time_provider=mock_time)  # type: ignore[arg-type]
+    monitor = OutputTracker(internal_bus=None, talkative_threshold=5, time_provider=mock_time)  # type: ignore[arg-type]
     for _ in range(6):
         monitor.record_output()
     assert monitor.output_count_5min == 6
 
 
 def test_frequency_exceeded_flag(mock_time: Callable[[], float]) -> None:
-    monitor = OutputMonitor(internal_bus=None, max_per_5min=3, talkative_threshold=10, time_provider=mock_time)  # type: ignore[arg-type]
+    monitor = OutputTracker(internal_bus=None, max_per_5min=3, talkative_threshold=10, time_provider=mock_time)  # type: ignore[arg-type]
     assert "frequency_exceeded" not in monitor.record_output()
     assert "frequency_exceeded" not in monitor.record_output()
     assert "frequency_exceeded" in monitor.record_output()
 
 
 def test_talkative_flag(mock_time: Callable[[], float]) -> None:
-    monitor = OutputMonitor(internal_bus=None, talkative_threshold=3, time_provider=mock_time)  # type: ignore[arg-type]
+    monitor = OutputTracker(internal_bus=None, talkative_threshold=3, time_provider=mock_time)  # type: ignore[arg-type]
     assert "talkative" not in monitor.record_output()
     assert "talkative" not in monitor.record_output()
     flags = monitor.record_output()
@@ -43,7 +43,7 @@ def test_talkative_flag(mock_time: Callable[[], float]) -> None:
 
 
 def test_talkative_degree(mock_time: Callable[[], float]) -> None:
-    monitor = OutputMonitor(internal_bus=None, talkative_threshold=3, time_provider=mock_time)  # type: ignore[arg-type]
+    monitor = OutputTracker(internal_bus=None, talkative_threshold=3, time_provider=mock_time)  # type: ignore[arg-type]
     assert monitor.talkative_degree == 0
     monitor.record_output()
     assert monitor.talkative_degree == 0
@@ -61,7 +61,7 @@ def test_talkative_degree(mock_time: Callable[[], float]) -> None:
 
 
 def test_record_user_input_resets_talkative(mock_time: Callable[[], float]) -> None:
-    monitor = OutputMonitor(internal_bus=None, talkative_threshold=3, time_provider=mock_time)  # type: ignore[arg-type]
+    monitor = OutputTracker(internal_bus=None, talkative_threshold=3, time_provider=mock_time)  # type: ignore[arg-type]
     monitor.record_output()
     monitor.record_output()
     flags = monitor.record_output()
@@ -77,7 +77,7 @@ def test_record_user_input_resets_talkative(mock_time: Callable[[], float]) -> N
 
 
 def test_reset(mock_time: Callable[[], float]) -> None:
-    monitor = OutputMonitor(internal_bus=None, talkative_threshold=2, time_provider=mock_time)  # type: ignore[arg-type]
+    monitor = OutputTracker(internal_bus=None, talkative_threshold=2, time_provider=mock_time)  # type: ignore[arg-type]
     monitor.record_output()
     monitor.record_output()
     assert monitor.alert_count > 0 or monitor.talkative_degree > 0

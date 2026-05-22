@@ -4,8 +4,8 @@ import time
 from unittest.mock import MagicMock
 
 from iris.agency.bus import InternalBus
-from iris.agency.execution.consolidator import Consolidator
-from iris.agency.execution.manager import ExecutionManager
+from iris.agency.execution.executor import FlowExecutor
+from iris.agency.execution.regulation.consolidator import Consolidator
 from iris.event.event_bus import EventBus
 from iris.event.event_types import TimerTick
 from iris.kernel.config import Config, ProactiveConfig
@@ -27,7 +27,7 @@ def test_execution_manager_idle_reflection_triggers() -> None:
         hippocampal=hippocampal,
         config=config,
     )
-    manager = ExecutionManager(
+    manager = FlowExecutor(
         internal_bus=internal_bus,
         event_bus=event_bus,
         llm_pipeline=llm_pipeline,
@@ -52,13 +52,13 @@ def test_execution_manager_idle_reflection_triggers() -> None:
     assert manager._consolidator._msg_count_since_reflect == 0
 
 
-def test_execution_manager_idle_reflection_no_trigger_if_zero_count() -> None:
-    internal_bus = MagicMock(spec=InternalBus)
+def test_execution_manager_idle_reflection_no_trigger_if_zero_count():
+    internal_bus = MagicMock()
     event_bus = EventBus()
     llm_pipeline = MagicMock()
     hippocampal = MagicMock()
 
-    config = MagicMock(spec=Config)
+    config = MagicMock()
     proactive = ProactiveConfig(idle_reflection_timeout_sec=2.0)
     config.proactive = proactive
 
@@ -68,7 +68,7 @@ def test_execution_manager_idle_reflection_no_trigger_if_zero_count() -> None:
         hippocampal=hippocampal,
         config=config,
     )
-    manager = ExecutionManager(
+    manager = FlowExecutor(
         internal_bus=internal_bus,
         event_bus=event_bus,
         llm_pipeline=llm_pipeline,
@@ -100,7 +100,7 @@ def test_execution_manager_idle_reflection_no_trigger_if_not_timeout() -> None:
         hippocampal=hippocampal,
         config=config,
     )
-    manager = ExecutionManager(
+    manager = FlowExecutor(
         internal_bus=internal_bus,
         event_bus=event_bus,
         llm_pipeline=llm_pipeline,

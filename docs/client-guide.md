@@ -214,7 +214,7 @@ flowchart LR
     MEM -->|InputReady| EB
     EB -->|InputReady| PL["PlanningManager"]
     PL -->|PlanDecided| IB["InternalBus"]
-    IB --> EX["ExecutionManager"]
+    IB --> EX["FlowExecutor"]
     EX --> LLM["LLM"]
     EX -->|OutputRequest| EB
     EB -->|OutputRequest| IO

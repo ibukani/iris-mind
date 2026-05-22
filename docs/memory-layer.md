@@ -96,7 +96,7 @@ class ShortTermMemoryManager:
 ```
 
 **add_turn のタイミング**:
-- `ExecutionManager._execute_general()` Plan決定後、LLM呼出直前に `add_turn("user", content)`
+- `FlowExecutor._execute_general()` Plan決定後、LLM呼出直前に `add_turn("user", content)`
 - LLM応答受信直後に `add_turn("assistant", response_text)`
 - Planning段階では short_term に最新ターンは存在しない（Planの `content` フィールド経由でアクセスする）
 
@@ -196,7 +196,7 @@ SemanticStore が内部で VectorStore を利用する。
 ```python
 class HippocampalManager:
     """Reflexion のスケジューリングと結果の永続化。
-    ExecutionManager 発話後カウンタに応じて quick_reflect を実行。
+    FlowExecutor 発話後カウンタに応じて quick_reflect を実行。
     ShortTermMemory の consolidation も担当。
     自律調査結果の自己納得度評価 (process_proactive_result) も行う。"""
     def maybe_run(self, messages: list[dict], counter: int) -> int
@@ -233,15 +233,15 @@ sequenceDiagram
         MGR->>EB: TimerTick → InputReady(content)
         MGR->>EB: publish InputReady
 
-        Note over EB,STM: PlanningManager が Plan 決定後に ExecutionManager が add_turn
-        EB-->>MGR: (ExecutionManager) short_term.add_turn("user", content)
+        Note over EB,STM: PlanningManager が Plan 決定後に FlowExecutor が add_turn
+        EB-->>MGR: (FlowExecutor) short_term.add_turn("user", content)
     else 自発発話トリガー
         EB-->>MGR: TimerTick（pending なし）
         MGR->>EB: publish InputReady(from_timer=True)
     end
 
     Note over STM,LTM: 応答後
-    MGR->>STM: (ExecutionManager) short_term.add_turn("assistant", response)
+    MGR->>STM: (FlowExecutor) short_term.add_turn("assistant", response)
     MGR->>LTM: Hippocampal consolidation（必要時）
 ```
 
@@ -253,5 +253,5 @@ sequenceDiagram
 | `TimerTick` | `_on_timer_tick` | pending pop → InputReady または proactive InputReady |
 
 MemoryManager は **Completed イベントを購読しない**。
-Reflexion は ExecutionManager が応答後に直接 HippocampalManager.maybe_run() を呼ぶ。
+Reflexion は FlowExecutor が応答後に直接 HippocampalManager.maybe_run() を呼ぶ。
 ContextWindow 圧縮は LLMContextWindowManager（iris/llm/context_window.py）が担当する。

@@ -1,43 +1,43 @@
-# 実行パイプライン: ExecutionManager + LLMPipeline
+# 実行パイプライン: FlowExecutor + LLMGateway
 
 ```mermaid
 sequenceDiagram
     participant IB as InternalBus
-    participant EM as ExecutionManager
-    participant INH as InhibitionController
-    participant PL as LLMPipeline
+    participant FE as FlowExecutor
+    participant ORCH as ExecutionOrchestrator
+    participant LG as LLMGateway
     participant LLM as LLM Provider
-    participant TE as ToolExecutor
-    participant PP as PostProcessor
+    participant TE as ToolEngine
+    participant CON as Consolidator
     participant EB as EventBus
 
-    IB->>EM: PlanDecided
-    EM->>INH: set_generating(True)
-    EM->>PL: generate(plan, messages)
+    IB->>FE: PlanDecided
+    FE->>ORCH: ainvoke(state)
+
+    ORCH->>ORCH: SetupNode
+    ORCH->>LG: LLMCallNode.chat(messages, tools)
 
     alt tools_allowed
-        PL->>PL: IrisExecutionWorkflow
         loop 最大3回
-            PL->>LLM: generate_step
-            LLM-->>PL: tool_calls or content
+            LG->>LLM: chat()
+            LLM-->>LG: tool_calls or content
             alt tool_callsあり
-                PL->>TE: execute_tools_step
-                TE-->>PL: 結果追加
+                LG->>TE: ToolRunNode.run_tool_calls()
+                TE-->>LG: 結果追加
             else tool_callsなし
-                PL-->>EM: StopEvent
+                LG-->>ORCH: response_text
             end
         end
     else no tools
-        PL->>LLM: chat (short, no streaming)
-        LLM-->>PL: response text
+        LG->>LLM: chat_short (tool-less)
+        LLM-->>LG: response text
     end
 
-    PL-->>EM: response_text
-    EM->>INH: set_generating(False)
-    EM->>EB: MessageEvent (response)
-    EM->>PP: trigger_post_processes
-    PP->>PP: reflexion (必要時)
-    PP->>PP: compression (必要時)
+    ORCH->>ORCH: FinalizeNode
+    ORCH->>EB: MessageEvent (response)
+    ORCH->>CON: PostProcessNode
+    CON->>CON: reflexion (必要時)
+    CON->>CON: compression (必要時)
 ```
 
 ### InputReady による割込
@@ -46,7 +46,7 @@ sequenceDiagram
 
 ### Talkative オーバーライド
 
-OutputMonitor が検出した talkative_degree に応じて計画属性を上書き:
+OutputTracker が検出した talkative_degree に応じて計画属性を上書き:
 
 | degree | オーバーライド |
 |--------|---------------|
@@ -77,34 +77,34 @@ if content が空 かつ (talkative >= 2 or (frequency_exceeded and talkative >=
 ### 実行フロー
 
 ```
-_on_plan(PlanDecided)
-├── _update_inhibition_state()    ← monitor 状態を inhibition に反映
-├── _apply_emotion_to_monitor()   ← emotion を monitor に設定
-├── _apply_talkative_overrides()  ← talkative 度に応じて上書き
-├── _should_skip_proactive()?     ← talkative 抑制
-├── _execute_general(plan)
-│   ├── silent mode 設定
-│   ├── _prepare_execution_context()
+FlowExecutor._on_plan(PlanDecided)
+├── apply_talkative_overrides()    ← talkative 度に応じて上書き
+├── should_skip_proactive()?       ← talkative 抑制
+├── ExecutionOrchestrator.ainvoke(state)
+│   ├── SetupNode
+│   │   ├── silent/streaming設定
 │   │   ├── messages.append(plan.content)
 │   │   ├── short_term.add_turn()
 │   │   └── show_thinking → MessageEvent(THINKING)
-│   ├── _run_llm_generation()
-│   │   ├── inhibition.set_generating(True)
-│   │   ├── pipeline.generate()
-│   │   └── inhibition.set_generating(False)
-│   ├── _finalize_execution()
+│   ├── LLMCallNode
+│   │   ├── chat_short() (ツール無効時)
+│   │   └── chat() + ツールループ (ツール有効時)
+│   ├── ToolRunNode (ループ内)
+│   │   └── ToolEngine.run_tool_calls()
+│   ├── FinalizeNode
 │   │   ├── 応答を messages に追加
 │   │   ├── short_term.add_turn()
-│   │   ├── ストリーミング中 → MessageEvent(stream)
-│   │   └── MessageEvent(response)
-│   └── post_process (silent 以外)
+│   │   ├── ストリーミング → MessageEvent(stream)
+│   │   ├── MessageEvent(response)
+│   │   └── OutputTracker / FeedbackCoordinator 記録
+│   └── PostProcessNode (silent 以外)
 │       ├── reflexion (run_reflexion=True)
 │       └── compression (run_compression=True)
 ```
 
-## LLMPipeline
+## LLMGateway
 
-LLM 呼出とツール実行のパイプライン。
+LLM 呼出とツール実行のゲートウェイ。
 
 ### SystemPromptBuilder
 
@@ -132,17 +132,18 @@ response = await llm.chat(messages, max_tokens=80 or plan.max_tokens, temperatur
 
 #### ツールあり生成 (通常応答と silent 内省)
 
-Workflow を使用:
+LangGraph 状態マシンを使用:
 
 ```
-generate_step → (tool_calls あり) → execute_tools_step → generate_step (循環)
-             → (tool_calls なし) → StopEvent (終了)
+START → SetupNode → LLMCallNode
+  ├─(tool_calls)→ ToolRunNode → LLMCallNode (循環)
+  └─(no tools) → FinalizeNode → PostProcessNode (optional) → END
 ```
 
 - 最大3回のツールイテレーションで打ち切り（`max_tool_iterations=3`）
-- 各イテレーションで tool_calls があれば ToolExecutionEngine で実行
-- 結果を履歴に追加して次の generate_step へ
-- LlamaIndex Workflow でステートマシンとして実装
+- 各イテレーションで tool_calls があれば ToolEngine.run_tool_calls() で実行
+- 結果を履歴に追加して次の LLMCallNode へ
+- LangGraph StateGraph で状態マシンとして実装
 - side_effect=True のツールは結果を会話に戻さない
 
 ### LLM 呼出パラメータ
@@ -155,7 +156,7 @@ generate_step → (tool_calls あり) → execute_tools_step → generate_step (
 | tools | ToolRegistry.list_tools() |
 | on_token | streaming 時のみ設定 |
 
-## OutputMonitor
+## OutputTracker
 
 出力頻度を監視し、talkative_degree を算出する。
 
@@ -172,17 +173,18 @@ generate_step → (tool_calls あり) → execute_tools_step → generate_step (
 | talkative | 出力頻度が高い |
 | frequency_exceeded | 1入力あたりの許容出力数超過 |
 
-## PostProcessor
+## Consolidator
 
-実行後の後処理を管理:
+実行後の後処理（Reflexion / ContextWindow圧縮）を管理:
 
 ```python
-trigger_post_processes(plan, run_reflexion, run_compression):
+Consolidator.run(plan, run_reflexion, run_compression):
     if run_reflexion:
         hippocampal.maybe_run(messages, msg_count_since_reflect)
     if run_compression:
-        context_window.compact(messages)
+        context_window.check_and_summarize(messages)
 ```
 
 - `flush_memory()`: 長期記憶への保存
 - `compact_context()`: 会話履歴の圧縮（ContextWindowManager）
+- `_on_timer_tick()`: idle反射チェック

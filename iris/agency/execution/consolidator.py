@@ -6,7 +6,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 
-from iris.agency.execution.inhibition import InhibitionController
+from iris.agency.inhibition import InhibitionController
 from iris.event.event_bus import EventBus
 from iris.event.event_types import ProactiveResultEvent, TimerTick
 
@@ -22,7 +22,7 @@ def _run_in_background(target: Callable[[], None], *, name: str = "bg-task") -> 
     threading.Thread(target=target, daemon=True, name=name).start()
 
 
-class PostProcessor:
+class Consolidator:
     def __init__(
         self,
         event_bus: EventBus,
@@ -125,7 +125,7 @@ class PostProcessor:
             return
 
         logger.info(
-            "PostProcessor: idle reflection triggered. elapsed=%.1fs >= timeout=%.1fs, msg_count=%d",
+            "Consolidator: idle reflection triggered. elapsed=%.1fs >= timeout=%.1fs, msg_count=%d",
             elapsed,
             timeout,
             self._msg_count_since_reflect,

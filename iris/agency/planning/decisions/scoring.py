@@ -215,5 +215,4 @@ class ProactiveScoring:
     def _compute_drive_score(limbic_drive: DriveState | None) -> float:
         if not limbic_drive:
             return 0.0
-        # 好奇心、社会的欲求、自己保全の最大値をスコアとする
         return max(limbic_drive.curiosity, limbic_drive.social_need, limbic_drive.maintenance)

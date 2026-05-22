@@ -272,12 +272,12 @@ sequenceDiagram
 
 ## 既存層との統合
 
-### LimbicManager → Agency（InhibitionController）
+### LimbicManager → inhibition（InhibitionController）
 
 `InhibitionController.apply_limbic_modulation()` が感情状態から抑制変調を計算する:
 
 ```python
-# agency/execution/inhibition.py
+# agency/inhibition/controller.py
 class InhibitionController:
     def apply_limbic_modulation(self, emotion: EmotionState) -> None
         # valence < -0.3 → negative_mood_score 増加（抑制）
@@ -310,7 +310,7 @@ EpisodicStore のエントリ形式に `emotion` フィールドを追加:
 ProactiveScoring の mood 因子を LimbicManager の感情状態から算出:
 
 ```python
-# agency/planning/scoring.py 内での利用イメージ
+# agency/planning/decisions/scoring.py 内での利用イメージ
 def _compute_mood_score(self, limbic: LimbicManager | None) -> float:
     if not limbic:
         return 1.0

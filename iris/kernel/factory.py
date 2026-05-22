@@ -4,15 +4,15 @@ from dataclasses import dataclass
 import logging
 
 from iris.agency.bus import InternalBus
-from iris.agency.execution.inhibition import InhibitionController
+from iris.agency.execution.consolidator import Consolidator
+from iris.agency.execution.generation.pipeline import LLMPipeline
+from iris.agency.execution.generation.tool_executor import ToolExecutionEngine
 from iris.agency.execution.manager import ExecutionManager
-from iris.agency.execution.monitor import OutputMonitor
-from iris.agency.execution.pipeline import LLMPipeline
-from iris.agency.execution.post_processor import PostProcessor
-from iris.agency.execution.tool_executor import ToolExecutionEngine
+from iris.agency.execution.regulation.monitor import OutputMonitor
+from iris.agency.inhibition import InhibitionController
 from iris.agency.manager import AgencyManager
+from iris.agency.planning.decisions import ProactiveScoring
 from iris.agency.planning.manager import PlanningManager
-from iris.agency.planning.scoring import ProactiveScoring
 from iris.event.event_bus import EventBus
 from iris.event.tracer import EventTracer
 from iris.io.manager import IOManager
@@ -310,7 +310,7 @@ class KernelFactory:
         cmd_handler = CommandHandler(
             config=config,
             on_shutdown=_on_shutdown,
-            on_compact=ctx.agency.compact_context if ctx.agency else _noop_compact,
+            on_compact=ctx.agency.execution.compact_context if ctx.agency else _noop_compact,
             memory=memory_mgr,
             limbic=limbic,
             session_mgr=session_mgr,
@@ -394,7 +394,7 @@ class KernelFactory:
             tokenizers=tokenizers,
             default_model_name=config.model.get_model("default"),
         )
-        post_processor = PostProcessor(
+        consolidator = Consolidator(
             event_bus=event_bus,
             messages_getter=lambda: execution._messages,
             hippocampal=hippocampal,
@@ -408,7 +408,7 @@ class KernelFactory:
             internal_bus=internal_bus,
             event_bus=event_bus,
             llm_pipeline=pipeline,
-            post_processor=post_processor,
+            consolidator=consolidator,
             monitor=monitor,
             inhibition=inhibition,
             session_roles_getter=session_mgr.get_sessions_summary,

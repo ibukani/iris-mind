@@ -1,6 +1,6 @@
 import time
 
-from iris.agency.execution.inhibition import InhibitionController
+from iris.agency.inhibition import InhibitionController
 
 
 def test_inhibition_topic_cooldown():

@@ -102,38 +102,13 @@ class Supervisor:
         parts = line[1:].strip().split(maxsplit=1)
         name = parts[0].lower() if parts else ""
         args = parts[1] if len(parts) > 1 else ""
-        if name == "shutdown":
-            self._cmd_shutdown()
-            return True
-        if name == "status":
-            self._cmd_status()
-        elif name == "help":
-            self._cmd_help()
-        elif self._cmd_handler is not None:
+        if self._cmd_handler is not None:
             print(self._cmd_handler(name, args))
+            if name == "shutdown":
+                return True
         else:
             print(f"Unknown command: /{name}")
         return False
-
-    def _cmd_help(self) -> None:
-        print("Available commands:")
-        print("  /help               Show this help")
-        print("  /status             Show kernel status")
-        print("  /shutdown           Graceful shutdown")
-        print("  exit, quit          Stop supervisor")
-        print()
-        print("See /help for full kernel command set (debug, memory, emotion, etc.)")
-
-    def _cmd_status(self) -> None:
-        if self._kernel is None:
-            print("Kernel: not started")
-            return
-        state = "running" if not self._kernel.shutdown_requested else "shutdown requested"
-        print(f"Kernel: {state}")
-
-    def _cmd_shutdown(self) -> None:
-        self._shutdown_requested = True
-        self.shutdown()
 
     def _on_signal(self, sig: int, _frame: object) -> None:
         if self._shutdown_requested:

@@ -5,7 +5,7 @@ from typing import Any
 
 from llama_index.core.workflow import Event, StartEvent, StopEvent, Workflow, step
 
-from iris.agency.execution.tool_executor import ToolExecutionEngine
+from iris.agency.execution.generation.tool_executor import ToolExecutionEngine
 from iris.kernel.config import ModelConfig
 from iris.llm.interrupt_token import InterruptToken
 from iris.llm.llm_bridge import LLMBridge
@@ -64,7 +64,6 @@ class IrisExecutionWorkflow(Workflow):
             logger.debug("Workflow interrupted in generate_step.")
             return StopEvent(result="")
 
-        # Retrieve attributes depending on event type
         if isinstance(ev, StartEvent):
             messages = ev.get("messages", [])
             model_role = ev.get("model_role", "default")

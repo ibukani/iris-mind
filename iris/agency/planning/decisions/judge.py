@@ -31,7 +31,7 @@ class ProactiveJudge:
         self._limbic = limbic
         self._context_builder = context_builder
 
-    def evaluate(
+    def decide(
         self,
         event: InputReady,
         context: dict[str, Any],

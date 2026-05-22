@@ -75,12 +75,12 @@ class PlanningManager:
         limbic_drive = self._limbic.current_drive() if self._limbic else None
         gate = self._inhibition.evaluate(time.time())
 
-        if context.get("from_timer") or "system_event" in context or context.get("escalation"):
-            self._handle_proactive_event(event, context, gate, limbic_mood, limbic_drive)
+        if self._is_proactive_event(context):
+            self._exec_proactive(event, context, gate, limbic_mood, limbic_drive)
             return
 
         self._inhibition.notify_user_activity()
-        plan = self._response_strategy.build(event.content, gate, limbic_mood)
+        plan = self._response_strategy.build_response(event.content, gate, limbic_mood)
         plan["session_id"] = event.session_id
         logger.info(
             "PlanningManager: plan published session=%s from_timer=%s",
@@ -96,7 +96,11 @@ class PlanningManager:
         self._inhibition.apply_limbic_modulation(emotion)
         return emotion
 
-    def _handle_proactive_event(
+    @staticmethod
+    def _is_proactive_event(context: dict) -> bool:
+        return bool(context.get("from_timer") or "system_event" in context or context.get("escalation"))
+
+    def _exec_proactive(
         self,
         event: InputReady,
         context: dict,
@@ -104,11 +108,11 @@ class PlanningManager:
         limbic_mood: EmotionState | None,
         limbic_drive: DriveState | None = None,
     ) -> None:
-        proactive_context = self._proactive_judge.evaluate(event, context, gate, limbic_mood, limbic_drive)
+        proactive_context = self._proactive_judge.decide(event, context, gate, limbic_mood, limbic_drive)
         if proactive_context is None:
             return
 
-        plan = self._proactive_strategy.build(proactive_context, gate, limbic_mood)
+        plan = self._proactive_strategy.build_proactive(proactive_context, gate, limbic_mood)
         plan["session_id"] = event.session_id
         logger.info(
             "PlanningManager: plan published session=%s from_timer=%s",

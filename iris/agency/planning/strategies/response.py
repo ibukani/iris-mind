@@ -20,7 +20,9 @@ class ResponsePlanStrategy:
         self._cfg = config
         self._context_builder = context_builder
 
-    def build(self, content: str, gate: GateVerdict, limbic_mood: EmotionState | None = None) -> dict[str, Any]:
+    def build_response(
+        self, content: str, gate: GateVerdict, limbic_mood: EmotionState | None = None
+    ) -> dict[str, Any]:
         abbreviated = gate.suppressed or gate.score < self._cfg.abbreviated_threshold
         context_hint = self._context_builder.build_user_context_hint(content)
         logger.debug(

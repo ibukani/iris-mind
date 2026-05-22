@@ -23,7 +23,7 @@ class ProactivePlanStrategy:
         self._persona_profile = persona_profile
         self._question_gen = question_gen
 
-    def build(
+    def build_proactive(
         self, context: dict[str, Any], gate: GateVerdict, limbic_mood: EmotionState | None = None
     ) -> dict[str, Any]:
         plan: dict[str, Any] = {

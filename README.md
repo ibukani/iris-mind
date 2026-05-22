@@ -126,10 +126,15 @@ flowchart TD
     subgraph Memory["memory/ 感覚野+海馬+皮質"]
         MM["MemoryManager<br/>記憶オーケストレーション"]
         SEN["sensory/ 感覚バッファ"]
-        EP["episodic/ エピソード記憶"]
-        SEM["semantic/ 意味記憶"]
+        STM["short_term/ ワーキングメモリ"]
+        LTM["long_term/ 長期記憶<br/>stores + VectorStore"]
         HIP["hippocampal/ Reflexion"]
-        PER["personality/ 人格"]
+    end
+    subgraph Limbic["limbic/ 大脳辺縁系"]
+        LM["LimbicManager<br/>感情評価・制御"]
+        AMY["Amygdala<br/>扁桃体"]
+        ACC["ACC<br/>前帯状皮質"]
+        BF["BigFive<br/>性格特性"]
     end
     subgraph Agency["agency/ 前頭前野+基底核+運動野"]
         IB["Internal Bus"]
@@ -150,6 +155,7 @@ flowchart TD
     CLI <-->|gRPC 127.0.0.1:9876| IO
     EB --- IO
     EB --- Memory
+    EB --- Limbic
     EB --- Agency
     EB --- Kernel
     EB --- LLM
@@ -160,7 +166,8 @@ flowchart TD
 - **Supervisor** — Kernel プロセスの起動・監視・管理コンソール（`main.py`）
 - **Kernel 層** — 脳幹+視床下部。プロセス管理、DIコンテナ、スラッシュコマンド。TimerTick(5秒) 発行
 - **IO 層** — 視床。gRPC入出力、セッション管理
-- **Memory 層** — 感覚野+海馬+皮質。断片的入力の統合、エピソード/意味記憶、Reflexion、人格
+- **Memory 層** — 感覚野+海馬+皮質。感覚バッファ、短期/長期記憶、Reflexion
+- **Limbic 層** — 大脳辺縁系。PAD感情評価・制御（扁桃体/ACC）、BigFive性格管理
 - **Agency 層** — 前頭前野+基底核+運動野。PFC評価（ProactiveScoring）、意思決定、基底核抑制、行動実行
 - **LLM 層** — 言語処理基盤。LLM接続、ContextWindow圧縮
 - **Event 層** — 神経路。全層を疎結合するグローバルEventBus

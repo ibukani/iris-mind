@@ -35,12 +35,14 @@
 ```python
 @dataclass
 class EmotionState:
-    valence: float      # -1.0 (不快) 〜 1.0 (快)
-    arousal: float      # 0.0 (鎮静) 〜 1.0 (興奮)
-    dominance: float    # 0.0 (無力) 〜 1.0 (支配)
+    valence: float = 0.0       # -1.0 (不快) 〜 1.0 (快)
+    arousal: float = 0.0       # 0.0 (鎮静) 〜 1.0 (興奮)
+    dominance: float = 0.5     # 0.0 (無力) 〜 1.0 (支配)
+    updated_at: float          # 最終更新時刻（field(default_factory=time.time)）
 
-    # 内部変数（減衰用）
-    updated_at: float   # 最終更新時刻
+    def decay(self, dt: float | None = None) -> None  # 指数減衰
+    def apply(self, delta: EmotionDelta, intensity: float = 1.0) -> None
+    def to_dict(self) -> dict[str, float]
 ```
 
 ### 基本感情へのマッピング
@@ -57,6 +59,41 @@ PAD 座標は以下の基本感情に大別できる:
 | 信頼 | +0.7 | -0.1 | +0.4 |
 | 期待 | +0.4 | +0.6 | +0.2 |
 | 平静 | +0.3 | -0.6 | +0.1 |
+
+### 基本感情辞書 (BASIC_EMOTIONS)
+
+`EmotionDelta` のプリセットとして `iris/limbic/models.py` に定義:
+
+| 感情 | Valence | Arousal | Dominance |
+|------|---------|---------|-----------|
+| joy | +0.8 | +0.6 | +0.5 |
+| sadness | -0.7 | -0.4 | -0.3 |
+| anger | -0.5 | +0.8 | +0.7 |
+| fear | -0.6 | +0.7 | -0.6 |
+| surprise | 0.0 | +0.8 | -0.2 |
+| trust | +0.7 | -0.1 | +0.4 |
+| anticipation | +0.4 | +0.6 | +0.2 |
+| calmness | +0.3 | -0.6 | +0.1 |
+
+### DriveState（動機づけモデル）
+
+PSI理論に基づく欲求（動機）モデル。時間経過で自然蓄積し、行動で解消される。
+
+```python
+@dataclass
+class DriveState:
+    curiosity: float      # 情報探索欲求（検索等で低下）
+    social_need: float    # 対話欲求（発話で低下）
+    maintenance: float    # 記憶整理欲求（Reflexionで低下）
+    updated_at: float
+
+    def accumulate(self, dt: float | None = None) -> None   # 時間蓄積
+    def satisfy(self, need_type: str, amount: float) -> None # 行動充足
+    def get_dominant_needs(self) -> list[tuple[str, float]]  # 欲求順位
+```
+
+`LimbicManager` は `DriveState` を保持し、`apply_limbic_modulation()` 経由で
+`InhibitionController` にムード変調を適用する。`PlanningManager` の自発発話スコアリングにも利用される。
 
 ### 減衰モデル (Decay)
 
@@ -104,6 +141,19 @@ class LimbicManager:
         """入力受信時の感情評価。"""
         emotion = self.amygdala.evaluate(event.content)
         self._emotion = self.acc.regulate(emotion, self._emotion, self._big_five)
+```
+
+### EmotionDelta
+
+```python
+@dataclass
+class EmotionDelta:
+    """扁桃体が出力する感情変化量。"""
+    valence: float = 0.0
+    arousal: float = 0.0
+    dominance: float = 0.0
+
+    def scale(self, factor: float) -> EmotionDelta
 ```
 
 ### Amygdala
@@ -224,16 +274,16 @@ sequenceDiagram
 
 ### LimbicManager → Agency（InhibitionController）
 
-`limbic/acc.py` が基底核の抑制制御を感情で変調する:
+`InhibitionController.apply_limbic_modulation()` が感情状態から抑制変調を計算する:
 
 ```python
-# agency/execution/inhibition.py 内での利用イメージ
+# agency/execution/inhibition.py
 class InhibitionController:
-    def evaluate(self, now: float, limbic: LimbicManager | None) -> GateVerdict:
-        if limbic:
-            emotion = limbic.current_emotion()
-            self.apply_limbic_modulation(emotion)
-        ...
+    def apply_limbic_modulation(self, emotion: EmotionState) -> None
+        # valence < -0.3 → negative_mood_score 増加（抑制）
+        # arousal > 0.6  → negative_mood_score 減少（活性）
+        # dominance < 0.3 → negative_mood_score 増加（抑制）
+        # → 結果を _state.negative_mood_score に反映
 ```
 
 ### LimbicManager → Personality（システムプロンプト）

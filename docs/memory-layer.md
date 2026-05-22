@@ -155,6 +155,25 @@ class PersonaData:
 
 ```
 
+### goal_store.py — 長期目標管理
+
+```python
+class LongTermGoal(BaseModel):
+    """エージェントの持続的な目標。
+    description + weight (0.0~1.0) + タイムスタンプ。decay() で減衰可能。"""
+
+class GoalStore:
+    """LongTermGoal をインメモリ管理。永続化は MemoryManager 経由で定期的にダンプ/ロード。
+    目標は時間経過や Reflexion で weight が減衰し、閾値未満で忘却される。"""
+    def add_goal(self, description: str, weight: float = 1.0) -> str
+    def remove_goal(self, goal_id: str) -> bool
+    def get_goals(self) -> list[LongTermGoal]
+    def get_active_goals(self, threshold: float = 0.3) -> list[LongTermGoal]
+    def decay_goals(self, decay_rate: float, remove_threshold: float = 0.1) -> None
+    def save(self, filepath: str) -> None
+    def load(self, filepath: str) -> None
+```
+
 ### long_term/vector_store.py — ベクトル検索
 
 ```python

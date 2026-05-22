@@ -12,6 +12,7 @@ _DEFAULT_PATH = ".iris/data/persona_data.json"
 _PERSONA_CATEGORIES = {
     "speech_quirks": "speech_quirks",
     "state_traits": "state_traits",
+    "interests": "interests",
 }
 
 # 後方互換: 旧フィールド名のマッピング
@@ -48,10 +49,11 @@ class PersonaData:
                 return {
                     "speech_quirks": raw.get("speech_quirks", []),
                     "state_traits": raw.get("state_traits", []),
+                    "interests": raw.get("interests", []),
                 }
             except (json.JSONDecodeError, Exception):
                 pass
-        return {"speech_quirks": [], "state_traits": []}
+        return {"speech_quirks": [], "state_traits": [], "interests": []}
 
     def _resolve_category(self, category: str) -> str | None:
         category = _LEGACY_FIELD_MAP.get(category, category)
@@ -119,5 +121,45 @@ class PersonaData:
         )
 
     def clear(self) -> None:
-        self._data = {"speech_quirks": [], "state_traits": []}
+        self._data = {"speech_quirks": [], "state_traits": [], "interests": []}
         self._save()
+
+    def add_interest(self, topic: str, weight_delta: float) -> None:
+        """興味トピックを追加または加重する。"""
+        interests = self._data.setdefault("interests", [])
+        now = datetime.now().isoformat(timespec="minutes")
+        normalized_topic = topic.strip()
+
+        for item in interests:
+            if item["topic"].lower() == normalized_topic.lower():
+                item["weight"] = max(0.0, min(1.0, item["weight"] + weight_delta))
+                item["updated_at"] = now
+                self._save()
+                return
+
+        # 新規追加
+        interests.append({"topic": normalized_topic, "weight": max(0.0, min(1.0, weight_delta)), "updated_at": now})
+        interests.sort(key=lambda x: x["weight"], reverse=True)
+        # 上限数制限（上位10件まで）
+        self._data["interests"] = interests[:10]
+        self._save()
+
+    def decay_interests(self, decay_rate: float = 0.05) -> None:
+        """すべての興味の重みを自然減衰させ、閾値以下のものを削除する。"""
+        interests = self._data.get("interests", [])
+        if not interests:
+            return
+
+        remaining = []
+        for item in interests:
+            new_weight = item["weight"] - decay_rate
+            if new_weight > 0.1:
+                item["weight"] = round(new_weight, 3)
+                remaining.append(item)
+
+        self._data["interests"] = remaining
+        self._save()
+
+    def get_interests(self) -> list[dict]:
+        """現在の興味リストを取得する。"""
+        return self._data.get("interests", [])

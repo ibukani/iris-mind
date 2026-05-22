@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from iris.limbic.models import EmotionState
 
 from iris.event.event_types import ClientSessionEvent, InputReady, MessageEvent, TimerTick
+from iris.memory.goal_store import GoalStore
 from iris.memory.long_term.manager import LongTermMemoryManager, LongTermMemoryProtocol
 from iris.memory.long_term.stores import EpisodicStore, SemanticStore
 from iris.memory.long_term.vector_store import VectorStore
@@ -51,6 +52,8 @@ class MemoryManagerProtocol(Protocol):
     def short_term(self) -> ShortTermMemoryProtocol: ...
     @property
     def long_term(self) -> LongTermMemoryProtocol: ...
+    @property
+    def goals(self) -> GoalStore: ...
 
 
 class MemoryManager:
@@ -86,6 +89,7 @@ class MemoryManager:
             semantic=semantic,
             vector_store=vector_store,
         )
+        self.goals: GoalStore = GoalStore()
 
         self._event_bus: EventBus | None = event_bus
         self._proactive_config: ProactiveConfig | None = proactive_config

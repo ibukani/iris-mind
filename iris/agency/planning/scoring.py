@@ -7,7 +7,7 @@ from iris.kernel.config import ProactiveConfig
 from iris.memory.manager import MemoryManager
 
 if TYPE_CHECKING:
-    from iris.limbic.models import EmotionState
+    from iris.limbic.models import DriveState, EmotionState
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +36,7 @@ class ProactiveScoring:
         last_user_activity: float,
         negative_mood_score: float,
         limbic_mood: EmotionState | None = None,
+        limbic_drive: DriveState | None = None,
         content: str = "",
         context: dict[str, Any] | None = None,
         ignore_count: int = 0,
@@ -45,6 +46,7 @@ class ProactiveScoring:
         memory_score = self._compute_memory_score()
         context_score = self._compute_context_score()
         mood_score = self._compute_mood_score(negative_mood_score, limbic_mood)
+        drive_score = self._compute_drive_score(limbic_drive)
         sensory_score = self._compute_sensory_score()
         stm_score = self._compute_short_term_score()
         urgency_score = self._compute_content_urgency(content)
@@ -64,6 +66,7 @@ class ProactiveScoring:
             + w.get("memory", 0.45) * memory_score
             + w.get("context", 0.15) * context_score
             + mood_weight * mood_score
+            + w.get("drive", 0.20) * drive_score
         )
         if sensory_score > 0:
             total = max(total, sensory_score * 0.3)
@@ -97,6 +100,7 @@ class ProactiveScoring:
             "memory": memory_score,
             "context": context_score,
             "mood": mood_score,
+            "drive": drive_score,
             "sensory": sensory_score,
             "short_term": stm_score,
             "urgency": urgency_score,
@@ -206,3 +210,10 @@ class ProactiveScoring:
         if negative_mood_score >= 0.7:
             return 0.0
         return max(0.0, 1.0 - negative_mood_score)
+
+    @staticmethod
+    def _compute_drive_score(limbic_drive: DriveState | None) -> float:
+        if not limbic_drive:
+            return 0.0
+        # 好奇心、社会的欲求、自己保全の最大値をスコアとする
+        return max(limbic_drive.curiosity, limbic_drive.social_need, limbic_drive.maintenance)

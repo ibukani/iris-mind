@@ -6,6 +6,7 @@ ollama.Client をラップし、ストリーミング・thinking モード・ツ
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 import contextlib
 import logging
@@ -47,7 +48,7 @@ class OllamaProvider:
         self.client = Client(host=base_url)
         self._chat_lock = threading.Lock()
 
-    def chat(
+    async def chat(
         self,
         messages: list[dict],
         model: str | None = None,
@@ -60,24 +61,28 @@ class OllamaProvider:
         **kwargs: Any,
     ) -> dict:
         """LLM にチャットリクエストを送信する。"""
-        with self._chat_lock:
-            call_kwargs = self._build_chat_kwargs(
-                messages=messages,
-                model=model,
-                enable_thinking=enable_thinking,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                tools=tools,
-                stream=on_token is not None,
-                kwargs=kwargs,
-            )
 
-            if on_token is not None:
-                return self._stream_chat(**call_kwargs, on_token=on_token, interrupt_token=interrupt_token)
+        def _sync_chat() -> dict:
+            with self._chat_lock:
+                call_kwargs = self._build_chat_kwargs(
+                    messages=messages,
+                    model=model,
+                    enable_thinking=enable_thinking,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    tools=tools,
+                    stream=on_token is not None,
+                    kwargs=kwargs,
+                )
 
-            resp = self._chat_with_retries(call_kwargs)
-            resp["message"] = _process_message(resp["message"])
-            return resp
+                if on_token is not None:
+                    return self._stream_chat(**call_kwargs, on_token=on_token, interrupt_token=interrupt_token)
+
+                resp = self._chat_with_retries(call_kwargs)
+                resp["message"] = _process_message(resp["message"])
+                return resp
+
+        return await asyncio.to_thread(_sync_chat)
 
     def _build_chat_kwargs(
         self,

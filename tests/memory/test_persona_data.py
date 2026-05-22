@@ -93,3 +93,39 @@ def test_max_entries_limit() -> None:
     assert "newcomer" not in texts
 
     _clean(data.path)
+
+
+def test_interests_add_and_decay() -> None:
+    data = _make_data()
+    data.add_interest("宇宙の起源", 0.8)
+    interests = data.get_interests()
+    assert len(interests) == 1
+    assert interests[0]["topic"] == "宇宙の起源"
+    assert interests[0]["weight"] == 0.8
+
+    # 重みの増減
+    data.add_interest("宇宙の起源", 0.1)
+    interests = data.get_interests()
+    assert interests[0]["weight"] == 0.9
+
+    # 新規追加でソートされること
+    data.add_interest("量子力学", 0.5)
+    interests = data.get_interests()
+    assert len(interests) == 2
+    assert interests[0]["topic"] == "宇宙の起源"
+    assert interests[1]["topic"] == "量子力学"
+
+    # 自然減衰
+    data.decay_interests(decay_rate=0.1)
+    interests = data.get_interests()
+    assert interests[0]["weight"] == 0.8
+    assert interests[1]["weight"] == 0.4
+
+    # 閾値以下の削除
+    data.decay_interests(decay_rate=0.35)
+    interests = data.get_interests()
+    assert len(interests) == 1
+    assert interests[0]["topic"] == "宇宙の起源"
+    assert interests[0]["weight"] == 0.45
+
+    _clean(data.path)

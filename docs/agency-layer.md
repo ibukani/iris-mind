@@ -51,7 +51,7 @@ sequenceDiagram
         PL->>PL: _inhibition.evaluate(now)
         PL->>PL: notify_user_activity()
         PL->>PL: _build_plan(content, context, gate, limbic_mood)
-    else 自発発話トリガー
+    else 自発発話トリガー（タイマー）
         EB-->>PL: InputReady(content="", from_timer=True)
         PL->>PL: limbic.apply_limbic_modulation()
         PL->>PL: _inhibition.evaluate(now)
@@ -59,8 +59,15 @@ sequenceDiagram
         PL->>PL: ProactiveScoring.compute(content=event.content, ...)
         PL->>PL: threshold? → abort
         PL->>PL: record_proactive_attempt()
+        PL->>PL: 内省調査(silent)の判定 (drive_score > 0.3 かつ context < 0.2)
+        Note over PL: silentの場合、interestsから重み付きサンプリングし、LLMで疑問生成
+        PL->>PL: _build_plan(content="", context, gate, limbic_mood)
+    else 自発発話トリガー（エスカレーション）
+        EB-->>PL: InputReady(content="", context={escalation: True})
+        Note over PL: 納得度の高かった前回の調査要約をもとに、ユーザーへの話しかけ文脈を生成
         PL->>PL: _build_plan(content="", context, gate, limbic_mood)
     end
+
 
     PL->>IB: PlanDecided(plan)
     IB-->>EX: PlanDecided
@@ -87,9 +94,11 @@ class PlanningManager:
     def _on_input_ready(self, event: InputReady) -> None
         # 1. limbic.apply_limbic_modulation(emotion) → 感情変調 (Phase 4)
         # 2. gate = inhibition.evaluate(now)
-        # 3. from_timer → scoring + threshold → abort or plan
-        # 4. !from_timer → notify_user_activity()
-        # 5. _build_plan(content, context, gate, limbic_mood) → PlanDecided
+        # 3. context.escalation → エスカレーション用の話しかけプラン (silent=False) → PlanDecided
+        # 4. from_timer → scoring + threshold → abort or plan (silent判定時は興味サンプリング + 疑問生成)
+        # 5. !from_timer → notify_user_activity()
+        # 6. _build_plan(content, context, gate, limbic_mood) → PlanDecided
+
 ```
 
 ### ProactiveScoring（PFC スコアリング）

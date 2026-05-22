@@ -3,14 +3,17 @@ from __future__ import annotations
 from collections.abc import Callable
 import logging
 import time
-from typing import Any, Protocol, TypedDict, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypedDict, runtime_checkable
+
+if TYPE_CHECKING:
+    from iris.memory.persona_profile import PersonaProfile
 
 from iris.event.event_bus import EventBus
-from iris.event.event_types import DebugSnapshotEvent, MessageEvent, TimerTick
+from iris.event.event_types import DebugSnapshotEvent, MessageEvent, ProactiveResultEvent, TimerTick
 from iris.limbic.acc import AnteriorCingulateCortex
 from iris.limbic.amygdala import Amygdala
 from iris.limbic.emotional_memory import EmotionalMemory
-from iris.limbic.models import EmotionDelta, EmotionState
+from iris.limbic.models import DriveState, EmotionDelta, EmotionState
 
 
 class _MoodEntry(TypedDict):
@@ -95,7 +98,9 @@ class LimbicManager:
         self._acc = acc or AnteriorCingulateCortex()
         self._emotional_memory = emotional_memory or EmotionalMemory()
         self._emotion = EmotionState()
+        self._drive = DriveState()
         self._big_five_provider: BigFiveProvider | None = None
+        self._persona_profile: PersonaProfile | None = None
 
         self._last_decay_time: float = time.time()
 
@@ -103,6 +108,10 @@ class LimbicManager:
             event_bus.subscribe("MessageEvent", self._on_message_event)
             event_bus.subscribe("TimerTick", self._on_timer_tick)
             event_bus.subscribe("MonitorFeedback", self._on_monitor_event)
+            event_bus.subscribe("ProactiveResultEvent", self._on_proactive_result)
+
+    def set_persona_profile(self, persona_profile: PersonaProfile) -> None:
+        self._persona_profile = persona_profile
 
     def _publish_snapshot(self, trigger: str) -> None:
         if self._event_bus is not None:
@@ -111,7 +120,10 @@ class LimbicManager:
                     timestamp=None,
                     source="limbic",
                     category="limbic.emotion",
-                    data=self._emotion.to_dict(),
+                    data={
+                        "emotion": self._emotion.to_dict(),
+                        "drive": self._drive.to_dict(),
+                    },
                     trigger=trigger,
                 )
             )
@@ -133,8 +145,11 @@ class LimbicManager:
         logger.debug("Limbic: input evaluated -> emotion=%s", self._emotion.to_dict())
 
     def _on_timer_tick(self, event: TimerTick) -> None:
+        self._drive.accumulate()
         if event.tick_count % 6 == 0:
             self._decay()
+            if self._persona_profile is not None:
+                self._persona_profile.persona_data.decay_interests()
 
     def _decay(self) -> None:
         now = time.time()
@@ -163,12 +178,32 @@ class LimbicManager:
         self._apply_emotion_change(delta, "monitor_feedback")
         logger.debug("Limbic: monitor feedback applied -> emotion=%s", self._emotion.to_dict())
 
+    def _on_proactive_result(self, event: ProactiveResultEvent) -> None:
+        delta = EmotionDelta()
+        if event.success:
+            # 調査成功: 達成感・満足感
+            delta.valence += 0.2
+            delta.dominance += 0.1
+            delta.arousal -= 0.1
+            self.satisfy_drive("curiosity", 0.3)
+        else:
+            # 調査失敗: フラストレーション
+            delta.valence -= 0.15
+            delta.arousal += 0.2
+            delta.dominance -= 0.1
+
+        self._apply_emotion_change(delta, "proactive_result")
+        logger.debug(
+            "Limbic: proactive result applied -> success=%s emotion=%s", event.success, self._emotion.to_dict()
+        )
+
     # === 公開インターフェース ===
 
     def get_state(self) -> dict:
         e = self.current_emotion()
         return {
             "emotion": e.to_dict(),
+            "drive": self._drive.to_dict(),
             "mood": self.build_mood_description(style="short"),
         }
 
@@ -176,6 +211,15 @@ class LimbicManager:
         """現在の感情状態を取得する。"""
         self._decay()
         return self._emotion
+
+    def current_drive(self) -> DriveState:
+        """現在の欲求状態を取得する。"""
+        return self._drive
+
+    def satisfy_drive(self, need_type: str, amount: float) -> None:
+        """特定の行動による欲求の解消を行う。"""
+        self._drive.satisfy(need_type, amount)
+        self._publish_snapshot(f"satisfy_{need_type}")
 
     @staticmethod
     def _is_neutral(e: EmotionState) -> bool:

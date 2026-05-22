@@ -13,6 +13,7 @@ import re
 from typing import Any
 
 from iris.kernel.config import ModelConfig, ModelEntry
+from iris.llm.priority_lock import PriorityLock
 
 from .google_provider import GoogleProvider
 from .ollama_provider import OllamaProvider
@@ -45,6 +46,7 @@ class LLMBridge:
         self._model_map: dict[str, str] = {}
         self._entries: dict[str, ModelEntry] = {}
         self._model_config = model_config
+        self._priority_lock = PriorityLock()
 
         for entry in model_config.models:
             base_url, api_key = self._resolve_connection(entry)
@@ -88,7 +90,7 @@ class LLMBridge:
             keep_alive=entry.keep_alive or "10m",
         )
 
-    def chat(
+    async def chat(
         self,
         messages: list[dict[str, Any]],
         model: str | None = None,
@@ -98,6 +100,7 @@ class LLMBridge:
         tools: list[dict[str, Any]] | None = None,
         on_token: Callable[[str], None] | None = None,
         interrupt_token: object | None = None,
+        priority: int = 0,
         **kwargs: Any,
     ) -> dict[str, Any]:
         """指定されたモデルでチャット生成を実行する。
@@ -142,17 +145,18 @@ class LLMBridge:
             if on_token:
                 on_token(token)
 
-        resp = provider.chat(
-            messages=messages,
-            model=model_name,
-            enable_thinking=enable_thinking,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            tools=tools,
-            on_token=wrapped_on_token if on_token else None,
-            interrupt_token=local_interrupt_token,
-            **kwargs,
-        )
+        async with self._priority_lock(priority):
+            resp = await provider.chat(
+                messages=messages,
+                model=model_name,
+                enable_thinking=enable_thinking,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                tools=tools,
+                on_token=wrapped_on_token if on_token else None,
+                interrupt_token=local_interrupt_token,
+                **kwargs,
+            )
 
         # Check and trim repetition in final response
         if "message" in resp and resp["message"].get("content"):

@@ -62,11 +62,15 @@ class ReadinessEvaluator:
             "If the user's input is a question, complete thought, or continuation of conversation, answer Yes."
         )
         try:
-            resp = self._llm.chat(
-                messages=[{"role": "user", "content": prompt}],
-                model=self._llm_model_role,
-                temperature=0.0,
-                max_tokens=10,
+            import asyncio
+
+            resp = asyncio.run(
+                self._llm.chat(
+                    messages=[{"role": "user", "content": prompt}],
+                    model=self._llm_model_role,
+                    temperature=0.0,
+                    max_tokens=10,
+                )
             )
             content = resp.get("message", {}).get("content", "").strip().lower()
             return content.startswith("yes")  # type: ignore[no-any-return]

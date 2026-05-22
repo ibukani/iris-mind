@@ -26,7 +26,9 @@ def test_google_provider_chat_success():
     mock_client.post.return_value = mock_response
 
     provider = GoogleProvider(api_key="test_key", http_client=mock_client)
-    res = provider.chat(messages=[{"role": "user", "content": "Hi"}], model="gemini-2.5-flash")
+    import asyncio
+
+    res = asyncio.run(provider.chat(messages=[{"role": "user", "content": "Hi"}], model="gemini-2.5-flash"))
 
     assert res["message"]["content"] == "Hello world"
     mock_client.post.assert_called_once()
@@ -54,7 +56,11 @@ def test_google_provider_chat_stream_success():
     def on_token(t: str):
         tokens.append(t)
 
-    res = provider.chat(messages=[{"role": "user", "content": "Hi"}], model="gemini-2.5-flash", on_token=on_token)
+    import asyncio
+
+    res = asyncio.run(
+        provider.chat(messages=[{"role": "user", "content": "Hi"}], model="gemini-2.5-flash", on_token=on_token)
+    )
 
     assert "".join(tokens) == "Hello world"
     assert res["message"]["content"] == "Hello world"

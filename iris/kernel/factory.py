@@ -348,6 +348,8 @@ class KernelFactory:
         agents_md_store = AgentsMdStore(path=mem_cfg.agents_md_path, max_bytes=mem_cfg.agents_md_max_bytes)
         persona_data = PersonaData(path=mem_cfg.persona_data_path)
         persona_profile = PersonaProfile(persona_data=persona_data)
+        if limbic is not None:
+            limbic.set_persona_profile(persona_profile)
 
         reflexion = Reflexion(llm=llm, compact_model=config.model.get_model("default"))
         hippocampal = HippocampalManager(
@@ -381,6 +383,8 @@ class KernelFactory:
             config=config,
             memory=memory,
             limbic=limbic,
+            persona_profile=persona_profile,
+            llm=llm,
         )
 
         monitor = OutputMonitor(internal_bus=internal_bus)

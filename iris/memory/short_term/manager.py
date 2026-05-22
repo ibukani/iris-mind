@@ -198,15 +198,19 @@ class ShortTermMemoryManager:
             relevant = self.search(query, max_results=3)
             shown_indices = {r.get("index", -1) for r in relevant}
             for r in relevant:
-                label = "User" if r["role"] == "user" else "Iris"
-                parts.append(f"- {label}: 「{r['content'][:100]}」(関連度 {r.get('relevance', 0):.2f})")
+                role = r.get("role", "system")
+                label = "User" if role == "user" else "Iris"
+                prefix = "(思考) " if role == "thought" else ""
+                parts.append(f"- {label}: {prefix}「{r['content'][:100]}」(関連度 {r.get('relevance', 0):.2f})")
             for t in reversed(self._turns[-4:]):
                 idx = self._turns.index(t)
                 if idx in shown_indices:
                     continue
                 shown_indices.add(idx)
-                label = "User" if t["role"] == "user" else "Iris"
-                parts.append(f"- {label}: 「{t['content'][:100]}」")
+                role = t.get("role", "system")
+                label = "User" if role == "user" else "Iris"
+                prefix = "(思考) " if role == "thought" else ""
+                parts.append(f"- {label}: {prefix}「{t['content'][:100]}」")
 
         if self._active_references:
             refs = sorted(self._active_references, key=len, reverse=True)[:5]

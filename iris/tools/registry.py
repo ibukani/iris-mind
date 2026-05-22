@@ -54,24 +54,32 @@ class ToolRegistry:
         """
         return self._tools.get(name)
 
-    def list_tools(self) -> list[dict]:
+    def list_tools(self, allow_side_effects: bool = True) -> list[dict]:
         """全ツールを OpenAI JSON スキーマ形式で返す。
+
+        Args:
+            allow_side_effects: Falseの場合、副作用のあるツールを除外する。
 
         Returns:
             ツール定義のリスト（OpenAI tool_choice 互換フォーマット）。
         """
-        return [t.to_openai_tool() for t in self._tools.values()]
+        return [t.to_openai_tool() for t in self._tools.values() if allow_side_effects or not t.side_effect]
 
-    def list_tools_for_role(self, role: str) -> list[dict]:
+    def list_tools_for_role(self, role: str, allow_side_effects: bool = True) -> list[dict]:
         """指定のロール（モデル役割）で使用可能なツールを返す。
 
         Args:
             role: モデルロール（例: "base", "smart"）。
+            allow_side_effects: Falseの場合、副作用のあるツールを除外する。
 
         Returns:
             ツール定義のリスト。
         """
-        return [t.to_openai_tool() for t in self._tools.values() if role in (t.allowed_roles or _DEFAULT_ALLOWED_ROLES)]
+        return [
+            t.to_openai_tool()
+            for t in self._tools.values()
+            if (role in (t.allowed_roles or _DEFAULT_ALLOWED_ROLES)) and (allow_side_effects or not t.side_effect)
+        ]
 
     def execute(self, name: str, **kwargs: object) -> str:
         """ツールを実行する。

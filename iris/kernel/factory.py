@@ -4,12 +4,12 @@ from dataclasses import dataclass
 import logging
 
 from iris.agency.bus import InternalBus
-from iris.agency.execution.inhibition import InhibitionController
 from iris.agency.execution.manager import ExecutionManager
 from iris.agency.execution.monitor import OutputMonitor
 from iris.agency.execution.pipeline import LLMPipeline
 from iris.agency.execution.post_processor import PostProcessor
 from iris.agency.execution.tool_executor import ToolExecutionEngine
+from iris.agency.inhibition import InhibitionController
 from iris.agency.manager import AgencyManager
 from iris.agency.planning.decisions import ProactiveScoring
 from iris.agency.planning.manager import PlanningManager

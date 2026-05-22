@@ -5,9 +5,30 @@ import json
 import logging
 from typing import Any, Protocol
 
+from pydantic import BaseModel, Field
+
 from iris.llm.provider import LLMProvider
 
 logger = logging.getLogger(__name__)
+
+
+class QuickReflexionResult(BaseModel):
+    speech_style: str = Field(default="", description="この会話でIrisが実際に使った口調の特徴（日本語、簡潔に1文）")
+    expressed_traits: str = Field(default="", description="この会話でIrisが発現させた性格特性（日本語、簡潔に1文）")
+    user_reaction: str = Field(default="", description="ユーザーの反応傾向（日本語、短く）")
+    big_five_estimate: dict[str, int] | None = Field(default=None, description="JSON object with OCEAN scores (0-100)")
+
+
+class ReflexionResult(QuickReflexionResult):
+    summary: str = Field(description="one-sentence session summary (日本語で)")
+    lesson: str = Field(default="", description="what you learned (日本語で、または空文字)")
+    preference: str = Field(default="", description="user preference you noticed (日本語で、または空文字)")
+    improvement: str = Field(default="", description="what you could have done better (日本語で、または空文字)")
+    missing_capability: str = Field(default="", description="a tool you wished you had (日本語で、または空文字)")
+    new_goals: list[str] = Field(
+        default_factory=list,
+        description="新たに発見した中長期的な目標や、達成すべきタスクのリスト（日本語で）。特になければ空リスト。",
+    )
 
 
 class ReflexionProtocol(Protocol):
@@ -28,46 +49,45 @@ class Reflexion:
         self._compact_model = compact_model
 
     def reflect(self, conversation_history: list[dict]) -> dict[str, Any]:
-        return self._chat_parse_json(
-            system_prompt=(
-                "You are Iris's reflection engine. Analyze the conversation and extract:\n"
-                "1. summary: one-sentence session summary (日本語で)\n"
-                "2. lesson: what you learned (日本語で、または空文字)\n"
-                "3. preference: user preference you noticed (日本語で、または空文字)\n"
-                "4. improvement: what you could have done better (日本語で、または空文字)\n"
-                "5. missing_capability: a tool you wished you had (日本語で、または空文字)\n"
-                "6. speech_style: この会話でIrisが実際に使った口調の特徴（日本語、簡潔に1文。変化がなければ空文字）\n"
-                "7. expressed_traits: この会話でIrisが発現させた性格特性（日本語、簡潔に1文。変化がなければ空文字）\n"
-                "8. user_reaction: ユーザーの反応傾向（日本語で、または空文字）\n"
-                "9. big_five_estimate: JSON object with OCEAN scores (0-100, e.g. "
-                '{"openness":60,"conscientiousness":45,"extraversion":70,"agreeableness":55,"neuroticism":30}) '
-                "based on Iris's personality in this conversation. "
-                "All other values must be in Japanese. Respond in JSON only."
-            ),
-            conversation=conversation_history,
-            max_history=10,
-            max_tokens=400,
-            fallback=lambda raw: {**self._empty(), "summary": raw[:100]},
+        schema_json = json.dumps(ReflexionResult.model_json_schema(), ensure_ascii=False)
+        system_prompt = (
+            "You are Iris's reflection engine. Analyze the conversation and extract the required fields.\n"
+            f"You must strictly output a valid JSON object matching this schema:\n{schema_json}\n"
+            "All string values must be in Japanese. Respond in JSON only."
         )
 
+        raw_dict = self._chat_parse_json(
+            system_prompt=system_prompt,
+            conversation=conversation_history,
+            max_history=10,
+            max_tokens=600,
+            fallback=lambda raw: {**self._empty(), "summary": raw[:100]},
+        )
+        try:
+            return dict(ReflexionResult.model_validate(raw_dict).model_dump())
+        except Exception as e:
+            logger.error("Reflexion validation failed: %s", e)
+            return self._empty()
+
     def quick_reflect(self, conversation_slice: list[dict]) -> dict[str, Any]:
-        return self._chat_parse_json(
-            system_prompt=(
-                "You are Iris's light-weight reflection engine. "
-                "Briefly analyze this short conversation and extract:\n"
-                "1. speech_style: この会話でIrisが実際に使った口調の特徴 (日本語、簡潔に1文。変化がなければ空文字)\n"
-                "2. expressed_traits: この会話でIrisが発現させた性格特性 (日本語、簡潔に1文。変化がなければ空文字)\n"
-                "3. user_reaction: ユーザーの反応傾向 (日本語、短く)\n"
-                "4. big_five_estimate: JSON for OCEAN scores (0-100, e.g. "
-                '{"openness":60,"conscientiousness":45,"extraversion":70,"agreeableness":55,"neuroticism":30}) '
-                "based on Iris's personality in this snippet.\n"
-                "Respond in JSON only."
-            ),
+        schema_json = json.dumps(QuickReflexionResult.model_json_schema(), ensure_ascii=False)
+        system_prompt = (
+            "You are Iris's light-weight reflection engine. Briefly analyze this short conversation.\n"
+            f"You must strictly output a valid JSON object matching this schema:\n{schema_json}\n"
+            "Respond in JSON only."
+        )
+        raw_dict = self._chat_parse_json(
+            system_prompt=system_prompt,
             conversation=conversation_slice,
             max_history=4,
-            max_tokens=200,
+            max_tokens=300,
             fallback=lambda _: self._empty_quick(),
         )
+        try:
+            return dict(QuickReflexionResult.model_validate(raw_dict).model_dump())
+        except Exception as e:
+            logger.error("Quick Reflexion validation failed: %s", e)
+            return self._empty_quick()
 
     def _chat_parse_json(
         self,
@@ -119,6 +139,7 @@ class Reflexion:
             "expressed_traits": "",
             "user_reaction": "",
             "big_five_estimate": None,
+            "new_goals": [],
         }
 
     @staticmethod

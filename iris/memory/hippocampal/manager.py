@@ -98,6 +98,12 @@ class HippocampalManager:
                     tags=tags,
                 )
 
+        new_goals = result.get("new_goals")
+        if new_goals and isinstance(new_goals, list):
+            for goal_desc in new_goals:
+                if isinstance(goal_desc, str) and goal_desc.strip():
+                    self._memory.goals.add_goal(description=goal_desc, weight=1.0)
+
     def _update_big_five(self, result: dict[str, Any]) -> None:
         if self._big_five is None:
             return
@@ -183,6 +189,13 @@ class HippocampalManager:
                         entry_type=entry_type,
                         content=val,
                     )
+
+            new_goals = result.get("new_goals")
+            if new_goals and isinstance(new_goals, list):
+                for goal_desc in new_goals:
+                    if isinstance(goal_desc, str) and goal_desc.strip():
+                        mem.goals.add_goal(description=goal_desc, weight=1.0)
+
             logger.info("Session reflect completed")
         except Exception as e:
             logger.exception("Session reflect failed: %s", e)

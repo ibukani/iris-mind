@@ -1,26 +1,28 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import json
 import logging
+from pathlib import Path
 import time
 import uuid
+
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
 
-@dataclass
-class LongTermGoal:
+class LongTermGoal(BaseModel):
     """エージェントの持続的な目標（LongTermGoal）。
 
     Agency層が意思決定や思考を行う際の指針となる。
     重要度（weight）を持ち、時間経過やReflexion処理で減衰・忘却される。
     """
 
-    id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     description: str = ""
     weight: float = 1.0  # 0.0 ~ 1.0
-    created_at: float = field(default_factory=time.time)
-    updated_at: float = field(default_factory=time.time)
+    created_at: float = Field(default_factory=time.time)
+    updated_at: float = Field(default_factory=time.time)
 
     def decay(self, amount: float) -> None:
         self.weight = max(0.0, self.weight - amount)
@@ -74,3 +76,26 @@ class GoalStore:
     def clear(self) -> None:
         self._goals.clear()
         logger.info("GoalStore: cleared all goals")
+
+    def save(self, filepath: Path | str) -> None:
+        path = Path(filepath)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        data = [g.model_dump() for g in self._goals.values()]
+        with path.open("w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        logger.debug("GoalStore: saved %d goals to %s", len(data), path)
+
+    def load(self, filepath: Path | str) -> None:
+        path = Path(filepath)
+        if not path.exists():
+            return
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            self._goals.clear()
+            for item in data:
+                goal = LongTermGoal.model_validate(item)
+                self._goals[goal.id] = goal
+            logger.info("GoalStore: loaded %d goals from %s", len(self._goals), path)
+        except Exception as e:
+            logger.error("GoalStore: failed to load goals from %s: %s", path, e)

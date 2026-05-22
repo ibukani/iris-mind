@@ -104,21 +104,7 @@ class LimbicManager:
             event_bus.subscribe("TimerTick", self._on_timer_tick)
             event_bus.subscribe("MonitorFeedback", self._on_monitor_event)
 
-    def _on_message_event(self, event: MessageEvent) -> None:
-        """メッセージイベント受信時に感情評価を実行する。
-
-        メッセージの入力テキストに基づいて扁桃体で感情の変位（delta）を評価し、
-        前帯状皮質で性格特性などを加味して感情を調整・適用し、感情メモリへのタグ付けを行う。
-        """
-        if not event.content:
-            return
-        if event.direction not in ("request", "event") or event.msg_type not in ("chat", "system"):
-            return
-        self._decay()
-        delta = self._amygdala.evaluate(event.content)
-        adjusted = self._acc.regulate(delta, self._emotion, self._get_big_five_scores())
-        self._emotion.apply(adjusted)
-        self._emotional_memory.tag(event.content[:200], self._emotion)
+    def _publish_snapshot(self, trigger: str) -> None:
         if self._event_bus is not None:
             self._event_bus.publish(
                 DebugSnapshotEvent(
@@ -126,43 +112,39 @@ class LimbicManager:
                     source="limbic",
                     category="limbic.emotion",
                     data=self._emotion.to_dict(),
-                    trigger="message",
+                    trigger=trigger,
                 )
             )
-        logger.debug(
-            "Limbic: input evaluated -> emotion=%s",
-            self._emotion.to_dict(),
-        )
+
+    def _apply_emotion_change(self, delta: EmotionDelta, trigger: str) -> None:
+        self._decay()
+        adjusted = self._acc.regulate(delta, self._emotion, self._get_big_five_scores())
+        self._emotion.apply(adjusted)
+        self._publish_snapshot(trigger)
+
+    def _on_message_event(self, event: MessageEvent) -> None:
+        if not event.content:
+            return
+        if event.direction not in ("request", "event") or event.msg_type not in ("chat", "system"):
+            return
+        delta = self._amygdala.evaluate(event.content)
+        self._apply_emotion_change(delta, "message")
+        self._emotional_memory.tag(event.content[:200], self._emotion)
+        logger.debug("Limbic: input evaluated -> emotion=%s", self._emotion.to_dict())
 
     def _on_timer_tick(self, event: TimerTick) -> None:
-        """タイマーイベント発生時に感情の自然減衰を実行する。
-
-        6回のTickごとに感情を減衰させる。
-        """
         if event.tick_count % 6 == 0:
             self._decay()
 
     def _decay(self) -> None:
-        """前回の更新からの経過時間に基づき感情状態を自然減衰（平穏へと近づける）させる。"""
         now = time.time()
         old = self._emotion.to_dict()
         self._emotion.decay(now - self._last_decay_time)
         self._last_decay_time = now
-        if self._emotion.to_dict() != old and self._event_bus is not None:
-            self._event_bus.publish(
-                DebugSnapshotEvent(
-                    timestamp=None,
-                    source="limbic",
-                    category="limbic.emotion",
-                    data=self._emotion.to_dict(),
-                    trigger="decay",
-                )
-            )
+        if self._emotion.to_dict() != old:
+            self._publish_snapshot("decay")
 
     def _on_monitor_event(self, event: MessageEvent) -> None:
-        """OutputMonitor からのフィードバックイベントを処理する。
-        島皮質 (Insula) 相当: 内部状態（出力頻度・多弁）の認識と感情への反映。
-        """
         content = event.content
         if not content:
             return
@@ -178,19 +160,7 @@ class LimbicManager:
             delta.dominance -= 0.15
         if delta.valence == 0 and delta.arousal == 0 and delta.dominance == 0:
             return
-        self._decay()
-        adjusted = self._acc.regulate(delta, self._emotion, self._get_big_five_scores())
-        self._emotion.apply(adjusted)
-        if self._event_bus is not None:
-            self._event_bus.publish(
-                DebugSnapshotEvent(
-                    timestamp=None,
-                    source="limbic",
-                    category="limbic.emotion",
-                    data=self._emotion.to_dict(),
-                    trigger="monitor_feedback",
-                )
-            )
+        self._apply_emotion_change(delta, "monitor_feedback")
         logger.debug("Limbic: monitor feedback applied -> emotion=%s", self._emotion.to_dict())
 
     # === 公開インターフェース ===
@@ -207,41 +177,21 @@ class LimbicManager:
         self._decay()
         return self._emotion
 
+    @staticmethod
+    def _is_neutral(e: EmotionState) -> bool:
+        return abs(e.valence) < 0.1 and e.arousal < 0.15 and abs(e.dominance - 0.5) < 0.1
+
     def build_mood_description(self, style: str = "full") -> str:
-        """現在の感情状態から自然言語での気分説明を生成する。
-
-        島皮質 (Insula) 相当: 内部状態の言語化。
-
-        Args:
-            style: "full" で完全な文章、"short" で簡潔なラベル
-
-        Returns:
-            気分説明テキスト。中立時は空文字。
-        """
         e = self.current_emotion()
-        if abs(e.valence) < 0.1 and e.arousal < 0.15 and abs(e.dominance - 0.5) < 0.1:
+        if self._is_neutral(e):
             return ""
         for entry in _MOOD_DESCRIPTIONS:
             if entry["condition"](e):
                 return entry["short"] if style == "short" else entry["text"]
         return ""
 
-    def build_response_style(self) -> str:
-        """感情状態に基づく応答スタイル指示を生成する。
-
-        島皮質+前頭前野が感情状態を言語化し、応答のトーンを調整するための指示文。
-        この指示文はシステムプロンプトに注入される。
-
-        Returns:
-            "## 応答スタイル\n{指示}" 形式の文字列。中立時は空文字。
-        """
-        e = self.current_emotion()
-        if abs(e.valence) < 0.1 and e.arousal < 0.15 and abs(e.dominance - 0.5) < 0.1:
-            return ""
-
-        hints: list[str] = []
-
-        # 快・不快 (Valence)
+    @staticmethod
+    def _build_valence_hints(e: EmotionState, hints: list[str]) -> None:
         if e.valence > 0.5:
             hints.append("明るく温かいトーンで応答してください")
             if e.arousal > 0.4:
@@ -271,18 +221,30 @@ class LimbicManager:
                 "発話の冒頭や途中に、元気がなさそうな感嘆詞（例：『うう…』『え〜ん』『しゅん…』）を自然に交え、悲しそうに応答してください"
             )
 
-        # 覚醒度 (Arousal)
+    @staticmethod
+    def _build_arousal_hints(e: EmotionState, hints: list[str]) -> None:
         if e.arousal > 0.6:
             hints.append("テンポ良く、1〜2文の短い言葉で活発に応答してください")
             hints.append("焦りや興奮を言葉の端々に表し、感嘆符『！』を多めに使ってテンポ良く応答してください")
         elif e.arousal < 0.2:
             hints.append("ゆったりとしたペースで、1〜2文程度で応答してください")
 
-        # 支配性 (Dominance)
+    @staticmethod
+    def _build_dominance_hints(e: EmotionState, hints: list[str]) -> None:
         if e.dominance > 0.6:
             hints.append("自信を持って明確に応答してください")
         elif e.dominance < 0.3:
             hints.append("慎重に、確認しながら応答してください")
+
+    def build_response_style(self) -> str:
+        e = self.current_emotion()
+        if self._is_neutral(e):
+            return ""
+
+        hints: list[str] = []
+        self._build_valence_hints(e, hints)
+        self._build_arousal_hints(e, hints)
+        self._build_dominance_hints(e, hints)
 
         if not hints:
             return ""
@@ -309,9 +271,6 @@ class LimbicManager:
         return None
 
     def apply_stimulus(self, stimulus_type: str, intensity: float = 1.0) -> None:
-        """外部からの感情刺激を適用する（無視・過剰出力など）。
-        扁桃体をバイパスして直接感情に影響を与える。
-        """
         delta = EmotionDelta()
         if stimulus_type == "ignored":
             decay = max(0.05, 0.15 - intensity * 0.02)
@@ -325,28 +284,16 @@ class LimbicManager:
             )
         if delta.valence == 0 and delta.arousal == 0 and delta.dominance == 0:
             return
-        self._decay()
-        adjusted = self._acc.regulate(delta, self._emotion, self._get_big_five_scores())
-        self._emotion.apply(adjusted)
-        if self._event_bus is not None:
-            self._event_bus.publish(
-                DebugSnapshotEvent(
-                    timestamp=None,
-                    source="limbic",
-                    category="limbic.emotion",
-                    data=self._emotion.to_dict(),
-                    trigger="stimulus",
-                )
-            )
+        self._apply_emotion_change(delta, "stimulus")
         logger.debug("Limbic: stimulus %s applied -> emotion=%s", stimulus_type, self._emotion.to_dict())
 
     def set_big_five(self, big_five: BigFiveProvider | dict[str, float] | None) -> None:
-        """Big Five 性格スコアソースを設定する。"""
         if isinstance(big_five, dict):
+            _scores: dict[str, float] = big_five
 
             class _StaticProvider:
                 def get_scores(self) -> dict[str, float]:
-                    return big_five  # type: ignore[return-value]
+                    return _scores
 
             self._big_five_provider = _StaticProvider()
         elif isinstance(big_five, BigFiveProvider):

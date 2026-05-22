@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from contextlib import suppress
+from dataclasses import dataclass
 import logging
 from typing import TYPE_CHECKING
 
@@ -18,6 +19,14 @@ if TYPE_CHECKING:
     from iris.tools.registry import ToolRegistry
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class _StateArgs:
+    path: str
+    history: bool = False
+    as_json: bool = False
+    n: int = 10
 
 
 def _format_value(v: object, indent: int = 0) -> str:
@@ -47,6 +56,25 @@ def _format_state(state: object, path: str = "") -> str:
             lines.append(f"{k}: {_format_value(v, 1)}")
         return "\n".join(lines)
     return str(state)
+
+
+def _parse_state_args(args: str) -> _StateArgs:
+    parts = args.strip().split()
+    path = ""
+    history = False
+    as_json = False
+    n = 10
+    for p in parts:
+        if p == "--history":
+            history = True
+        elif p == "--json":
+            as_json = True
+        elif p.startswith("--n="):
+            with suppress(ValueError):
+                n = int(p[4:])
+        elif not p.startswith("--"):
+            path = p
+    return _StateArgs(path=path, history=history, as_json=as_json, n=n)
 
 
 class CommandHandler:
@@ -184,6 +212,9 @@ class CommandHandler:
         return "Compact handler not available"
 
     def _memory_cmd(self, args: str) -> str:
+        if not self._memory:
+            return "Memory not available"
+
         parts = args.strip().split(maxsplit=1)
         sub = parts[0].lower() if parts else ""
 
@@ -239,7 +270,7 @@ class CommandHandler:
         valid = {"", "episodic", "semantic"}
         if stream not in valid:
             return "Usage: /memory clear [episodic|semantic]"
-        s = stream if stream else None
+        s: str | None = stream if stream else None
         self._memory.clear(s)
         return f"Cleared {stream or 'all'} memory"
 
@@ -259,33 +290,20 @@ class CommandHandler:
         diag = self._diagnostics
         if diag is None:
             return "Diagnostics not available"
-        parts = args.strip().split()
-        path = ""
-        history = False
-        as_json = False
-        n = 10
-        for p in parts:
-            if p == "--history":
-                history = True
-            elif p == "--json":
-                as_json = True
-            elif p.startswith("--n="):
-                with suppress(ValueError):
-                    n = int(p[4:])
-            elif not p.startswith("--"):
-                path = p
 
-        if history:
-            return self._format_state_history(diag, path, n)
+        sa = _parse_state_args(args)
 
-        state = diag.query(path)
+        if sa.history:
+            return self._format_state_history(diag, sa.path, sa.n)
+
+        state = diag.query(sa.path)
         if state is None:
-            return f"Path not found: '{path}'" if path else "No state available"
-        if as_json:
+            return f"Path not found: '{sa.path}'" if sa.path else "No state available"
+        if sa.as_json:
             import json
 
             return json.dumps(state, ensure_ascii=False, indent=2)
-        return _format_state(state, path)
+        return _format_state(state, sa.path)
 
     def _format_state_history(self, diag: SystemDiagnostics, path: str, n: int) -> str:
         result = diag.query(path, history=True, n=n)
@@ -339,6 +357,8 @@ class CommandHandler:
         if diag is None:
             return "Diagnostics not available"
         h = diag.health()
+        if not h:
+            return "Health check: no data"
         lines = []
         for k, v in h.items():
             if v.startswith("OK"):
@@ -370,45 +390,48 @@ class CommandHandler:
         if handler is not None:
             return handler(rest)
 
-        dc = self._debug_capture
         if sub == "on":
-            if dc is None:
+            if not self._debug_capture:
                 return "DebugCapture not available"
-            dc.set_enabled(True)
+            self._debug_capture.set_enabled(True)
             return "Debug capture enabled"
 
         if sub == "off":
-            if dc is None:
+            if not self._debug_capture:
                 return "DebugCapture not available"
-            dc.set_enabled(False)
+            self._debug_capture.set_enabled(False)
             return "Debug capture disabled"
 
         if sub == "help" or not sub:
             return self._debug_help()
 
-        if dc is None:
+        if not self._debug_capture:
             return "DebugCapture not available. Available: state, events, health, report"
-        if not dc.enabled:
+
+        if not self._debug_capture.enabled:
             return "Debug capture is disabled (use /debug on first). Available: state, events, health, report"
 
         if sub == "list":
-            return dc.list_captures()
+            return self._debug_capture.list_captures()
+
         if sub == "last":
-            entries = dc.last()
+            entries = self._debug_capture.last()
             if not entries:
                 return "No captures"
             return "\n\n".join(e.format() for e in entries)
+
         if sub in ("show", "get"):
             try:
                 entry_id = int(rest)
             except (ValueError, TypeError):
                 return "Usage: /debug show <id>"
-            return dc.show(entry_id)
+            return self._debug_capture.show(entry_id)
+
         if sub == "dump":
-            written = dc.dump_all()
-            if written:
-                return f"Wrote {len(written)} file(s):\n" + "\n".join(str(p) for p in written)
-            return "No captures to dump"
+            written = self._debug_capture.dump_all()
+            if not written:
+                return "No captures to dump"
+            return f"Wrote {len(written)} file(s):\n" + "\n".join(str(p) for p in written)
 
         return self._debug_help()
 

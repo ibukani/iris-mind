@@ -195,34 +195,32 @@ iris-mind/
 │   └── data/                    # 記憶データ (runtime generated)
 ├── docs/                        # 設計ドキュメント
 │   ├── adr/                     # Architecture Decision Records
+│   ├── how-it-works/            # 動作原理の詳細解説（11ファイル）
 │   ├── architecture.md          # 全体アーキテクチャ
 │   ├── agency-layer.md          # Agency 層設計
 │   ├── memory-layer.md          # Memory 層設計
+│   ├── limbic-layer.md          # Limbic 層設計
 │   ├── io-layer.md              # IO 層設計
 │   ├── kernel-layer.md          # Kernel 層設計
+│   ├── config.md                # Config 設定一覧
 │   └── ipc-spec.md              # IPC プロトコル仕様
 ├── iris/                        # アプリケーションコア
 │   ├── agency/                  # 前頭前野+基底核+運動野
-│   │   ├── planning/            # PFC: 意思決定・スコアリング
+│   │   ├── planning/            # PFC: 意思決定・ProactiveScoring
 │   │   └── execution/           # 基底核+運動野: 行動実行・抑制制御
 │   ├── event/                   # 神経路: グローバル EventBus
 │   ├── io/                      # 視床: TCP入出力・セッション・認証
-│   │   ├── transport/
-│   │   ├── session/
-│   │   └── auth/
 │   ├── kernel/                  # 脳幹: プロセス管理・DI・コマンド
-│   │   └── commands/
+│   ├── limbic/                  # 大脳辺縁系: 感情・制御・性格
 │   ├── llm/                     # LLM接続・ContextWindow管理
 │   ├── memory/                  # 感覚野+海馬+皮質記憶
-│   │   ├── sensory/             # 感覚バッファ
-│   │   ├── episodic/            # エピソード記憶 (stores.py)
-│   │   ├── semantic/            # 意味記憶 (stores.py)
+│   │   ├── sensory/             # 感覚バッファ（断片+生入力 2系統）
+│   │   ├── short_term/          # ワーキングメモリ
+│   │   ├── long_term/           # 長期記憶（stores + VectorStore）
 │   │   ├── hippocampal/         # 海馬: Reflexion
-│   │   ├── personality/         # 人格
-│   │   └── vector/              # ベクトル検索 (vector_store.py)
+│   │   └── personality/         # 人格データ
 │   └── tools/                   # @tool, ToolRegistry, ビルトイン
-│       └── builtins/
-├── tests/                       # テストスイート (138 tests, ~3秒)
+├── tests/                       # テストスイート
 ├── config.yaml                  # Iris 設定ファイル
 └── main.py                      # Supervisor エントリーポイント
 ```
@@ -278,10 +276,6 @@ pytest tests/                         # 全テスト実行
 - **IPC**: gRPC（HTTP/2）— 1ポート多重
 - **UI**: Rich（TUI）, prompt_toolkit
 - **テスト**: pytest（138 tests）, ruff, mypy
-
-## Maintainers
-
-- [ibuibu](https://github.com/your-org)
 
 ## Contributing
 

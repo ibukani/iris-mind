@@ -19,7 +19,7 @@
 | [`kernel-layer.md`](./kernel-layer.md) | **Kernel 層（脳幹+視床下部）** — プロセス管理、DI、CommandHandler、TimerTick |
 | [`memory-layer.md`](./memory-layer.md) | **Memory 層（感覚野+海馬+皮質）** — 感覚バッファ、エピソード/意味記憶、海馬整理、人格 |
 | [`config.md`](./config.md) | Config 設定一覧 — 全フィールドとデフォルト値 |
-| [`ipc-spec.md`](./ipc-spec.md) | IPC プロトコル仕様 — gRPC, シリアライズ, 接続ライフサイクル |
+| [`how-it-works/`](./how-it-works/index.md) | **動作原理の詳細解説** — 計算式・条件分岐・Mermaid図を網羅（11ファイル） |
 
 ## 設計背景
 

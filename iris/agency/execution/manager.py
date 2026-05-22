@@ -6,10 +6,10 @@ import logging
 from typing import TYPE_CHECKING, Any
 
 from iris.agency.bus import InternalBus, PlanDecided
-from iris.agency.execution.inhibition import InhibitionController
 from iris.agency.execution.monitor import OutputMonitor
 from iris.agency.execution.pipeline import LLMPipeline
 from iris.agency.execution.post_processor import PostProcessor
+from iris.agency.inhibition import InhibitionController
 from iris.event.event_bus import EventBus
 from iris.event.event_types import InputReady, MessageEvent, MonitorFeedback, ProactiveResultEvent
 from iris.io.models import StreamState

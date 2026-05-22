@@ -5,7 +5,7 @@ import time
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from iris.agency.execution.inhibition import GateVerdict, InhibitionController
+    from iris.agency.inhibition import GateVerdict, InhibitionController
     from iris.agency.planning.context_hint_builder import ContextHintBuilder
     from iris.agency.planning.decisions.scoring import ProactiveScoring
     from iris.event.event_types import InputReady

@@ -5,7 +5,7 @@ import time
 from typing import TYPE_CHECKING
 
 from iris.agency.bus import InternalBus, PlanDecided
-from iris.agency.execution.inhibition import GateVerdict, InhibitionController
+from iris.agency.inhibition import InhibitionController
 from iris.agency.planning.context_hint_builder import ContextHintBuilder
 from iris.agency.planning.decisions import ProactiveJudge, ProactiveScoring
 from iris.agency.planning.question_generator import QuestionGenerator
@@ -17,7 +17,7 @@ from iris.memory.manager import MemoryManager
 
 if TYPE_CHECKING:
     from iris.limbic.manager import LimbicManager
-    from iris.limbic.models import DriveState, EmotionState
+    from iris.limbic.models import EmotionState
     from iris.llm.provider import LLMProvider
     from iris.memory.persona_profile import PersonaProfile
 
@@ -61,33 +61,35 @@ class PlanningManager:
         )
         event_bus.subscribe("InputReady", self._on_input_ready)
 
-    def get_state(self) -> dict:
-        gate = self._inhibition.evaluate(time.time())
-        return {
-            "suppressed": gate.suppressed,
-            "reason": gate.reason,
-            "go_signal": round(gate.go_signal, 2),
-        }
-
     def _on_input_ready(self, event: InputReady) -> None:
         context = event.context or {}
+        if self._is_proactive_event(context):
+            self._on_proactive_event(event, context)
+        else:
+            self._on_user_input(event)
+
+    @staticmethod
+    def _is_proactive_event(context: dict) -> bool:
+        return bool(context.get("from_timer") or "system_event" in context or context.get("escalation"))
+
+    def _on_proactive_event(self, event: InputReady, context: dict) -> None:
         limbic_mood = self._resolve_limbic_mood()
         limbic_drive = self._limbic.current_drive() if self._limbic else None
         gate = self._inhibition.evaluate(time.time())
 
-        if self._is_proactive_event(context):
-            self._exec_proactive(event, context, gate, limbic_mood, limbic_drive)
+        proactive_context = self._proactive_judge.decide(event, context, gate, limbic_mood, limbic_drive)
+        if proactive_context is None:
             return
+        plan = self._proactive_strategy.build_proactive(proactive_context, gate, limbic_mood)
+        self._publish(plan, event.session_id, from_timer=True)
 
+    def _on_user_input(self, event: InputReady) -> None:
+        limbic_mood = self._resolve_limbic_mood()
+        gate = self._inhibition.evaluate(time.time())
         self._inhibition.notify_user_activity()
+
         plan = self._response_strategy.build_response(event.content, gate, limbic_mood)
-        plan["session_id"] = event.session_id
-        logger.info(
-            "PlanningManager: plan published session=%s from_timer=%s",
-            event.session_id,
-            False,
-        )
-        self._bus.publish(PlanDecided(plan=plan))
+        self._publish(plan, event.session_id, from_timer=False)
 
     def _resolve_limbic_mood(self) -> EmotionState | None:
         if not self._limbic:
@@ -96,27 +98,11 @@ class PlanningManager:
         self._inhibition.apply_limbic_modulation(emotion)
         return emotion
 
-    @staticmethod
-    def _is_proactive_event(context: dict) -> bool:
-        return bool(context.get("from_timer") or "system_event" in context or context.get("escalation"))
-
-    def _exec_proactive(
-        self,
-        event: InputReady,
-        context: dict,
-        gate: GateVerdict,
-        limbic_mood: EmotionState | None,
-        limbic_drive: DriveState | None = None,
-    ) -> None:
-        proactive_context = self._proactive_judge.decide(event, context, gate, limbic_mood, limbic_drive)
-        if proactive_context is None:
-            return
-
-        plan = self._proactive_strategy.build_proactive(proactive_context, gate, limbic_mood)
-        plan["session_id"] = event.session_id
+    def _publish(self, plan: dict, session_id: str, from_timer: bool) -> None:
+        plan["session_id"] = session_id
         logger.info(
             "PlanningManager: plan published session=%s from_timer=%s",
-            event.session_id,
-            True,
+            session_id,
+            from_timer,
         )
         self._bus.publish(PlanDecided(plan=plan))

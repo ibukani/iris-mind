@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 from iris.memory.manager import MemoryManager
 
 if TYPE_CHECKING:
-    from iris.agency.execution.inhibition import InhibitionController
+    from iris.agency.inhibition import InhibitionController
 
 logger = logging.getLogger(__name__)
 

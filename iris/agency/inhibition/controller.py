@@ -297,3 +297,17 @@ class InhibitionController:
     @property
     def confirmation_mode(self) -> bool:
         return self._state.confirmation_mode
+
+    def get_state(self) -> dict:
+        s = self._state
+        return {
+            "consecutive_ignores": s.consecutive_ignores,
+            "last_proactive_time": s.last_proactive_time,
+            "last_user_activity": s.last_user_activity,
+            "negative_mood_score": s.negative_mood_score,
+            "outputs_since_input": s.outputs_since_input,
+            "frequency_exceeded": s.frequency_exceeded,
+            "is_sleeping": s.is_sleeping,
+            "cooldown_until": s.cooldown_until,
+            "confirmation_mode": s.confirmation_mode,
+        }

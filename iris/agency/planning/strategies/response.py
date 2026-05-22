@@ -7,7 +7,7 @@ from iris.agency.planning.emotion_temperature import EmotionTemperatureModulator
 from iris.agency.planning.task_content import is_task_content
 
 if TYPE_CHECKING:
-    from iris.agency.execution.inhibition import GateVerdict
+    from iris.agency.inhibition import GateVerdict
     from iris.agency.planning.context_hint_builder import ContextHintBuilder
     from iris.kernel.config import ProactiveConfig
     from iris.limbic.models import EmotionState

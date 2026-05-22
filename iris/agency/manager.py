@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import logging
 
-from iris.agency.execution.inhibition import InhibitionController
 from iris.agency.execution.manager import ExecutionManager
+from iris.agency.inhibition import InhibitionController
 from iris.agency.planning.manager import PlanningManager
 
 logger = logging.getLogger(__name__)
@@ -21,10 +21,12 @@ class AgencyManager:
         self._inhibition = inhibition
 
     def get_state(self) -> dict:
-        return {
-            "planning": self._planning.get_state(),
+        state: dict = {
             "execution": self._execution.get_state(),
         }
+        if self._inhibition is not None:
+            state["inhibition"] = self._inhibition.get_state()
+        return state
 
     def compact_context(self) -> str:
         return self._execution.compact_context()

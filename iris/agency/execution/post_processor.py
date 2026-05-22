@@ -6,7 +6,7 @@ import threading
 import time
 from typing import TYPE_CHECKING, Any
 
-from iris.agency.execution.inhibition import InhibitionController
+from iris.agency.inhibition import InhibitionController
 from iris.event.event_bus import EventBus
 from iris.event.event_types import ProactiveResultEvent, TimerTick
 

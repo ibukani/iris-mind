@@ -4,11 +4,11 @@ from dataclasses import dataclass
 import logging
 
 from iris.agency.bus import InternalBus
-from iris.agency.execution.consolidator import Consolidator
-from iris.agency.execution.generation.pipeline import LLMPipeline
-from iris.agency.execution.generation.tool_executor import ToolExecutionEngine
-from iris.agency.execution.manager import ExecutionManager
-from iris.agency.execution.regulation.monitor import OutputMonitor
+from iris.agency.execution.engine import ToolEngine
+from iris.agency.execution.executor import FlowExecutor
+from iris.agency.execution.llm.gateway import LLMGateway
+from iris.agency.execution.regulation.consolidator import Consolidator
+from iris.agency.execution.regulation.output_tracker import OutputTracker
 from iris.agency.inhibition import InhibitionController
 from iris.agency.manager import AgencyManager
 from iris.agency.planning.decisions import ProactiveScoring
@@ -255,10 +255,10 @@ class KernelFactory:
         return LLMBridge(model_config=config.model)
 
     @staticmethod
-    def _build_tools() -> tuple[ToolRegistry, ToolExecutionEngine]:
+    def _build_tools() -> tuple[ToolRegistry, ToolEngine]:
         registry = ToolRegistry()
         registry.discover_modules()
-        tool_exec = ToolExecutionEngine(registry=registry)
+        tool_exec = ToolEngine(registry=registry)
         return registry, tool_exec
 
     @staticmethod
@@ -331,7 +331,7 @@ class KernelFactory:
         event_bus: EventBus,
         llm: LLMBridge,
         memory: MemoryManager,
-        tool_exec: ToolExecutionEngine,
+        tool_exec: ToolEngine,
         session_mgr: SessionManager,
         limbic: LimbicManager | None = None,
         big_five: BigFiveProfile | None = None,
@@ -361,7 +361,7 @@ class KernelFactory:
             event_bus=event_bus,
         )
 
-        pipeline = LLMPipeline(
+        pipeline = LLMGateway(
             llm=llm,
             model_config=config.model,
             personality=personality,
@@ -369,7 +369,6 @@ class KernelFactory:
             persona_profile=persona_profile,
             memory=memory,
             limbic=limbic,
-            tool_executor=tool_exec,
             capability_checker=capability_checker,
             debug_capture=debug_capture,
         )
@@ -387,7 +386,7 @@ class KernelFactory:
             llm=llm,
         )
 
-        monitor = OutputMonitor(internal_bus=internal_bus)
+        monitor = OutputTracker(internal_bus=internal_bus)
         context_window_mgr = LLMContextWindowManager(
             llm=llm,
             compact_model=config.model.get_model("default"),
@@ -404,15 +403,17 @@ class KernelFactory:
             inhibition=inhibition,
             config=config,
         )
-        execution = ExecutionManager(
+        execution = FlowExecutor(
             internal_bus=internal_bus,
             event_bus=event_bus,
             llm_pipeline=pipeline,
             consolidator=consolidator,
+            tool_executor=tool_exec,
             monitor=monitor,
             inhibition=inhibition,
             session_roles_getter=session_mgr.get_sessions_summary,
             memory=memory,
+            capability_checker=capability_checker,
         )
 
         return AgencyManager(

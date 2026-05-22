@@ -42,7 +42,7 @@ sequenceDiagram
     participant EB as Global EventBus
     participant PL as PlanningManager
     participant IB as Internal Bus
-    participant EX as ExecutionManager
+    participant EX as FlowExecutor
     participant STM as short_term
 
     alt ユーザー入力
@@ -72,9 +72,9 @@ sequenceDiagram
     PL->>IB: PlanDecided(plan)
     IB-->>EX: PlanDecided
 
-    EX->>EX: _execute_general(plan)
+    EX->>EX: ExecutionOrchestrator.ainvoke(plan)
     EX->>STM: short_term.add_turn("user", content)  # Plan決定後に追加
-    EX->>EX: pipeline.generate(plan, messages)
+    EX->>EX: LLMGateway.chat(plan, messages)
     EX->>EB: OutputRequest(stream)
     EX->>EB: OutputRequest(response)
     EX->>STM: short_term.add_turn("assistant", response)
@@ -159,27 +159,25 @@ flowchart LR
     RESPOND -->|Yes| SHORT["plan(abbreviated=True, <br/>tools_allowed=False, <br/>streaming=False)"]
 ```
 
-## ExecutionManager
+## FlowExecutor
 
 ```python
-class ExecutionManager:
+class FlowExecutor:
     """大脳基底核 + 運動野: 行動実行。
-    PlanDecided を受け取り、action の種別に関わらず _execute_general(plan) を実行する。
+    PlanDecided を受け取り、ExecutionOrchestrator (LangGraph) に委譲する。
     """
 
     # subscribe: PlanDecided (internal bus)
 
     def _on_plan(self, event: PlanDecided) -> None
-        self._execute_general(event.plan)  # action 分岐なし
+        self._graph.ainvoke(state)  # LangGraph 状態マシン
 
-    def _execute_general(self, plan: dict) -> None
-        # 1. plan 属性（abbreviated / tools_allowed / streaming / ...）を取得
-        # 2. short_term.add_turn("user", content) — Plan決定後に追加
-        # 3. pipeline.generate(plan, messages, on_token) を呼ぶ
-        # 4. ストリーミング出力 → OutputRequest(stream)
-        # 5. 出力完了 → OutputRequest(stream, state="done")
-        # 6. 応答 → OutputRequest(response, text) + add_turn("assistant")
-        # 7. 必要に応じて reflexion / context compression
+    # グラフノード内で:
+    #   SetupNode: silent/streaming設定, short_term.add_turn, ストリーミングコールバック
+    #   LLMCallNode: LLMGateway.chat() 呼出
+    #   ToolRunNode: ToolEngine.run_tool_calls() 実行
+    #   FinalizeNode: 応答出力, monitor記録, ProactiveResultEvent
+    #   PostProcessNode: reflexion / context compression
 ```
 
 ### InhibitionController 補足: トピックベースクールダウン
@@ -195,69 +193,59 @@ def is_topic_suppressed(self, topic: str, now: float) -> bool
 
 | 条件 | 実行内容 |
 |------|----------|
-| plan.abbreviated=False | LLMPipeline.generate: 通常 system prompt + ツールループ有効 |
-| plan.abbreviated=True | LLMPipeline.generate: plan.short_prompt 使用、ツールループ無効、streaming無効 |
+| plan.abbreviated=False | LLMGateway.chat: 通常 system prompt + ツールループ有効 |
+| plan.abbreviated=True | LLMGateway.chat: plan.short_prompt 使用、ツールループ無効、streaming無効 |
 | plan.from_timer=True | 同上（abbreviated=False固定、tools_allowed=False） |
 | plan.model_role="fast" | 軽量モデルで短縮応答。abbreviated時に自動設定 |
 | plan.model_role="default" | 標準モデルで応答 |
 
-LLMPipeline は `plan.model_role` に従って `ModelConfig.get_model(role)` で使用モデルを決定する。
-ExecutionManager は圧縮実行時に `get_effective_context_window(role)` でper-modelの閾値を使用する。
+LLMGateway は `plan.model_role` に従って `ModelConfig.get_model(role)` で使用モデルを決定する。
+FlowExecutor は圧縮実行時に `get_effective_context_window(role)` でper-modelの閾値を使用する。
 
-### IrisExecutionWorkflow（LlamaIndex Workflow パイプライン）
+### ExecutionOrchestrator（LangGraph 状態マシン）
 
-`agency/execution/workflow.py` — LlamaIndex Workflow を利用した LLM + ツールループの非同期パイプライン。
+`agency/execution/orchestrator.py` — LangGraph StateGraph を利用した LLM + ツールループ。
 
 ```python
-class IrisExecutionWorkflow(Workflow):
-    """LLM呼出→ツール実行→LLM呼出のループをステップマシンで表現。
-    StartEvent → generate_step → ToolCallEvent → execute_tools_step → InputEvent(循環) → StopEvent
-    """
+# グラフトポロジ:
+# START → SetupNode → LLMCallNode
+#   ├─(tool_calls)→ ToolRunNode → LLMCallNode (loop)
+#   └─(no tools) → FinalizeNode → PostProcessNode (optional) → END
 
-    @step
-    async def generate_step(self, ev: StartEvent | InputEvent) -> ToolCallEvent | StopEvent:
-        # 1. 中断トークンチェック → StopEvent
-        # 2. iteration >= max_tool_iterations → StopEvent
-        # 3. model_role からモデル選択、temperature/max_tokens 解決
-        # 4. LLMBridge.chat() 呼出
-        # 5. tool_calls あり → ToolCallEvent, なし → StopEvent(result=final_text)
-
-    @step
-    async def execute_tools_step(self, ev: ToolCallEvent) -> InputEvent | StopEvent:
-        # 1. ToolExecutionEngine.execute_all() → ツール結果
-        # 2. 全 side_effect → StopEvent
-        # 3. ツール結果を truncate → InputEvent で generate_step へ戻る
+# 各ノード:
+#   SetupNode:      plan属性設定, short_term.add_turn, ストリーミングコールバック
+#   LLMCallNode:   LLMGateway.chat() 呼出（ツール有無で分岐）
+#   ToolRunNode:   ToolEngine.run_tool_calls() 実行, 結果truncate
+#   FinalizeNode:  応答出力, monitor記録, イベント発行
+#   PostProcessNode: reflexion / context compression
 ```
-
-`priority` パラメータで LLM 呼出の優先度を制御可能（PriorityLock と連携）。
 
 ```mermaid
 sequenceDiagram
     participant IB as Internal Bus
-    participant EX as ExecutionManager
-    participant LLM as LLMPipeline
+    participant EX as FlowExecutor
+    participant LLM as LLMGateway
     participant EB as Global EventBus
 
     IB-->>EX: PlanDecided(plan)
 
-    Note over EX,LLM: action 分岐なし、plan属性で制御
-    EX->>EX: _execute_general(plan)
-    EX->>LLM: generate(plan, messages, on_token)
+    Note over EX,LLM: LangGraph 状態マシン起動
+    EX->>LLM: LLMGateway.chat(messages, tools, ...)
 
     alt streaming=True
         loop トークン生成
             LLM-->>EX: delta token
-            EX->>EB: OutputRequest(stream, delta)
+            EX->>EB: MessageEvent(stream, delta)
         end
     end
 
-    EX->>EB: OutputRequest(stream, state="done")
-    EX->>EB: OutputRequest(response, text)
+    EX->>EB: MessageEvent(done)
+    EX->>EB: MessageEvent(response, text)
 
     alt run_reflexion=True
-        EX->>EX: hippocampal.maybe_run()
+        EX->>EX: consolidator.run()
     end
     alt run_compression=True
-        EX->>EX: context_window_mgr.check_and_summarize()
+        EX->>EX: consolidator.compact()
     end
 ```

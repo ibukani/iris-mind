@@ -5,9 +5,7 @@ import datetime
 import logging
 from typing import Any
 
-from iris.agency.execution.generation.prompt_builder import SystemPromptBuilder
-from iris.agency.execution.generation.tool_executor import ToolExecutionEngine
-from iris.agency.execution.generation.workflow import IrisExecutionWorkflow
+from iris.agency.execution.llm.prompt_builder import SystemPromptBuilder
 from iris.kernel.config import ModelConfig
 from iris.kernel.debug_capture import CaptureEntry, DebugCapture
 from iris.limbic.manager import LimbicManager
@@ -22,7 +20,7 @@ from iris.memory.persona_profile import PersonaProfile
 logger = logging.getLogger(__name__)
 
 
-class LLMPipeline:
+class LLMGateway:
     def __init__(
         self,
         llm: LLMBridge,
@@ -32,19 +30,14 @@ class LLMPipeline:
         persona_profile: PersonaProfile | None = None,
         memory: MemoryManager | None = None,
         limbic: LimbicManager | None = None,
-        tool_executor: ToolExecutionEngine | None = None,
         capability_checker: CapabilityChecker | None = None,
-        governance_principles: str = "",
         debug_capture: DebugCapture | None = None,
     ) -> None:
         self._llm = llm
         self._model_config = model_config
-        self._tool_executor = tool_executor
         self._capability_checker = capability_checker
         self._debug_capture = debug_capture
         self._session_roles_summary: str = ""
-        self._max_tool_iterations: int = 3
-        self._sysprompt_cache: str | None = None
         self._last_system_prompt: str = ""
         self._last_call_model_role: str = "default"
 
@@ -54,18 +47,12 @@ class LLMPipeline:
             persona_profile=persona_profile,
             memory=memory,
             limbic=limbic,
-            governance_principles=governance_principles,
         )
 
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
 
-    def _get_tools(self, allow_side_effects: bool = True) -> list[dict[str, Any]] | None:
-        if self._tool_executor is None:
-            return None
-        return self._tool_executor.registry.list_tools(allow_side_effects=allow_side_effects) or None
-
-    async def call(
+    async def chat(
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
@@ -76,7 +63,6 @@ class LLMPipeline:
         max_tokens: int | None = None,
         priority: int = 0,
     ) -> dict[str, Any]:
-        self._sysprompt_cache = None
         response_style = ""
         if self._prompt_builder._limbic:
             response_style = self._prompt_builder._limbic.build_response_style()
@@ -101,59 +87,18 @@ class LLMPipeline:
             priority=priority,
         )
 
-    async def generate(
+    async def chat_short(
         self,
-        plan: dict[str, Any],
         messages: list[dict[str, Any]],
-        on_token: Callable[[str], None] | None = None,
-        interrupt_token: InterruptToken | None = None,
-    ) -> str:
-        self._sysprompt_cache = None
-        model_role: str = plan.get("model_role", "default")
-        context_hint: str = plan.get("context_hint", "")
-        max_tokens: int | None = plan.get("max_tokens", 0) or None
-        priority: int = plan.get("priority", 0)
-
-        if not plan.get("tools_allowed", True):
-            temperature: float = plan.get("temperature", 0.5)
-            return await self._generate_without_tools(
-                plan,
-                messages,
-                max_tokens,
-                temperature,
-                model_role=model_role,
-                interrupt_token=interrupt_token,
-                priority=priority,
-            )
-
-        allow_side_effects: bool = plan.get("allow_side_effects", True)
-        max_tool_iters = plan.get("max_tool_iterations")
-
-        return await self._generate_with_tools(
-            messages,
-            context_hint=context_hint,
-            on_token=on_token,
-            interrupt_token=interrupt_token,
-            model_role=model_role,
-            max_tokens=max_tokens,
-            allow_side_effects=allow_side_effects,
-            max_tool_iterations=max_tool_iters,
-            priority=priority,
-        )
-
-    async def _generate_without_tools(
-        self,
         plan: dict[str, Any],
-        messages: list[dict[str, Any]],
-        max_tokens: int | None,
-        temperature: float,
         model_role: str = "default",
-        interrupt_token: InterruptToken | None = None,
+        max_tokens: int | None = None,
         priority: int = 0,
+        interrupt_token: InterruptToken | None = None,
     ) -> str:
-        context_hint: str = plan.get("context_hint", "")
-        situation: str = plan.get("situation", "")
-        content: str = plan.get("content", "")
+        context_hint = plan.get("context_hint", "")
+        situation = plan.get("situation", "")
+        content = plan.get("content", "")
 
         response_style = ""
         if situation == "proactive" and self._prompt_builder._limbic:
@@ -171,12 +116,15 @@ class LLMPipeline:
             msgs.extend(messages)
         msgs.append({"role": "user", "content": content if content else "..."})
 
+        temperature = plan.get("temperature", 0.5)
+        max_tok = max_tokens or 80
+
         text = ""
         try:
             resp = await self._llm.chat(
                 messages=msgs,
                 model=self._model_config.get_model(model_role),
-                max_tokens=max_tokens or 80,
+                max_tokens=max_tok,
                 temperature=temperature,
                 interrupt_token=interrupt_token,
                 priority=priority,
@@ -197,57 +145,6 @@ class LLMPipeline:
         )
 
         return text
-
-    async def _generate_with_tools(
-        self,
-        messages: list[dict],
-        on_token: Callable[[str], None] | None = None,
-        interrupt_token: InterruptToken | None = None,
-        context_hint: str = "",
-        model_role: str = "default",
-        max_tokens: int | None = None,
-        allow_side_effects: bool = True,
-        max_tool_iterations: int | None = None,
-        priority: int = 0,
-    ) -> str:
-        tools = self._get_tools(allow_side_effects=allow_side_effects)
-        if tools and self._capability_checker and not self._capability_checker.supports_tools(model_role):
-            tools = None
-
-        workflow = IrisExecutionWorkflow(
-            llm=self._llm,
-            model_config=self._model_config,
-            tool_executor=self._tool_executor,
-            max_tool_iterations=max_tool_iterations if max_tool_iterations is not None else self._max_tool_iterations,
-            interrupt_token=interrupt_token,
-            timeout=None,
-        )
-
-        try:
-            final_text = await workflow.run(
-                messages=messages,
-                model_role=model_role,
-                max_tokens=max_tokens,
-                tools=tools,
-                context_hint=context_hint,
-                iteration=0,
-                priority=priority,
-            )
-        except Exception as e:
-            logger.error("Workflow failed: %s", e)
-            final_text = ""
-
-        sys_prompt = getattr(self, "_last_system_prompt", "")
-        self._capture_debug(
-            model_role=model_role,
-            system_prompt=sys_prompt,
-            messages=messages,
-            tools=tools,
-            response=str(final_text),
-            tool_iterations=workflow.get_tool_iterations_log(),
-        )
-
-        return str(final_text)
 
     def _capture_debug(
         self,

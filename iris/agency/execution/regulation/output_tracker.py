@@ -14,7 +14,7 @@ _TALKATIVE_THRESHOLD = 3
 _MAX_SUPPRESSION_DEGREE = 5
 
 
-class OutputMonitor:
+class OutputTracker:
     def __init__(
         self,
         internal_bus: InternalBus,
@@ -68,7 +68,7 @@ class OutputMonitor:
 
     def record_user_input(self) -> None:
         self._outputs_since_input = 0
-        logger.debug("OutputMonitor: user input recorded, reset outputs_since_input")
+        logger.debug("OutputTracker: user input recorded, reset outputs_since_input")
 
     def record_output(self) -> list[str]:
         now = self._time()
@@ -83,7 +83,7 @@ class OutputMonitor:
             flags.append("frequency_exceeded")
             self._alert_count += 1
             logger.warning(
-                "OutputMonitor: frequency exceeded (%d in 5min, alert #%d) emotion=(v=%.2f a=%.2f d=%.2f)",
+                "OutputTracker: frequency exceeded (%d in 5min, alert #%d) emotion=(v=%.2f a=%.2f d=%.2f)",
                 len(self._window),
                 self._alert_count,
                 self._valence,
@@ -93,7 +93,7 @@ class OutputMonitor:
         if self._outputs_since_input >= self._get_effective_talkative_threshold():
             flags.append("talkative")
             logger.info(
-                "OutputMonitor: talkative (%d outputs since last user input, threshold=%d)",
+                "OutputTracker: talkative (%d outputs since last user input, threshold=%d)",
                 self._outputs_since_input,
                 self._get_effective_talkative_threshold(),
             )
@@ -112,7 +112,7 @@ class OutputMonitor:
         if self._alert_count > 0:
             issues.append(
                 {
-                    "type": "output_monitor",
+                    "type": "output_tracker",
                     "alert_count": self._alert_count,
                     "output_5min": self.output_count_5min,
                 }

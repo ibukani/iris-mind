@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 import time
 
-from iris.agency.execution.generation.pipeline import LLMPipeline
+from iris.agency.execution.llm.gateway import LLMGateway
 from iris.agency.inhibition import InhibitionController
 from iris.agency.planning.decisions import ProactiveScoring
 from iris.event.event_bus import EventBus
@@ -106,7 +106,7 @@ def test_inhibition_controller_cooldown_and_planning_scoring():
 
 
 def test_pipeline_injects_datetime():
-    pipeline = LLMPipeline(
+    pipeline = LLMGateway(
         llm=None,  # type: ignore
         model_config=None,  # type: ignore
         personality=Personality(),

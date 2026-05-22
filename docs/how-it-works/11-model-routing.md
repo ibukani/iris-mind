@@ -117,7 +117,7 @@ class PriorityLock:
         # priority が高いほど先に実行される
         # 同一 priority は FIFO
         # LLM 生成中にユーザー入力が来た場合、
-        # ExecutionManager が InterruptToken で中断
+        # FlowExecutor が InterruptToken で中断
 ```
 
 - priority=0: 通常応答（ユーザー応答）

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 
-from iris.agency.execution.manager import ExecutionManager
+from iris.agency.execution.executor import FlowExecutor
 from iris.agency.inhibition import InhibitionController
 from iris.agency.planning.manager import PlanningManager
 
@@ -13,7 +13,7 @@ class AgencyManager:
     def __init__(
         self,
         planning: PlanningManager,
-        execution: ExecutionManager,
+        execution: FlowExecutor,
         inhibition: InhibitionController,
     ) -> None:
         self.planning = planning

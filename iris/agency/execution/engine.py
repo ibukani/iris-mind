@@ -7,11 +7,11 @@ from iris.tools.registry import ToolRegistry
 logger = logging.getLogger(__name__)
 
 
-class ToolExecutionEngine:
+class ToolEngine:
     def __init__(self, registry: ToolRegistry) -> None:
         self.registry = registry
 
-    def execute_all(self, ctx: list[dict]) -> list[tuple[str, str, bool]]:
+    def run_tool_calls(self, ctx: list[dict]) -> list[tuple[str, str, bool]]:
         last = ctx[-1]
         if not last.get("tool_calls"):
             return []
@@ -36,7 +36,7 @@ class ToolExecutionEngine:
         return results
 
     @staticmethod
-    def all_side_effects(results: list[tuple[str, str, bool]]) -> bool:
+    def all_side_effect(results: list[tuple[str, str, bool]]) -> bool:
         return bool(results) and all(r[2] for r in results)
 
 

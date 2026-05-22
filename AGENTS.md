@@ -65,12 +65,25 @@ iris/                             ← アプリケーションコア
 │   ├── planning/                 ← 前頭前野: 意思決定 + PFCスコアリング
 │   │   ├── manager.py            ← PlanningManager
 │   │   └── scoring.py            ← ProactiveScoring
-│   └── execution/                ← 基底核+運動野: 行動実行 + 抑制制御
-│       ├── manager.py            ← ExecutionManager（action分岐なし）
-│       ├── pipeline.py           ← LLMPipeline（LLM+ツールループ）
-│       ├── inhibition.py         ← InhibitionController（基底核抑制）
-│       ├── monitor.py            ← OutputMonitor
-│       ├── tool_executor.py      ← ToolExecutionEngine
+│   └── execution/                ← 基底核+運動野: 行動実行
+│       ├── orchestrator.py       ← ExecutionOrchestrator（LangGraphグラフ）
+│       ├── executor.py           ← FlowExecutor（Plan購読→グラフ起動）
+│       ├── models.py             ← ExecutionState / DynamicState
+│       ├── engine.py             ← ToolEngine（ツール実行）
+│       ├── llm/
+│       │   ├── gateway.py        ← LLMGateway（LLM呼出）
+│       │   └── prompt_builder.py ← SystemPromptBuilder
+│       ├── nodes/                ← LangGraphノード
+│       │   ├── setup.py          ← SetupNode
+│       │   ├── llm_call.py       ← LLMCallNode
+│       │   ├── tool_run.py       ← ToolRunNode
+│       │   ├── finalize.py       ← FinalizeNode
+│       │   └── post_process.py   ← PostProcessNode
+│       └── regulation/           ← 出力調整
+│           ├── consolidator.py   ← Consolidator
+│           ├── feedback.py       ← FeedbackCoordinator
+│           ├── output_tracker.py ← OutputTracker
+│           └── talk_control.py   ← talkative抑制
 ├── llm/                          ← LLM基盤 + ContextWindow管理
 │   ├── llm_bridge.py             ← LLMBridge（マルチプロバイダルーター）
 │   ├── provider.py               ← LLMProvider / ProviderFactory Protocol

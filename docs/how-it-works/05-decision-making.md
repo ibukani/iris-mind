@@ -15,7 +15,7 @@ flowchart TD
     SYS --> PLAN1
     ESC --> PLAN1
 
-    PLAN1 --> IB["InternalBus → ExecutionManager"]
+    PLAN1 --> IB["InternalBus → FlowExecutor"]
 ```
 
 ## InputReady の種類

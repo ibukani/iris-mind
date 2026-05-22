@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from iris.event.event_types import MonitorFeedback
 
 if TYPE_CHECKING:
-    from iris.agency.execution.regulation.monitor import OutputMonitor
+    from iris.agency.execution.regulation.output_tracker import OutputTracker
     from iris.agency.inhibition import InhibitionController
     from iris.event.event_bus import EventBus
     from iris.limbic.models import EmotionState
@@ -14,13 +14,13 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class MonitorCoordinator:
-    """OutputMonitor と InhibitionController 間の状態同期を担当。"""
+class FeedbackCoordinator:
+    """OutputTracker と InhibitionController 間の状態同期を担当。"""
 
     def __init__(
         self,
         event_bus: EventBus,
-        monitor: OutputMonitor | None = None,
+        monitor: OutputTracker | None = None,
         inhibition: InhibitionController | None = None,
     ) -> None:
         self._event_bus = event_bus
@@ -46,7 +46,7 @@ class MonitorCoordinator:
             emotion.dominance,
         )
 
-    def handle_flags(self, flags: list[str]) -> None:
+    def process_feedback(self, flags: list[str]) -> None:
         if not self._monitor:
             return
         if self._inhibition:

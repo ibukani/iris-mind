@@ -118,6 +118,13 @@ class DebugSnapshotEvent(Event):
     trigger: str = ""
 
 
+@dataclass
+class ProactiveResultEvent(Event):
+    topic: str = ""
+    success: bool = True
+    content: str = ""
+
+
 def new_trace_id() -> str:
     return _uuid.uuid4().hex[:12]
 
@@ -132,6 +139,7 @@ __all__ = [
     "MemoryUpdateEvent",
     "MessageEvent",
     "MonitorFeedback",
+    "ProactiveResultEvent",
     "TimerTick",
     "new_trace_id",
 ]

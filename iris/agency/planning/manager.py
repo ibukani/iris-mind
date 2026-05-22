@@ -404,6 +404,22 @@ class PlanningManager:
             logger.debug("Below speak_threshold: total=%.3f < threshold=%.2f", total, self._cfg.speak_threshold)
             return
 
+        topic = "general"
+        if limbic_drive:
+            dominant = limbic_drive.get_dominant_needs()
+            if dominant:
+                topic = dominant[0][0]
+
+        drive_score = scores.get("drive", 0.0)
+        # 欲求に基づく行動だが、対外的コンテキストが低い場合は内省(silent)に留める
+        # この場合、同一トピックの連続調査を抑制する
+        is_silent_proactive = drive_score > 0.3 and scores.get("context", 0.0) < 0.2
+        if is_silent_proactive:
+            if self._inhibition.is_topic_suppressed(topic, time.time()):
+                logger.debug("Proactive investigation for topic '%s' is suppressed by cooldown", topic)
+                return
+            self._inhibition.record_topic(topic, 3600.0)
+
         self._inhibition.record_proactive_attempt()
 
         context_hint = self._context_builder.build_proactive_context_hint(context, scores, self._inhibition)
@@ -412,6 +428,8 @@ class PlanningManager:
             "salience": total,
             "scores": scores,
             "context_hint": context_hint,
+            "topic": topic,
+            "is_silent_proactive": is_silent_proactive,
         }
         logger.debug("Proactive plan published: total=%.3f scores=%s hint=%s", total, scores, context_hint)
         plan = self._build_proactive_plan(proactive_context, gate, limbic_mood)
@@ -443,12 +461,10 @@ class PlanningManager:
             "silent": False,
         }
 
-        scores = context.get("scores", {})
-        drive_score = scores.get("drive", 0.0)
-        # 欲求に基づく行動だが、対外的コンテキスト（直近ユーザー活動など）が低い場合は内省(silent)に留める
-        if drive_score > 0.3 and scores.get("context", 0.0) < 0.2:
+        if context.get("is_silent_proactive", False):
             plan["silent"] = True
             plan["tools_allowed"] = True  # 内省時に調査ツールを使えるようにする
+            plan["proactive_reason"] = context.get("topic", "general")
 
         if limbic_mood:
             EmotionTemperatureModulator.apply(plan, limbic_mood)

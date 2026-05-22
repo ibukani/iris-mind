@@ -159,3 +159,9 @@ class DriveState:
             "social_need": round(self.social_need, 3),
             "maintenance": round(self.maintenance, 3),
         }
+
+    def get_dominant_needs(self) -> list[tuple[str, float]]:
+        """最も欲求レベルの高いものから順に返す"""
+        needs = [("curiosity", self.curiosity), ("social_need", self.social_need), ("maintenance", self.maintenance)]
+        needs.sort(key=lambda x: x[1], reverse=True)
+        return needs

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 import datetime
@@ -181,7 +180,7 @@ class LLMPipeline:
             return None
         return self._tool_executor.registry.list_tools(allow_side_effects=allow_side_effects) or None
 
-    def call(
+    async def call(
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None = None,
@@ -190,6 +189,7 @@ class LLMPipeline:
         context_hint: str = "",
         model_role: str = "default",
         max_tokens: int | None = None,
+        priority: int = 0,
     ) -> dict[str, Any]:
         self._sysprompt_cache = None
         response_style = ""
@@ -205,7 +205,7 @@ class LLMPipeline:
 
         msgs: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}, *messages]
 
-        return self._llm.chat(
+        return await self._llm.chat(
             messages=msgs,
             model=self._model_config.get_model(model_role),
             temperature=self._model_config.get_effective_temperature(model_role),
@@ -213,9 +213,10 @@ class LLMPipeline:
             tools=tools,
             on_token=on_token,
             interrupt_token=interrupt_token,
+            priority=priority,
         )
 
-    def generate(
+    async def generate(
         self,
         plan: dict[str, Any],
         messages: list[dict[str, Any]],
@@ -226,17 +227,24 @@ class LLMPipeline:
         model_role: str = plan.get("model_role", "default")
         context_hint: str = plan.get("context_hint", "")
         max_tokens: int | None = plan.get("max_tokens", 0) or None
+        priority: int = plan.get("priority", 0)
 
         if not plan.get("tools_allowed", True):
             temperature: float = plan.get("temperature", 0.5)
-            return self._generate_without_tools(
-                plan, messages, max_tokens, temperature, model_role=model_role, interrupt_token=interrupt_token
+            return await self._generate_without_tools(
+                plan,
+                messages,
+                max_tokens,
+                temperature,
+                model_role=model_role,
+                interrupt_token=interrupt_token,
+                priority=priority,
             )
 
         allow_side_effects: bool = plan.get("allow_side_effects", True)
         max_tool_iters = plan.get("max_tool_iterations")
 
-        return self._generate_with_tools(
+        return await self._generate_with_tools(
             messages,
             context_hint=context_hint,
             on_token=on_token,
@@ -245,9 +253,10 @@ class LLMPipeline:
             max_tokens=max_tokens,
             allow_side_effects=allow_side_effects,
             max_tool_iterations=max_tool_iters,
+            priority=priority,
         )
 
-    def _generate_without_tools(
+    async def _generate_without_tools(
         self,
         plan: dict[str, Any],
         messages: list[dict[str, Any]],
@@ -255,6 +264,7 @@ class LLMPipeline:
         temperature: float,
         model_role: str = "default",
         interrupt_token: InterruptToken | None = None,
+        priority: int = 0,
     ) -> str:
         context_hint: str = plan.get("context_hint", "")
         situation: str = plan.get("situation", "")
@@ -278,12 +288,13 @@ class LLMPipeline:
 
         text = ""
         try:
-            resp = self._llm.chat(
+            resp = await self._llm.chat(
                 messages=msgs,
                 model=self._model_config.get_model(model_role),
                 max_tokens=max_tokens or 80,
                 temperature=temperature,
                 interrupt_token=interrupt_token,
+                priority=priority,
             )
             text = str((resp.get("message", {}) or {}).get("content", "")).strip()
         except Exception as e:
@@ -302,7 +313,7 @@ class LLMPipeline:
 
         return text
 
-    def _generate_with_tools(
+    async def _generate_with_tools(
         self,
         messages: list[dict],
         on_token: Callable[[str], None] | None = None,
@@ -312,6 +323,7 @@ class LLMPipeline:
         max_tokens: int | None = None,
         allow_side_effects: bool = True,
         max_tool_iterations: int | None = None,
+        priority: int = 0,
     ) -> str:
         tools = self._get_tools(allow_side_effects=allow_side_effects)
         if tools and self._capability_checker and not self._capability_checker.supports_tools(model_role):
@@ -327,15 +339,14 @@ class LLMPipeline:
         )
 
         try:
-            final_text = asyncio.run(
-                workflow.run(
-                    messages=messages,
-                    model_role=model_role,
-                    max_tokens=max_tokens,
-                    tools=tools,
-                    context_hint=context_hint,
-                    iteration=0,
-                )
+            final_text = await workflow.run(
+                messages=messages,
+                model_role=model_role,
+                max_tokens=max_tokens,
+                tools=tools,
+                context_hint=context_hint,
+                iteration=0,
+                priority=priority,
             )
         except Exception as e:
             logger.error("Workflow failed: %s", e)

@@ -20,7 +20,7 @@ class FakeLLMProvider:
         self._messages_log: list[list[dict]] = []
         self._model_log: list[str | None] = []
 
-    def chat(
+    async def chat(
         self,
         messages: list[dict],
         model: str | None = None,

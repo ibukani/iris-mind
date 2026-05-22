@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from unittest.mock import MagicMock
-
 from iris.kernel.config import ModelConfig
 from iris.llm.interrupt_token import InterruptToken
 from iris.llm.llm_bridge import LLMBridge
@@ -65,32 +63,38 @@ def test_trim_repetition_single() -> None:
 
 def test_chat_non_streaming_repetition() -> None:
     bridge = _make_bridge()
-    mock_provider = MagicMock()
+    from unittest.mock import AsyncMock
+
+    mock_provider = AsyncMock()
     # 返り値に繰り返しを含める
     mock_provider.chat.return_value = {
         "message": {"role": "assistant", "content": "同じことを言います。全部、全部、全部、全部、"}
     }
     bridge._providers = {next(iter(bridge._providers)): mock_provider}
 
-    resp = bridge.chat(messages=[{"role": "user", "content": "hello"}])
+    import asyncio
+
+    resp = asyncio.run(bridge.chat(messages=[{"role": "user", "content": "hello"}]))
     content = resp["message"]["content"]
     assert content == "同じことを言います。全部、全部、… [繰り返し検知により中断]"
 
 
 def test_chat_streaming_repetition() -> None:
     bridge = _make_bridge()
-    mock_provider = MagicMock()
+    from unittest.mock import AsyncMock
+
+    mock_provider = AsyncMock()
 
     # ストリーミングのモック動作
     # chatを呼んだときに on_token を順次呼び出し、最終的な返り値を返す
-    def mock_chat(*args, **kwargs) -> dict:
+    async def mock_chat(*args, **kwargs) -> dict:
         on_token = kwargs.get("on_token")
         interrupt_token = kwargs.get("interrupt_token")
 
         tokens = ["これは", "ストリーム", "です。", "全部、", "全部、", "全部、", "全部、", "全部、"]
         content_parts = []
         for t in tokens:
-            if interrupt_token and interrupt_token.is_cancelled:
+            if interrupt_token and getattr(interrupt_token, "is_cancelled", False):
                 break
             content_parts.append(t)
             if on_token:
@@ -104,10 +108,14 @@ def test_chat_streaming_repetition() -> None:
     captured_tokens = []
     interrupt_token = InterruptToken()
 
-    resp = bridge.chat(
-        messages=[{"role": "user", "content": "hello"}],
-        on_token=captured_tokens.append,
-        interrupt_token=interrupt_token,
+    import asyncio
+
+    resp = asyncio.run(
+        bridge.chat(
+            messages=[{"role": "user", "content": "hello"}],
+            on_token=captured_tokens.append,
+            interrupt_token=interrupt_token,
+        )
     )
 
     # 4回目の「全部、」の時点でキャンセルされ、それ以降のトークンは呼ばれない

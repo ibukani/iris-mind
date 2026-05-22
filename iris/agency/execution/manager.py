@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 import logging
 from typing import TYPE_CHECKING, Any
@@ -10,7 +11,7 @@ from iris.agency.execution.monitor import OutputMonitor
 from iris.agency.execution.pipeline import LLMPipeline
 from iris.agency.execution.post_processor import PostProcessor
 from iris.event.event_bus import EventBus
-from iris.event.event_types import InputReady, MessageEvent, MonitorFeedback
+from iris.event.event_types import InputReady, MessageEvent, MonitorFeedback, ProactiveResultEvent
 from iris.io.models import StreamState
 from iris.llm.interrupt_token import InterruptToken
 
@@ -49,6 +50,7 @@ class ExecutionManager:
         self._post_processor = post_processor
         self._messages: list[dict[str, Any]] = messages if messages is not None else []
         self._interrupt_token: InterruptToken | None = None
+        self._bg_tasks: set[asyncio.Task] = set()
         self._bus.subscribe("PlanDecided", self._on_plan)
         self._event_bus.subscribe("InputReady", self._on_input_ready)
 
@@ -93,7 +95,9 @@ class ExecutionManager:
             plan.get("session_id"),
             plan.get("abbreviated"),
         )
-        self._execute_general(plan)
+        task = asyncio.create_task(self._execute_general(plan))
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
 
     def _update_inhibition_state(self) -> None:
         if self._monitor and self._inhibition:
@@ -141,7 +145,7 @@ class ExecutionManager:
         talkative: int = plan.get("talkative_degree", 0) or self._monitor.talkative_degree
         return talkative >= 2 or (self._monitor.frequency_exceeded and talkative >= 1)
 
-    def _execute_general(self, plan: dict[str, Any]) -> None:
+    async def _execute_general(self, plan: dict[str, Any]) -> None:
         content: str = plan.get("content", "")
         abbreviated: bool = plan.get("abbreviated", False)
         streaming: bool = plan.get("streaming", not abbreviated)
@@ -162,6 +166,9 @@ class ExecutionManager:
             # 無限ループや不要なトークン消費を防ぐため、ツール実行回数を厳密に制限する
             plan["max_tool_iterations"] = 3
 
+            # バックグラウンド処理として優先度を下げる
+            plan["priority"] = 1
+
             # 処理内容が未指定の場合、自律行動のためのベース指示（Origin Prompt）を構築する
             if not content:
                 base_instruction = "システムからの内部指示: 現在の目標や欲求に基づき、Web検索や記憶検索を用いて知識を深めるための自律的な調査を行ってください。"
@@ -178,13 +185,25 @@ class ExecutionManager:
 
         self._interrupt_token = InterruptToken()
         try:
-            response_text = self._run_llm_generation(plan, on_token, self._interrupt_token)
+            response_text = await self._run_llm_generation(plan, on_token, self._interrupt_token)
             self._finalize_execution(plan, response_text, show_thinking, record_history, silent)
         finally:
             self._interrupt_token = None
 
         if not silent and (run_reflexion or run_compression):
             self._post_processor.trigger_post_processes(plan, run_reflexion, run_compression)
+
+        if silent:
+            success = bool(response_text and "[Error:" not in response_text)
+            self._event_bus.publish(
+                ProactiveResultEvent(
+                    timestamp=None,
+                    source="execution",
+                    topic=plan.get("proactive_reason", ""),
+                    success=success,
+                    content=response_text,
+                )
+            )
 
     def _prepare_execution_context(
         self, plan: dict[str, Any], content: str, show_thinking: bool, record_history: bool, silent: bool = False
@@ -228,13 +247,13 @@ class ExecutionManager:
 
         return _on_token
 
-    def _run_llm_generation(
+    async def _run_llm_generation(
         self, plan: dict[str, Any], on_token: Callable[[str], None] | None, interrupt_token: InterruptToken | None
     ) -> str:
         try:
             if self._inhibition:
                 self._inhibition.set_generating(True)
-            response_text = self._pipeline.generate(
+            response_text = await self._pipeline.generate(
                 plan=plan,
                 messages=self._messages,
                 on_token=on_token,

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import logging
 import time
 from typing import TYPE_CHECKING, TypedDict
@@ -53,6 +53,7 @@ class _InhibitionState:
     generating: bool = False
     outputs_since_input: int = 0
     frequency_exceeded: bool = False
+    topic_cooldowns: dict[str, float] = field(default_factory=dict)
 
 
 class InhibitionController:
@@ -208,6 +209,18 @@ class InhibitionController:
     def set_cooldown(self, duration_sec: float = 600.0) -> None:
         self._state.cooldown_until = time.time() + duration_sec
         logger.info("Proactive cooldown set for %.0f seconds", duration_sec)
+
+    def record_topic(self, topic: str, duration_sec: float = 3600.0) -> None:
+        if not topic:
+            return
+        self._state.topic_cooldowns[topic] = time.time() + duration_sec
+        logger.info("Topic cooldown set for '%s' for %.0f seconds", topic, duration_sec)
+
+    def is_topic_suppressed(self, topic: str, now: float) -> bool:
+        if not topic:
+            return False
+        cooldown_until = self._state.topic_cooldowns.get(topic, 0.0)
+        return now < cooldown_until
 
     def set_mood(self, negative_score: float) -> None:
         self._state.negative_mood_score = max(0.0, min(1.0, negative_score))

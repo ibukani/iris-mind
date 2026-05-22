@@ -16,7 +16,7 @@ from iris.kernel.config import ModelConfig, ModelEntry
 class LLMProvider(Protocol):
     """LLM プロバイダインスタンスのインターフェース。"""
 
-    def chat(
+    async def chat(
         self,
         messages: list[dict],
         model: str | None = None,

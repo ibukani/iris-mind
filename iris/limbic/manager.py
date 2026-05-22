@@ -6,7 +6,7 @@ import time
 from typing import Any, Protocol, TypedDict, runtime_checkable
 
 from iris.event.event_bus import EventBus
-from iris.event.event_types import DebugSnapshotEvent, MessageEvent, TimerTick
+from iris.event.event_types import DebugSnapshotEvent, MessageEvent, ProactiveResultEvent, TimerTick
 from iris.limbic.acc import AnteriorCingulateCortex
 from iris.limbic.amygdala import Amygdala
 from iris.limbic.emotional_memory import EmotionalMemory
@@ -104,6 +104,7 @@ class LimbicManager:
             event_bus.subscribe("MessageEvent", self._on_message_event)
             event_bus.subscribe("TimerTick", self._on_timer_tick)
             event_bus.subscribe("MonitorFeedback", self._on_monitor_event)
+            event_bus.subscribe("ProactiveResultEvent", self._on_proactive_result)
 
     def _publish_snapshot(self, trigger: str) -> None:
         if self._event_bus is not None:
@@ -167,6 +168,25 @@ class LimbicManager:
             return
         self._apply_emotion_change(delta, "monitor_feedback")
         logger.debug("Limbic: monitor feedback applied -> emotion=%s", self._emotion.to_dict())
+
+    def _on_proactive_result(self, event: ProactiveResultEvent) -> None:
+        delta = EmotionDelta()
+        if event.success:
+            # 調査成功: 達成感・満足感
+            delta.valence += 0.2
+            delta.dominance += 0.1
+            delta.arousal -= 0.1
+            self.satisfy_drive("curiosity", 0.3)
+        else:
+            # 調査失敗: フラストレーション
+            delta.valence -= 0.15
+            delta.arousal += 0.2
+            delta.dominance -= 0.1
+
+        self._apply_emotion_change(delta, "proactive_result")
+        logger.debug(
+            "Limbic: proactive result applied -> success=%s emotion=%s", event.success, self._emotion.to_dict()
+        )
 
     # === 公開インターフェース ===
 

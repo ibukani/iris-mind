@@ -20,6 +20,7 @@ class InputEvent(Event):
     tools: list[dict[str, Any]] | None
     context_hint: str
     iteration: int
+    priority: int = 0
 
 
 class ToolCallEvent(Event):
@@ -30,6 +31,7 @@ class ToolCallEvent(Event):
     tools: list[dict[str, Any]] | None
     context_hint: str
     iteration: int
+    priority: int = 0
 
 
 class IrisExecutionWorkflow(Workflow):
@@ -70,6 +72,7 @@ class IrisExecutionWorkflow(Workflow):
             tools = ev.get("tools", None)
             context_hint = ev.get("context_hint", "")
             iteration = ev.get("iteration", 0)
+            priority = ev.get("priority", 0)
         else:
             messages = ev.messages
             model_role = ev.model_role
@@ -77,6 +80,7 @@ class IrisExecutionWorkflow(Workflow):
             tools = ev.tools
             context_hint = ev.context_hint
             iteration = ev.iteration
+            priority = ev.priority
 
         if iteration >= self._max_tool_iterations:
             logger.warning("Max tool iterations reached.")
@@ -87,13 +91,14 @@ class IrisExecutionWorkflow(Workflow):
         max_tok = max_tokens or self._model_config.get_effective_max_tokens(model_role)
 
         try:
-            resp = self._llm.chat(
+            resp = await self._llm.chat(
                 messages=messages,
                 model=model,
                 temperature=temp,
                 max_tokens=max_tok,
                 tools=tools,
                 interrupt_token=self._interrupt_token,
+                priority=priority,
             )
         except Exception as e:
             logger.error("LLM execution failed: %s", e)
@@ -115,6 +120,7 @@ class IrisExecutionWorkflow(Workflow):
             tools=tools,
             context_hint=context_hint,
             iteration=iteration + 1,
+            priority=priority,
         )
 
     @step
@@ -132,12 +138,13 @@ class IrisExecutionWorkflow(Workflow):
         if self._tool_executor.all_side_effects(results):
             return StopEvent(result="")
 
-        # Limit long output messages to avoid context explosion
-        for m in ev.messages[-len(ev.tool_calls) :]:
-            if m.get("role") == "tool":
-                content = str(m.get("content", ""))
-                if len(content) > self.MAX_TOOL_OUTPUT_LENGTH:
-                    m["content"] = content[: self.MAX_TOOL_OUTPUT_LENGTH] + "..."
+        non_side_effects_count = sum(1 for r in results if not r[2])
+        if non_side_effects_count > 0:
+            for m in ev.messages[-non_side_effects_count:]:
+                if m.get("role") == "tool":
+                    content = str(m.get("content", ""))
+                    if len(content) > self.MAX_TOOL_OUTPUT_LENGTH:
+                        m["content"] = content[: self.MAX_TOOL_OUTPUT_LENGTH] + "..."
 
         return InputEvent(
             messages=ev.messages,
@@ -146,4 +153,5 @@ class IrisExecutionWorkflow(Workflow):
             tools=ev.tools,
             context_hint=ev.context_hint,
             iteration=ev.iteration,
+            priority=ev.priority,
         )

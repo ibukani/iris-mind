@@ -6,6 +6,7 @@ OpenAI 互換 REST API を叩くプロバイダの共通基底クラス。
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 import json
 import logging
@@ -70,7 +71,7 @@ class OpenAICompatibleProvider:
 
         raise RuntimeError(f"{self.provider_name} API エラー (429 リトライ超過 {self._max_retries}回)")
 
-    def chat(
+    async def chat(
         self,
         messages: list[dict[str, Any]],
         model: str | None = None,
@@ -83,37 +84,43 @@ class OpenAICompatibleProvider:
         **kwargs: Any,
     ) -> dict[str, Any]:
         """LLM にチャットリクエストを送信する。"""
-        effective_model = model or self.default_model
 
-        body: dict[str, Any] = {
-            "model": effective_model,
-            "messages": messages,
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-            "stream": on_token is not None,
-        }
-        presence_penalty = kwargs.pop("presence_penalty", None)
-        if presence_penalty is not None:
-            body["presence_penalty"] = presence_penalty
-        frequency_penalty = kwargs.pop("frequency_penalty", None)
-        if frequency_penalty is not None:
-            body["frequency_penalty"] = frequency_penalty
+        def _sync_chat() -> dict[str, Any]:
+            effective_model = model or self.default_model
 
-        if tools:
-            body["tools"] = tools
+            body: dict[str, Any] = {
+                "model": effective_model,
+                "messages": messages,
+                "temperature": temperature,
+                "max_tokens": max_tokens,
+                "stream": on_token is not None,
+            }
+            presence_penalty = kwargs.pop("presence_penalty", None)
+            if presence_penalty is not None:
+                body["presence_penalty"] = presence_penalty
+            frequency_penalty = kwargs.pop("frequency_penalty", None)
+            if frequency_penalty is not None:
+                body["frequency_penalty"] = frequency_penalty
 
-        headers = self._get_headers()
+            if tools:
+                body["tools"] = tools
 
-        try:
-            if on_token is not None:
-                return self._stream_chat(body=body, headers=headers, on_token=on_token, interrupt_token=interrupt_token)
-            resp = self._request(body=body, headers=headers)
-            data = resp.json()
-            return _normalize_response(data)
-        except httpx.HTTPStatusError as e:
-            code = e.response.status_code
-            msg = _extract_error_text(e.response)
-            raise RuntimeError(f"{self.provider_name} API エラー ({code}): {msg}") from e
+            headers = self._get_headers()
+
+            try:
+                if on_token is not None:
+                    return self._stream_chat(
+                        body=body, headers=headers, on_token=on_token, interrupt_token=interrupt_token
+                    )
+                resp = self._request(body=body, headers=headers)
+                data = resp.json()
+                return _normalize_response(data)
+            except httpx.HTTPStatusError as e:
+                code = e.response.status_code
+                msg = _extract_error_text(e.response)
+                raise RuntimeError(f"{self.provider_name} API エラー ({code}): {msg}") from e
+
+        return await asyncio.to_thread(_sync_chat)
 
     def _stream_chat(
         self,

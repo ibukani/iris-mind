@@ -156,15 +156,19 @@ class LLMContextWindowManager:
         user_prompt += f"■ 新規の会話履歴:\n{text}"
 
         try:
-            resp = self._llm.chat(
-                messages=[
-                    {"role": "system", "content": _COMPACT_PROMPT},
-                    {"role": "user", "content": user_prompt},
-                ],
-                model=self._compact_model,
-                temperature=0.3,
-                max_tokens=500,
-                num_ctx=4096,
+            import asyncio
+
+            resp = asyncio.run(
+                self._llm.chat(
+                    messages=[
+                        {"role": "system", "content": _COMPACT_PROMPT},
+                        {"role": "user", "content": user_prompt},
+                    ],
+                    model=self._compact_model,
+                    temperature=0.3,
+                    max_tokens=500,
+                    num_ctx=4096,
+                )
             )
             return resp.get("message", {}).get("content", "").strip()  # type: ignore[no-any-return]
         except Exception as e:

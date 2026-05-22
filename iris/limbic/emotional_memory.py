@@ -20,13 +20,25 @@ class EmotionTag(TypedDict):
     intensity: float
 
 
+def _pad_to_tuple(v: EmotionState | Mapping[str, Any]) -> tuple[float, float, float]:
+    if isinstance(v, EmotionState):
+        return (v.valence, v.arousal, v.dominance)
+    return (float(v.get("valence", 0)), float(v.get("arousal", 0)), float(v.get("dominance", 0)))
+
+
+def _pad_distance(a: EmotionState | Mapping[str, Any], b: Mapping[str, Any] | EmotionState) -> float:
+    a_v, a_a, a_d = _pad_to_tuple(a)
+    b_v, b_a, b_d = _pad_to_tuple(b)
+    return math.sqrt((a_v - b_v) ** 2 + (a_a - b_a) ** 2 + (a_d - b_d) ** 2)
+
+
 class EmotionalMemory:
     """扁桃体-海馬相互作用: 記憶への感情タグ付け。
 
     脳科学:
-      扁桃体と海馬は密接に連携し、感情を伴ったエピソード記憶の
-      符号化と検索を強化する。感情強度の高い記憶ほど強く定着し、
-      想起されやすくなる。
+       扁桃体と海馬は密接に連携し、感情を伴ったエピソード記憶の
+       符号化と検索を強化する。感情強度の高い記憶ほど強く定着し、
+       想起されやすくなる。
     """
 
     def __init__(
@@ -38,15 +50,38 @@ class EmotionalMemory:
         self._semantic_store = semantic_store
         self._recent_tags: list[EmotionTag] = []
 
+    def _push_recent_tag(self, tag: EmotionTag) -> None:
+        self._recent_tags.append(tag)
+        if len(self._recent_tags) > 50:
+            self._recent_tags.pop(0)
+
+    def _persist_episodic(self, content: str, emotion_dict: dict[str, float], intensity: float) -> None:
+        if self._episodic_store is None:
+            return
+        self._episodic_store.add(
+            summary=content[:80],
+            metadata={
+                "type": "emotion_tag",
+                "emotion": emotion_dict,
+                "intensity": round(intensity, 4),
+            },
+        )
+
+    def _persist_semantic(self, content: str, emotion_dict: dict[str, float], label: str, intensity: float) -> None:
+        if self._semantic_store is None:
+            return
+        self._semantic_store.add(
+            {
+                "content": content[:120],
+                "type": "emotional_memory",
+                "tags": ["emotion", label],
+                "emotion": emotion_dict,
+                "intensity": round(intensity, 4),
+                "timestamp": datetime.now(UTC).isoformat(),
+            }
+        )
+
     def tag(self, content: str, emotion: EmotionState) -> None:
-        """会話内容に感情タグを付与して記録する。
-
-        感情強度が閾値を超えた場合、EpisodicStore / SemanticStore にも永続化する。
-
-        Args:
-            content: タグ付け対象のテキスト
-            emotion: その時点の感情状態
-        """
         emotion_dict = emotion.to_dict()
         intensity = abs(emotion.valence) * emotion.arousal
         tag: EmotionTag = {
@@ -54,37 +89,15 @@ class EmotionalMemory:
             "emotion": emotion_dict,
             "intensity": round(intensity, 4),
         }
-        self._recent_tags.append(tag)
-        if len(self._recent_tags) > 50:
-            self._recent_tags.pop(0)
+        self._push_recent_tag(tag)
 
-        if intensity > _EMOTION_INTENSITY_THRESHOLD and self._episodic_store:
-            summary = content[:80]
-            self._episodic_store.add(
-                summary=summary,
-                metadata={
-                    "type": "emotion_tag",
-                    "emotion": emotion_dict,
-                    "intensity": round(intensity, 4),
-                },
-            )
-
-        if intensity > _EMOTION_INTENSITY_THRESHOLD and self._semantic_store:
-            self._semantic_store.add(
-                {
-                    "content": content[:120],
-                    "type": "emotional_memory",
-                    "tags": ["emotion", _emotion_label(emotion)],
-                    "emotion": emotion_dict,
-                    "intensity": round(intensity, 4),
-                    "timestamp": datetime.now(UTC).isoformat(),
-                }
-            )
+        if intensity > _EMOTION_INTENSITY_THRESHOLD:
+            self._persist_episodic(content, emotion_dict, intensity)
+            self._persist_semantic(content, emotion_dict, _emotion_label(emotion), intensity)
 
         logger.debug("EmotionalMemory tagged: intensity=%.3f label=%s", intensity, _emotion_label(emotion))
 
     def get_recent_tags(self, n: int = 5) -> list[EmotionTag]:
-        """最近の感情タグを強度順で返す。"""
         sorted_tags = sorted(
             self._recent_tags,
             key=lambda t: t["intensity"],
@@ -93,7 +106,6 @@ class EmotionalMemory:
         return sorted_tags[:n]
 
     def salient_summary(self) -> str:
-        """直近の感情的なトピックの要約を生成する。"""
         if not self._recent_tags:
             return ""
         n_positive = sum(1 for t in self._recent_tags if t["emotion"]["valence"] > 0.3)
@@ -110,18 +122,6 @@ class EmotionalMemory:
         target: EmotionState,
         max_results: int = 5,
     ) -> list[dict[str, Any]]:
-        """感情状態に近い記憶を検索（強度順）。
-
-        EpisodicStore の永続化された感情タグから、
-        指定された感情状態とのPAD距離が近いものを返す。
-
-        Args:
-            target: 検索基準となる感情状態
-            max_results: 最大件数
-
-        Returns:
-            感情距離が近い順の記憶リスト
-        """
         if not self._episodic_store:
             return []
 
@@ -142,16 +142,6 @@ class EmotionalMemory:
 
         scored.sort(key=lambda x: x[0], reverse=True)
         return [e for _, e in scored[:max_results]]
-
-
-def _pad_distance(a: EmotionState | Mapping[str, Any], b: Mapping[str, Any] | EmotionState) -> float:
-    a_val = float(a.valence) if isinstance(a, EmotionState) else float(a.get("valence", 0))
-    a_aro = float(a.arousal) if isinstance(a, EmotionState) else float(a.get("arousal", 0))
-    a_dom = float(a.dominance) if isinstance(a, EmotionState) else float(a.get("dominance", 0))
-    b_val = float(b.valence) if isinstance(b, EmotionState) else float(b.get("valence", 0))
-    b_aro = float(b.arousal) if isinstance(b, EmotionState) else float(b.get("arousal", 0))
-    b_dom = float(b.dominance) if isinstance(b, EmotionState) else float(b.get("dominance", 0))
-    return math.sqrt((a_val - b_val) ** 2 + (a_aro - b_aro) ** 2 + (a_dom - b_dom) ** 2)
 
 
 def _emotion_label(emotion: EmotionState) -> str:

@@ -135,6 +135,14 @@ _PASSIVE_PATTERNS: list[tuple[re.Pattern, float]] = [
 ]
 
 
+class _KeywordCounter:
+    def __init__(self, words: frozenset[str]) -> None:
+        self._words = words
+
+    def count(self, text: str) -> int:
+        return sum(1 for w in self._words if w in text)
+
+
 class Amygdala:
     """扁桃体: 入力テキストの感情評価。
 
@@ -142,47 +150,38 @@ class Amygdala:
     Phase 2 (将来): LLMアシスト（高精度）
 
     脳科学:
-      扁桃体は感覚入力の感情的な意義を素早く評価する。
-      特に恐怖・報酬・社会的刺激に対して即時的な価値判断を行う。
+       扁桃体は感覚入力の感情的な意義を素早く評価する。
+       特に恐怖・報酬・社会的刺激に対して即時的な価値判断を行う。
     """
 
     def __init__(self) -> None:
-        self._positive = _POSITIVE_WORDS
-        self._negative = _NEGATIVE_WORDS
-        self._high_arousal = _HIGH_AROUSAL_MARKERS
-        self._appreciation = _APPRECIATION_WORDS
-        self._criticism = _CRITICISM_WORDS
+        self._positive = _KeywordCounter(_POSITIVE_WORDS)
+        self._negative = _KeywordCounter(_NEGATIVE_WORDS)
+        self._high_arousal = _KeywordCounter(_HIGH_AROUSAL_MARKERS)
+        self._appreciation = _KeywordCounter(_APPRECIATION_WORDS)
+        self._criticism = _KeywordCounter(_CRITICISM_WORDS)
 
     def evaluate(self, text: str) -> EmotionDelta:
-        """入力テキストから感情変化量を推定する。
-
-        Returns:
-            テキストが誘発すべき感情変化量。
-        """
         if not text:
             return EmotionDelta()
 
         lower = text.lower()
-        n_pos = sum(1 for w in self._positive if w in lower)
-        n_neg = sum(1 for w in self._negative if w in lower)
-        n_arousal_markers = sum(1 for m in self._high_arousal if m in text)
+        n_pos = self._positive.count(lower)
+        n_neg = self._negative.count(lower)
+        n_arousal = self._high_arousal.count(text)
+        n_appreciation = self._appreciation.count(lower)
+        n_criticism = self._criticism.count(lower)
 
         if n_pos > 2 or n_neg > 2:
-            logger.info(
-                "Amygdala: significant emotional input (pos=%d neg=%d arousal=%d)",
-                n_pos,
-                n_neg,
-                n_arousal_markers,
-            )
+            logger.info("Amygdala: significant emotional input (pos=%d neg=%d arousal=%d)", n_pos, n_neg, n_arousal)
 
-        n_appreciation = sum(1 for w in self._appreciation if w in lower)
-        n_criticism = sum(1 for w in self._criticism if w in lower)
+        if n_pos == 0 and n_neg == 0 and n_arousal == 0:
+            return EmotionDelta()
 
         valence_raw = (n_pos - n_neg) / max(n_pos + n_neg, 1)
-        arousal_raw = min(n_arousal_markers / 3.0, 1.0)
-        total_len = len(text)
+        arousal_raw = min(n_arousal / 3.0, 1.0)
 
-        if total_len < 10:
+        if len(text) < 10:
             arousal_raw *= 0.5
 
         if n_appreciation > 0:
@@ -192,17 +191,10 @@ class Amygdala:
 
         dominance_score = self._estimate_dominance(text)
 
-        valence = max(-1.0, min(1.0, valence_raw))
-        arousal = max(0.0, min(1.0, arousal_raw))
-        dominance = max(-1.0, min(1.0, dominance_score))
-
-        if n_pos == 0 and n_neg == 0 and n_arousal_markers == 0:
-            return EmotionDelta()
-
         return EmotionDelta(
-            valence=valence * 0.8,
-            arousal=arousal * 0.8,
-            dominance=dominance * 0.6,
+            valence=max(-1.0, min(1.0, valence_raw)) * 0.8,
+            arousal=max(0.0, min(1.0, arousal_raw)) * 0.8,
+            dominance=max(-1.0, min(1.0, dominance_score)) * 0.6,
         )
 
     def evaluate_basic(self, text: str) -> str | None:

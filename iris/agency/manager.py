@@ -14,22 +14,14 @@ class AgencyManager:
         self,
         planning: PlanningManager,
         execution: ExecutionManager,
-        inhibition: InhibitionController | None = None,
+        inhibition: InhibitionController,
     ) -> None:
-        self._planning = planning
-        self._execution = execution
-        self._inhibition = inhibition
+        self.planning = planning
+        self.execution = execution
+        self.inhibition = inhibition
 
     def get_state(self) -> dict:
-        state: dict = {
-            "execution": self._execution.get_state(),
+        return {
+            "execution": self.execution.get_state(),
+            "inhibition": self.inhibition.get_state(),
         }
-        if self._inhibition is not None:
-            state["inhibition"] = self._inhibition.get_state()
-        return state
-
-    def compact_context(self) -> str:
-        return self._execution.compact_context()
-
-    def flush_memory(self) -> None:
-        self._execution.flush_memory()

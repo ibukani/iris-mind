@@ -15,7 +15,7 @@ from iris.memory.manager import MemoryManager
 
 if TYPE_CHECKING:
     from iris.limbic.manager import LimbicManager
-    from iris.limbic.models import EmotionState
+    from iris.limbic.models import DriveState, EmotionState
 
 logger = logging.getLogger(__name__)
 
@@ -345,10 +345,11 @@ class PlanningManager:
     def _on_input_ready(self, event: InputReady) -> None:
         context = event.context or {}
         limbic_mood = self._resolve_limbic_mood()
+        limbic_drive = self._limbic.current_drive() if self._limbic else None
         gate = self._inhibition.evaluate(time.time())
 
         if context.get("from_timer") or "system_event" in context:
-            self._handle_proactive_event(event, context, gate, limbic_mood)
+            self._handle_proactive_event(event, context, gate, limbic_mood, limbic_drive)
             return
 
         self._inhibition.notify_user_activity()
@@ -374,6 +375,7 @@ class PlanningManager:
         context: dict,
         gate: GateVerdict,
         limbic_mood: EmotionState | None,
+        limbic_drive: DriveState | None = None,
     ) -> None:
         if "system_event" in context:
             self._inhibition.set_cooldown(30.0)
@@ -393,6 +395,7 @@ class PlanningManager:
             last_user_activity=self._inhibition.last_user_activity,
             negative_mood_score=self._inhibition.negative_mood_score,
             limbic_mood=limbic_mood,
+            limbic_drive=limbic_drive,
             content=event.content,
             context=context,
             ignore_count=self._inhibition.consecutive_ignores,
@@ -437,7 +440,16 @@ class PlanningManager:
             "run_reflexion": False,
             "run_compression": False,
             "record_history": True,
+            "silent": False,
         }
+
+        scores = context.get("scores", {})
+        drive_score = scores.get("drive", 0.0)
+        # 欲求に基づく行動だが、対外的コンテキスト（直近ユーザー活動など）が低い場合は内省(silent)に留める
+        if drive_score > 0.3 and scores.get("context", 0.0) < 0.2:
+            plan["silent"] = True
+            plan["tools_allowed"] = True  # 内省時に調査ツールを使えるようにする
+
         if limbic_mood:
             EmotionTemperatureModulator.apply(plan, limbic_mood)
         plan["current_emotion"] = limbic_mood

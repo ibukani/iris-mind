@@ -214,7 +214,11 @@ class LLMPipeline:
         )
 
     def generate(
-        self, plan: dict[str, Any], messages: list[dict[str, Any]], on_token: Callable[[str], None] | None = None
+        self,
+        plan: dict[str, Any],
+        messages: list[dict[str, Any]],
+        on_token: Callable[[str], None] | None = None,
+        interrupt_token: InterruptToken | None = None,
     ) -> str:
         self._sysprompt_cache = None
         model_role: str = plan.get("model_role", "default")
@@ -223,12 +227,15 @@ class LLMPipeline:
 
         if not plan.get("tools_allowed", True):
             temperature: float = plan.get("temperature", 0.5)
-            return self._generate_without_tools(plan, messages, max_tokens, temperature, model_role=model_role)
+            return self._generate_without_tools(
+                plan, messages, max_tokens, temperature, model_role=model_role, interrupt_token=interrupt_token
+            )
 
         return self._generate_with_tools(
             messages,
             context_hint=context_hint,
             on_token=on_token,
+            interrupt_token=interrupt_token,
             model_role=model_role,
             max_tokens=max_tokens,
         )
@@ -240,6 +247,7 @@ class LLMPipeline:
         max_tokens: int | None,
         temperature: float,
         model_role: str = "default",
+        interrupt_token: InterruptToken | None = None,
     ) -> str:
         context_hint: str = plan.get("context_hint", "")
         situation: str = plan.get("situation", "")
@@ -268,6 +276,7 @@ class LLMPipeline:
                 model=self._model_config.get_model(model_role),
                 max_tokens=max_tokens or 80,
                 temperature=temperature,
+                interrupt_token=interrupt_token,
             )
             text = str((resp.get("message", {}) or {}).get("content", "")).strip()
         except Exception as e:
@@ -299,51 +308,33 @@ class LLMPipeline:
         if tools and self._capability_checker and not self._capability_checker.supports_tools(model_role):
             tools = None
 
-        iteration = 0
-        tool_iters: list[dict] = []
+        import asyncio
 
-        while iteration < self._max_tool_iterations:
-            if interrupt_token and interrupt_token.is_cancelled:
-                logger.debug("LLMPipeline: interrupted during tool iteration")
-                break
+        from iris.agency.execution.workflow import IrisExecutionWorkflow
 
-            iteration += 1
-            resp = self.call(
-                messages,
-                tools=tools,
-                on_token=on_token,
-                interrupt_token=interrupt_token,
-                context_hint=context_hint,
-                model_role=model_role,
-                max_tokens=max_tokens,
+        workflow = IrisExecutionWorkflow(
+            llm=self._llm,
+            model_config=self._model_config,
+            tool_executor=self._tool_executor,
+            max_tool_iterations=self._max_tool_iterations,
+            interrupt_token=interrupt_token,
+            timeout=None,
+        )
+
+        try:
+            final_text = asyncio.run(
+                workflow.run(
+                    messages=messages,
+                    model_role=model_role,
+                    max_tokens=max_tokens,
+                    tools=tools,
+                    context_hint=context_hint,
+                    iteration=0,
+                )
             )
-            msg = resp.get("message", {})
-
-            if not msg.get("tool_calls") or self._tool_executor is None:
-                final_text: str = msg.get("content", "") or ""
-                if final_text:
-                    sys_prompt = getattr(self, "_last_system_prompt", "")
-                    self._capture_debug(
-                        model_role=model_role,
-                        system_prompt=sys_prompt,
-                        messages=messages,
-                        tools=tools,
-                        response=final_text,
-                        tool_iterations=tool_iters,
-                    )
-                    return final_text
-                continue
-
-            messages.append(msg)
-            results = self._tool_executor.execute_all(messages)
-            tool_iters.append({"tool_calls": msg["tool_calls"], "results": results})
-
-            if self._tool_executor.all_side_effects(results):
-                break
-
-            for m in messages[-len(msg["tool_calls"]) :]:
-                if m["role"] == "tool" and len(m.get("content", "")) > 200:
-                    m["content"] = m["content"][:200] + "..."
+        except Exception as e:
+            logger.error("Workflow failed: %s", e)
+            final_text = ""
 
         sys_prompt = getattr(self, "_last_system_prompt", "")
         self._capture_debug(
@@ -351,11 +342,11 @@ class LLMPipeline:
             system_prompt=sys_prompt,
             messages=messages,
             tools=tools,
-            response="",
-            tool_iterations=tool_iters,
+            response=str(final_text),
+            tool_iterations=workflow.get_tool_iterations_log(),
         )
 
-        return ""
+        return str(final_text)
 
     def _capture_debug(
         self,

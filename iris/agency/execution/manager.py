@@ -10,8 +10,9 @@ from iris.agency.execution.monitor import OutputMonitor
 from iris.agency.execution.pipeline import LLMPipeline
 from iris.agency.execution.post_processor import PostProcessor
 from iris.event.event_bus import EventBus
-from iris.event.event_types import MessageEvent, MonitorFeedback
+from iris.event.event_types import InputReady, MessageEvent, MonitorFeedback
 from iris.io.models import StreamState
+from iris.llm.interrupt_token import InterruptToken
 
 if TYPE_CHECKING:
     from iris.limbic.models import EmotionState
@@ -47,13 +48,27 @@ class ExecutionManager:
         self._memory = memory
         self._post_processor = post_processor
         self._messages: list[dict[str, Any]] = messages if messages is not None else []
+        self._interrupt_token: InterruptToken | None = None
         self._bus.subscribe("PlanDecided", self._on_plan)
+        self._event_bus.subscribe("InputReady", self._on_input_ready)
 
     def get_state(self) -> dict:
         state = self._post_processor.get_state()
         state["msg_count"] = len(self._messages)
         state["talkative_degree"] = self._monitor.talkative_degree if self._monitor else 0
         return state
+
+    def _on_input_ready(self, event: InputReady) -> None:
+        # ユーザー入力が来た場合、現在実行中の処理があれば中断する
+        context = event.context or {}
+        if (
+            not context.get("from_timer")
+            and "system_event" not in context
+            and self._interrupt_token
+            and not self._interrupt_token.is_cancelled
+        ):
+            logger.info("ExecutionManager: cancelling current execution due to new user input")
+            self._interrupt_token.cancel()
 
     def _on_plan(self, event: PlanDecided) -> None:
         plan = event.plan
@@ -134,26 +149,39 @@ class ExecutionManager:
         run_reflexion: bool = plan.get("run_reflexion", not abbreviated)
         run_compression: bool = plan.get("run_compression", not abbreviated)
         record_history: bool = plan.get("record_history", True)
+        silent: bool = plan.get("silent", False)
+
+        if silent:
+            streaming = False
+            show_thinking = False
+
         if content:
             plan["tools_allowed"] = True
 
-        self._prepare_execution_context(plan, content, show_thinking, record_history)
+        self._prepare_execution_context(plan, content, show_thinking, record_history, silent)
         on_token = self._create_stream_callback() if streaming else None
-        response_text = self._run_llm_generation(plan, on_token)
-        self._finalize_execution(plan, response_text, show_thinking, record_history)
 
-        if run_reflexion or run_compression:
+        self._interrupt_token = InterruptToken()
+        try:
+            response_text = self._run_llm_generation(plan, on_token, self._interrupt_token)
+            self._finalize_execution(plan, response_text, show_thinking, record_history, silent)
+        finally:
+            self._interrupt_token = None
+
+        if not silent and (run_reflexion or run_compression):
             self._post_processor.trigger_post_processes(plan, run_reflexion, run_compression)
 
     def _prepare_execution_context(
-        self, plan: dict[str, Any], content: str, show_thinking: bool, record_history: bool
+        self, plan: dict[str, Any], content: str, show_thinking: bool, record_history: bool, silent: bool = False
     ) -> None:
         if record_history and content:
-            self._messages.append({"role": "user", "content": content})
+            role = "thought" if silent else "user"
+            self._messages.append({"role": role, "content": content})
             self._post_processor.record_activity()
 
         if content and self._memory:
-            self._memory.short_term.add_turn("user", content)
+            role = "thought" if silent else "user"
+            self._memory.short_term.add_turn(role, content)
 
         if show_thinking:
             self._event_bus.publish(
@@ -185,7 +213,9 @@ class ExecutionManager:
 
         return _on_token
 
-    def _run_llm_generation(self, plan: dict[str, Any], on_token: Callable[[str], None] | None) -> str:
+    def _run_llm_generation(
+        self, plan: dict[str, Any], on_token: Callable[[str], None] | None, interrupt_token: InterruptToken | None
+    ) -> str:
         try:
             if self._inhibition:
                 self._inhibition.set_generating(True)
@@ -193,6 +223,7 @@ class ExecutionManager:
                 plan=plan,
                 messages=self._messages,
                 on_token=on_token,
+                interrupt_token=interrupt_token,
             )
         except Exception as e:
             response_text = f"[Error: {e}]"
@@ -203,7 +234,7 @@ class ExecutionManager:
         return response_text
 
     def _finalize_execution(
-        self, plan: dict[str, Any], response_text: str, show_thinking: bool, record_history: bool
+        self, plan: dict[str, Any], response_text: str, show_thinking: bool, record_history: bool, silent: bool = False
     ) -> None:
         session_id: str = plan.get("session_id", "")
         if not response_text:
@@ -221,12 +252,14 @@ class ExecutionManager:
             return
 
         if record_history:
-            self._messages.append({"role": "assistant", "content": response_text})
+            role = "thought" if silent else "assistant"
+            self._messages.append({"role": role, "content": response_text})
             self._post_processor.record_activity()
             self._post_processor.increment_reflect_count()
 
         if response_text and self._memory:
-            self._memory.short_term.add_turn("assistant", response_text)
+            role = "thought" if silent else "assistant"
+            self._memory.short_term.add_turn(role, response_text)
 
         logger.info(
             "ExecutionManager: response session=%s len=%d",
@@ -246,15 +279,16 @@ class ExecutionManager:
                 )
             )
 
-        self._event_bus.publish(
-            MessageEvent(
-                timestamp=None,
-                source="execution",
-                msg_type="chat",
-                content=response_text,
-                direction="response",
+        if not silent:
+            self._event_bus.publish(
+                MessageEvent(
+                    timestamp=None,
+                    source="execution",
+                    msg_type="chat",
+                    content=response_text,
+                    direction="response",
+                )
             )
-        )
 
         if self._monitor:
             flags = self._monitor.record_output()

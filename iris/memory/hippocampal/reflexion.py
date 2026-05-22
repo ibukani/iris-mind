@@ -96,7 +96,10 @@ class Reflexion:
         raw = resp.get("message", {}).get("content")
         content = raw if isinstance(raw, str) else ""
         try:
-            return json.loads(content)
+            result = json.loads(content)
+            if isinstance(result, dict):
+                return result
+            return fallback(content)
         except (json.JSONDecodeError, TypeError):
             return fallback(content)
 

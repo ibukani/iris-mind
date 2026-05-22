@@ -10,7 +10,7 @@ from iris.event.event_types import DebugSnapshotEvent, MessageEvent, TimerTick
 from iris.limbic.acc import AnteriorCingulateCortex
 from iris.limbic.amygdala import Amygdala
 from iris.limbic.emotional_memory import EmotionalMemory
-from iris.limbic.models import EmotionDelta, EmotionState
+from iris.limbic.models import DriveState, EmotionDelta, EmotionState
 
 
 class _MoodEntry(TypedDict):
@@ -95,6 +95,7 @@ class LimbicManager:
         self._acc = acc or AnteriorCingulateCortex()
         self._emotional_memory = emotional_memory or EmotionalMemory()
         self._emotion = EmotionState()
+        self._drive = DriveState()
         self._big_five_provider: BigFiveProvider | None = None
 
         self._last_decay_time: float = time.time()
@@ -111,7 +112,10 @@ class LimbicManager:
                     timestamp=None,
                     source="limbic",
                     category="limbic.emotion",
-                    data=self._emotion.to_dict(),
+                    data={
+                        "emotion": self._emotion.to_dict(),
+                        "drive": self._drive.to_dict(),
+                    },
                     trigger=trigger,
                 )
             )
@@ -133,6 +137,7 @@ class LimbicManager:
         logger.debug("Limbic: input evaluated -> emotion=%s", self._emotion.to_dict())
 
     def _on_timer_tick(self, event: TimerTick) -> None:
+        self._drive.accumulate()
         if event.tick_count % 6 == 0:
             self._decay()
 
@@ -169,6 +174,7 @@ class LimbicManager:
         e = self.current_emotion()
         return {
             "emotion": e.to_dict(),
+            "drive": self._drive.to_dict(),
             "mood": self.build_mood_description(style="short"),
         }
 
@@ -176,6 +182,15 @@ class LimbicManager:
         """現在の感情状態を取得する。"""
         self._decay()
         return self._emotion
+
+    def current_drive(self) -> DriveState:
+        """現在の欲求状態を取得する。"""
+        return self._drive
+
+    def satisfy_drive(self, need_type: str, amount: float) -> None:
+        """特定の行動による欲求の解消を行う。"""
+        self._drive.satisfy(need_type, amount)
+        self._publish_snapshot(f"satisfy_{need_type}")
 
     @staticmethod
     def _is_neutral(e: EmotionState) -> bool:

@@ -95,3 +95,67 @@ BASIC_EMOTIONS: dict[str, EmotionDelta] = {
     "anticipation": EmotionDelta(valence=0.4, arousal=0.6, dominance=0.2),
     "calmness": EmotionDelta(valence=0.3, arousal=-0.6, dominance=0.1),
 }
+
+
+@dataclass
+class DriveState:
+    """PSI理論等の認知アーキテクチャに基づく動機づけ（欲求）モデル。
+
+    時間経過とともに自然蓄積し、行動（対話や検索など）によって解消される。
+
+    Attributes:
+        curiosity: 情報探索や思考の動機（不確実性の解消）。検索などで低下。
+        social_need: ユーザーとの対話の動機（親和欲求）。発話で低下。
+        maintenance: 記憶整理の動機（自己保全）。Reflexion等で低下。
+    """
+
+    curiosity: float = 0.0
+    social_need: float = 0.0
+    maintenance: float = 0.0
+    updated_at: float = field(default_factory=time.time)
+
+    def accumulate(self, dt: float | None = None) -> None:
+        """時間経過による欲求の自然蓄積。"""
+        if dt is None:
+            now = time.time()
+            dt = now - self.updated_at
+            self.updated_at = now
+        else:
+            self.updated_at += dt
+
+        if dt <= 0:
+            return
+
+        minutes = dt / 60.0
+        # 各欲求の蓄積レート（1分あたり）
+        rate_curiosity = 0.015
+        rate_social = 0.01
+        rate_maintenance = 0.005
+
+        self.curiosity += rate_curiosity * minutes
+        self.social_need += rate_social * minutes
+        self.maintenance += rate_maintenance * minutes
+
+        self._clamp()
+
+    def satisfy(self, need_type: str, amount: float) -> None:
+        """行動による欲求の解消（低下）。"""
+        if need_type == "curiosity":
+            self.curiosity -= amount
+        elif need_type == "social_need":
+            self.social_need -= amount
+        elif need_type == "maintenance":
+            self.maintenance -= amount
+        self._clamp()
+
+    def _clamp(self) -> None:
+        self.curiosity = max(0.0, min(1.0, self.curiosity))
+        self.social_need = max(0.0, min(1.0, self.social_need))
+        self.maintenance = max(0.0, min(1.0, self.maintenance))
+
+    def to_dict(self) -> dict[str, float]:
+        return {
+            "curiosity": round(self.curiosity, 3),
+            "social_need": round(self.social_need, 3),
+            "maintenance": round(self.maintenance, 3),
+        }

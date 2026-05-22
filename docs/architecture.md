@@ -40,16 +40,20 @@ flowchart TD
         M_Personality["personality/<br/>話し方・自己状態"]
     end
 
-    subgraph Agency["agency/ 前頭前野+大脳基底核+運動野"]
+    subgraph Agency["agency/ 前頭前野+基底核+運動野"]
         A_Bus["bus/ 内部EventBus"]
 
         subgraph Planning["planning/ 前頭前野"]
             P_Manager["PlanningManager<br/>意思決定"]
+            P_Judge["ProactiveJudge<br/>判断フロー"]
             P_Scoring["ProactiveScoring<br/>PFCスコアリング"]
         end
 
-        subgraph Execution["execution/ 基底核+運動野"]
-            INH["InhibitionController<br/>基底核抑制"]
+        subgraph Inhibition["inhibition/ 基底核"]
+            INH["InhibitionController<br/>抑制制御"]
+        end
+
+        subgraph Execution["execution/ 運動野"]
             E_Manager["ExecutionManager<br/>行動実行"]
             E_LLM["LLMPipeline<br/>LLM呼出+ツールループ"]
         end
@@ -73,6 +77,7 @@ flowchart TD
     EB --- Infra
 
     A_Bus --- Planning
+    A_Bus --- Inhibition
     A_Bus --- Execution
 
     Limbic -.->|感情タグ| Memory
@@ -185,19 +190,33 @@ iris/
 ├── agency/                    # 高度認知: PFC + 基底核 + 運動野
 │   ├── __init__.py
 │   ├── manager.py             AgencyManager（compact_contextの中継のみ）
-│   ├── bus.py                 Internal EventBus
-│   ├── planning/
+│   ├── bus.py                 Internal EventBus（planning→inhibition→execution）
+│   ├── planning/              # 前頭前野: 意思決定
 │   │   ├── __init__.py
 │   │   ├── manager.py         PlanningManager（意思決定, InputReady購読）
-│   │   └── scoring.py         ProactiveScoring（PFCスコアリング）
-│   └── execution/
+│   │   ├── context_hint_builder.py  ContextHintBuilder（文脈ヒント構築）
+│   │   ├── emotion_temperature.py   EmotionTemperatureModulator（PAD→temperature）
+│   │   ├── question_generator.py    QuestionGenerator（LLM質問生成）
+│   │   ├── task_content.py          is_task_content（タスク判定）
+│   │   ├── decisions/         # プロアクティブ判断サブパッケージ
+│   │   │   ├── __init__.py    ProactiveJudge, ProactiveScoring を公開
+│   │   │   ├── judge.py       ProactiveJudge（判断フロー）
+│   │   │   └── scoring.py     ProactiveScoring（PFCスコアリング）
+│   │   └── strategies/        # 計画構築ストラテジ
+│   │       ├── __init__.py
+│   │       ├── response.py    ResponsePlanStrategy（応答計画）
+│   │       └── proactive.py   ProactivePlanStrategy（自発発話計画）
+│   ├── inhibition/            # 基底核: 抑制制御
+│   │   ├── __init__.py        InhibitionController, GateVerdict を公開
+│   │   └── controller.py      InhibitionController（Gate評価, トピックcooldown）
+│   └── execution/             # 運動野: 行動実行
 │       ├── __init__.py
 │       ├── manager.py         ExecutionManager（行動実行, _execute_general統一）
 │       ├── pipeline.py        LLMPipeline（generate + ツールループ）
-│       ├── inhibition.py      InhibitionController（基底核抑制, GateVerdict）
-│       ├── workflow.py        IrisExecutionWorkflow（LlamaIndex Workflow パイプライン）
+│       ├── workflow.py        IrisExecutionWorkflow（パイプライン）
 │       ├── monitor.py         OutputMonitor（発話頻度監視）
 │       ├── tool_executor.py   ToolExecutionEngine
+│       └── post_processor.py  PostProcessor（出力後処理）
 │
 ├── llm/                       # LLM 基盤
 │   ├── __init__.py

@@ -103,7 +103,7 @@ class PlanningManager:
 
 ### ProactiveScoring（PFC スコアリング）
 
-`agency/planning/scoring.py` — PFC が自発発話の価値を評価する。
+`agency/planning/decisions/scoring.py` — PFC が自発発話の価値を評価する。
 
 ```python
 class ProactiveScoring:

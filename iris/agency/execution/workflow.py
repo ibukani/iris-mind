@@ -33,6 +33,8 @@ class ToolCallEvent(Event):
 
 
 class IrisExecutionWorkflow(Workflow):
+    MAX_TOOL_OUTPUT_LENGTH = 200
+
     def __init__(
         self,
         llm: LLMBridge,
@@ -134,8 +136,8 @@ class IrisExecutionWorkflow(Workflow):
         for m in ev.messages[-len(ev.tool_calls) :]:
             if m.get("role") == "tool":
                 content = str(m.get("content", ""))
-                if len(content) > 200:
-                    m["content"] = content[:200] + "..."
+                if len(content) > self.MAX_TOOL_OUTPUT_LENGTH:
+                    m["content"] = content[: self.MAX_TOOL_OUTPUT_LENGTH] + "..."
 
         return InputEvent(
             messages=ev.messages,

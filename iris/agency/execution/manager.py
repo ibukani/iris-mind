@@ -152,11 +152,17 @@ class ExecutionManager:
         silent: bool = plan.get("silent", False)
 
         if silent:
+            # 自律処理（silentモード）の場合、ユーザーには出力を見せない
             streaming = False
             show_thinking = False
+
+            # 環境を不用意に変更しないよう、副作用のあるツールを制限する
             plan["allow_side_effects"] = False
+
+            # 無限ループや不要なトークン消費を防ぐため、ツール実行回数を厳密に制限する
             plan["max_tool_iterations"] = 3
 
+            # 処理内容が未指定の場合、自律行動のためのベース指示（Origin Prompt）を構築する
             if not content:
                 base_instruction = "システムからの内部指示: 現在の目標や欲求に基づき、Web検索や記憶検索を用いて知識を深めるための自律的な調査を行ってください。"
                 if "proactive_reason" in plan:

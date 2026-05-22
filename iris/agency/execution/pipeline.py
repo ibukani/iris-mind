@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 import datetime
@@ -7,6 +8,7 @@ import logging
 from typing import Any
 
 from iris.agency.execution.tool_executor import ToolExecutionEngine
+from iris.agency.execution.workflow import IrisExecutionWorkflow
 from iris.kernel.config import ModelConfig
 from iris.kernel.debug_capture import CaptureEntry, DebugCapture
 from iris.limbic.manager import LimbicManager
@@ -314,10 +316,6 @@ class LLMPipeline:
         tools = self._get_tools(allow_side_effects=allow_side_effects)
         if tools and self._capability_checker and not self._capability_checker.supports_tools(model_role):
             tools = None
-
-        import asyncio
-
-        from iris.agency.execution.workflow import IrisExecutionWorkflow
 
         workflow = IrisExecutionWorkflow(
             llm=self._llm,

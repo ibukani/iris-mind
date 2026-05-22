@@ -178,8 +178,9 @@ iris/
 │   │   ├── __init__.py
 │   │   ├── manager.py         HippocampalManager（Reflexionスケジューリング）
 │   │   └── reflexion.py       Reflexion（自己反省, 特性抽出）
-    │   ├── persona_data.py        PersonaData（話し方・自己状態の動的管理）
-    │   └── persona_profile.py     PersonaProfile（ペルソナ情報の統合IF）
+│   │   ├── goal_store.py              GoalStore（長期目標管理）
+│   │   ├── persona_data.py            PersonaData（話し方・自己状態の動的管理）
+│   │   └── persona_profile.py         PersonaProfile（ペルソナ情報の統合IF）
 │
 ├── agency/                    # 高度認知: PFC + 基底核 + 運動野
 │   ├── __init__.py
@@ -194,6 +195,7 @@ iris/
 │       ├── manager.py         ExecutionManager（行動実行, _execute_general統一）
 │       ├── pipeline.py        LLMPipeline（generate + ツールループ）
 │       ├── inhibition.py      InhibitionController（基底核抑制, GateVerdict）
+│       ├── workflow.py        IrisExecutionWorkflow（LlamaIndex Workflow パイプライン）
 │       ├── monitor.py         OutputMonitor（発話頻度監視）
 │       ├── tool_executor.py   ToolExecutionEngine
 │
@@ -202,8 +204,10 @@ iris/
 │   ├── llm_bridge.py          LLMBridge（マルチプロバイダルーター）
 │   ├── provider.py            LLMProvider / ProviderFactory Protocol
 │   ├── ollama_provider.py     Ollamaプロバイダ
+│   ├── openai_compatible_provider.py  OpenAI互換REST API共通基底（OpenRouter/Googleが継承）
 │   ├── openrouter_provider.py OpenRouterプロバイダ
 │   ├── google_provider.py     Googleプロバイダ
+│   ├── priority_lock.py       PriorityLock（優先度付き非同期排他ロック）
 │   ├── capability_checker.py
 │   ├── tokenizer_manager.py   TokenizerManager（tokenizersラッパー）
 │   ├── context_window.py      LLMContextWindowManager（会話履歴圧縮）
@@ -224,11 +228,41 @@ iris/
 
 ## 4. グローバル EventBus 定義
 
+全イベントは `Event` 基底クラスを継承する（`kw_only=True`、`timestamp`/`source`/`trace_id` を持つ）。
+イベント型名は自動レジストリ（`_type_registry`）で管理され、`to_dict()` / `from_dict()` でシリアライズ可能。
+
 ```python
 # iris/event/event_types.py
 
+@dataclass(kw_only=True)
+class Event:
+    timestamp: datetime | None
+    source: str
+    trace_id: str = ""
+    # _type_registry, to_dict(), from_dict()
+
 @dataclass
-class MessageEvent:
+class TimerTick(Event):
+    tick_count: int = 0
+
+@dataclass
+class AgentStateChangeEvent(Event):
+    previous_state: str | None
+    new_state: str | None
+
+@dataclass
+class MemoryUpdateEvent(Event):
+    entry_type: str
+    content: str
+
+@dataclass
+class AgentAnomalyEvent(Event):
+    anomaly_type: str
+    severity: str
+    detail: str
+
+@dataclass
+class MessageEvent(Event):
     session_id: str
     source_role: str
     target_role: str
@@ -237,12 +271,9 @@ class MessageEvent:
     content: str
     state: str | None
     correlation_id: str | None
-    is_final: bool
 
 @dataclass
-class InputReady:
-    timestamp: float | None
-    source: str
+class InputReady(Event):
     session_id: str
     content: str
     context: dict | None
@@ -256,8 +287,21 @@ class ClientSessionEvent(Event):
     offline_duration: str    # 切断されていた期間（例: "3時間20分間"）
 
 @dataclass
-class TimerTick:
-    timestamp: float
+class MonitorFeedback(Event):
+    flags: list[str] | None
+    content: str
+
+@dataclass
+class DebugSnapshotEvent(Event):
+    category: str
+    data: dict | None
+    trigger: str
+
+@dataclass
+class ProactiveResultEvent(Event):
+    topic: str
+    success: bool = True
+    content: str
 ```
 
 ## 5. 状態管理（統合）

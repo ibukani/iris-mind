@@ -182,6 +182,15 @@ class ExecutionManager:
         # 7. 必要に応じて reflexion / context compression
 ```
 
+### InhibitionController 補足: トピックベースクールダウン
+
+```python
+def record_topic(self, topic: str, duration_sec: float = 3600.0) -> None
+    # 話題単位のクールダウン設定。1時間（デフォルト）は同一話題で自発発話しない。
+def is_topic_suppressed(self, topic: str, now: float) -> bool
+    # 指定話題がクールダウン中か判定。`_state.topic_cooldowns` で管理。
+```
+
 ### 実行ルート
 
 | 条件 | 実行内容 |
@@ -194,6 +203,33 @@ class ExecutionManager:
 
 LLMPipeline は `plan.model_role` に従って `ModelConfig.get_model(role)` で使用モデルを決定する。
 ExecutionManager は圧縮実行時に `get_effective_context_window(role)` でper-modelの閾値を使用する。
+
+### IrisExecutionWorkflow（LlamaIndex Workflow パイプライン）
+
+`agency/execution/workflow.py` — LlamaIndex Workflow を利用した LLM + ツールループの非同期パイプライン。
+
+```python
+class IrisExecutionWorkflow(Workflow):
+    """LLM呼出→ツール実行→LLM呼出のループをステップマシンで表現。
+    StartEvent → generate_step → ToolCallEvent → execute_tools_step → InputEvent(循環) → StopEvent
+    """
+
+    @step
+    async def generate_step(self, ev: StartEvent | InputEvent) -> ToolCallEvent | StopEvent:
+        # 1. 中断トークンチェック → StopEvent
+        # 2. iteration >= max_tool_iterations → StopEvent
+        # 3. model_role からモデル選択、temperature/max_tokens 解決
+        # 4. LLMBridge.chat() 呼出
+        # 5. tool_calls あり → ToolCallEvent, なし → StopEvent(result=final_text)
+
+    @step
+    async def execute_tools_step(self, ev: ToolCallEvent) -> InputEvent | StopEvent:
+        # 1. ToolExecutionEngine.execute_all() → ツール結果
+        # 2. 全 side_effect → StopEvent
+        # 3. ツール結果を truncate → InputEvent で generate_step へ戻る
+```
+
+`priority` パラメータで LLM 呼出の優先度を制御可能（PriorityLock と連携）。
 
 ```mermaid
 sequenceDiagram

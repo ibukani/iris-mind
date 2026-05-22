@@ -85,12 +85,27 @@ python main.py --verbose
 | コマンド | 説明 |
 |---|---|
 | `/help` | ヘルプ表示 |
-| `/sleep` | スリープ |
-| `/wakeup` | ウェイクアップ |
-| `/compact` | 会話履歴圧縮 |
-| `/clear` | 履歴クリア |
-| `/status` | 状態表示 |
-| `/reflect` | 自己反省実行 |
+| `/status` | カーネル状態表示 |
+| `/shutdown` | グレースフルシャットダウン |
+| `/compact` | コンテキスト圧縮 |
+| `/memory recent [n]` | 直近のエピソード記憶を n 件表示 |
+| `/memory search <q>` | 意味記憶を検索 |
+| `/memory clear [type]` | 記憶を消去（episodic/semantic） |
+| `/emotion` | 現在の感情状態（PAD） |
+| `/sessions` | アクティブセッション一覧 |
+| `/ping` | LLM ヘルスチェック |
+| `/tools` | 登録ツール一覧 |
+| `/llm` | LLM 設定情報 |
+| `/personality` | Big Five パーソナリティ |
+| `/state [path] [--history] [--json]` | システム状態クエリ |
+| `/events [n] [--type=TYPE]` | 最近のイベント一覧 |
+| `/health` | ヘルスチェック |
+| `/report` | デバッグレポート出力 |
+| `/debug help` | デバッグサブコマンド一覧 |
+| `/debug on\|off` | LLM 入出力キャプチャ切替 |
+| `/debug list\|last` | 直近の LLM キャプチャ |
+| `/debug show <id>` | 特定キャプチャ表示 |
+| `/debug dump` | 全キャプチャをファイル出力 |
 
 ## Architecture
 
@@ -111,10 +126,15 @@ flowchart TD
     subgraph Memory["memory/ 感覚野+海馬+皮質"]
         MM["MemoryManager<br/>記憶オーケストレーション"]
         SEN["sensory/ 感覚バッファ"]
-        EP["episodic/ エピソード記憶"]
-        SEM["semantic/ 意味記憶"]
+        STM["short_term/ ワーキングメモリ"]
+        LTM["long_term/ 長期記憶<br/>stores + VectorStore"]
         HIP["hippocampal/ Reflexion"]
-        PER["personality/ 人格"]
+    end
+    subgraph Limbic["limbic/ 大脳辺縁系"]
+        LM["LimbicManager<br/>感情評価・制御"]
+        AMY["Amygdala<br/>扁桃体"]
+        ACC["ACC<br/>前帯状皮質"]
+        BF["BigFive<br/>性格特性"]
     end
     subgraph Agency["agency/ 前頭前野+基底核+運動野"]
         IB["Internal Bus"]
@@ -135,6 +155,7 @@ flowchart TD
     CLI <-->|gRPC 127.0.0.1:9876| IO
     EB --- IO
     EB --- Memory
+    EB --- Limbic
     EB --- Agency
     EB --- Kernel
     EB --- LLM
@@ -145,7 +166,8 @@ flowchart TD
 - **Supervisor** — Kernel プロセスの起動・監視・管理コンソール（`main.py`）
 - **Kernel 層** — 脳幹+視床下部。プロセス管理、DIコンテナ、スラッシュコマンド。TimerTick(5秒) 発行
 - **IO 層** — 視床。gRPC入出力、セッション管理
-- **Memory 層** — 感覚野+海馬+皮質。断片的入力の統合、エピソード/意味記憶、Reflexion、人格
+- **Memory 層** — 感覚野+海馬+皮質。感覚バッファ、短期/長期記憶、Reflexion
+- **Limbic 層** — 大脳辺縁系。PAD感情評価・制御（扁桃体/ACC）、BigFive性格管理
 - **Agency 層** — 前頭前野+基底核+運動野。PFC評価（ProactiveScoring）、意思決定、基底核抑制、行動実行
 - **LLM 層** — 言語処理基盤。LLM接続、ContextWindow圧縮
 - **Event 層** — 神経路。全層を疎結合するグローバルEventBus
@@ -195,34 +217,32 @@ iris-mind/
 │   └── data/                    # 記憶データ (runtime generated)
 ├── docs/                        # 設計ドキュメント
 │   ├── adr/                     # Architecture Decision Records
+│   ├── how-it-works/            # 動作原理の詳細解説（11ファイル）
 │   ├── architecture.md          # 全体アーキテクチャ
 │   ├── agency-layer.md          # Agency 層設計
 │   ├── memory-layer.md          # Memory 層設計
+│   ├── limbic-layer.md          # Limbic 層設計
 │   ├── io-layer.md              # IO 層設計
 │   ├── kernel-layer.md          # Kernel 層設計
+│   ├── config.md                # Config 設定一覧
 │   └── ipc-spec.md              # IPC プロトコル仕様
 ├── iris/                        # アプリケーションコア
 │   ├── agency/                  # 前頭前野+基底核+運動野
-│   │   ├── planning/            # PFC: 意思決定・スコアリング
+│   │   ├── planning/            # PFC: 意思決定・ProactiveScoring
 │   │   └── execution/           # 基底核+運動野: 行動実行・抑制制御
 │   ├── event/                   # 神経路: グローバル EventBus
 │   ├── io/                      # 視床: TCP入出力・セッション・認証
-│   │   ├── transport/
-│   │   ├── session/
-│   │   └── auth/
 │   ├── kernel/                  # 脳幹: プロセス管理・DI・コマンド
-│   │   └── commands/
+│   ├── limbic/                  # 大脳辺縁系: 感情・制御・性格
 │   ├── llm/                     # LLM接続・ContextWindow管理
 │   ├── memory/                  # 感覚野+海馬+皮質記憶
-│   │   ├── sensory/             # 感覚バッファ
-│   │   ├── episodic/            # エピソード記憶 (stores.py)
-│   │   ├── semantic/            # 意味記憶 (stores.py)
+│   │   ├── sensory/             # 感覚バッファ（断片+生入力 2系統）
+│   │   ├── short_term/          # ワーキングメモリ
+│   │   ├── long_term/           # 長期記憶（stores + VectorStore）
 │   │   ├── hippocampal/         # 海馬: Reflexion
-│   │   ├── personality/         # 人格
-│   │   └── vector/              # ベクトル検索 (vector_store.py)
+│   │   └── personality/         # 人格データ
 │   └── tools/                   # @tool, ToolRegistry, ビルトイン
-│       └── builtins/
-├── tests/                       # テストスイート (138 tests, ~3秒)
+├── tests/                       # テストスイート
 ├── config.yaml                  # Iris 設定ファイル
 └── main.py                      # Supervisor エントリーポイント
 ```
@@ -258,9 +278,11 @@ pytest tests/                         # 全テスト実行
 | [agency-layer.md](./docs/agency-layer.md) | Agency 層 — 意思決定と行動実行 |
 | [io-layer.md](./docs/io-layer.md) | IO 層 — gRPC入出力・セッション管理 |
 | [kernel-layer.md](./docs/kernel-layer.md) | Kernel 層 — プロセス管理・DI |
+| [limbic-layer.md](./docs/limbic-layer.md) | Limbic 層 — PAD感情・制御・性格進化 |
 | [memory-layer.md](./docs/memory-layer.md) | Memory 層 — 感覚野+海馬+皮質記憶 |
 | [config.md](./docs/config.md) | Config 設定一覧 |
 | [ipc-spec.md](./docs/ipc-spec.md) | IPC プロトコル仕様 (gRPC) |
+| [how-it-works/](./docs/how-it-works/index.md) | 動作原理の詳細 — 計算式・条件分岐・Mermaid図を網羅 |
 
 ## API
 
@@ -276,10 +298,6 @@ pytest tests/                         # 全テスト実行
 - **IPC**: gRPC（HTTP/2）— 1ポート多重
 - **UI**: Rich（TUI）, prompt_toolkit
 - **テスト**: pytest（138 tests）, ruff, mypy
-
-## Maintainers
-
-- [ibuibu](https://github.com/your-org)
 
 ## Contributing
 

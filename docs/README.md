@@ -5,14 +5,14 @@
 ### 外部開発者向け（Client接続）
 
 | ファイル | 内容 |
-|---|--->|
+|---|---|---|
 | [`client-guide.md`](./client-guide.md) | **Iris Client Guide** — 応答パターン、自発発話、コマンド、クイックリファレンス |
 | [`ipc-spec.md`](./ipc-spec.md) | **IPCプロトコル仕様** — ワイヤー形式、メッセージ構造、認証、実装例 |
 
 ### 内部設計（アーキテクチャ理解向け）
 
 | ファイル | 内容 |
-|---|--->|
+|---|---|---|
 | [`architecture.md`](./architecture.md) | **全体アーキテクチャ設計書** — 脳科学ベース層分割、C4図、イベントフロー、状態管理 |
 | [`agency-layer.md`](./agency-layer.md) | **Agency 層（前頭前野+基底核+運動野）** — 意思決定(planning) と行動実行(execution) |
 | [`io-layer.md`](./io-layer.md) | **IO 層（視床）** — gRPC入出力、セッション管理、認証、EventBusマッピング |

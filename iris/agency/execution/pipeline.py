@@ -38,40 +38,71 @@ class _PersonalityContext:
     user_prefs: str
 
 
-class LLMPipeline:
+class SystemPromptBuilder:
     def __init__(
         self,
-        llm: LLMBridge,
-        model_config: ModelConfig,
         personality: Personality,
         agents_md_store: AgentsMdStore | None = None,
         persona_profile: PersonaProfile | None = None,
         memory: MemoryManager | None = None,
         limbic: LimbicManager | None = None,
-        tool_executor: ToolExecutionEngine | None = None,
-        capability_checker: CapabilityChecker | None = None,
         governance_principles: str = "",
-        debug_capture: DebugCapture | None = None,
     ) -> None:
-        self._llm = llm
-        self._model_config = model_config
         self._personality = personality
         self._agents_md_store = agents_md_store
         self._persona_profile = persona_profile
         self._memory = memory
         self._limbic = limbic
-        self._tool_executor = tool_executor
-        self._capability_checker = capability_checker
         self._governance_principles = governance_principles
-        self._debug_capture = debug_capture
-        self._session_roles_summary: str = ""
-        self._max_tool_iterations: int = 3
-        self._sysprompt_cache: str | None = None
-        self._last_system_prompt: str = ""
-        self._last_call_model_role: str = "default"
 
-    def set_session_roles_summary(self, summary: str) -> None:
-        self._session_roles_summary = summary
+    def build(
+        self,
+        context_hint: str = "",
+        response_style: str = "",
+        session_roles_summary: str = "",
+    ) -> str:
+        pctx = self._load_personality_context()
+
+        prompt = self._personality.build_system_prompt(
+            agents_md_content=pctx.agents_md,
+            user_preferences=pctx.user_prefs,
+            session_roles=session_roles_summary,
+            response_style=response_style,
+            speech_style=pctx.speech_style,
+            personality_traits=pctx.personality_traits,
+            governance_principles=self._governance_principles,
+        )
+
+        prompt += f"\n\n## 現在日時\n{self._build_time_string()}"
+
+        if self._limbic:
+            mood_desc = self._limbic.build_mood_description()
+            if mood_desc:
+                prompt += f"\n\n## 現在の気分\n{mood_desc}"
+
+        if pctx.current_state and "{speech_style}" not in self._personality.system_prompt_template:
+            prompt += f"\n\n{pctx.current_state}"
+
+        if context_hint:
+            prompt += f"\n\n## 会話コンテキスト\n{context_hint}"
+
+        return prompt
+
+    def build_full(
+        self,
+        context_hint: str,
+        response_style: str,
+        situation: str,
+        session_roles_summary: str = "",
+    ) -> str:
+        prompt = self.build(
+            context_hint=context_hint,
+            response_style=response_style,
+            session_roles_summary=session_roles_summary,
+        )
+        if situation in _SITUATION_INSTRUCTIONS:
+            prompt += "\n\n" + _SITUATION_INSTRUCTIONS[situation]
+        return prompt
 
     def _load_personality_context(self) -> _PersonalityContext:
         agents_md = self._agents_md_store.load() if self._agents_md_store else ""
@@ -104,37 +135,44 @@ class LLMPipeline:
         weekdays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
         return f"{dt_now.strftime('%Y-%m-%d %H:%M:%S')} ({weekdays[dt_now.weekday()]})"
 
-    def _build_system_prompt(self, context_hint: str = "", response_style: str = "") -> str:
-        if self._sysprompt_cache is not None and not response_style:
-            return self._sysprompt_cache
 
-        pctx = self._load_personality_context()
+class LLMPipeline:
+    def __init__(
+        self,
+        llm: LLMBridge,
+        model_config: ModelConfig,
+        personality: Personality,
+        agents_md_store: AgentsMdStore | None = None,
+        persona_profile: PersonaProfile | None = None,
+        memory: MemoryManager | None = None,
+        limbic: LimbicManager | None = None,
+        tool_executor: ToolExecutionEngine | None = None,
+        capability_checker: CapabilityChecker | None = None,
+        governance_principles: str = "",
+        debug_capture: DebugCapture | None = None,
+    ) -> None:
+        self._llm = llm
+        self._model_config = model_config
+        self._tool_executor = tool_executor
+        self._capability_checker = capability_checker
+        self._debug_capture = debug_capture
+        self._session_roles_summary: str = ""
+        self._max_tool_iterations: int = 3
+        self._sysprompt_cache: str | None = None
+        self._last_system_prompt: str = ""
+        self._last_call_model_role: str = "default"
 
-        prompt = self._personality.build_system_prompt(
-            agents_md_content=pctx.agents_md,
-            user_preferences=pctx.user_prefs,
-            session_roles=self._session_roles_summary,
-            response_style=response_style,
-            speech_style=pctx.speech_style,
-            personality_traits=pctx.personality_traits,
-            governance_principles=self._governance_principles,
+        self._prompt_builder = SystemPromptBuilder(
+            personality=personality,
+            agents_md_store=agents_md_store,
+            persona_profile=persona_profile,
+            memory=memory,
+            limbic=limbic,
+            governance_principles=governance_principles,
         )
 
-        prompt += f"\n\n## 現在日時\n{self._build_time_string()}"
-
-        if self._limbic:
-            mood_desc = self._limbic.build_mood_description()
-            if mood_desc:
-                prompt += f"\n\n## 現在の気分\n{mood_desc}"
-
-        if pctx.current_state and "{speech_style}" not in self._personality.system_prompt_template:
-            prompt += f"\n\n{pctx.current_state}"
-
-        if context_hint:
-            prompt += f"\n\n## 会話コンテキスト\n{context_hint}"
-        if not response_style:
-            self._sysprompt_cache = prompt
-        return prompt
+    def set_session_roles_summary(self, summary: str) -> None:
+        self._session_roles_summary = summary
 
     def _get_tools(self) -> list[dict[str, Any]] | None:
         if self._tool_executor is None:
@@ -153,11 +191,16 @@ class LLMPipeline:
     ) -> dict[str, Any]:
         self._sysprompt_cache = None
         response_style = ""
-        if self._limbic:
-            response_style = self._limbic.build_response_style()
-        system_prompt = self._build_system_prompt(context_hint=context_hint, response_style=response_style)
+        if self._prompt_builder._limbic:
+            response_style = self._prompt_builder._limbic.build_response_style()
+        system_prompt = self._prompt_builder.build(
+            context_hint=context_hint,
+            response_style=response_style,
+            session_roles_summary=self._session_roles_summary,
+        )
         self._last_system_prompt = system_prompt
         self._last_call_model_role = model_role
+
         msgs: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}, *messages]
 
         return self._llm.chat(
@@ -170,12 +213,6 @@ class LLMPipeline:
             interrupt_token=interrupt_token,
         )
 
-    def _build_full_system_prompt(self, context_hint: str, response_style: str, situation: str) -> str:
-        prompt = self._build_system_prompt(context_hint=context_hint, response_style=response_style)
-        if situation in _SITUATION_INSTRUCTIONS:
-            prompt += "\n\n" + _SITUATION_INSTRUCTIONS[situation]
-        return prompt
-
     def generate(
         self, plan: dict[str, Any], messages: list[dict[str, Any]], on_token: Callable[[str], None] | None = None
     ) -> str:
@@ -183,16 +220,18 @@ class LLMPipeline:
         model_role: str = plan.get("model_role", "default")
         context_hint: str = plan.get("context_hint", "")
         max_tokens: int | None = plan.get("max_tokens", 0) or None
-        if plan.get("tools_allowed", True):
-            return self._generate_with_tools(
-                messages,
-                context_hint=context_hint,
-                on_token=on_token,
-                model_role=model_role,
-                max_tokens=max_tokens,
-            )
-        temperature: float = plan.get("temperature", 0.5)
-        return self._generate_without_tools(plan, messages, max_tokens, temperature, model_role=model_role)
+
+        if not plan.get("tools_allowed", True):
+            temperature: float = plan.get("temperature", 0.5)
+            return self._generate_without_tools(plan, messages, max_tokens, temperature, model_role=model_role)
+
+        return self._generate_with_tools(
+            messages,
+            context_hint=context_hint,
+            on_token=on_token,
+            model_role=model_role,
+            max_tokens=max_tokens,
+        )
 
     def _generate_without_tools(
         self,
@@ -207,13 +246,14 @@ class LLMPipeline:
         content: str = plan.get("content", "")
 
         response_style = ""
-        if situation == "proactive" and self._limbic:
-            response_style = self._limbic.build_response_style()
+        if situation == "proactive" and self._prompt_builder._limbic:
+            response_style = self._prompt_builder._limbic.build_response_style()
 
-        system_prompt = self._build_full_system_prompt(
+        system_prompt = self._prompt_builder.build_full(
             context_hint=context_hint,
             response_style=response_style,
             situation=situation,
+            session_roles_summary=self._session_roles_summary,
         )
 
         msgs: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
@@ -260,7 +300,6 @@ class LLMPipeline:
             tools = None
 
         iteration = 0
-        final_text = ""
         tool_iters: list[dict] = []
 
         while iteration < self._max_tool_iterations:
@@ -280,22 +319,31 @@ class LLMPipeline:
             )
             msg = resp.get("message", {})
 
-            if msg.get("tool_calls") and self._tool_executor is not None:
-                messages.append(msg)
-                results = self._tool_executor.execute_all(messages)
-                tool_iters.append({"tool_calls": msg["tool_calls"], "results": results})
-
-                if self._tool_executor.all_side_effects(results):
-                    break
-
-                for m in messages[-len(msg["tool_calls"]) :]:
-                    if m["role"] == "tool" and len(m.get("content", "")) > 200:
-                        m["content"] = m["content"][:200] + "..."
+            if not msg.get("tool_calls") or self._tool_executor is None:
+                final_text: str = msg.get("content", "") or ""
+                if final_text:
+                    sys_prompt = getattr(self, "_last_system_prompt", "")
+                    self._capture_debug(
+                        model_role=model_role,
+                        system_prompt=sys_prompt,
+                        messages=messages,
+                        tools=tools,
+                        response=final_text,
+                        tool_iterations=tool_iters,
+                    )
+                    return final_text
                 continue
 
-            final_text = msg.get("content", "")
-            if final_text:
+            messages.append(msg)
+            results = self._tool_executor.execute_all(messages)
+            tool_iters.append({"tool_calls": msg["tool_calls"], "results": results})
+
+            if self._tool_executor.all_side_effects(results):
                 break
+
+            for m in messages[-len(msg["tool_calls"]) :]:
+                if m["role"] == "tool" and len(m.get("content", "")) > 200:
+                    m["content"] = m["content"][:200] + "..."
 
         sys_prompt = getattr(self, "_last_system_prompt", "")
         self._capture_debug(
@@ -303,11 +351,11 @@ class LLMPipeline:
             system_prompt=sys_prompt,
             messages=messages,
             tools=tools,
-            response=final_text,
+            response="",
             tool_iterations=tool_iters,
         )
 
-        return final_text
+        return ""
 
     def _capture_debug(
         self,

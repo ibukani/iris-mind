@@ -119,6 +119,11 @@ class DebugSnapshotEvent(Event):
 
 
 @dataclass
+class InterruptEvent(Event):
+    session_id: str = ""
+
+
+@dataclass
 class ProactiveResultEvent(Event):
     topic: str = ""
     success: bool = True
@@ -136,6 +141,7 @@ __all__ = [
     "DebugSnapshotEvent",
     "Event",
     "InputReady",
+    "InterruptEvent",
     "MemoryUpdateEvent",
     "MessageEvent",
     "MonitorFeedback",

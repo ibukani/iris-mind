@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 
 from loguru import logger
 
-from iris.event.event_types import ClientSessionEvent, InputReady, MessageEvent, TimerTick
+from iris.event.event_types import ClientSessionEvent, InputReady, InterruptEvent, MessageEvent, TimerTick
 from iris.memory.goal_store import GoalStore
 from iris.memory.long_term.manager import LongTermMemoryManager, LongTermMemoryProtocol
 from iris.memory.long_term.stores import EpisodicStore, SemanticStore
@@ -158,6 +158,13 @@ class MemoryManager:
                         session_id=session_id,
                         content=content,
                         context={},
+                    )
+                )
+                self._event_bus.publish(
+                    InterruptEvent(
+                        timestamp=None,
+                        source="memory",
+                        session_id=session_id,
                     )
                 )
             return

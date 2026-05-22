@@ -10,7 +10,7 @@ if TYPE_CHECKING:
 
 from loguru import logger
 
-from iris.event.event_types import DebugSnapshotEvent
+from iris.event.event_types import DebugSnapshotEvent, InputReady, InterruptEvent
 from iris.memory.hippocampal.reflexion import ReflexionProtocol
 
 _REFLECTION_MEMORY_KEYS: list[tuple[str, str, str, list[str]]] = [
@@ -245,8 +245,14 @@ class HippocampalManager:
 
             if random.random() < 0.5:
                 logger.info("Escalating proactive result to user conversation for topic: %s", topic)
-                from iris.event.event_types import InputReady
 
+                self._event_bus.publish(
+                    InterruptEvent(
+                        timestamp=None,
+                        source="hippocampal",
+                        session_id="",
+                    )
+                )
                 self._event_bus.publish(
                     InputReady(
                         timestamp=None,

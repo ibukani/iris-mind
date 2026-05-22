@@ -18,7 +18,7 @@ from iris.agency.execution.regulation.talk_control import (
 from iris.agency.execution.state import ExecutionState
 from iris.agency.inhibition import InhibitionController
 from iris.event.event_bus import EventBus
-from iris.event.event_types import InputReady
+from iris.event.event_types import InterruptEvent
 from iris.llm.capability import CapabilityChecker
 from iris.llm.interrupt_token import InterruptToken
 
@@ -67,7 +67,7 @@ class FlowExecutor:
             capability_checker=capability_checker,
         )
         self._bus.subscribe("PlanDecided", self._on_plan)
-        self._event_bus.subscribe("InputReady", self._on_input_ready)
+        self._event_bus.subscribe("InterruptEvent", self._on_interrupt)
 
     def get_state(self) -> dict:
         state = self._consolidator.get_state()
@@ -75,15 +75,9 @@ class FlowExecutor:
         state["talkative_degree"] = self._monitor.talkative_degree if self._monitor else 0
         return state
 
-    def _on_input_ready(self, event: InputReady) -> None:
-        context = event.context or {}
-        if (
-            not context.get("from_timer")
-            and "system_event" not in context
-            and self._interrupt_token
-            and not self._interrupt_token.is_cancelled
-        ):
-            logger.info("FlowExecutor: cancelling current execution due to new user input")
+    def _on_interrupt(self, event: InterruptEvent) -> None:
+        if self._interrupt_token and not self._interrupt_token.is_cancelled:
+            logger.info("FlowExecutor: cancelling current execution due to interrupt")
             self._interrupt_token.cancel()
 
     def _on_plan(self, event: PlanDecided) -> None:

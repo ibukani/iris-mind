@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING, Any
 
 from iris.agency.execution.inhibition import InhibitionController
 from iris.event.event_bus import EventBus
-from iris.event.event_types import TimerTick
+from iris.event.event_types import ProactiveResultEvent, TimerTick
 
 if TYPE_CHECKING:
     from iris.kernel.config import Config, ModelConfig
@@ -47,6 +47,7 @@ class PostProcessor:
         self._reflect_lock = threading.Lock()
         self._is_reflecting = False
         event_bus.subscribe("TimerTick", self._on_timer_tick)
+        event_bus.subscribe("ProactiveResultEvent", self._on_proactive_result)
 
     def record_activity(self) -> None:
         self._last_activity_time = time.time()
@@ -156,3 +157,16 @@ class PostProcessor:
             "msg_count_since_reflect": self._msg_count_since_reflect,
             "idle_seconds": time.time() - self._last_activity_time if self._last_activity_time else 0,
         }
+
+    def _on_proactive_result(self, event: ProactiveResultEvent) -> None:
+        hippocampal = self._hippocampal
+        if hippocampal is None:
+            return
+        _run_in_background(
+            lambda: hippocampal.process_proactive_result(
+                topic=event.topic,
+                success=event.success,
+                content=event.content,
+            ),
+            name="proactive-result-process",
+        )

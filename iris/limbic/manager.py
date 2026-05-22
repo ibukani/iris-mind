@@ -3,7 +3,10 @@ from __future__ import annotations
 from collections.abc import Callable
 import logging
 import time
-from typing import Any, Protocol, TypedDict, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, TypedDict, runtime_checkable
+
+if TYPE_CHECKING:
+    from iris.memory.persona_profile import PersonaProfile
 
 from iris.event.event_bus import EventBus
 from iris.event.event_types import DebugSnapshotEvent, MessageEvent, ProactiveResultEvent, TimerTick
@@ -97,6 +100,7 @@ class LimbicManager:
         self._emotion = EmotionState()
         self._drive = DriveState()
         self._big_five_provider: BigFiveProvider | None = None
+        self._persona_profile: PersonaProfile | None = None
 
         self._last_decay_time: float = time.time()
 
@@ -105,6 +109,9 @@ class LimbicManager:
             event_bus.subscribe("TimerTick", self._on_timer_tick)
             event_bus.subscribe("MonitorFeedback", self._on_monitor_event)
             event_bus.subscribe("ProactiveResultEvent", self._on_proactive_result)
+
+    def set_persona_profile(self, persona_profile: PersonaProfile) -> None:
+        self._persona_profile = persona_profile
 
     def _publish_snapshot(self, trigger: str) -> None:
         if self._event_bus is not None:
@@ -141,6 +148,8 @@ class LimbicManager:
         self._drive.accumulate()
         if event.tick_count % 6 == 0:
             self._decay()
+            if self._persona_profile is not None:
+                self._persona_profile.persona_data.decay_interests()
 
     def _decay(self) -> None:
         now = time.time()

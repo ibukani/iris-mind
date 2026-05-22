@@ -199,7 +199,7 @@ class ExecutionManager:
                 ProactiveResultEvent(
                     timestamp=None,
                     source="execution",
-                    topic=plan.get("proactive_reason", ""),
+                    topic=plan.get("interest_topic", plan.get("proactive_reason", "")),
                     success=success,
                     content=response_text,
                 )

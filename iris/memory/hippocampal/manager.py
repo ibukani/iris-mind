@@ -32,6 +32,7 @@ class HippocampalManagerProtocol(Protocol):
     def maybe_run(self, messages: list[dict], msg_count_since_reflect: int) -> int: ...
     def force_run(self, messages: list[dict]) -> None: ...
     def run_session(self, messages: list[dict], memory: MemoryManagerProtocol | None = None) -> None: ...
+    def process_proactive_result(self, topic: str, success: bool, content: str) -> None: ...
 
 
 class HippocampalManager:
@@ -196,6 +197,67 @@ class HippocampalManager:
                     if isinstance(goal_desc, str) and goal_desc.strip():
                         mem.goals.add_goal(description=goal_desc, weight=1.0)
 
+            new_interests = result.get("new_interests")
+            if new_interests and isinstance(new_interests, list) and self._persona_profile is not None:
+                for topic in new_interests:
+                    if isinstance(topic, str) and topic.strip():
+                        self._persona_profile.persona_data.add_interest(topic.strip(), 0.3)
+
             logger.info("Session reflect completed")
         except Exception as e:
             logger.exception("Session reflect failed: %s", e)
+
+    def process_proactive_result(self, topic: str, success: bool, content: str) -> None:
+        if self._persona_profile is None or not topic:
+            return
+
+        satisfaction = 0.0
+        summary = "調査に失敗しました。"
+        next_interests = []
+
+        if success and self._reflexion is not None:
+            try:
+                if hasattr(self._reflexion, "evaluate_proactive_result"):
+                    eval_res = self._reflexion.evaluate_proactive_result(topic, content)
+                    satisfaction = eval_res.get("satisfaction", 0.0)
+                    summary = eval_res.get("summary", "")
+                    next_interests = eval_res.get("next_interests", [])
+            except Exception as e:
+                logger.exception("Failed to evaluate proactive result with LLM: %s", e)
+
+        # 納得度評価に基づく減衰/維持
+        delta = -0.3 if satisfaction >= 0.7 else 0.1
+
+        self._persona_profile.persona_data.add_interest(topic, delta)
+
+        for next_topic in next_interests:
+            if isinstance(next_topic, str) and next_topic.strip():
+                self._persona_profile.persona_data.add_interest(next_topic.strip(), 0.3)
+
+        if self._memory is not None:
+            outcome = "成功" if success else "失敗"
+            self._memory.add_episodic(
+                content=f"[self investigation] {topic} について調査（結果: {outcome}）。まとめ: {summary}",
+                kind="system",
+            )
+
+        if success and satisfaction >= 0.7 and self._event_bus is not None:
+            import random
+
+            if random.random() < 0.5:
+                logger.info("Escalating proactive result to user conversation for topic: %s", topic)
+                from iris.event.event_types import InputReady
+
+                self._event_bus.publish(
+                    InputReady(
+                        timestamp=None,
+                        source="hippocampal",
+                        session_id="",
+                        content="",
+                        context={
+                            "escalation": True,
+                            "topic": topic,
+                            "summary": summary,
+                        },
+                    )
+                )

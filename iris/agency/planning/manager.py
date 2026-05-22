@@ -16,6 +16,8 @@ from iris.memory.manager import MemoryManager
 if TYPE_CHECKING:
     from iris.limbic.manager import LimbicManager
     from iris.limbic.models import DriveState, EmotionState
+    from iris.llm.provider import LLMProvider
+    from iris.memory.persona_profile import PersonaProfile
 
 logger = logging.getLogger(__name__)
 
@@ -324,12 +326,16 @@ class PlanningManager:
         config: Config,
         memory: MemoryManager | None = None,
         limbic: LimbicManager | None = None,
+        persona_profile: PersonaProfile | None = None,
+        llm: LLMProvider | None = None,
     ) -> None:
         self._bus = internal_bus
         self._inhibition = inhibition
         self._scoring = scoring
         self._memory = memory
         self._limbic = limbic
+        self._persona_profile = persona_profile
+        self._llm = llm
         self._cfg = config.proactive
         self._context_builder = ContextHintBuilder(memory=memory)
         event_bus.subscribe("InputReady", self._on_input_ready)
@@ -348,7 +354,7 @@ class PlanningManager:
         limbic_drive = self._limbic.current_drive() if self._limbic else None
         gate = self._inhibition.evaluate(time.time())
 
-        if context.get("from_timer") or "system_event" in context:
+        if context.get("from_timer") or "system_event" in context or context.get("escalation"):
             self._handle_proactive_event(event, context, gate, limbic_mood, limbic_drive)
             return
 
@@ -377,6 +383,26 @@ class PlanningManager:
         limbic_mood: EmotionState | None,
         limbic_drive: DriveState | None = None,
     ) -> None:
+        if context.get("escalation"):
+            topic = context.get("topic", "general")
+            summary = context.get("summary", "")
+            context_hint = f"自律調査によるエスカレーション / トピック: {topic} / 調査のまとめ: {summary}"
+            proactive_context = {
+                "from_timer": True,
+                "salience": 1.0,
+                "scores": {"curiosity": 1.0},
+                "context_hint": context_hint,
+                "topic": topic,
+                "is_silent_proactive": False,
+                "escalation": True,
+                "summary": summary,
+            }
+            logger.info("Publishing escalation proactive plan for topic: %s", topic)
+            plan = self._build_proactive_plan(proactive_context, gate, limbic_mood)
+            plan["session_id"] = event.session_id
+            self._bus.publish(PlanDecided(plan=plan))
+            return
+
         if "system_event" in context:
             self._inhibition.set_cooldown(30.0)
 
@@ -464,12 +490,62 @@ class PlanningManager:
         if context.get("is_silent_proactive", False):
             plan["silent"] = True
             plan["tools_allowed"] = True  # 内省時に調査ツールを使えるようにする
-            plan["proactive_reason"] = context.get("topic", "general")
+
+            topic = context.get("topic", "general")
+            if self._persona_profile:
+                interests = self._persona_profile.persona_data.get_interests()
+                if interests:
+                    import random
+
+                    topics = [item["topic"] for item in interests]
+                    weights = [item["weight"] for item in interests]
+                    if sum(weights) <= 0:
+                        weights = [1.0] * len(weights)
+                    selected_topic = random.choices(topics, weights=weights, k=1)[0]
+                    question = self._generate_question_from_topic(selected_topic)
+                    plan["proactive_reason"] = question
+                    plan["interest_topic"] = selected_topic
+                else:
+                    plan["proactive_reason"] = topic
+            else:
+                plan["proactive_reason"] = topic
+        elif context.get("escalation"):
+            plan["silent"] = False
+            topic = context.get("topic", "")
+            summary = context.get("summary", "")
+            plan["content"] = (
+                f"システムからの内部指示: あなたは自発的に『{topic}』に関する調査を行い、次のことが分かりました：『{summary}』。この知見を元に、ユーザーに対して『ねえ、さっき〜について考えていたんだけど……』というように、あなたの言葉で自然に自発的な話しかけを行ってください。"
+            )
+            plan["record_history"] = True
+            plan["streaming"] = True
 
         if limbic_mood:
             EmotionTemperatureModulator.apply(plan, limbic_mood)
         plan["current_emotion"] = limbic_mood
         return plan
+
+    def _generate_question_from_topic(self, topic: str) -> str:
+        """興味トピックから具体的な疑問（Question）を生成する。"""
+        if self._llm is None:
+            return f"{topic}についての自発的調査"
+
+        system_prompt = (
+            "You are Iris's curiosity generator. Given a general interest topic, "
+            "generate one specific, deep, and concrete scientific or philosophical question in Japanese "
+            "that Iris would want to investigate. Do not output anything other than the question itself."
+        )
+        user_content = f"興味トピック: {topic}"
+        msgs = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_content}]
+        import asyncio
+
+        try:
+            resp = asyncio.run(self._llm.chat(messages=msgs, model=None, temperature=0.7, max_tokens=150))
+            raw = resp.get("message", {}).get("content")
+            if isinstance(raw, str) and raw.strip():
+                return raw.strip()
+        except Exception as e:
+            logger.error("Failed to generate question from topic: %s", e)
+        return f"{topic}についての自発的調査"
 
     def _build_response_plan(
         self, content: str, gate: GateVerdict, limbic_mood: EmotionState | None = None

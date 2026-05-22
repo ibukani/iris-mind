@@ -144,6 +144,15 @@ class AgentsMdStore:
     """構造記憶。.iris/data/iris_profile.md の読み書き（上限2KB）。"""
     def load(self) -> str
     def update(self, new_content: str) -> None
+
+class PersonaData:
+    """ペルソナの現在状態データ（話し方、性格特性、興味）をJSONで管理。
+    interestsは重み付きで管理され、自然減衰(decay_interests)および内省や調査納得度による加重更新に対応。"""
+    def add_entry(self, category: str, text: str, source: str = "reflection") -> None
+    def add_interest(self, topic: str, weight_delta: float) -> None
+    def decay_interests(self, decay_rate: float = 0.05) -> None
+    def get_interests(self) -> list[dict]
+
 ```
 
 ### long_term/vector_store.py — ベクトル検索
@@ -169,9 +178,12 @@ SemanticStore が内部で VectorStore を利用する。
 class HippocampalManager:
     """Reflexion のスケジューリングと結果の永続化。
     ExecutionManager 発話後カウンタに応じて quick_reflect を実行。
-    ShortTermMemory の consolidation も担当。"""
+    ShortTermMemory の consolidation も担当。
+    自律調査結果の自己納得度評価 (process_proactive_result) も行う。"""
     def maybe_run(self, messages: list[dict], counter: int) -> int
     def run_session(self, messages: list[dict]) -> None
+    def process_proactive_result(self, topic: str, success: bool, content: str) -> None
+
 
 class Reflexion:
     """完了した会話を分析し、話し方・性格・教訓・好みを抽出 → 意味記憶へ格納。"""

@@ -29,6 +29,21 @@ class ReflexionResult(QuickReflexionResult):
         default_factory=list,
         description="新たに発見した中長期的な目標や、達成すべきタスクのリスト（日本語で）。特になければ空リスト。",
     )
+    new_interests: list[str] = Field(
+        default_factory=list,
+        description="対話や文脈から、Iris自身がもっと詳しく知りたい・探求したいと内発的に思ったこと、興味を持った学術的・哲学的・技術的トピック（日本語で）。特になければ空リスト。",
+    )
+
+
+class ProactiveEvaluationResult(BaseModel):
+    satisfaction: float = Field(
+        description="今回の調査結果に対する自己納得度（0.0〜1.0）。疑問や興味がどれだけ解消・満足されたか。"
+    )
+    summary: str = Field(description="調査結果の簡単なまとめ（日本語、1文）")
+    next_interests: list[str] = Field(
+        default_factory=list,
+        description="今回の調査結果を受けて、さらに新しく生じた興味や、次に調べたい関連トピック（日本語で）。",
+    )
 
 
 class ReflexionProtocol(Protocol):
@@ -41,12 +56,35 @@ class ReflexionProtocol(Protocol):
 
     def reflect(self, conversation_history: list[dict]) -> dict[str, Any]: ...
     def quick_reflect(self, conversation_slice: list[dict]) -> dict[str, Any]: ...
+    def evaluate_proactive_result(self, topic: str, content: str) -> dict[str, Any]: ...
 
 
 class Reflexion:
     def __init__(self, llm: LLMProvider, compact_model: str | None = None) -> None:
         self._llm = llm
         self._compact_model = compact_model
+
+    def evaluate_proactive_result(self, topic: str, content: str) -> dict[str, Any]:
+        schema_json = json.dumps(ProactiveEvaluationResult.model_json_schema(), ensure_ascii=False)
+        system_prompt = (
+            "You are Iris's self-reflection engine evaluating a proactive investigation.\n"
+            f"You must strictly output a valid JSON object matching this schema:\n{schema_json}\n"
+            "All string values must be in Japanese. Respond in JSON only."
+        )
+        user_content = f"調査したトピック: {topic}\n\n調査によって得られた内容:\n{content}"
+        msgs = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_content}]
+        import asyncio
+
+        resp = asyncio.run(self._llm.chat(messages=msgs, model=self._compact_model, temperature=0.3, max_tokens=400))
+        raw = resp.get("message", {}).get("content")
+        content_str = raw if isinstance(raw, str) else ""
+        try:
+            result = json.loads(content_str)
+            if isinstance(result, dict):
+                return dict(ProactiveEvaluationResult.model_validate(result).model_dump())
+        except Exception as e:
+            logger.error("Proactive evaluation validation failed: %s", e)
+        return {"satisfaction": 0.0, "summary": "調査結果の評価に失敗しました。", "next_interests": []}
 
     def reflect(self, conversation_history: list[dict]) -> dict[str, Any]:
         schema_json = json.dumps(ReflexionResult.model_json_schema(), ensure_ascii=False)
@@ -144,6 +182,7 @@ class Reflexion:
             "user_reaction": "",
             "big_five_estimate": None,
             "new_goals": [],
+            "new_interests": [],
         }
 
     @staticmethod

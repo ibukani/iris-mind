@@ -161,6 +161,7 @@ class FakeMemoryManager:
 class FakePersonaData:
     def __init__(self) -> None:
         self._entries: list[dict] = []
+        self._interests: list[dict] = []
 
     def add_entry(self, category: str, text: str, source: str = "reflection") -> None:
         self._entries.append({"category": category, "text": text, "source": source})
@@ -173,11 +174,32 @@ class FakePersonaData:
 
     def clear(self) -> None:
         self._entries.clear()
+        self._interests.clear()
+
+    def add_interest(self, topic: str, weight_delta: float) -> None:
+        for item in self._interests:
+            if item["topic"].lower() == topic.strip().lower():
+                item["weight"] = max(0.0, min(1.0, item["weight"] + weight_delta))
+                return
+        self._interests.append({"topic": topic.strip(), "weight": max(0.0, min(1.0, weight_delta))})
+
+    def decay_interests(self, decay_rate: float = 0.05) -> None:
+        remaining = []
+        for item in self._interests:
+            new_weight = item["weight"] - decay_rate
+            if new_weight > 0.1:
+                item["weight"] = round(new_weight, 3)
+                remaining.append(item)
+        self._interests = remaining
+
+    def get_interests(self) -> list[dict]:
+        return self._interests
 
 
 class FakePersonaProfile:
     def __init__(self, persona_data: FakePersonaData | None = None) -> None:
         self._data = persona_data or FakePersonaData()
+        self.persona_data = self._data
         self._speech_style = ""
         self._traits = ""
 
@@ -377,6 +399,13 @@ class FakeReflexion:
 
     def should_add_capability(self, reflection: dict[str, str]) -> bool:
         return bool(reflection.get("missing_capability"))
+
+    def evaluate_proactive_result(self, topic: str, content: str) -> dict[str, Any]:
+        return {
+            "satisfaction": 0.8,
+            "summary": "Mock summary of investigation",
+            "next_interests": ["宇宙の起源", "ブラックホール"],
+        }
 
 
 # ── Fake Personality ──────────────────────────────────────────

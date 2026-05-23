@@ -53,9 +53,9 @@ class ReflexionProtocol(Protocol):
     テスト容易性と柔軟性を向上させるため。
     """
 
-    def reflect(self, conversation_history: list[BaseMessage]) -> dict[str, Any]: ...
-    def quick_reflect(self, conversation_slice: list[BaseMessage]) -> dict[str, Any]: ...
-    def evaluate_proactive_result(self, topic: str, content: str) -> dict[str, Any]: ...
+    async def reflect(self, conversation_history: list[BaseMessage]) -> dict[str, Any]: ...
+    async def quick_reflect(self, conversation_slice: list[BaseMessage]) -> dict[str, Any]: ...
+    async def evaluate_proactive_result(self, topic: str, content: str) -> dict[str, Any]: ...
 
 
 class Reflexion:
@@ -63,24 +63,21 @@ class Reflexion:
         self._llm = llm
         self._compact_model = compact_model
 
-    def evaluate_proactive_result(self, topic: str, content: str) -> dict[str, Any]:
+    async def evaluate_proactive_result(self, topic: str, content: str) -> dict[str, Any]:
         system_prompt = (
             "You are Iris's self-reflection engine evaluating a proactive investigation.\n"
             "All string values must be in Japanese."
         )
         user_content = f"調査したトピック: {topic}\n\n調査によって得られた内容:\n{content}"
         msgs: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_content)]
-        import asyncio
 
         try:
-            result = asyncio.run(
-                self._llm.chat_with_structured_output(
-                    schema=ProactiveEvaluationResult,
-                    messages=msgs,
-                    model=self._compact_model,
-                    temperature=0.3,
-                    max_tokens=400,
-                )
+            result = await self._llm.chat_with_structured_output(
+                schema=ProactiveEvaluationResult,
+                messages=msgs,
+                model=self._compact_model,
+                temperature=0.3,
+                max_tokens=400,
             )
             if result:
                 return dict(result.model_dump())
@@ -88,13 +85,13 @@ class Reflexion:
             logger.error("Proactive evaluation validation failed: %s", e)
         return {"satisfaction": 0.0, "summary": "調査結果の評価に失敗しました。", "next_interests": []}
 
-    def reflect(self, conversation_history: list[BaseMessage]) -> dict[str, Any]:
+    async def reflect(self, conversation_history: list[BaseMessage]) -> dict[str, Any]:
         system_prompt = (
             "You are Iris's reflection engine. Analyze the conversation and extract the required fields.\n"
             "All string values must be in Japanese."
         )
 
-        return self._chat_structured(
+        return await self._chat_structured(
             schema=ReflexionResult,
             system_prompt=system_prompt,
             conversation=conversation_history,
@@ -103,9 +100,9 @@ class Reflexion:
             fallback=lambda: self._empty(),
         )
 
-    def quick_reflect(self, conversation_slice: list[BaseMessage]) -> dict[str, Any]:
+    async def quick_reflect(self, conversation_slice: list[BaseMessage]) -> dict[str, Any]:
         system_prompt = "You are Iris's light-weight reflection engine. Briefly analyze this short conversation.\n"
-        return self._chat_structured(
+        return await self._chat_structured(
             schema=QuickReflexionResult,
             system_prompt=system_prompt,
             conversation=conversation_slice,
@@ -114,7 +111,7 @@ class Reflexion:
             fallback=lambda: self._empty_quick(),
         )
 
-    def _chat_structured(
+    async def _chat_structured(
         self,
         schema: Any,
         system_prompt: str,
@@ -128,7 +125,7 @@ class Reflexion:
 
         conv_text_list = []
         for m in conversation[-max_history:]:
-            role = getattr(m, "type", "user")
+            role = m.type
             content = str(m.content)[:200]
             conv_text_list.append({"role": role, "content": content})
 
@@ -136,17 +133,14 @@ class Reflexion:
             SystemMessage(content=system_prompt),
             HumanMessage(content=orjson.dumps(conv_text_list).decode("utf-8")),
         ]
-        import asyncio
 
         try:
-            result = asyncio.run(
-                self._llm.chat_with_structured_output(
-                    schema=schema,
-                    messages=msgs,
-                    model=self._compact_model,
-                    temperature=0.3,
-                    max_tokens=max_tokens,
-                )
+            result = await self._llm.chat_with_structured_output(
+                schema=schema,
+                messages=msgs,
+                model=self._compact_model,
+                temperature=0.3,
+                max_tokens=max_tokens,
             )
             if result:
                 return dict(result.model_dump())

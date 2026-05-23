@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 import time
 from typing import TYPE_CHECKING, Any
@@ -49,20 +50,20 @@ class Consolidator:
     def increment_reflect_count(self) -> None:
         self._msg_count_since_reflect += 1
 
-    def run_post_process(self, plan: dict[str, Any], run_reflexion: bool, run_compression: bool) -> None:
+    async def run_post_process(self, plan: dict[str, Any], run_reflexion: bool, run_compression: bool) -> None:
         messages = self._get_messages()
         try:
             if run_reflexion and self._hippocampal:
-                self._msg_count_since_reflect = self._hippocampal.maybe_run(
+                self._msg_count_since_reflect = await self._hippocampal.maybe_run(
                     messages,
                     self._msg_count_since_reflect,
                 )
             if run_compression and self._context_window_mgr:
-                self._compact_messages(messages, plan)
+                await self._compact_messages(messages, plan)
         except Exception:
             logger.exception("Post-process failed")
 
-    def _compact_messages(self, messages: list[BaseMessage], plan: dict[str, Any]) -> None:
+    async def _compact_messages(self, messages: list[BaseMessage], plan: dict[str, Any]) -> None:
         cwm = self._context_window_mgr
         if cwm is None:
             return
@@ -71,7 +72,7 @@ class Consolidator:
             self._model_config.get_effective_context_window(model_role) if self._model_config else self._context_window
         )
         model_name = self._model_config.get_model(model_role) if self._model_config else None
-        summary = cwm.check_and_summarize(
+        summary = await cwm.check_and_summarize(
             messages,
             effective_ctx,
             model_name=model_name,
@@ -95,7 +96,7 @@ class Consolidator:
         messages = self._get_messages()
         if len(messages) < 2:
             return "Not enough messages to compact"
-        summary = self._context_window_mgr.compact(messages)
+        summary = asyncio.run(self._context_window_mgr.compact(messages))
         keep = 6
         messages[:] = [SystemMessage(content=f"## Session Summary\n{summary}"), *messages[-keep:]]
         return f"Compacted: {len(summary)} chars summary, kept last {keep} messages"

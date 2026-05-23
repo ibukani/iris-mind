@@ -64,8 +64,9 @@ class LLMGateway:
         priority: int = 0,
     ) -> AIMessage:
         response_style = ""
-        if self._prompt_builder._limbic:
-            response_style = self._prompt_builder._limbic.generate_response_style()
+        limbic = self._prompt_builder.limbic
+        if limbic:
+            response_style = limbic.generate_response_style()
         system_prompt = self._prompt_builder.build(
             context_hint=context_hint,
             response_style=response_style,
@@ -101,8 +102,9 @@ class LLMGateway:
         content = plan.get("content", "")
 
         response_style = ""
-        if situation == "proactive" and self._prompt_builder._limbic:
-            response_style = self._prompt_builder._limbic.generate_response_style()
+        limbic = self._prompt_builder.limbic
+        if situation == "proactive" and limbic:
+            response_style = limbic.generate_response_style()
 
         system_prompt = self._prompt_builder.build_full(
             context_hint=context_hint,

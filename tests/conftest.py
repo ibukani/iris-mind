@@ -14,9 +14,11 @@ from iris.kernel.config import Config, ModelConfig, ProactiveConfig
 
 
 class FakeLLMProvider:
-    def __init__(self, responses: list[dict] | None = None) -> None:
+    def __init__(self, responses: list[Any] | None = None) -> None:
         self.call_count = 0
-        self._responses = responses or [{"message": {"content": "Hello from FakeLLM", "role": "assistant"}}]
+        from langchain_core.messages import AIMessage
+
+        self._responses: list[Any] = responses or [AIMessage(content="Hello from FakeLLM")]
         self._messages_log: list[list[dict]] = []
         self._model_log: list[str | None] = []
 
@@ -30,7 +32,7 @@ class FakeLLMProvider:
         tools: list[dict] | None = None,
         on_token: Callable[[str], None] | None = None,
         **kwargs: Any,
-    ) -> dict:
+    ) -> Any:
         self._messages_log.append(messages)
         self._model_log.append(model)
         resp = self._responses[self.call_count % len(self._responses)]
@@ -384,11 +386,11 @@ class FakeReflexion:
         self.reflect_calls: list[list[dict]] = []
         self.quick_reflect_calls: list[list[dict]] = []
 
-    def reflect(self, conversation_history: list[dict]) -> dict[str, str]:
+    async def reflect(self, conversation_history: list[dict]) -> dict[str, str]:
         self.reflect_calls.append(conversation_history)
         return dict(self._reflect_result)
 
-    def quick_reflect(self, conversation_slice: list[dict]) -> dict[str, str]:
+    async def quick_reflect(self, conversation_slice: list[dict]) -> dict[str, str]:
         self.quick_reflect_calls.append(conversation_slice)
         result = {
             "speech_style": self._reflect_result.get("speech_style", ""),
@@ -400,7 +402,7 @@ class FakeReflexion:
     def should_add_capability(self, reflection: dict[str, str]) -> bool:
         return bool(reflection.get("missing_capability"))
 
-    def evaluate_proactive_result(self, topic: str, content: str) -> dict[str, Any]:
+    async def evaluate_proactive_result(self, topic: str, content: str) -> dict[str, Any]:
         return {
             "satisfaction": 0.8,
             "summary": "Mock summary of investigation",

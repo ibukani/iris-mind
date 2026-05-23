@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 
 from langchain_core.messages import HumanMessage
@@ -62,8 +63,6 @@ class ReadinessEvaluator:
             "If the user's input is a question, complete thought, or continuation of conversation, answer Yes."
         )
         try:
-            import asyncio
-
             resp = asyncio.run(
                 self._llm.chat(
                     messages=[HumanMessage(content=prompt)],

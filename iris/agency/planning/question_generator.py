@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -14,7 +13,7 @@ class QuestionGenerator:
     def __init__(self, llm: LLMBridge | None = None) -> None:
         self._llm = llm
 
-    def generate(self, topic: str) -> str:
+    async def generate(self, topic: str) -> str:
         if self._llm is None:
             return f"{topic}についての自発的調査"
 
@@ -27,7 +26,7 @@ class QuestionGenerator:
         msgs = [SystemMessage(content=system_prompt), HumanMessage(content=user_content)]
 
         try:
-            resp = asyncio.run(self._llm.chat(messages=msgs, model=None, temperature=0.7, max_tokens=150))
+            resp = await self._llm.chat(messages=msgs, model=None, temperature=0.7, max_tokens=150)
             raw = str(resp.content)
             if raw.strip():
                 return raw.strip()

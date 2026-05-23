@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any
 
 from iris.agency.planning.emotion_temperature import EmotionTemperatureModulator
@@ -55,7 +56,7 @@ class ProactivePlanStrategy:
                     if sum(weights) <= 0:
                         weights = [1.0] * len(weights)
                     selected_topic = random.choices(topics, weights=weights, k=1)[0]
-                    question = self._question_gen.generate(selected_topic) if self._question_gen else topic
+                    question = asyncio.run(self._question_gen.generate(selected_topic)) if self._question_gen else topic
                     plan["proactive_reason"] = question
                     plan["interest_topic"] = selected_topic
                 else:

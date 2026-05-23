@@ -47,6 +47,10 @@ class SystemPromptBuilder:
         self._limbic = limbic
         self._governance_principles = governance_principles
 
+    @property
+    def limbic(self) -> LimbicManager | None:
+        return self._limbic
+
     def build(
         self,
         context_hint: str = "",

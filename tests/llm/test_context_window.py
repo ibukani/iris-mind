@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from langchain_core.messages import AIMessage, HumanMessage
+import pytest
 
 from iris.llm.context import LLMContextWindowManager, estimate_messages_tokens, estimate_tokens
 from tests.conftest import FakeLLMProvider
@@ -20,17 +21,19 @@ def test_estimate_messages_tokens() -> None:
     assert estimate_messages_tokens(msgs) == 2
 
 
-def test_check_and_summarize_no_trigger() -> None:
+@pytest.mark.anyio
+async def test_check_and_summarize_no_trigger() -> None:
     llm = FakeLLMProvider()
     mgr = LLMContextWindowManager(llm=llm, compact_model="test-model")
 
     # 閾値未満なので要約されない
     messages = [HumanMessage(content="test")] * 10
-    summary = mgr.check_and_summarize(messages, context_window=1000, threshold=0.85, preserve_last=4)
+    summary = await mgr.check_and_summarize(messages, context_window=1000, threshold=0.85, preserve_last=4)
     assert summary == ""
 
 
-def test_check_and_summarize_trigger() -> None:
+@pytest.mark.anyio
+async def test_check_and_summarize_trigger() -> None:
     # 要約がトリガーされるケース
     fake_response = AIMessage(content="要約された内容")
     llm = FakeLLMProvider(responses=[fake_response])
@@ -40,7 +43,7 @@ def test_check_and_summarize_trigger() -> None:
     messages = [HumanMessage(content="長い日本語メッセージです。" * 20)] * 10
     # estimate_tokens: "長い日本語メッセージです。" * 20 -> 13文字 * 20 = 260文字 -> 260 * 1.3 = 338 tokens
     # 10メッセージで約3380 tokens。context_window=1000 だと余裕で超える
-    summary = mgr.check_and_summarize(messages, context_window=1000, threshold=0.8, preserve_last=2)
+    summary = await mgr.check_and_summarize(messages, context_window=1000, threshold=0.8, preserve_last=2)
     assert summary == "要約された内容"
     assert mgr.summary == "要約された内容"
 
@@ -54,7 +57,8 @@ def test_check_and_summarize_trigger() -> None:
     assert "要約された内容" not in compact_call[1].content  # 初回なので過去の要約は含まれない
 
 
-def test_summarize_keeps_previous_summary() -> None:
+@pytest.mark.anyio
+async def test_summarize_keeps_previous_summary() -> None:
     # 既存の要約が存在する場合、引き継がれるテスト
     fake_response = AIMessage(content="統合要約")
     llm = FakeLLMProvider(responses=[fake_response])
@@ -66,7 +70,7 @@ def test_summarize_keeps_previous_summary() -> None:
         AIMessage(content="追加メッセージ2"),
     ]
 
-    summary = mgr.summarize(messages)
+    summary = await mgr.summarize(messages)
     assert summary == "統合要約"
 
     # 送信メッセージの確認

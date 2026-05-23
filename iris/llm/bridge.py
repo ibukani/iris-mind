@@ -204,9 +204,12 @@ class LLMBridge:
         kwargs: dict[str, Any],
     ) -> dict[str, Any]:
         if isinstance(provider, ChatOllama):
-            call_kwargs: dict[str, Any] = {
-                "options": self._build_ollama_options(temperature, max_tokens, entry, kwargs),
-            }
+            call_options = self._build_ollama_options(temperature, max_tokens, entry, kwargs)
+            instance_options = dict(getattr(provider, "options", None) or {})
+            merged = {**instance_options, **call_options}
+            if "num_ctx" not in merged:
+                merged["num_ctx"] = self._model_config.default_num_ctx
+            call_kwargs: dict[str, Any] = {"options": merged}
         else:
             call_kwargs = self._build_openai_kwargs(temperature, max_tokens, kwargs)
         call_kwargs.update(kwargs)

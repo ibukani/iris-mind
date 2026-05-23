@@ -226,30 +226,35 @@ class InhibitionController:
     def set_mood(self, negative_score: float) -> None:
         self._state.negative_mood_score = max(0.0, min(1.0, negative_score))
 
+    @staticmethod
+    def _valence_modulation(valence: float) -> float:
+        if valence < -0.3:
+            return abs(valence) * 0.4
+        if valence > 0.3:
+            return -valence * 0.1
+        return 0.0
+
+    @staticmethod
+    def _arousal_modulation(arousal: float) -> float:
+        if arousal > 0.6:
+            return -arousal * 0.1
+        if arousal < 0.2:
+            return 0.1
+        return 0.0
+
+    @staticmethod
+    def _dominance_modulation(dominance: float) -> float:
+        if dominance < 0.3:
+            return (0.3 - dominance) * 0.3
+        if dominance > 0.7:
+            return -dominance * 0.05
+        return 0.0
+
     def apply_limbic_modulation(self, emotion: EmotionState) -> None:
-        mood = 0.0
-        triggered = False
-
-        if emotion.valence < -0.3:
-            mood += abs(emotion.valence) * 0.4
-            triggered = True
-        elif emotion.valence > 0.3:
-            mood -= emotion.valence * 0.1
-            triggered = True
-
-        if emotion.arousal > 0.6:
-            mood -= emotion.arousal * 0.1
-            triggered = True
-        elif emotion.arousal < 0.2:
-            mood += 0.1
-            triggered = True
-
-        if emotion.dominance < 0.3:
-            mood += (0.3 - emotion.dominance) * 0.3
-            triggered = True
-        elif emotion.dominance > 0.7:
-            mood -= emotion.dominance * 0.05
-            triggered = True
+        mood_v = self._valence_modulation(emotion.valence)
+        mood_a = self._arousal_modulation(emotion.arousal)
+        mood_d = self._dominance_modulation(emotion.dominance)
+        triggered = mood_v != 0.0 or mood_a != 0.0 or mood_d != 0.0
 
         current = self._state.negative_mood_score
 
@@ -257,7 +262,7 @@ class InhibitionController:
             decay = max(current * 0.1, 0.02)
             current = max(0.0, current - decay)
 
-        self._state.negative_mood_score = max(0.0, min(1.0, current + mood))
+        self._state.negative_mood_score = max(0.0, min(1.0, current + mood_v + mood_a + mood_d))
 
     def reset(self) -> None:
         self._state = _InhibitionState()

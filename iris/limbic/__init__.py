@@ -5,7 +5,7 @@ from iris.limbic.manager import LimbicManager
 from iris.limbic.models import BASIC_EMOTIONS, EmotionDelta, EmotionState
 from iris.limbic.mood import MoodEngine
 from iris.limbic.prefrontal.personality import BigFiveProfile
-from iris.limbic.score import PsychometricState
+from iris.limbic.state import PsychometricState
 
 __all__ = [
     "BASIC_EMOTIONS",

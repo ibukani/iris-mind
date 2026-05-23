@@ -25,7 +25,7 @@ from iris.kernel.diagnostics import SystemDiagnostics
 from iris.limbic.hippocampus.binder import EmotionalMemory
 from iris.limbic.manager import LimbicManager
 from iris.limbic.prefrontal.personality import BigFiveProfile
-from iris.limbic.score import PsychometricState
+from iris.limbic.state import PsychometricState
 from iris.llm.bridge import LLMBridge
 from iris.llm.capability import CapabilityChecker
 from iris.llm.context import LLMContextWindowManager

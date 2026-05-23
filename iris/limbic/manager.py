@@ -15,7 +15,7 @@ from iris.limbic.cingulate.regulator import AnteriorCingulateCortex
 from iris.limbic.hippocampus.binder import EmotionalMemory
 from iris.limbic.models import DriveState, EmotionDelta, EmotionState
 from iris.limbic.mood import MoodEngine
-from iris.limbic.score import PsychometricState
+from iris.limbic.state import PsychometricState
 
 
 @runtime_checkable

@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 if TYPE_CHECKING:
-    from iris.limbic.score import PsychometricState
+    from iris.limbic.state import PsychometricState
 
 _PEM_LAMBDA = 0.8
 _CHANGE_THRESHOLD = 1.0

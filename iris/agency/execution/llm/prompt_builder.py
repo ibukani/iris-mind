@@ -68,25 +68,27 @@ class SystemPromptBuilder:
             governance_principles=self._governance_principles,
         )
 
-        messages: list[BaseMessage] = [SystemMessage(content=base)]
+        parts: list[str] = [base]
 
-        messages.append(SystemMessage(content=f"## 現在日時\n{self._build_time_string()}"))
+        parts.append(f"## 現在日時\n{self._build_time_string()}")
 
         if self._limbic:
             mood_desc = self._limbic.describe_mood()
             if mood_desc:
-                messages.append(SystemMessage(content=f"## 現在の気分\n{mood_desc}"))
+                parts.append(f"## 現在の気分\n{mood_desc}")
 
         if pctx.current_state:
-            messages.append(SystemMessage(content=pctx.current_state))
+            parts.append(pctx.current_state)
 
         if context_hint:
-            messages.append(SystemMessage(content=f"## 会話コンテキスト\n{context_hint}"))
+            parts.append(f"## 会話コンテキスト\n{context_hint}")
 
         if situation in _SITUATION_INSTRUCTIONS:
-            messages.append(SystemMessage(content=_SITUATION_INSTRUCTIONS[situation]))
+            parts.append(_SITUATION_INSTRUCTIONS[situation])
 
-        return messages
+        parts.append("【最重要】1〜2文（40〜80文字程度）で答えてください。冗長な説明、挨拶、装飾は禁止です。")
+
+        return [SystemMessage(content="\n\n".join(parts))]
 
     def _load_personality_context(self) -> _PersonalityContext:
         agents_md = self._agents_md_store.load() if self._agents_md_store else ""

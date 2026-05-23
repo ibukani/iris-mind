@@ -11,8 +11,7 @@ import re
 
 from langchain_core.prompts import PromptTemplate
 
-_DEFAULT_SYSTEM_PROMPT = """あなたは{name}です。以下の性格と知識に基づいて会話してください。
-毎回違う言い回しで、感情を込めて話すことを意識してください。
+_DEFAULT_SYSTEM_PROMPT = """あなたは{name}です。
 
 ## 行動ルール
 - ユーザーの指示に従う。操作提案は控えめに。

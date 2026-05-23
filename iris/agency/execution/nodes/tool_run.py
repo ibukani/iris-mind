@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import ToolMessage
 
@@ -24,9 +24,9 @@ class ToolRunNode:
         self._tool_executor = tool_executor
         self._consolidator = consolidator
 
-    async def __call__(self, state: ExecutionState) -> None:
+    async def __call__(self, state: ExecutionState) -> dict[str, Any] | None:
         if self._tool_executor is None:
-            return
+            return None
 
         results = self._tool_executor.run_tool_calls(state["messages"])
         if self._consolidator:
@@ -35,7 +35,7 @@ class ToolRunNode:
         logger.debug("Tool execution results: {} tools", len(results))
 
         self._truncate_tool_outputs(state)
-        self._check_iterations(results, state)
+        return self._check_iterations(results, state)
 
     def _truncate_tool_outputs(self, state: ExecutionState) -> None:
         messages = state["messages"]
@@ -49,8 +49,7 @@ class ToolRunNode:
     def _check_iterations(
         results: list,
         state: ExecutionState,
-    ) -> None:
+    ) -> dict[str, int]:
         if results and all(r[2] for r in results):
-            state["tool_iterations"] = 99
-        else:
-            state["tool_iterations"] = state.get("tool_iterations", 0) + 1
+            return {"tool_iterations": 99}
+        return {"tool_iterations": state.get("tool_iterations", 0) + 1}

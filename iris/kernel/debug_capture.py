@@ -22,11 +22,13 @@ class CaptureEntry:
     response: str
     token_counts: dict
     tool_iterations: list[dict] = field(default_factory=list)
+    full_prompt: str = ""
 
     def format(self) -> str:
         lines: list[str] = []
         self._append_header(lines)
         self._append_system_prompt(lines)
+        self._append_full_prompt(lines)
         self._append_messages(lines)
         self._append_tools(lines)
         self._append_tool_iterations(lines)
@@ -56,6 +58,15 @@ class CaptureEntry:
         lines.append("SYSTEM PROMPT")
         lines.append("-" * 80)
         lines.append(self.system_prompt)
+        lines.append("")
+
+    def _append_full_prompt(self, lines: list[str]) -> None:
+        if not self.full_prompt:
+            return
+        lines.append("-" * 80)
+        lines.append("FULL PROMPT (LLM に渡される最終形式)")
+        lines.append("-" * 80)
+        lines.append(self.full_prompt)
         lines.append("")
 
     def _append_messages(self, lines: list[str]) -> None:

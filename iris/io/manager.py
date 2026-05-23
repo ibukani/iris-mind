@@ -49,6 +49,10 @@ class IOManager:
         }
 
     def _on_message_event(self, event: MessageEvent) -> None:
+        direction = event.direction or "response"
+        if direction not in ("response", "stream"):
+            return
+
         session_info = self._session_mgr.get_session_info(event.session_id)
         target_role = session_info.role if session_info else event.source_role or "*"
 
@@ -60,7 +64,7 @@ class IOManager:
             source_role="mind",
             target_role=target_role,
             session_id=event.session_id,
-            direction=Direction(event.direction) if event.direction else Direction.RESPONSE,
+            direction=Direction(direction),
         )
         logger.debug(
             "IOManager: message event session={} type={} state={} target_role={} content_len={}",

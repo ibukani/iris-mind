@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, ChatMessage
 
@@ -33,7 +33,7 @@ class FinalizeNode:
         self._monitor = monitor
         self._coordinator = coordinator
 
-    async def __call__(self, state: ExecutionState) -> None:
+    async def __call__(self, state: ExecutionState) -> dict[str, Any] | None:
         plan = state["plan"]
         response_text = state.get("response_text", "")
         show_thinking = plan.get("show_thinking", False)
@@ -45,6 +45,7 @@ class FinalizeNode:
             if show_thinking and self._event_bus:
                 self._event_bus.publish(
                     MessageEvent(
+                        session_id=session_id,
                         timestamp=None,
                         source="execution",
                         msg_type="chat",
@@ -54,7 +55,7 @@ class FinalizeNode:
                     )
                 )
             state["completed"] = True
-            return
+            return {"completed": True}
 
         if record_history:
             if silent:
@@ -74,6 +75,7 @@ class FinalizeNode:
         if show_thinking and self._event_bus:
             self._event_bus.publish(
                 MessageEvent(
+                    session_id=session_id,
                     timestamp=None,
                     source="execution",
                     msg_type="chat",
@@ -86,6 +88,7 @@ class FinalizeNode:
         if not silent and self._event_bus:
             self._event_bus.publish(
                 MessageEvent(
+                    session_id=session_id,
                     timestamp=None,
                     source="execution",
                     msg_type="chat",
@@ -112,3 +115,4 @@ class FinalizeNode:
             )
 
         state["completed"] = True
+        return {"completed": True}

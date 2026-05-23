@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+import queue
+import threading
 from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import BaseMessage, SystemMessage
@@ -52,7 +54,6 @@ class FlowExecutor:
         self._memory = memory
         self._messages: list[BaseMessage] = messages if messages is not None else []
         self._interrupt_token: InterruptToken | None = None
-        self._bg_tasks: set[asyncio.Task] = set()
 
         coordinator = FeedbackCoordinator(event_bus, monitor, inhibition)
 
@@ -68,6 +69,14 @@ class FlowExecutor:
             session_roles_getter=session_roles_getter,
             capability_checker=capability_checker,
         )
+
+        self._loop = asyncio.new_event_loop()
+        self._plan_queue: queue.Queue[dict[str, Any] | None] = queue.Queue()
+        self._worker_thread = threading.Thread(
+            target=self._worker_run, daemon=True, name="executor-worker"
+        )
+        self._worker_thread.start()
+
         self._bus.subscribe("PlanDecided", self._on_plan)
         self._event_bus.subscribe("InterruptEvent", self._on_interrupt)
 
@@ -99,18 +108,31 @@ class FlowExecutor:
             return
 
         logger.info(
-            "FlowExecutor: executing plan session={} abbreviated={}",
+            "FlowExecutor: queueing plan session={} abbreviated={}",
             plan.get("session_id"),
             plan.get("abbreviated"),
         )
-        try:
-            loop = asyncio.get_running_loop()
-        except RuntimeError:
-            asyncio.run(self._run_graph(plan))
-        else:
-            task = loop.create_task(self._run_graph(plan))
-            self._bg_tasks.add(task)
-            task.add_done_callback(self._bg_tasks.discard)
+        self._plan_queue.put(plan)
+
+    def shutdown(self) -> None:
+        """Signal the worker thread to stop and wait for completion."""
+        self._plan_queue.put(None)
+        self._worker_thread.join(timeout=5.0)
+        if self._worker_thread.is_alive():
+            logger.warning("FlowExecutor worker thread did not finish within 5s timeout")
+        self._loop.close()
+
+    def _worker_run(self) -> None:
+        """Dedicated worker thread: owns the event loop, processes plans from queue."""
+        asyncio.set_event_loop(self._loop)
+        while True:
+            plan = self._plan_queue.get()
+            if plan is None:
+                break
+            try:
+                self._loop.run_until_complete(self._run_graph(plan))
+            except Exception:
+                logger.exception("FlowExecutor worker: graph execution failed")
 
     async def _run_graph(self, plan: dict[str, Any]) -> None:
         self._interrupt_token = InterruptToken()

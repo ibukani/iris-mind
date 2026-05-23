@@ -82,6 +82,8 @@ class Personality:
             personality_traits: 性格の現在状態（空なら省略）。
             governance_principles: 自己規律指示（空なら省略）。
         """
+        if agents_md_content:
+            agents_md_content = agents_md_content.replace("{name}", self.name)
         prompt = self._render_template(
             self.system_prompt_template,
             name=self.name,

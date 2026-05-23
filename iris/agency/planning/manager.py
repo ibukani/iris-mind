@@ -7,6 +7,8 @@ from iris.agency.bus import InternalBus, PlanDecided
 from iris.agency.inhibition import InhibitionController
 from iris.agency.planning.context_hint_builder import ContextHintBuilder
 from iris.agency.planning.decisions import ProactiveJudge, ProactiveScoring
+from iris.agency.planning.level_profile import resolve_level
+from iris.agency.planning.models import Plan, PlanReason
 from iris.agency.planning.question_generator import QuestionGenerator
 from iris.agency.planning.strategies import ProactivePlanStrategy, ResponsePlanStrategy
 from iris.event.event_bus import EventBus
@@ -97,11 +99,25 @@ class PlanningManager:
         self._inhibition.apply_limbic_modulation(emotion)
         return emotion
 
-    def _publish(self, plan: dict, session_id: str, from_timer: bool) -> None:
-        plan["session_id"] = session_id
+    def _publish(self, plan: Plan, session_id: str, from_timer: bool) -> None:
+        resolved = resolve_level(plan.task_level, plan.overrides)
+        resolved["content"] = plan.content
+        resolved["streaming"] = not plan.silent
+        resolved["silent"] = plan.silent
+        if plan.silent:
+            resolved["show_thinking"] = False
+        resolved["record_history"] = True
+        resolved["session_id"] = session_id
+        resolved["situation"] = (
+            "proactive"
+            if plan.reason in (PlanReason.PROACTIVE_CURIOSITY, PlanReason.PROACTIVE_ESCALATION, PlanReason.TIMER_EVENT)
+            else ""
+        )
+
         logger.info(
-            "PlanningManager: plan published session={} from_timer={}",
+            "PlanningManager: plan published session={} from_timer={} level={}",
             session_id,
             from_timer,
+            plan.task_level,
         )
-        self._bus.publish(PlanDecided(plan=plan))
+        self._bus.publish(PlanDecided(plan=resolved))

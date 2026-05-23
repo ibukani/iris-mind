@@ -57,6 +57,8 @@ class KernelProcess:
         ctx.shutdown_requested = True
         if ctx.agency is not None:
             ctx.agency.execution.flush_memory()
+        if ctx.limbic is not None:
+            ctx.limbic.flush_state()
         ctx.io.stop()
 
         logger.info("KernelProcess: shutdown complete")

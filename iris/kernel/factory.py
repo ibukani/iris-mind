@@ -25,6 +25,7 @@ from iris.kernel.diagnostics import SystemDiagnostics
 from iris.limbic.hippocampus.binder import EmotionalMemory
 from iris.limbic.manager import LimbicManager
 from iris.limbic.prefrontal.personality import BigFiveProfile
+from iris.limbic.state import PsychometricState
 from iris.llm.bridge import LLMBridge
 from iris.llm.capability import CapabilityChecker
 from iris.llm.context import LLMContextWindowManager
@@ -141,12 +142,16 @@ class KernelFactory:
         (episodic, semantic) = KernelFactory._build_stores(config)
         memory_mgr = KernelFactory._build_memory(event_bus, config, episodic=episodic, semantic=semantic)
 
-        big_five = BigFiveProfile.load()
+        psychometric = PsychometricState(path=config.memory.psychometric_state_path)
+
+        big_five = BigFiveProfile()
+        big_five.set_state(psychometric)
         limbic = LimbicManager(
             event_bus=event_bus,
             emotional_memory=EmotionalMemory(episodic_store=episodic, semantic_store=semantic),
         )
         limbic.set_big_five(big_five)
+        limbic.set_psychometric_state(psychometric)
 
         llm = KernelFactory._build_llm(config)
         tokenizers: dict[str, TokenizerManager] = {
@@ -174,6 +179,7 @@ class KernelFactory:
             session_mgr,
             limbic=limbic,
             big_five=big_five,
+            psychometric=psychometric,
             tokenizers=tokenizers,
             debug_capture=debug_capture,
         )
@@ -334,6 +340,7 @@ class KernelFactory:
         session_mgr: SessionManager,
         limbic: LimbicManager | None = None,
         big_five: BigFiveProfile | None = None,
+        psychometric: PsychometricState | None = None,
         tokenizers: dict[str, TokenizerManager] | None = None,
         debug_capture: DebugCapture | None = None,
     ) -> AgencyManager:
@@ -345,7 +352,9 @@ class KernelFactory:
 
         mem_cfg = config.memory
         agents_md_store = AgentsMdStore(path=mem_cfg.agents_md_path, max_bytes=mem_cfg.agents_md_max_bytes)
-        persona_data = PersonaData(path=mem_cfg.persona_data_path)
+        persona_data = PersonaData()
+        if psychometric is not None:
+            persona_data.set_state(psychometric)
         persona_profile = PersonaProfile(persona_data=persona_data)
         if limbic is not None:
             limbic.set_persona_profile(persona_profile)

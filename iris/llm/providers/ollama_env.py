@@ -25,6 +25,7 @@ def ensure_environment(entries: list[ModelEntry], model_config: ModelConfig) -> 
     """Ollama 環境を確認・準備する（再起動 → モデル確認 → pull）。"""
     default_gpu = model_config.default_num_gpu if entries else 99
     os.environ.setdefault("OLLAMA_GPU_LAYERS", str(default_gpu))
+    os.environ["OLLAMA_FLASH_ATTENTION"] = "1"
     _restart_ollama()
     model_names = [e.name for e in entries]
     _stop_config_models(model_names)
@@ -96,7 +97,9 @@ def _ensure_model_pulled(model_name: str) -> bool:
 
 def _confirm_pull(model_name: str) -> bool:
     try:
-        resp = input(f"モデル '{model_name}' が見つかりません。\n  ollama pull {model_name}\nを実行してダウンロードしますか？ [y/N] ")
+        resp = input(
+            f"モデル '{model_name}' が見つかりません。\n  ollama pull {model_name}\nを実行してダウンロードしますか？ [y/N] "
+        )
     except EOFError:
         logger.warning("Non-interactive environment: skipping model pull for '{}'", model_name)
         return False

@@ -261,7 +261,7 @@ class LLMBridge:
         return self._repetition_detector.trim(text)
 
     def is_available(self) -> bool:
-        for provider in self._providers.values():
+        for provider in self._providers.values():  # noqa: SIM110
             if self._check_provider_available(provider):
                 return True
         return False

@@ -15,7 +15,9 @@ def test_build_response_style_neutral() -> None:
 def test_generate_response_style_joy() -> None:
     e = EmotionState(valence=0.8, arousal=0.6)
     style = _engine().generate_response_style(e)
-    assert any(x in style for x in ["明るく温かいトーン", "温かみのある明るい", "明るい声で", "最高に嬉しそう", "歓喜に満ちた"])
+    assert any(
+        x in style for x in ["明るく温かいトーン", "温かみのある明るい", "明るい声で", "最高に嬉しそう", "歓喜に満ちた"]
+    )
     assert any(x in style for x in ["やったー", "わあ！", "やった！", "最高！！", "うわぁぁ！", "興奮を隠しきれない"])
 
 

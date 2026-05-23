@@ -73,7 +73,7 @@ class SystemPromptBuilder:
         parts.append(f"## 現在日時\n{self._build_time_string()}")
 
         if self._limbic:
-            mood_desc = self._limbic.describe_mood() or "落ち着いた状態です。特に強い感情はありません。"
+            mood_desc = self._limbic.describe_mood() or "落ち着いた状態。特に強い感情はないよ。"
             parts.append(f"## 現在の気分\n{mood_desc}")
 
         if pctx.current_state:

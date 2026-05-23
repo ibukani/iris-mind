@@ -155,6 +155,68 @@ if big_five:
         # E=75 → 5%促進, E=100 → 10%促進
 ```
 
+### ACC 慣れ率の性格変調
+
+| 特性 | 効果 |
+|------|------|
+| Neuroticism 高 | habituation_rate 低下（慣れが遅い）→ 負の感情反応が持続 |
+
+```python
+habituation_rate = 0.015
+if big_five:
+    neuroticism = N / 100
+    habituation_rate *= max(0.3, 1.0 - (neuroticism - 0.5) * 0.6)
+    # N=50 → 変化なし, N=100 → -30%（慣れが遅くなる）
+```
+
+### 感情慣性の性格変調
+
+| 特性 | 効果 |
+|------|------|
+| Neuroticism 高 | inertia 低下（感情が不安定、方向転換しやすい） |
+| Conscientiousness 高 | inertia 上昇（感情が安定、変化に抵抗） |
+
+```python
+neuro_factor = 1.0 - (N - 0.5) * 0.4   # N=100 → -20%
+con_factor = 0.5 + C                     # C=100 → 1.5x
+self._inertia *= max(0.5, neuro_factor)
+self._inertia *= max(0.5, con_factor)
+```
+
+### 欲求蓄積の性格変調
+
+`DriveState.accumulate(big_five=...)` で各欲求の蓄積速度が変調:
+
+| 特性 | 効果 |
+|------|------|
+| Openness 高 | curiosity 蓄積加速 (1.0 + (O-50)*0.003) |
+| Extraversion 高 | social_need 蓄積減少 (1.0 - (E-50)*0.002) |
+| Neuroticism 高 | social_need 蓄積加速 (1.0 + (N-50)*0.003) |
+| Conscientiousness 低 | maintenance 蓄積加速 (1.0 + (50-C)*0.003) |
+
+### 感情トリガーによる性格更新 (PEM)
+
+極端な感情状態 (|valence| > 0.75) が発生した場合、PEM 更新をトリガー:
+
+```python
+if abs(self._emotion.valence) > 0.75:
+    estimate = {}
+    if delta.valence > 0:
+        estimate["openness"] = 50 + delta.valence * 12
+        estimate["extraversion"] = 50 + delta.valence * 15
+    elif delta.valence < 0:
+        estimate["neuroticism"] = 50 + abs(delta.valence) * 10
+        estimate["agreeableness"] = 50 - abs(delta.valence) * 8
+    self._big_five_provider.update_from_estimate(estimate, "emotional_trigger")
+```
+
+| トリガー | 推定方向 |
+|---------|---------|
+| 強い喜び | Openness +12, Extraversion +15 上昇方向 |
+| 強い怒り/悲しみ | Neuroticism +10 上昇、Agreeableness -8 低下方向 |
+
+これにより「感情経験が性格を形成する」という心理学的知見をモデル化。
+
 ## システムプロンプトへの反映
 
 `BigFiveProfile.format_summary()` で Markdown 形式に整形:

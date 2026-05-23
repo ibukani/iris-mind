@@ -47,6 +47,7 @@ class FinalizeNode:
                     MessageEvent(
                         timestamp=None,
                         source="execution",
+                        session_id=session_id,
                         msg_type="chat",
                         content="",
                         state=StreamState.DONE.value,
@@ -76,6 +77,7 @@ class FinalizeNode:
                 MessageEvent(
                     timestamp=None,
                     source="execution",
+                    session_id=session_id,
                     msg_type="chat",
                     content="",
                     state=StreamState.DONE.value,
@@ -88,6 +90,7 @@ class FinalizeNode:
                 MessageEvent(
                     timestamp=None,
                     source="execution",
+                    session_id=session_id,
                     msg_type="chat",
                     content=response_text,
                     direction="response",

@@ -180,8 +180,10 @@ class LLMBridge:
                 active_model, messages, call_kwargs, on_token, local_interrupt_token, wrapped_on_token
             )
 
-        content = self._extract_content(resp_message)
+        return self._handle_response_content(resp_message)
 
+    def _handle_response_content(self, resp_message: AIMessage) -> AIMessage:
+        content = self._extract_content(resp_message)
         if content and self._detect_repetition(content):
             content = self._trim_repetition(content)
             logger.warning("Trimmed repetition loop from final LLM response.")
@@ -189,7 +191,6 @@ class LLMBridge:
             if getattr(resp_message, "tool_calls", None):
                 new_msg.tool_calls = resp_message.tool_calls
             return new_msg
-
         if isinstance(resp_message, AIMessage):
             return resp_message
         return AIMessage(content=str(getattr(resp_message, "content", "")))
@@ -260,39 +261,46 @@ class LLMBridge:
         return self._repetition_detector.trim(text)
 
     def is_available(self) -> bool:
-        """登録されているプロバイダのいずれかが利用可能かどうかを判定する。"""
-        any_ok = False
         for provider in self._providers.values():
-            if isinstance(provider, ChatOllama):
-                try:
-                    url = getattr(provider, "base_url", None)
-                    if url:
-                        r = httpx.get(url, timeout=1.0)
-                        if r.status_code == 200:
-                            any_ok = True
-                except Exception:
-                    logger.warning("Ollama provider at {} is unavailable", getattr(provider, "base_url", None))
-            elif isinstance(provider, ChatOpenAI) and provider.openai_api_key:
-                any_ok = True
-        return any_ok
+            if self._check_provider_available(provider):
+                return True
+        return False
+
+    def _check_provider_available(self, provider: BaseChatModel) -> bool:
+        if isinstance(provider, ChatOllama):
+            url = getattr(provider, "base_url", None)
+            if not url:
+                return False
+            try:
+                return httpx.get(url, timeout=1.0).status_code == 200
+            except Exception:
+                logger.warning("Ollama provider at {} is unavailable", url)
+                return False
+        if isinstance(provider, ChatOpenAI):
+            return bool(provider.openai_api_key)
+        return False
 
     def unload_model(self, model_name: str | None = None) -> None:
-        """メモリ解放のため、指定されたモデルをプロバイダからアンロードする。"""
-        if model_name:
-            key = self._model_map.get(model_name)
-            if key:
-                provider = self._providers[key]
-                if isinstance(provider, ChatOllama):
-                    from ollama import Client
+        if not model_name:
+            return
+        key = self._model_map.get(model_name)
+        if not key:
+            return
+        provider = self._providers[key]
+        if isinstance(provider, ChatOllama):
+            self._unload_ollama_model(model_name, provider)
 
-                    try:
-                        Client(host=getattr(provider, "base_url", None)).chat(
-                            model=model_name,
-                            messages=[{"role": "user", "content": ""}],
-                            keep_alive=0,
-                        )
-                    except Exception as e:
-                        logger.warning("Failed to unload ollama model {}: {}", model_name, e)
+    def _unload_ollama_model(self, model_name: str, provider: ChatOllama) -> None:
+        from ollama import Client
+
+        try:
+            Client(host=getattr(provider, "base_url", None)).chat(
+                model=model_name,
+                messages=[{"role": "user", "content": ""}],
+                keep_alive=0,
+            )
+        except Exception as e:
+            logger.warning("Failed to unload ollama model {}: {}", model_name, e)
 
     @cached(cache=LRUCache(maxsize=32))  # type: ignore[arg-type]
     def _resolve_provider(self, model_name: str) -> BaseChatModel:

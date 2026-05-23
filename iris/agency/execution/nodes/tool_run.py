@@ -32,7 +32,7 @@ class ToolRunNode:
         if self._consolidator:
             self._consolidator.record_activity()
 
-        logger.debug("Tool execution results: %d tools", len(results))
+        logger.debug("Tool execution results: {} tools", len(results))
 
         self._truncate_tool_outputs(state)
         self._check_iterations(results, state)

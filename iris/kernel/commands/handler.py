@@ -106,7 +106,7 @@ class CommandHandler:
         self._debug_cmds.set_diagnostics(diagnostics)
 
     def handle(self, name: str, args: str = "") -> str:
-        logger.info("CommandHandler: /%s %s", name, args[:100] if args else "")
+        logger.info("CommandHandler: /{} {}", name, args[:100] if args else "")
         handler = self._commands.get(name)
         if handler is None:
             return f"Unknown command: /{name}"

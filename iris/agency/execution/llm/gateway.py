@@ -142,7 +142,7 @@ class LLMGateway:
             )
             text = str(resp.content).strip() if isinstance(resp.content, str) else ""
         except Exception as e:
-            logger.debug("Short generation failed: %s", e)
+            logger.debug("Short generation failed: {}", e)
 
         if not text:
             text = "" if situation == "proactive" else "…"

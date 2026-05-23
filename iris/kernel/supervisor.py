@@ -113,6 +113,6 @@ class Supervisor:
         if self._shutdown_requested:
             return
         self._shutdown_requested = True
-        logger.info("Supervisor: received signal %d, starting shutdown", sig)
+        logger.info("Supervisor: received signal {}, starting shutdown", sig)
         self.shutdown()
         sys.exit(0)

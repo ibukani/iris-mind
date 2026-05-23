@@ -130,7 +130,7 @@ class ProactiveScoring:
             if results:
                 return max(r.get("score", 0.0) for r in results)  # type: ignore[no-any-return]
         except Exception as e:
-            logger.debug("Memory score failed: %s", e)
+            logger.debug("Memory score failed: {}", e)
         return 0.0
 
     @staticmethod

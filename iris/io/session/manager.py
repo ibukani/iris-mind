@@ -77,7 +77,7 @@ class SessionManager:
                             with contextlib.suppress(Exception):
                                 s.conn.close()
                         del self._sessions[sid]
-                        logger.info("SessionManager: replaced duplicate session %s (identity=%s)", sid, msg.identity)
+                        logger.info("SessionManager: replaced duplicate session {} (identity={})", sid, msg.identity)
 
             now = datetime.now()
             session_id = uuid4().hex[:16]
@@ -108,7 +108,7 @@ class SessionManager:
                 else:
                     offline_duration = f"{secs // 86400}日間"
 
-            logger.info("Session created: %s (role=%s)", session_id, msg.role)
+            logger.info("Session created: {} (role={})", session_id, msg.role)
 
         if self._event_bus:
             from iris.event.event_types import ClientSessionEvent
@@ -161,14 +161,14 @@ class SessionManager:
             session = self._sessions.get(session_id)
 
         if session is None:
-            logger.warning("Command output route for unknown session: %s", session_id)
+            logger.warning("Command output route for unknown session: {}", session_id)
             return
         if session.state != SessionState.ACTIVE:
             return
         if session.conn is None:
             return
         if Permission.PERMISSION_RECEIVE_COMMAND not in session.permissions:
-            logger.warning("Command output denied for session=%s (no receive_command)", session_id)
+            logger.warning("Command output denied for session={} (no receive_command)", session_id)
             return
         self._send_to_session(session, msg)
 
@@ -182,7 +182,7 @@ class SessionManager:
             conn.send_bytes(raw)
             session.last_activity = datetime.now()
         except (BrokenPipeError, ConnectionError, EOFError):
-            logger.warning("Connection lost for session: %s", session.session_id)
+            logger.warning("Connection lost for session: {}", session.session_id)
             session.conn = None
 
     def update_activity(self, session_id: str | None) -> None:
@@ -211,7 +211,7 @@ class SessionManager:
                 if session.conn is not None:
                     with contextlib.suppress(Exception):
                         session.conn.close()
-                logger.info("Session removed: %s", session_id)
+                logger.info("Session removed: {}", session_id)
                 key = f"{session.role}:{session.identity}" if session.identity else session.role
                 self._last_disconnect_times[key] = now
 

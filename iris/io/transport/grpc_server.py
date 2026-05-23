@@ -61,7 +61,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
         grpc_service_pb2_grpc.add_IrisServiceServicer_to_server(self, self._server)
         self._server.add_insecure_port(f"{host}:{port}")
         await self._server.start()
-        logger.info("GrpcServer started on %s:%d", host, port)
+        logger.info("GrpcServer started on {}:{}", host, port)
 
     async def stop(self) -> None:
         if self._server:
@@ -80,7 +80,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
                     try:
                         permissions.append(Permission(p))
                     except ValueError:
-                        logger.warning("GrpcServer: invalid permission metadata %s", p)
+                        logger.warning("GrpcServer: invalid permission metadata {}", p)
         return permissions
 
     async def _authenticate(self, metadata: dict[str, str], grpc_conn: GrpcConnection, context: Any) -> tuple[str, str]:
@@ -99,14 +99,14 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
 
         auth_res = self._session_manager.authenticate(grpc_conn, auth_msg)
         if auth_res.msg_type == "auth_failure":
-            logger.warning("GrpcServer: authentication failed: %s", auth_res.error_message)
+            logger.warning("GrpcServer: authentication failed: {}", auth_res.error_message)
             await context.abort(grpc.StatusCode.UNAUTHENTICATED, auth_res.error_message or "Auth failed")
             raise ConnectionError("Authentication failed")
 
         session_id = auth_res.session_id
         assert session_id is not None
         session_role = auth_msg.role or "external"
-        logger.info("GrpcServer: session %s authenticated (role=%s)", session_id, session_role)
+        logger.info("GrpcServer: session {} authenticated (role={})", session_id, session_role)
         return session_id, session_role
 
     async def BidirectionalStream(self, request_iterator: Any, context: Any) -> Any:
@@ -146,7 +146,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             with contextlib.suppress(Exception):
                 await asyncio.gather(receive_task, return_exceptions=True)
             self._session_manager.remove_session(session_id)
-            logger.info("GrpcServer: session %s disconnected", session_id)
+            logger.info("GrpcServer: session {} disconnected", session_id)
 
     async def _stream_send_loop(self, grpc_conn: GrpcConnection) -> AsyncGenerator[Any]:
         """内部の送信キューからデータを受け取り、gRPCのフレームとして yield する。"""
@@ -239,11 +239,11 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             return
 
         if not self._session_manager.is_session_active(session_id):
-            logger.warning("GrpcServer: message from inactive session: %s", session_id)
+            logger.warning("GrpcServer: message from inactive session: {}", session_id)
             return
 
         if not self._session_manager.check_send_permission(session_id, msg.msg_type):
-            logger.warning("GrpcServer: session=%s lacks permission for msg_type=%s", session_id, msg.msg_type)
+            logger.warning("GrpcServer: session={} lacks permission for msg_type={}", session_id, msg.msg_type)
             err = Message(
                 msg_type="error",
                 content=f"Permission denied: cannot send {msg.msg_type}",
@@ -283,11 +283,11 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             return
 
         if not self._session_manager.is_session_active(session_id):
-            logger.warning("GrpcServer: command from inactive session: %s", session_id)
+            logger.warning("GrpcServer: command from inactive session: {}", session_id)
             return
 
         if not self._session_manager.check_send_permission(session_id, "command"):
-            logger.warning("GrpcServer: session=%s lacks permission to send command", session_id)
+            logger.warning("GrpcServer: session={} lacks permission to send command", session_id)
             return
 
         if self._on_command:

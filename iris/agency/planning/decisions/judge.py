@@ -45,7 +45,7 @@ class ProactiveJudge:
             self._inhibition.set_cooldown(30.0)
 
         if gate.suppressed:
-            logger.debug("Proactive trigger suppressed by gate (system_event=%s)", context.get("system_event"))
+            logger.debug("Proactive trigger suppressed by gate (system_event={})", context.get("system_event"))
             return None
 
         if context.get("from_timer"):
@@ -65,7 +65,7 @@ class ProactiveJudge:
             ignore_count=self._inhibition.consecutive_ignores,
         )
         if total < self._cfg.speak_threshold:
-            logger.debug("Below speak_threshold: total=%.3f < threshold=%.2f", total, self._cfg.speak_threshold)
+            logger.debug("Below speak_threshold: total={:.3f} < threshold={:.2f}", total, self._cfg.speak_threshold)
             return None
 
         topic = "general"
@@ -78,7 +78,7 @@ class ProactiveJudge:
         is_silent_proactive = drive_score > 0.3 and scores.get("context", 0.0) < 0.2
         if is_silent_proactive:
             if self._inhibition.is_topic_suppressed(topic, time.time()):
-                logger.debug("Proactive investigation for topic '%s' is suppressed by cooldown", topic)
+                logger.debug("Proactive investigation for topic '{}' is suppressed by cooldown", topic)
                 return None
             self._inhibition.record_topic(topic, 3600.0)
 
@@ -89,7 +89,7 @@ class ProactiveJudge:
             if self._context_builder
             else ""
         )
-        logger.debug("Proactive plan published: total=%.3f scores=%s hint=%s", total, scores, context_hint)
+        logger.debug("Proactive plan published: total={:.3f} scores={} hint={}", total, scores, context_hint)
         return {
             "from_timer": True,
             "salience": total,
@@ -103,7 +103,7 @@ class ProactiveJudge:
         topic = context.get("topic", "general")
         summary = context.get("summary", "")
         context_hint = f"自律調査によるエスカレーション / トピック: {topic} / 調査のまとめ: {summary}"
-        logger.info("Publishing escalation proactive plan for topic: %s", topic)
+        logger.info("Publishing escalation proactive plan for topic: {}", topic)
         return {
             "from_timer": True,
             "salience": 1.0,

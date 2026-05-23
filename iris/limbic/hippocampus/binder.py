@@ -118,7 +118,7 @@ class EmotionalMemory:
             self._persist_episodic(content, emotion_dict, intensity)
             self._persist_semantic(content, emotion_dict, _emotion_label(emotion), intensity)
 
-        logger.debug("Hippocampus encoded: intensity=%.3f label=%s", intensity, _emotion_label(emotion))
+        logger.debug("Hippocampus encoded: intensity={:.3f} label={}", intensity, _emotion_label(emotion))
 
     def get_recent_tags(self, n: int = 5) -> list[EmotionTag]:
         sorted_tags = sorted(

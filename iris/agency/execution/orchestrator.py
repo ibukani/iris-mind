@@ -130,7 +130,7 @@ class ExecutionOrchestrator:
         plan = state["plan"]
         max_iters = plan.get("max_tool_iterations", 3)
         if state.get("tool_iterations", 0) >= max_iters:
-            logger.debug("Tool iteration limit reached (%d)", max_iters)
+            logger.debug("Tool iteration limit reached ({})", max_iters)
             return "finalize"
         return "llm_generate"
 

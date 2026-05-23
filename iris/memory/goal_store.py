@@ -40,12 +40,12 @@ class GoalStore:
     def add_goal(self, description: str, weight: float = 1.0) -> str:
         goal = LongTermGoal(description=description, weight=max(0.0, min(1.0, weight)))
         self._goals[goal.id] = goal
-        logger.info("GoalStore: added goal '%s' (weight=%.2f)", description, weight)
+        logger.info("GoalStore: added goal '{}' (weight={:.2f})", description, weight)
         return goal.id
 
     def remove_goal(self, goal_id: str) -> bool:
         if goal_id in self._goals:
-            logger.info("GoalStore: removed goal '%s'", self._goals[goal_id].description)
+            logger.info("GoalStore: removed goal '{}'", self._goals[goal_id].description)
             del self._goals[goal_id]
             return True
         return False
@@ -81,7 +81,7 @@ class GoalStore:
         data = [g.model_dump() for g in self._goals.values()]
         with path.open("wb") as f:
             f.write(orjson.dumps(data, option=orjson.OPT_INDENT_2))
-        logger.debug("GoalStore: saved %d goals to %s", len(data), path)
+        logger.debug("GoalStore: saved {} goals to {}", len(data), path)
 
     def load(self, filepath: Path | str) -> None:
         path = Path(filepath)
@@ -94,6 +94,6 @@ class GoalStore:
             for item in data:
                 goal = LongTermGoal.model_validate(item)
                 self._goals[goal.id] = goal
-            logger.info("GoalStore: loaded %d goals from %s", len(self._goals), path)
+            logger.info("GoalStore: loaded {} goals from {}", len(self._goals), path)
         except Exception as e:
-            logger.error("GoalStore: failed to load goals from %s: %s", path, e)
+            logger.error("GoalStore: failed to load goals from {}: {}", path, e)

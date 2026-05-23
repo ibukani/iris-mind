@@ -19,7 +19,7 @@ class Authenticator:
             logger.warning("Auth failed: invalid access_token")
             return False, "invalid access_token"
 
-        logger.debug("Authenticated connection (role=%s)", msg.role)
+        logger.debug("Authenticated connection (role={})", msg.role)
         return True, None
 
     def set_token(self, token: str) -> None:

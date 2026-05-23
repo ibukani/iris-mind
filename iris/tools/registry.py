@@ -136,7 +136,7 @@ class ToolRegistry:
                     else:
                         register_decorated_tools(module, self)
                 except Exception as exc:
-                    logger.warning("Failed to load tool module %s: %s", module_path, exc)
+                    logger.warning("Failed to load tool module {}: {}", module_path, exc)
 
     def _iter_tool_modules(self, base_path: Path) -> list[Path]:
         return [path for path in base_path.rglob("server.py") if path.is_file()]

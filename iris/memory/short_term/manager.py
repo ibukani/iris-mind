@@ -128,7 +128,7 @@ class ShortTermMemoryManager:
         if len(self._turns) > self._max_turns:
             self._turns.pop(0)
         self._extract_from_content(truncated)
-        logger.debug("ShortTerm: added %s turn, total=%d", role, len(self._turns))
+        logger.debug("ShortTerm: added {} turn, total={}", role, len(self._turns))
 
     def _extract_from_content(self, content: str) -> None:
         """発話内容からエンティティの抽出と話題の更新を行う。"""

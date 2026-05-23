@@ -69,7 +69,7 @@ class FinalizeNode:
             role = "thought" if silent else "assistant"
             self._memory.short_term.add_turn(role, response_text)
 
-        logger.info("ExecutionGraph: response session=%s len=%d", session_id, len(response_text))
+        logger.info("ExecutionGraph: response session={} len={}", session_id, len(response_text))
 
         if show_thinking and self._event_bus:
             self._event_bus.publish(

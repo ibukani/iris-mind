@@ -120,7 +120,7 @@ class BigFiveProfile:
                 }
             )
             for c in changes:
-                logger.info("BigFiveProfile: %s", c)
+                logger.info("BigFiveProfile: {}", c)
 
         self._save()
         return changes

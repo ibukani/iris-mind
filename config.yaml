@@ -80,7 +80,7 @@ debug:
 # ログ出力 — レベル・保存先・ローテーション
 logging:
     backup_count: 14
-    console_format: "%(asctime)s [%(levelname)s] %(message)s"
+    console_format: "{time:YYYY-MM-DD HH:mm:ss} [{level}] {message}"
     console_level: DEBUG
     dir: logs
     file_level: INFO

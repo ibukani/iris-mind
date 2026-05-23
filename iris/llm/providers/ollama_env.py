@@ -90,7 +90,7 @@ def _ensure_model_pulled(model_name: str) -> bool:
             f"モデル '{model_name}' が見つかりません。\n  ollama pull {model_name}\nを実行してダウンロードしますか？ [y/N] "
         )
     except EOFError:
-        logger.warning("Non-interactive environment: skipping model pull for '%s'", model_name)
+        logger.warning("Non-interactive environment: skipping model pull for '{}'", model_name)
         return False
     if console_input.strip().lower() in ("y", "yes"):
         try:

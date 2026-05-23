@@ -38,12 +38,12 @@ class TokenizerManager:
             if p.exists():
                 try:
                     self._tokenizer = Tokenizer.from_file(str(p))
-                    logger.info("Tokenizer loaded from local: %s", local_path)
+                    logger.info("Tokenizer loaded from local: {}", local_path)
                     loaded = True
                 except Exception as e:
-                    logger.warning("Failed to load tokenizer from %s: %s", local_path, e)
+                    logger.warning("Failed to load tokenizer from {}: {}", local_path, e)
             else:
-                logger.warning("Tokenizer local_path not found: %s", local_path)
+                logger.warning("Tokenizer local_path not found: {}", local_path)
 
         if not loaded and repo_id:
             if hf_token:
@@ -52,9 +52,9 @@ class TokenizerManager:
                 t = Tokenizer.from_pretrained(repo_id)
                 if t is not None:
                     self._tokenizer = t
-                    logger.info("Tokenizer loaded from HF Hub: %s (vocab=%d)", repo_id, t.get_vocab_size())
+                    logger.info("Tokenizer loaded from HF Hub: {} (vocab={})", repo_id, t.get_vocab_size())
             except Exception as e:
-                logger.warning("Failed to load tokenizer from %s: %s", repo_id, e)
+                logger.warning("Failed to load tokenizer from {}: {}", repo_id, e)
 
     @cached(cache=LRUCache(maxsize=2048))
     def estimate_tokens(self, text: str) -> int:

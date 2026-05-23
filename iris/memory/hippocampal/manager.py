@@ -127,7 +127,7 @@ class HippocampalManager:
                     trigger="reflection",
                 )
             )
-        logger.info("Big Five updated: %s", changes)
+        logger.info("Big Five updated: {}", changes)
 
     def _parse_big_five_estimate(self, bf_raw: Any) -> dict[str, float] | None:
         if not bf_raw:
@@ -139,7 +139,7 @@ class HippocampalManager:
             if isinstance(estimate, dict):
                 return estimate  # type: ignore[no-any-return]
         except (orjson.JSONDecodeError, TypeError):
-            logger.debug("Could not parse big_five_estimate: %s", bf_raw)
+            logger.debug("Could not parse big_five_estimate: {}", bf_raw)
         return None
 
     def _consolidate_short_term(self, force: bool = False) -> None:
@@ -162,7 +162,7 @@ class HippocampalManager:
                 {"content": topic, "type": "topic", "tags": ["short_term_topic"]},
             )
         self._memory.short_term.mark_consolidated()
-        logger.info("Hippocampal: consolidated %d turns, %d topics", len(unconsolidated), len(topics))
+        logger.info("Hippocampal: consolidated {} turns, {} topics", len(unconsolidated), len(topics))
 
     async def run_session(self, messages: list[BaseMessage], memory: MemoryManagerProtocol | None = None) -> None:
         if self._reflexion is None:
@@ -252,7 +252,7 @@ class HippocampalManager:
             import random
 
             if random.random() < 0.5:
-                logger.info("Escalating proactive result to user conversation for topic: %s", topic)
+                logger.info("Escalating proactive result to user conversation for topic: {}", topic)
 
                 self._event_bus.publish(
                     InterruptEvent(

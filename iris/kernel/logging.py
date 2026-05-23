@@ -65,7 +65,8 @@ def _module_level_filter(levels: dict[str, str]) -> Callable[[dict], bool]:
 
 def _console_sink(msg: object) -> None:
     """コンソール出力: 行頭に \\r を挿入し、プロンプト再表示で追従する。"""
-    sys.stderr.write("\r" + str(msg) + "\n> ")
+    text = str(msg).rstrip("\n")
+    sys.stderr.write("\r" + text + "\n> ")
     sys.stderr.flush()
 
 
@@ -86,7 +87,7 @@ def setup_logging(cfg: LoggingConfig) -> None:
         sink=str(log_path),
         level=cfg.file_level.upper(),
         format=_FILE_FORMAT,
-        rotation=f"{cfg.max_bytes} bytes",
+        rotation=cfg.max_bytes,
         retention=3,
         encoding="utf-8",
         filter=filter_fn,

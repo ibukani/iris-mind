@@ -7,7 +7,6 @@ ModelConfig に基づき複数の LangChain ChatModel インスタンスを管�
 from __future__ import annotations
 
 from collections.abc import Callable
-import re
 from typing import Any
 
 from cachetools import LRUCache, cached
@@ -23,11 +22,7 @@ from iris.kernel.config import ModelConfig, ModelEntry
 
 from .interrupt_token import InterruptToken
 from .priority_lock import PriorityLock
-
-_RE_MULTI_REPEAT = re.compile(r"(.{2,20}?)\1{3,}")
-_RE_SINGLE_REPEAT = re.compile(r"(.)\1{9,}")
-_RE_MULTI_REPEAT_FULL = re.compile(r"((.{2,20}?)\2{3,})")
-_RE_SINGLE_REPEAT_FULL = re.compile(r"((.)\2{9,})")
+from .repetition import RepetitionDetector
 
 _PROVIDER_DEFAULTS: dict[str, str] = {
     "ollama": "http://localhost:11434",
@@ -45,6 +40,7 @@ class LLMBridge:
         self._entries: dict[str, ModelEntry] = {}
         self._model_config = model_config
         self._priority_lock = PriorityLock()
+        self._repetition_detector = RepetitionDetector()
 
         for entry in model_config.models:
             base_url, api_key = self._resolve_connection(entry)
@@ -162,17 +158,8 @@ class LLMBridge:
         provider = self._resolve_provider(model_name)
         entry = self._entries.get(model_name)
 
-        if isinstance(provider, ChatOllama):
-            call_kwargs = {
-                "options": self._build_ollama_options(temperature, max_tokens, entry, kwargs),
-            }
-        else:
-            call_kwargs = self._build_openai_kwargs(temperature, max_tokens, kwargs)
-        call_kwargs.update(kwargs)
-
-        active_model: Any = provider
-        if tools:
-            active_model = provider.bind_tools(tools)
+        call_kwargs = self._build_call_kwargs(provider, temperature, max_tokens, entry, kwargs)
+        active_model = provider.bind_tools(tools) if tools else provider
 
         local_interrupt_token = interrupt_token or InterruptToken()
         accumulated_text: list[str] = []
@@ -189,22 +176,9 @@ class LLMBridge:
                 on_token(token)
 
         async with self._priority_lock(priority):
-            if on_token:
-                full_message = None
-                try:
-                    async for chunk in active_model.astream(messages, **call_kwargs):
-                        if local_interrupt_token.is_cancelled:
-                            break
-                        full_message = chunk if full_message is None else full_message + chunk
-                        if chunk.content and isinstance(chunk.content, str):
-                            wrapped_on_token(chunk.content)
-                except Exception as e:
-                    logger.error("LangChain stream error: {}", e)
-                    raise
-
-                resp_message = full_message or AIMessage(content="")
-            else:
-                resp_message = await active_model.ainvoke(messages, **call_kwargs)
+            resp_message = await self._stream_or_invoke(
+                active_model, messages, call_kwargs, on_token, local_interrupt_token, wrapped_on_token
+            )
 
         content = self._extract_content(resp_message)
 
@@ -220,6 +194,49 @@ class LLMBridge:
             return resp_message
         return AIMessage(content=str(getattr(resp_message, "content", "")))
 
+    def _build_call_kwargs(
+        self,
+        provider: BaseChatModel,
+        temperature: float,
+        max_tokens: int,
+        entry: ModelEntry | None,
+        kwargs: dict[str, Any],
+    ) -> dict[str, Any]:
+        if isinstance(provider, ChatOllama):
+            call_kwargs: dict[str, Any] = {
+                "options": self._build_ollama_options(temperature, max_tokens, entry, kwargs),
+            }
+        else:
+            call_kwargs = self._build_openai_kwargs(temperature, max_tokens, kwargs)
+        call_kwargs.update(kwargs)
+        return call_kwargs
+
+    async def _stream_or_invoke(
+        self,
+        active_model: Any,
+        messages: list[BaseMessage],
+        call_kwargs: dict[str, Any],
+        on_token: Callable[[str], None] | None,
+        interrupt_token: InterruptToken,
+        wrapped_on_token: Callable[[str], None],
+    ) -> Any:
+        if not on_token:
+            return await active_model.ainvoke(messages, **call_kwargs)
+
+        full_message = None
+        try:
+            async for chunk in active_model.astream(messages, **call_kwargs):
+                if interrupt_token.is_cancelled:
+                    break
+                full_message = chunk if full_message is None else full_message + chunk
+                if chunk.content and isinstance(chunk.content, str):
+                    wrapped_on_token(chunk.content)
+        except Exception as e:
+            logger.error("LangChain stream error: {}", e)
+            raise
+
+        return full_message or AIMessage(content="")
+
     async def chat_with_structured_output(
         self,
         schema: Any,
@@ -231,46 +248,16 @@ class LLMBridge:
     ) -> Any:
         model_name = model or self._get_default_model()
         provider = self._resolve_provider(model_name)
-
-        empty_kwargs: dict[str, Any] = {}
-        if isinstance(provider, ChatOllama):
-            call_kwargs = {
-                "options": self._build_ollama_options(temperature, max_tokens, None, empty_kwargs),
-            }
-        else:
-            call_kwargs = self._build_openai_kwargs(temperature, max_tokens, empty_kwargs)
-        call_kwargs.update(kwargs)
+        call_kwargs = self._build_call_kwargs(provider, temperature, max_tokens, None, kwargs)
 
         active_model = provider.with_structured_output(schema)
         return await active_model.ainvoke(messages, **call_kwargs)
 
     def _detect_repetition(self, text: str) -> bool:
-        if not text:
-            return False
-        target = text[-150:] if len(text) > 150 else text
-
-        for match in _RE_MULTI_REPEAT.finditer(target):
-            if len(set(match.group(1))) > 1:
-                return True
-
-        return bool(_RE_SINGLE_REPEAT.search(target))
+        return self._repetition_detector.detect(text)
 
     def _trim_repetition(self, text: str) -> str:
-        for match_multi in _RE_MULTI_REPEAT_FULL.finditer(text):
-            pattern = match_multi.group(2)
-            if len(set(pattern)) > 1:
-                start = match_multi.start(1)
-                replacement = pattern * 2 + "… [繰り返し検知により中断]"
-                return text[:start] + replacement
-
-        match_single = _RE_SINGLE_REPEAT_FULL.search(text)
-        if match_single:
-            start = match_single.start(1)
-            char = match_single.group(2)
-            replacement = char * 3 + "… [繰り返し検知により中断]"
-            return text[:start] + replacement
-
-        return text
+        return self._repetition_detector.trim(text)
 
     def is_available(self) -> bool:
         """登録されているプロバイダのいずれかが利用可能かどうかを判定する。"""

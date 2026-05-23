@@ -130,46 +130,53 @@ class LimbicManager:
     def _apply_emotion_change(self, delta: EmotionDelta, trigger: str, affect_labeling: bool = False) -> None:
         self._decay()
         adjusted = self._acc.modulate(delta, self._emotion, self._get_big_five_scores())
+        adjusted = self._apply_interference(adjusted)
+        adjusted = self._apply_inertia(adjusted)
 
-        # 干渉効果: deltaが現在の感情方向と一致→増幅、逆→減衰（量子認知干渉項）
-        alignment = _emotion_alignment(adjusted, self._emotion)
-        interference = 1.0 + 0.3 * alignment
-        adjusted = adjusted.scale(interference)
-
-        # 感情慣性: 直近のdelta方向と一致→促進、反転→減衰
-        if self._last_delta is not None:
-            with_last = _delta_alignment(adjusted, self._last_delta)
-            if with_last > 0.35:
-                self._inertia = min(1.5, self._inertia + 0.15)
-            elif with_last < -0.35:
-                self._inertia = max(0.3, self._inertia - 0.25)
-            else:
-                self._inertia += (1.0 - self._inertia) * 0.2
-            # 慣性の性格変調: Neuroticism→不安定化、Conscientiousness→安定化
-            scores = self._get_big_five_scores()
-            if scores:
-                neuroticism = scores.get("neuroticism", 50) / 100.0
-                conscientiousness = scores.get("conscientiousness", 50) / 100.0
-                neuro_factor = 1.0 - (neuroticism - 0.5) * 0.4
-                self._inertia *= max(0.5, neuro_factor)
-                con_factor = 0.5 + conscientiousness
-                self._inertia *= max(0.5, con_factor)
-                self._inertia = max(0.3, min(1.5, self._inertia))
-            adjusted = adjusted.scale(self._inertia)
-        else:
-            self._inertia = 1.0
-        self._last_delta = adjusted
-
-        # 感情ラベリング効果: ユーザが感情名を明示→前頭前野が扁桃体反応を抑制
         if affect_labeling:
             adjusted = adjusted.scale(0.85)
 
         self._emotion.apply(adjusted)
         self._publish_snapshot(trigger)
 
-        # 極端な感情→自己内省→PEM更新
         if abs(self._emotion.valence) > 0.75 and trigger not in ("contagion", "retrieval_induced", "drive_coupling"):
             self._trigger_emotional_reflection(delta)
+
+    def _apply_interference(self, delta: EmotionDelta) -> EmotionDelta:
+        alignment = _emotion_alignment(delta, self._emotion)
+        interference = 1.0 + 0.3 * alignment
+        return delta.scale(interference)
+
+    def _apply_inertia(self, delta: EmotionDelta) -> EmotionDelta:
+        if self._last_delta is None:
+            self._inertia = 1.0
+            self._last_delta = delta
+            return delta
+
+        with_last = _delta_alignment(delta, self._last_delta)
+        if with_last > 0.35:
+            self._inertia = min(1.5, self._inertia + 0.15)
+        elif with_last < -0.35:
+            self._inertia = max(0.3, self._inertia - 0.25)
+        else:
+            self._inertia += (1.0 - self._inertia) * 0.2
+
+        scores = self._get_big_five_scores()
+        if scores:
+            self._inertia = self._modulate_inertia_by_personality(self._inertia, scores)
+
+        self._last_delta = delta
+        return delta.scale(self._inertia)
+
+    @staticmethod
+    def _modulate_inertia_by_personality(inertia: float, scores: dict[str, float]) -> float:
+        neuroticism = scores.get("neuroticism", 50) / 100.0
+        conscientiousness = scores.get("conscientiousness", 50) / 100.0
+        neuro_factor = 1.0 - (neuroticism - 0.5) * 0.4
+        inertia *= max(0.5, neuro_factor)
+        con_factor = 0.5 + conscientiousness
+        inertia *= max(0.5, con_factor)
+        return max(0.3, min(1.5, inertia))
 
     def _on_message_event(self, event: MessageEvent) -> None:
         if not event.content:

@@ -347,6 +347,49 @@ class KernelFactory:
         inhibition = InhibitionController()
         internal_bus = InternalBus()
 
+        pipeline, hippocampal, persona_profile = KernelFactory._build_llm_pipeline(
+            config, event_bus, llm, memory, limbic, big_five, psychometric, debug_capture
+        )
+        execution = KernelFactory._build_execution(
+            config,
+            event_bus,
+            llm,
+            memory,
+            tool_exec,
+            session_mgr,
+            internal_bus,
+            inhibition,
+            pipeline,
+            hippocampal,
+            tokenizers,
+        )
+
+        scoring = ProactiveScoring(config=config.proactive, memory=memory)
+        planning = PlanningManager(
+            internal_bus=internal_bus,
+            event_bus=event_bus,
+            inhibition=inhibition,
+            scoring=scoring,
+            config=config,
+            memory=memory,
+            limbic=limbic,
+            persona_profile=persona_profile,
+            llm=llm,
+        )
+
+        return AgencyManager(planning=planning, execution=execution, inhibition=inhibition)
+
+    @staticmethod
+    def _build_llm_pipeline(
+        config: Config,
+        event_bus: EventBus,
+        llm: LLMBridge,
+        memory: MemoryManager,
+        limbic: LimbicManager | None,
+        big_five: BigFiveProfile | None,
+        psychometric: PsychometricState | None,
+        debug_capture: DebugCapture | None,
+    ) -> tuple[LLMGateway, HippocampalManager, PersonaProfile]:
         personality = Personality(name=config.personality.name, prompt_file=config.personality.prompt_file)
         capability_checker = CapabilityChecker(config=config.model)
 
@@ -380,20 +423,22 @@ class KernelFactory:
             capability_checker=capability_checker,
             debug_capture=debug_capture,
         )
+        return pipeline, hippocampal, persona_profile
 
-        scoring = ProactiveScoring(config=config.proactive, memory=memory)
-        planning = PlanningManager(
-            internal_bus=internal_bus,
-            event_bus=event_bus,
-            inhibition=inhibition,
-            scoring=scoring,
-            config=config,
-            memory=memory,
-            limbic=limbic,
-            persona_profile=persona_profile,
-            llm=llm,
-        )
-
+    @staticmethod
+    def _build_execution(
+        config: Config,
+        event_bus: EventBus,
+        llm: LLMBridge,
+        memory: MemoryManager,
+        tool_exec: ToolEngine,
+        session_mgr: SessionManager,
+        internal_bus: InternalBus,
+        inhibition: InhibitionController,
+        pipeline: LLMGateway,
+        hippocampal: HippocampalManager,
+        tokenizers: dict[str, TokenizerManager] | None,
+    ) -> FlowExecutor:
         monitor = OutputTracker(internal_bus=internal_bus)
         context_window_mgr = LLMContextWindowManager(
             llm=llm,
@@ -401,9 +446,11 @@ class KernelFactory:
             tokenizers=tokenizers,
             default_model_name=config.model.get_model("default"),
         )
+        # consolidator needs a messages_getter referencing execution;
+        # late binding resolves execution after FlowExecutor is constructed
         consolidator = Consolidator(
             event_bus=event_bus,
-            messages_getter=lambda: execution._messages,
+            messages_getter=lambda: execution._messages,  # type: ignore[used-before-def]
             hippocampal=hippocampal,
             context_window_mgr=context_window_mgr,
             model_config=config.model,
@@ -421,11 +468,6 @@ class KernelFactory:
             inhibition=inhibition,
             session_roles_getter=session_mgr.get_sessions_summary,
             memory=memory,
-            capability_checker=capability_checker,
+            capability_checker=CapabilityChecker(config=config.model),
         )
-
-        return AgencyManager(
-            planning=planning,
-            execution=execution,
-            inhibition=inhibition,
-        )
+        return execution

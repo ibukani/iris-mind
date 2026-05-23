@@ -30,31 +30,36 @@ class TokenizerManager:
         self._load(repo_id, local_path, hf_token)
 
     def _load(self, repo_id: str, local_path: str, hf_token: str) -> None:
+        if local_path:
+            self._load_local(local_path)
+        if self._tokenizer is None and repo_id:
+            self._load_hub(repo_id, hf_token)
+
+    def _load_local(self, local_path: str) -> None:
         from tokenizers import Tokenizer
 
-        loaded = False
-        if local_path:
-            p = Path(local_path)
-            if p.exists():
-                try:
-                    self._tokenizer = Tokenizer.from_file(str(p))
-                    logger.info("Tokenizer loaded from local: {}", local_path)
-                    loaded = True
-                except Exception as e:
-                    logger.warning("Failed to load tokenizer from {}: {}", local_path, e)
-            else:
-                logger.warning("Tokenizer local_path not found: {}", local_path)
+        p = Path(local_path)
+        if not p.exists():
+            logger.warning("Tokenizer local_path not found: {}", local_path)
+            return
+        try:
+            self._tokenizer = Tokenizer.from_file(str(p))
+            logger.info("Tokenizer loaded from local: {}", local_path)
+        except Exception as e:
+            logger.warning("Failed to load tokenizer from {}: {}", local_path, e)
 
-        if not loaded and repo_id:
-            if hf_token:
-                os.environ.setdefault("HF_TOKEN", hf_token)
-            try:
-                t = Tokenizer.from_pretrained(repo_id)
-                if t is not None:
-                    self._tokenizer = t
-                    logger.info("Tokenizer loaded from HF Hub: {} (vocab={})", repo_id, t.get_vocab_size())
-            except Exception as e:
-                logger.warning("Failed to load tokenizer from {}: {}", repo_id, e)
+    def _load_hub(self, repo_id: str, hf_token: str) -> None:
+        from tokenizers import Tokenizer
+
+        if hf_token:
+            os.environ.setdefault("HF_TOKEN", hf_token)
+        try:
+            t = Tokenizer.from_pretrained(repo_id)
+            if t is not None:
+                self._tokenizer = t
+                logger.info("Tokenizer loaded from HF Hub: {} (vocab={})", repo_id, t.get_vocab_size())
+        except Exception as e:
+            logger.warning("Failed to load tokenizer from {}: {}", repo_id, e)
 
     @cached(cache=LRUCache(maxsize=2048))
     def estimate_tokens(self, text: str) -> int:

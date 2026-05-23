@@ -51,11 +51,6 @@ class LLMGateway:
         )
 
     @staticmethod
-    def _system_messages_str(msgs: list[BaseMessage]) -> str:
-        """已废弃: build() は単一 SystemMessage を返すため不要だが互換性のため維持"""
-        return "\n\n".join(str(m.content) for m in msgs if isinstance(m, SystemMessage))
-
-    @staticmethod
     def _build_full_prompt(msgs: list[BaseMessage]) -> str:
         lines: list[str] = []
         for m in msgs:
@@ -67,32 +62,39 @@ class LLMGateway:
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
 
-    async def chat(
+    def _build_system_messages(
         self,
-        messages: list[BaseMessage],
-        tools: list[dict[str, Any]] | None = None,
-        on_token: Callable[[str], None] | None = None,
-        interrupt_token: InterruptToken | None = None,
-        context_hint: str = "",
-        model_role: str = "default",
-        max_tokens: int | None = None,
-        priority: int = 0,
-    ) -> AIMessage:
-        response_style = self._limbic.generate_response_style() if self._limbic else ""
-        system_msgs = self._prompt_builder.build(
+        context_hint: str,
+        response_style: str = "",
+        situation: str = "",
+    ) -> list[BaseMessage]:
+        return self._prompt_builder.build(
             context_hint=context_hint,
             response_style=response_style,
             session_roles_summary=self._session_roles_summary,
+            situation=situation,
         )
-        self._last_system_prompt = self._system_messages_str(system_msgs)
-        self._last_call_model_role = model_role
 
+    async def _call_llm(
+        self,
+        system_msgs: list[BaseMessage],
+        messages: list[BaseMessage],
+        model_role: str,
+        max_tokens: int | None,
+        temperature: float | None = None,
+        tools: list[dict[str, Any]] | None = None,
+        on_token: Callable[[str], None] | None = None,
+        interrupt_token: InterruptToken | None = None,
+        priority: int = 0,
+    ) -> AIMessage:
         msgs: list[BaseMessage] = [*system_msgs, *messages]
+        self._last_system_prompt = str(system_msgs[0].content) if system_msgs else ""
+        self._last_call_model_role = model_role
 
         resp = await self._llm.chat(
             messages=msgs,
             model=self._model_config.get_model(model_role),
-            temperature=self._model_config.get_effective_temperature(model_role),
+            temperature=temperature or self._model_config.get_effective_temperature(model_role),
             max_tokens=max_tokens or self._model_config.get_effective_max_tokens(model_role),
             tools=tools,
             on_token=on_token,
@@ -107,8 +109,33 @@ class LLMGateway:
             tools=tools,
             response=str(resp.content) if isinstance(resp.content, str) else "",
         )
-
         return resp
+
+    async def chat(
+        self,
+        messages: list[BaseMessage],
+        tools: list[dict[str, Any]] | None = None,
+        on_token: Callable[[str], None] | None = None,
+        interrupt_token: InterruptToken | None = None,
+        context_hint: str = "",
+        model_role: str = "default",
+        max_tokens: int | None = None,
+        priority: int = 0,
+    ) -> AIMessage:
+        response_style = self._limbic.generate_response_style() if self._limbic else ""
+        system_msgs = self._build_system_messages(
+            context_hint=context_hint, response_style=response_style,
+        )
+        return await self._call_llm(
+            system_msgs,
+            messages,
+            model_role,
+            max_tokens,
+            tools=tools,
+            on_token=on_token,
+            interrupt_token=interrupt_token,
+            priority=priority,
+        )
 
     async def chat_short(
         self,
@@ -125,11 +152,8 @@ class LLMGateway:
 
         response_style = self._limbic.generate_response_style() if self._limbic and situation == "proactive" else ""
 
-        system_msgs = self._prompt_builder.build(
-            context_hint=context_hint,
-            response_style=response_style,
-            session_roles_summary=self._session_roles_summary,
-            situation=situation,
+        system_msgs = self._build_system_messages(
+            context_hint=context_hint, response_style=response_style, situation=situation,
         )
 
         msgs: list[BaseMessage] = [*system_msgs]
@@ -140,12 +164,12 @@ class LLMGateway:
         temperature = plan.get("temperature", 0.5)
         max_tok = max_tokens or 80
 
-        text = ""
         try:
-            resp = await self._llm.chat(
-                messages=msgs,
-                model=self._model_config.get_model(model_role),
-                max_tokens=max_tok,
+            resp = await self._call_llm(
+                system_msgs,
+                msgs,
+                model_role,
+                max_tok,
                 temperature=temperature,
                 interrupt_token=interrupt_token,
                 priority=priority,
@@ -153,17 +177,10 @@ class LLMGateway:
             text = str(resp.content).strip() if isinstance(resp.content, str) else ""
         except Exception as e:
             logger.debug("Short generation failed: {}", e)
+            text = ""
 
         if not text:
             text = "" if situation == "proactive" else "…"
-
-        self._capture_debug(
-            model_role=model_role,
-            system_prompt=self._system_messages_str(system_msgs),
-            messages=msgs,
-            tools=None,
-            response=text,
-        )
 
         return text
 

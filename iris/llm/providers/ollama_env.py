@@ -58,52 +58,46 @@ def _stop_config_models(model_names: list[str]) -> None:
             subprocess.run(["ollama", "stop", name], capture_output=True, timeout=10)
 
 
+def _extract_model_name(model: Any) -> str:
+    name = ""
+    if isinstance(model, dict):
+        name = model.get("model") or model.get("name") or ""
+    else:
+        name = getattr(model, "model", "") or getattr(model, "name", "")
+    return name.split(":")[0] if ":" in name else name
+
+
 def _get_available_models() -> set[str]:
-    """Ollama に既に pull 済みのモデル名のセットを返す。"""
     try:
-        client = Client()
-        response = client.list()
-        models: set[str] = set()
-        for model in response.get("models", []):
-            if isinstance(model, dict):
-                name = model.get("model") or model.get("name") or ""
-            else:
-                name = getattr(model, "model", "") or getattr(model, "name", "")
-            if name and ":" in name:
-                models.add(name.split(":")[0])
-            elif name:
-                models.add(name)
-        return models
+        response = Client().list()
+        names = [_extract_model_name(m) for m in response.get("models", [])]
+        return {n for n in names if n}
     except Exception:
         return set()
 
 
 def _ensure_model_pulled(model_name: str) -> bool:
-    """モデルが存在しない場合はユーザーに確認して pull する。"""
     model_base = model_name.split(":")[0]
-    available = _get_available_models()
-    if model_base in available:
+    if model_base in _get_available_models():
         return True
 
+    if not _confirm_pull(model_name):
+        return False
     try:
-        console_input = input(
-            f"モデル '{model_name}' が見つかりません。\n  ollama pull {model_name}\nを実行してダウンロードしますか？ [y/N] "
-        )
+        subprocess.run(["ollama", "pull", model_name], check=True, timeout=600)
+        return True
+    except subprocess.CalledProcessError:
+        print(f"モデル '{model_name}' のダウンロードに失敗しました。", file=sys.stderr)
+        return False
+    except subprocess.TimeoutExpired:
+        print(f"モデル '{model_name}' のダウンロードがタイムアウトしました。", file=sys.stderr)
+        return False
+
+
+def _confirm_pull(model_name: str) -> bool:
+    try:
+        resp = input(f"モデル '{model_name}' が見つかりません。\n  ollama pull {model_name}\nを実行してダウンロードしますか？ [y/N] ")
     except EOFError:
         logger.warning("Non-interactive environment: skipping model pull for '{}'", model_name)
         return False
-    if console_input.strip().lower() in ("y", "yes"):
-        try:
-            subprocess.run(
-                ["ollama", "pull", model_name],
-                check=True,
-                timeout=600,
-            )
-            return True
-        except subprocess.CalledProcessError:
-            print(f"モデル '{model_name}' のダウンロードに失敗しました。", file=sys.stderr)
-            return False
-        except subprocess.TimeoutExpired:
-            print(f"モデル '{model_name}' のダウンロードがタイムアウトしました。", file=sys.stderr)
-            return False
-    return False
+    return resp.strip().lower() in ("y", "yes")

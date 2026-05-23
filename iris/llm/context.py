@@ -122,29 +122,8 @@ class LLMContextWindowManager:
         if self._llm is None or not messages:
             return self._summary
 
-        previous_summary_from_msg = ""
-        new_messages = []
-        for m in messages:
-            if m.type == "system" and str(m.content).startswith("## Session Summary"):
-                previous_summary_from_msg = str(m.content).replace("## Session Summary\n", "", 1).strip()
-            else:
-                new_messages.append(m)
-
-        prev_summary = previous_summary_from_msg or self._summary
-
-        formatted_turns = []
-        for m in new_messages:
-            content = str(m.content)
-            if len(content) > 1000:
-                content = content[:1000] + "... (省略)"
-            formatted_turns.append(f"{m.type}: {content}")
-
-        text = "\n".join(formatted_turns)
-
-        user_prompt = ""
-        if prev_summary:
-            user_prompt += f"■ 以前の会話要約:\n{prev_summary}\n\n"
-        user_prompt += f"■ 新規の会話履歴:\n{text}"
+        prev_summary, new_messages = self._extract_previous_summary(messages)
+        user_prompt = self._build_user_prompt(prev_summary, new_messages)
 
         try:
             resp = await self._llm.chat(
@@ -161,6 +140,34 @@ class LLMContextWindowManager:
         except Exception as e:
             logger.exception("Summarization failed: {}", e)
             return self._summary
+
+    def _extract_previous_summary(
+        self, messages: list[BaseMessage]
+    ) -> tuple[str, list[BaseMessage]]:
+        previous_summary = ""
+        new_messages: list[BaseMessage] = []
+        for m in messages:
+            if m.type == "system" and str(m.content).startswith("## Session Summary"):
+                previous_summary = str(m.content).replace("## Session Summary\n", "", 1).strip()
+            else:
+                new_messages.append(m)
+        return previous_summary or self._summary, new_messages
+
+    @staticmethod
+    def _build_user_prompt(prev_summary: str, new_messages: list[BaseMessage]) -> str:
+        formatted_turns = []
+        for m in new_messages:
+            content = str(m.content)
+            if len(content) > 1000:
+                content = content[:1000] + "... (省略)"
+            formatted_turns.append(f"{m.type}: {content}")
+        text = "\n".join(formatted_turns)
+
+        prompt = ""
+        if prev_summary:
+            prompt += f"■ 以前の会話要約:\n{prev_summary}\n\n"
+        prompt += f"■ 新規の会話履歴:\n{text}"
+        return prompt
 
     async def compact(self, messages: list[BaseMessage]) -> str:
         return await self._compact(messages)

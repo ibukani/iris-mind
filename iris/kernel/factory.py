@@ -106,21 +106,7 @@ class KernelFactory:
     @staticmethod
     def build(config: Config, debug: bool = False) -> KernelContext:
         _ensure_access_token(config)
-
-        tracer = EventTracer(max_entries=config.debug.trace_max_entries)
-        tracer.set_enabled(config.debug.enabled)
-        event_bus = EventBus(tracer=tracer)
-        session_mgr = SessionManager(
-            config=SessionConfig(**config.session.model_dump()),
-            event_bus=event_bus,
-        )
-        grpc_listener = GrpcListener(session_manager=session_mgr)
-
-        io_mgr = IOManager(
-            event_bus=event_bus,
-            session_manager=session_mgr,
-            grpc_listener=grpc_listener,
-        )
+        tracer, event_bus, io_mgr, session_mgr, grpc_listener = KernelFactory._build_infrastructure(config)
 
         if debug:
             return KernelFactory._build_shared(
@@ -130,22 +116,58 @@ class KernelFactory:
                 io_mgr,
                 session_mgr,
                 grpc_listener,
-                memory_mgr=None,
-                limbic=None,
-                llm=None,
-                debug_capture=None,
-                registry=None,
-                agency=None,
-                big_five=None,
             )
 
-        (episodic, semantic) = KernelFactory._build_stores(config)
+        memory_mgr, limbic, big_five, psychometric = KernelFactory._build_cognitive_layers(config, event_bus)
+        llm, tokenizers, debug_capture = KernelFactory._build_llm_layer(config)
+        registry, agency = KernelFactory._build_agency_layer(
+            config, event_bus, llm, memory_mgr, session_mgr, limbic, big_five, psychometric, tokenizers, debug_capture
+        )
+
+        return KernelFactory._build_shared(
+            config,
+            event_bus,
+            tracer,
+            io_mgr,
+            session_mgr,
+            grpc_listener,
+            memory_mgr=memory_mgr,
+            limbic=limbic,
+            llm=llm,
+            debug_capture=debug_capture,
+            registry=registry,
+            agency=agency,
+            big_five=big_five,
+        )
+
+    @staticmethod
+    def _build_infrastructure(config: Config) -> tuple[EventTracer, EventBus, IOManager, SessionManager, GrpcListener]:
+        tracer = EventTracer(max_entries=config.debug.trace_max_entries)
+        tracer.set_enabled(config.debug.enabled)
+        event_bus = EventBus(tracer=tracer)
+        session_mgr = SessionManager(
+            config=SessionConfig(**config.session.model_dump()),
+            event_bus=event_bus,
+        )
+        grpc_listener = GrpcListener(session_manager=session_mgr)
+        io_mgr = IOManager(
+            event_bus=event_bus,
+            session_manager=session_mgr,
+            grpc_listener=grpc_listener,
+        )
+        return tracer, event_bus, io_mgr, session_mgr, grpc_listener
+
+    @staticmethod
+    def _build_cognitive_layers(
+        config: Config, event_bus: EventBus
+    ) -> tuple[MemoryManager, LimbicManager, BigFiveProfile, PsychometricState]:
+        episodic, semantic = KernelFactory._build_stores(config)
         memory_mgr = KernelFactory._build_memory(event_bus, config, episodic=episodic, semantic=semantic)
 
         psychometric = PsychometricState(path=config.memory.psychometric_state_path)
-
         big_five = BigFiveProfile()
         big_five.set_state(psychometric)
+
         limbic = LimbicManager(
             event_bus=event_bus,
             emotional_memory=EmotionalMemory(episodic_store=episodic, semantic_store=semantic),
@@ -153,7 +175,13 @@ class KernelFactory:
         limbic.set_big_five(big_five)
         limbic.set_psychometric_state(psychometric)
 
-        llm = KernelFactory._build_llm(config)
+        return memory_mgr, limbic, big_five, psychometric
+
+    @staticmethod
+    def _build_llm_layer(
+        config: Config,
+    ) -> tuple[LLMBridge, dict[str, TokenizerManager], DebugCapture]:
+        llm = LLMBridge(model_config=config.model)
         tokenizers: dict[str, TokenizerManager] = {
             entry.name: TokenizerManager(
                 repo_id=entry.tokenizer_repo_id,
@@ -169,7 +197,22 @@ class KernelFactory:
         )
         if config.debug.capture_enabled:
             debug_capture.set_enabled(True)
-        _registry, tool_exec = KernelFactory._build_tools()
+        return llm, tokenizers, debug_capture
+
+    @staticmethod
+    def _build_agency_layer(
+        config: Config,
+        event_bus: EventBus,
+        llm: LLMBridge,
+        memory_mgr: MemoryManager,
+        session_mgr: SessionManager,
+        limbic: LimbicManager,
+        big_five: BigFiveProfile,
+        psychometric: PsychometricState,
+        tokenizers: dict[str, TokenizerManager],
+        debug_capture: DebugCapture,
+    ) -> tuple[ToolRegistry, AgencyManager]:
+        registry, tool_exec = KernelFactory._build_tools()
         agency = KernelFactory._build_agency(
             config,
             event_bus,
@@ -183,22 +226,7 @@ class KernelFactory:
             tokenizers=tokenizers,
             debug_capture=debug_capture,
         )
-
-        return KernelFactory._build_shared(
-            config,
-            event_bus,
-            tracer,
-            io_mgr,
-            session_mgr,
-            grpc_listener,
-            memory_mgr=memory_mgr,
-            limbic=limbic,
-            llm=llm,
-            debug_capture=debug_capture,
-            registry=_registry,
-            agency=agency,
-            big_five=big_five,
-        )
+        return registry, agency
 
     @staticmethod
     def _build_stores(config: Config) -> tuple[EpisodicStore, SemanticStore]:
@@ -274,13 +302,13 @@ class KernelFactory:
         io_mgr: IOManager,
         session_mgr: SessionManager,
         grpc_listener: GrpcListener,
-        memory_mgr: MemoryManager | None,
-        limbic: LimbicManager | None,
-        llm: LLMBridge | None,
-        debug_capture: DebugCapture | None,
-        registry: ToolRegistry | None,
-        agency: AgencyManager | None,
-        big_five: BigFiveProfile | None,
+        memory_mgr: MemoryManager | None = None,
+        limbic: LimbicManager | None = None,
+        llm: LLMBridge | None = None,
+        debug_capture: DebugCapture | None = None,
+        registry: ToolRegistry | None = None,
+        agency: AgencyManager | None = None,
+        big_five: BigFiveProfile | None = None,
     ) -> KernelContext:
         kernel_mgr = KernelManager()
         diagnostics = SystemDiagnostics(
@@ -347,6 +375,49 @@ class KernelFactory:
         inhibition = InhibitionController()
         internal_bus = InternalBus()
 
+        pipeline, hippocampal, persona_profile = KernelFactory._build_llm_pipeline(
+            config, event_bus, llm, memory, limbic, big_five, psychometric, debug_capture
+        )
+        execution = KernelFactory._build_execution(
+            config,
+            event_bus,
+            llm,
+            memory,
+            tool_exec,
+            session_mgr,
+            internal_bus,
+            inhibition,
+            pipeline,
+            hippocampal,
+            tokenizers,
+        )
+
+        scoring = ProactiveScoring(config=config.proactive, memory=memory)
+        planning = PlanningManager(
+            internal_bus=internal_bus,
+            event_bus=event_bus,
+            inhibition=inhibition,
+            scoring=scoring,
+            config=config,
+            memory=memory,
+            limbic=limbic,
+            persona_profile=persona_profile,
+            llm=llm,
+        )
+
+        return AgencyManager(planning=planning, execution=execution, inhibition=inhibition)
+
+    @staticmethod
+    def _build_llm_pipeline(
+        config: Config,
+        event_bus: EventBus,
+        llm: LLMBridge,
+        memory: MemoryManager,
+        limbic: LimbicManager | None,
+        big_five: BigFiveProfile | None,
+        psychometric: PsychometricState | None,
+        debug_capture: DebugCapture | None,
+    ) -> tuple[LLMGateway, HippocampalManager, PersonaProfile]:
         personality = Personality(name=config.personality.name, prompt_file=config.personality.prompt_file)
         capability_checker = CapabilityChecker(config=config.model)
 
@@ -380,20 +451,22 @@ class KernelFactory:
             capability_checker=capability_checker,
             debug_capture=debug_capture,
         )
+        return pipeline, hippocampal, persona_profile
 
-        scoring = ProactiveScoring(config=config.proactive, memory=memory)
-        planning = PlanningManager(
-            internal_bus=internal_bus,
-            event_bus=event_bus,
-            inhibition=inhibition,
-            scoring=scoring,
-            config=config,
-            memory=memory,
-            limbic=limbic,
-            persona_profile=persona_profile,
-            llm=llm,
-        )
-
+    @staticmethod
+    def _build_execution(
+        config: Config,
+        event_bus: EventBus,
+        llm: LLMBridge,
+        memory: MemoryManager,
+        tool_exec: ToolEngine,
+        session_mgr: SessionManager,
+        internal_bus: InternalBus,
+        inhibition: InhibitionController,
+        pipeline: LLMGateway,
+        hippocampal: HippocampalManager,
+        tokenizers: dict[str, TokenizerManager] | None,
+    ) -> FlowExecutor:
         monitor = OutputTracker(internal_bus=internal_bus)
         context_window_mgr = LLMContextWindowManager(
             llm=llm,
@@ -401,9 +474,11 @@ class KernelFactory:
             tokenizers=tokenizers,
             default_model_name=config.model.get_model("default"),
         )
+        # consolidator needs a messages_getter referencing execution;
+        # late binding resolves execution after FlowExecutor is constructed
         consolidator = Consolidator(
             event_bus=event_bus,
-            messages_getter=lambda: execution._messages,
+            messages_getter=lambda: execution._messages,  # type: ignore[used-before-def]
             hippocampal=hippocampal,
             context_window_mgr=context_window_mgr,
             model_config=config.model,
@@ -421,11 +496,6 @@ class KernelFactory:
             inhibition=inhibition,
             session_roles_getter=session_mgr.get_sessions_summary,
             memory=memory,
-            capability_checker=capability_checker,
+            capability_checker=CapabilityChecker(config=config.model),
         )
-
-        return AgencyManager(
-            planning=planning,
-            execution=execution,
-            inhibition=inhibition,
-        )
+        return execution

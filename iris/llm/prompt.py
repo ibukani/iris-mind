@@ -84,14 +84,8 @@ class Personality:
     ) -> str:
         """システムプロンプトを構築する。
 
-        Args:
-            agents_md_content: iris_profile.md の内容（構造記憶）。
-            user_preferences: ユーザー情報（重複除去済み）。
-            session_roles: 接続セッション情報（空ならセクション省略）。
-            response_style: 応答スタイル指示（空ならセクション省略）。
-            speech_style: 話し方の現在状態（空なら省略）。
-            personality_traits: 性格の現在状態（空なら省略）。
-            governance_principles: 自己規律指示（空なら省略）。
+        カスタムテンプレートに存在しないプレースホルダーは、
+        テンプレート末尾に動的に追記される。
         """
         if agents_md_content:
             agents_md_content = agents_md_content.replace("{name}", self.name)
@@ -107,17 +101,15 @@ class Personality:
             governance_principles=governance_principles or "（なし）",
         )
 
-        if user_preferences and "{user_preferences}" not in self.system_prompt_template:
-            prompt += f"\n\n## ユーザー情報\n{user_preferences}"
-
-        if session_roles and "{session_roles}" not in self.system_prompt_template:
-            prompt += f"\n\n## 接続セッション\n{session_roles}"
-
-        if response_style and "{response_style}" not in self.system_prompt_template:
-            prompt += f"\n\n## 応答スタイル\n{response_style}"
-
-        if agents_md_content and "{agents_md_content}" not in self.system_prompt_template:
-            prompt += f"\n\n## 構造記憶\n{agents_md_content}"
+        sections = [
+            (user_preferences, "{user_preferences}", "## ユーザー情報"),
+            (session_roles, "{session_roles}", "## 接続セッション"),
+            (response_style, "{response_style}", "## 応答スタイル"),
+            (agents_md_content, "{agents_md_content}", "## 構造記憶"),
+        ]
+        for data, placeholder, header in sections:
+            if data and placeholder not in self.system_prompt_template:
+                prompt += f"\n\n{header}\n{data}"
 
         return prompt
 

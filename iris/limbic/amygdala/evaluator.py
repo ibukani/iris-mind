@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-import re
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -9,133 +8,16 @@ if TYPE_CHECKING:
 
 from loguru import logger
 
+from iris.limbic.amygdala.keywords import (
+    AGENTIVE_PATTERNS,
+    APPRECIATION_WORDS,
+    CRITICISM_WORDS,
+    HIGH_AROUSAL_MARKERS,
+    NEGATIVE_WORDS,
+    PASSIVE_PATTERNS,
+    POSITIVE_WORDS,
+)
 from iris.limbic.models import BASIC_EMOTIONS, EmotionDelta
-
-_POSITIVE_WORDS: frozenset[str] = frozenset(
-    {
-        "ありがとう",
-        "嬉しい",
-        "楽しい",
-        "素晴らしい",
-        "最高",
-        "好き",
-        "いいね",
-        "すごい",
-        "素敵",
-        "感動",
-        "幸せ",
-        "感謝",
-        "助かる",
-        "面白い",
-        "笑",
-        "w",
-        "すげえ",
-        "やった",
-        "さすが",
-        "thank",
-        "love",
-        "great",
-        "awesome",
-        "amazing",
-        "wonderful",
-        "happy",
-        "excellent",
-        "perfect",
-        "beautiful",
-        "nice",
-    }
-)
-
-_NEGATIVE_WORDS: frozenset[str] = frozenset(
-    {
-        "残念",
-        "つまらない",
-        "ひどい",
-        "悲しい",
-        "最悪",
-        "嫌い",
-        "むかつく",
-        "腹立つ",
-        "イライラ",
-        "疲れた",
-        "つらい",
-        "苦しい",
-        "意味ない",
-        "もういい",
-        "ダメ",
-        "無理",
-        "死",
-        "殺す",
-        "hate",
-        "terrible",
-        "awful",
-        "horrible",
-        "bad",
-        "worst",
-        "sad",
-        "angry",
-        "bored",
-        "tired",
-        "useless",
-    }
-)
-
-_HIGH_AROUSAL_MARKERS: frozenset[str] = frozenset(
-    {
-        "!",
-        "？",
-        "！",
-        "本当",
-        "まじ",
-        "めっちゃ",
-        "超",
-        "やば",
-        "マジ",
-        "w",
-        "笑",
-        "www",
-        "は？",
-    }
-)
-
-_APPRECIATION_WORDS: frozenset[str] = frozenset(
-    {
-        "ありがとう",
-        "感謝",
-        "助かる",
-        "thank",
-        "thanks",
-        "good",
-    }
-)
-
-_CRITICISM_WORDS: frozenset[str] = frozenset(
-    {
-        "違う",
-        "間違い",
-        "バカ",
-        "アホ",
-        "無能",
-        "使えない",
-        "wrong",
-        "incorrect",
-        "stupid",
-        "useless",
-    }
-)
-
-_AGENTIVE_PATTERNS: list[tuple[re.Pattern, float]] = [
-    (re.compile(r"\b(私|俺|僕|私が|自分は)\s*(が|は|を)"), 0.3),
-    (re.compile(r"\b(I|I\'ll|I\'m|let me|my)\b"), 0.2),
-    (re.compile(r"^(やって|して|実行|作っ|書い)"), 0.2),
-    (re.compile(r"(決めた|決めたい|やる|やろう)"), 0.3),
-]
-
-_PASSIVE_PATTERNS: list[tuple[re.Pattern, float]] = [
-    (re.compile(r"(させられる|されてる|やられ)"), -0.3),
-    (re.compile(r"(わからない|できない|無理|難しい)"), -0.2),
-    (re.compile(r"\b(can\'t|cannot|couldn\'t)\b"), -0.2),
-]
 
 
 class _KeywordCounter:
@@ -233,11 +115,11 @@ class Amygdala:
     """
 
     def __init__(self, embedding_scorer: _EmbeddingScorer | None = None) -> None:
-        self._positive = _KeywordCounter(_POSITIVE_WORDS)
-        self._negative = _KeywordCounter(_NEGATIVE_WORDS)
-        self._high_arousal = _KeywordCounter(_HIGH_AROUSAL_MARKERS)
-        self._appreciation = _KeywordCounter(_APPRECIATION_WORDS)
-        self._criticism = _KeywordCounter(_CRITICISM_WORDS)
+        self._positive = _KeywordCounter(POSITIVE_WORDS)
+        self._negative = _KeywordCounter(NEGATIVE_WORDS)
+        self._high_arousal = _KeywordCounter(HIGH_AROUSAL_MARKERS)
+        self._appreciation = _KeywordCounter(APPRECIATION_WORDS)
+        self._criticism = _KeywordCounter(CRITICISM_WORDS)
         self._embedding_scorer = embedding_scorer or _EmbeddingScorer()
         self._cumulative_keywords: int = 0  # 扁桃体stateful適応用: 累積キーワード数
 
@@ -284,31 +166,17 @@ class Amygdala:
         if n_pos == 0 and n_neg == 0 and n_arousal == 0:
             return EmotionDelta()
 
-        valence_raw = (n_pos - n_neg) / max(n_pos + n_neg, 1)
-        arousal_raw = min(n_arousal / 3.0, 1.0)
-
-        if len(text) < 10:
-            arousal_raw *= 0.5
-
-        if n_appreciation > 0:
-            valence_raw += 0.3
-        if n_criticism > 0:
-            valence_raw -= 0.4
-
+        valence_raw = self._keyword_valence(n_pos, n_neg, n_appreciation, n_criticism)
+        arousal_raw = self._keyword_arousal(n_arousal, text)
         dominance_score = self._estimate_dominance(text)
+        conflict = self._keyword_conflict(n_pos, n_neg, n_appreciation, n_criticism)
 
-        total_valence = n_pos + n_neg
-        conflict = 2.0 * min(n_pos, n_neg) / max(total_valence, 1) if total_valence > 0 else 0.0
-        if n_appreciation > 0 and n_criticism > 0:
-            conflict = max(conflict, 0.5)
-
-        # 扁桃体stateful適応: 累積キーワード数に応じた慣れ（同じ刺激の繰り返しで反応減衰）
         self._cumulative_keywords += n_pos + n_neg + n_arousal
-        if self._cumulative_keywords > 10:
-            cumulative_damp = max(0.4, 1.0 - 0.02 * min(self._cumulative_keywords - 10, 30))
-            valence_raw *= cumulative_damp
-            arousal_raw *= cumulative_damp
-            dominance_score *= cumulative_damp
+        valence_raw, arousal_raw, dominance_score = self._apply_adaptive_decay(
+            valence_raw,
+            arousal_raw,
+            dominance_score,
+        )
 
         return EmotionDelta(
             valence=max(-1.0, min(1.0, valence_raw)) * 0.8,
@@ -316,6 +184,41 @@ class Amygdala:
             dominance=max(-1.0, min(1.0, dominance_score)) * 0.6,
             conflict=min(1.0, conflict),
         )
+
+    @staticmethod
+    def _keyword_valence(n_pos: int, n_neg: int, n_appreciation: int, n_criticism: int) -> float:
+        v = (n_pos - n_neg) / max(n_pos + n_neg, 1)
+        if n_appreciation > 0:
+            v += 0.3
+        if n_criticism > 0:
+            v -= 0.4
+        return v
+
+    @staticmethod
+    def _keyword_arousal(n_arousal: int, text: str) -> float:
+        a = min(n_arousal / 3.0, 1.0)
+        if len(text) < 10:
+            a *= 0.5
+        return a
+
+    @staticmethod
+    def _keyword_conflict(n_pos: int, n_neg: int, n_appreciation: int, n_criticism: int) -> float:
+        total = n_pos + n_neg
+        c = 2.0 * min(n_pos, n_neg) / max(total, 1) if total > 0 else 0.0
+        if n_appreciation > 0 and n_criticism > 0:
+            c = max(c, 0.5)
+        return c
+
+    def _apply_adaptive_decay(
+        self,
+        valence: float,
+        arousal: float,
+        dominance: float,
+    ) -> tuple[float, float, float]:
+        if self._cumulative_keywords <= 10:
+            return valence, arousal, dominance
+        damp = max(0.4, 1.0 - 0.02 * min(self._cumulative_keywords - 10, 30))
+        return valence * damp, arousal * damp, dominance * damp
 
     def classify_emotion(self, text: str) -> str | None:
         delta = self.assess(text)
@@ -339,10 +242,10 @@ class Amygdala:
     @staticmethod
     def _estimate_dominance(text: str) -> float:
         score = 0.0
-        for pat, val in _AGENTIVE_PATTERNS:
+        for pat, val in AGENTIVE_PATTERNS:
             if pat.search(text):
                 score += val
-        for pat, val in _PASSIVE_PATTERNS:
+        for pat, val in PASSIVE_PATTERNS:
             if pat.search(text):
                 score += val
         return max(-1.0, min(1.0, score))

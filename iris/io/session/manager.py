@@ -63,69 +63,96 @@ class SessionManager:
         self._last_disconnect_times: dict[str, datetime] = {}
 
     def authenticate(self, conn: Any, msg: AuthMessage) -> ControlMessage:
-        offline_duration = ""
         with self._lock:
             success, error = self._authenticator.authenticate(msg)
             if not success:
                 return ControlMessage(msg_type="auth_failure", error_message=error)
 
-            if msg.identity:
-                for sid, s in list(self._sessions.items()):
-                    if s.identity == msg.identity and s.state == SessionState.ACTIVE:
-                        s.state = SessionState.CLOSED
-                        if s.conn is not None:
-                            with contextlib.suppress(Exception):
-                                s.conn.close()
-                        del self._sessions[sid]
-                        logger.info("SessionManager: replaced duplicate session {} (identity={})", sid, msg.identity)
+            self._replace_duplicate_session(msg.identity)
 
             now = datetime.now()
-            session_id = uuid4().hex[:16]
-            session = SessionInfo(
-                session_id=session_id,
-                state=SessionState.ACTIVE,
-                role=msg.role or "external",
-                permissions=msg.permissions[:],
-                identity=msg.identity,
-                description=msg.description,
-                conn=conn,
-                created_at=now,
-                last_activity=now,
-            )
-            self._sessions[session_id] = session
-
-            key = f"{session.role}:{session.identity}" if session.identity else session.role
-            if key in self._last_disconnect_times:
-                disc_time = self._last_disconnect_times[key]
-                diff = now - disc_time
-                secs = int(diff.total_seconds())
-                if secs < 60:
-                    offline_duration = "たった今"
-                elif secs < 3600:
-                    offline_duration = f"{secs // 60}分間"
-                elif secs < 86400:
-                    offline_duration = f"{secs // 3600}時間{(secs % 3600) // 60}分間"
-                else:
-                    offline_duration = f"{secs // 86400}日間"
+            session = self._create_session(conn, msg, now)
+            session_id = session.session_id
+            offline_duration = self._compute_offline_duration(session)
 
             logger.info("Session created: {} (role={})", session_id, msg.role)
 
-        if self._event_bus:
-            from iris.event.event_types import ClientSessionEvent
-
-            self._event_bus.publish(
-                ClientSessionEvent(
-                    timestamp=now,
-                    source="session",
-                    session_id=session_id,
-                    action="connected",
-                    role=session.role,
-                    identity=session.identity,
-                    offline_duration=offline_duration,
-                )
-            )
+        self._publish_client_event(
+            action="connected",
+            session=session,
+            timestamp=now,
+            offline_duration=offline_duration,
+        )
 
         return ControlMessage(msg_type="auth_success", session_id=session_id)
+
+    def _replace_duplicate_session(self, identity: str | None) -> None:
+        if not identity:
+            return
+        for sid, s in list(self._sessions.items()):
+            if s.identity == identity and s.state == SessionState.ACTIVE:
+                s.state = SessionState.CLOSED
+                if s.conn is not None:
+                    with contextlib.suppress(Exception):
+                        s.conn.close()
+                del self._sessions[sid]
+                logger.info("SessionManager: replaced duplicate session {} (identity={})", sid, identity)
+
+    def _create_session(self, conn: Any, msg: AuthMessage, now: datetime) -> SessionInfo:
+        session_id = uuid4().hex[:16]
+        session = SessionInfo(
+            session_id=session_id,
+            state=SessionState.ACTIVE,
+            role=msg.role or "external",
+            permissions=msg.permissions[:],
+            identity=msg.identity,
+            description=msg.description,
+            conn=conn,
+            created_at=now,
+            last_activity=now,
+        )
+        self._sessions[session_id] = session
+        return session
+
+    def _compute_offline_duration(self, session: SessionInfo, now: datetime | None = None) -> str:
+        if now is None:
+            now = datetime.now()
+        key = f"{session.role}:{session.identity}" if session.identity else session.role
+        disc_time = self._last_disconnect_times.get(key)
+        if not disc_time:
+            return ""
+        diff = now - disc_time
+        secs = int(diff.total_seconds())
+        if secs < 60:
+            return "たった今"
+        if secs < 3600:
+            return f"{secs // 60}分間"
+        if secs < 86400:
+            return f"{secs // 3600}時間{(secs % 3600) // 60}分間"
+        return f"{secs // 86400}日間"
+
+    def _publish_client_event(
+        self,
+        action: str,
+        session: SessionInfo,
+        timestamp: datetime,
+        offline_duration: str = "",
+    ) -> None:
+        if not self._event_bus:
+            return
+        from iris.event.event_types import ClientSessionEvent
+
+        self._event_bus.publish(
+            ClientSessionEvent(
+                timestamp=timestamp,
+                source="session",
+                session_id=session.session_id,
+                action=action,
+                role=session.role,
+                identity=session.identity,
+                offline_duration=offline_duration,
+            )
+        )
 
     def route_message(self, msg: Message) -> None:
         session: SessionInfo | None = None
@@ -173,9 +200,7 @@ class SessionManager:
         if session is None:
             logger.warning("Command output route for unknown session: {}", session_id)
             return
-        if session.state != SessionState.ACTIVE:
-            return
-        if session.conn is None:
+        if session.state != SessionState.ACTIVE or session.conn is None:
             return
         if Permission.PERMISSION_RECEIVE_COMMAND not in session.permissions:
             logger.warning("Command output denied for session={} (no receive_command)", session_id)
@@ -226,18 +251,11 @@ class SessionManager:
                 key = f"{session.role}:{session.identity}" if session.identity else session.role
                 self._last_disconnect_times[key] = now
 
-        if session and self._event_bus:
-            from iris.event.event_types import ClientSessionEvent
-
-            self._event_bus.publish(
-                ClientSessionEvent(
-                    timestamp=now,
-                    source="session",
-                    session_id=session_id,
-                    action="disconnected",
-                    role=session.role,
-                    identity=session.identity,
-                )
+        if session:
+            self._publish_client_event(
+                action="disconnected",
+                session=session,
+                timestamp=now,
             )
 
     def get_active_sessions(self) -> list[SessionInfo]:

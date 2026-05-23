@@ -28,30 +28,24 @@ class OllamaProvider:
         return ollama_env.ensure_environment(entries, model_config)
 
 
-class OpenRouterProvider:
+class _ApiKeyProvider:
+    """APIキーの存在確認のみを行うプロバイダ基底実装。"""
+
+    @classmethod
+    def ensure_environment(cls, entries: list[ModelEntry], model_config: ModelConfig) -> bool:
+        for entry in entries:
+            conn = model_config.providers.get(entry.provider)
+            if not conn or not conn.api_key:
+                return False
+        return True
+
+
+class OpenRouterProvider(_ApiKeyProvider):
     """OpenRouter 環境検証用ダミークラス。"""
 
-    @classmethod
-    def ensure_environment(cls, entries: list[ModelEntry], model_config: ModelConfig) -> bool:
-        # API キーが設定されていることを確認
-        for entry in entries:
-            conn = model_config.providers.get(entry.provider)
-            if not conn or not conn.api_key:
-                return False
-        return True
 
-
-class GoogleProvider:
+class GoogleProvider(_ApiKeyProvider):
     """Google 環境検証用ダミークラス。"""
-
-    @classmethod
-    def ensure_environment(cls, entries: list[ModelEntry], model_config: ModelConfig) -> bool:
-        # API キーが設定されていることを確認
-        for entry in entries:
-            conn = model_config.providers.get(entry.provider)
-            if not conn or not conn.api_key:
-                return False
-        return True
 
 
 _PROVIDER_CLASSES: dict[str, type[ProviderFactory]] = {

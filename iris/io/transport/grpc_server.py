@@ -149,43 +149,50 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             logger.info("GrpcServer: session {} disconnected", session_id)
 
     async def _stream_send_loop(self, grpc_conn: GrpcConnection) -> AsyncGenerator[Any]:
-        """内部の送信キューからデータを受け取り、gRPCのフレームとして yield する。"""
         while True:
             raw = await grpc_conn.queue.get()
             data = orjson.loads(raw)
-
             msg_type = data.get("msg_type", "")
             frame = grpc_service_pb2.BidirectionalStreamResponse()  # type: ignore[attr-defined]
 
             if msg_type == "command":
-                cmd_out = grpc_service_pb2.CommandOutput(  # type: ignore[attr-defined]
-                    id=data.get("id", ""),
-                    correlation_id=data.get("correlation_id", ""),
-                    session_id=data.get("session_id", ""),
-                    msg_type=data.get("msg_type", ""),
-                    content=data.get("content", ""),
-                    state=data.get("state") or "",
-                )
+                cmd_out = self._build_command_frame(data)
                 frame.command.CopyFrom(cmd_out)
             else:
-                msg = grpc_service_pb2.Message(  # type: ignore[attr-defined]
-                    id=data.get("id", ""),
-                    correlation_id=data.get("correlation_id", ""),
-                    session_id=data.get("session_id", ""),
-                    source_role=data.get("source_role", ""),
-                    target_role=data.get("target_role", ""),
-                    direction=data.get("direction", ""),
-                    msg_type=data.get("msg_type", ""),
-                    content=data.get("content", ""),
-                    content_type=data.get("content_type", ""),
-                    state=data.get("state") or "",
-                )
-                meta = data.get("metadata", {})
-                for k, v in meta.items():
-                    msg.metadata[k] = str(v)
+                msg = self._build_message_frame(data)
                 frame.message.CopyFrom(msg)
 
             yield frame
+
+    @staticmethod
+    def _build_command_frame(data: dict[str, Any]) -> Any:
+        return grpc_service_pb2.CommandOutput(  # type: ignore[attr-defined]
+            id=data.get("id", ""),
+            correlation_id=data.get("correlation_id", ""),
+            session_id=data.get("session_id", ""),
+            msg_type=data.get("msg_type", ""),
+            content=data.get("content", ""),
+            state=data.get("state") or "",
+        )
+
+    @staticmethod
+    def _build_message_frame(data: dict[str, Any]) -> Any:
+        msg = grpc_service_pb2.Message(  # type: ignore[attr-defined]
+            id=data.get("id", ""),
+            correlation_id=data.get("correlation_id", ""),
+            session_id=data.get("session_id", ""),
+            source_role=data.get("source_role", ""),
+            target_role=data.get("target_role", ""),
+            direction=data.get("direction", ""),
+            msg_type=data.get("msg_type", ""),
+            content=data.get("content", ""),
+            content_type=data.get("content_type", ""),
+            state=data.get("state") or "",
+        )
+        meta = data.get("metadata", {})
+        for k, v in meta.items():
+            msg.metadata[k] = str(v)
+        return msg
 
     async def _receive_loop(self, request_iterator: Any, session_id: str, session_role: str) -> None:
         try:
@@ -217,6 +224,27 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
                 metadata[k] = v
         return metadata
 
+    def _validate_session(self, session_id: str, msg_type: str, log_label: str = "message") -> bool:
+        if not self._session_manager.is_session_active(session_id):
+            logger.warning("GrpcServer: {} from inactive session: {}", log_label, session_id)
+            return False
+        if not self._session_manager.check_send_permission(session_id, msg_type):
+            logger.warning("GrpcServer: session={} lacks permission for {}", session_id, msg_type)
+            return False
+        return True
+
+    def _send_ack(self, correlation_id: str, session_role: str, session_id: str) -> None:
+        ack = Message(
+            msg_type="ack",
+            content=f"ack:{correlation_id}",
+            correlation_id=correlation_id,
+            source_role="mind",
+            target_role=session_role,
+            session_id=session_id,
+            direction=Direction.RESPONSE,
+        )
+        self._session_manager.route_message(ack)
+
     async def _dispatch_message(self, msg_proto: Any, session_id: str, session_role: str) -> None:
         metadata = self._parse_message_metadata(msg_proto.metadata)
 
@@ -238,36 +266,13 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             logger.warning("GrpcServer: invalid message parse failed")
             return
 
-        if not self._session_manager.is_session_active(session_id):
-            logger.warning("GrpcServer: message from inactive session: {}", session_id)
-            return
-
-        if not self._session_manager.check_send_permission(session_id, msg.msg_type):
-            logger.warning("GrpcServer: session={} lacks permission for msg_type={}", session_id, msg.msg_type)
-            err = Message(
-                msg_type="error",
-                content=f"Permission denied: cannot send {msg.msg_type}",
-                source_role="mind",
-                target_role=session_role,
-                session_id=session_id,
-                direction=Direction.RESPONSE,
-            )
-            self._session_manager.route_message(err)
+        if not self._validate_session(session_id, msg.msg_type):
             return
 
         await asyncio.to_thread(self._on_message, msg)
 
         if msg.metadata.get("ack_required", False):
-            ack = Message(
-                msg_type="ack",
-                content=f"ack:{msg.id}",
-                correlation_id=msg.id,
-                source_role="mind",
-                target_role=session_role,
-                session_id=session_id,
-                direction=Direction.RESPONSE,
-            )
-            self._session_manager.route_message(ack)
+            self._send_ack(msg.id, session_role, session_id)
 
     async def _handle_command(self, cmd_proto: Any, session_id: str, session_role: str) -> None:
         try:
@@ -282,12 +287,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             logger.warning("GrpcServer: invalid command parse failed")
             return
 
-        if not self._session_manager.is_session_active(session_id):
-            logger.warning("GrpcServer: command from inactive session: {}", session_id)
-            return
-
-        if not self._session_manager.check_send_permission(session_id, "command"):
-            logger.warning("GrpcServer: session={} lacks permission to send command", session_id)
+        if not self._validate_session(session_id, "command", log_label="command"):
             return
 
         if self._on_command:

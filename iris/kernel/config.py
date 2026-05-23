@@ -69,6 +69,7 @@ class ModelEntry(BaseModel):
     presence_penalty: float | None = None
     frequency_penalty: float | None = None
     repeat_penalty: float | None = None
+    reasoning: bool = False
 
     @field_validator("roles", mode="before")
     @classmethod

@@ -75,6 +75,7 @@ class LLMBridge:
                 model=entry.name,
                 base_url=base_url,
                 keep_alive=entry.keep_alive or "10m",
+                reasoning=entry.reasoning,
                 client_kwargs={"timeout": 120},
                 async_client_kwargs={"timeout": 120},
                 options=options,  # type: ignore[call-arg]
@@ -146,7 +147,7 @@ class LLMBridge:
         self,
         messages: list[BaseMessage],
         model: str | None = None,
-        enable_thinking: bool = False,
+        reasoning: bool | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
         tools: list[dict[str, Any]] | None = None,
@@ -159,7 +160,7 @@ class LLMBridge:
         provider = self._resolve_provider(model_name)
         entry = self._entries.get(model_name)
 
-        call_kwargs = self._build_call_kwargs(provider, temperature, max_tokens, entry, kwargs)
+        call_kwargs = self._build_call_kwargs(provider, temperature, max_tokens, entry, kwargs, reasoning=reasoning)
         active_model = provider.bind_tools(tools) if tools else provider
 
         local_interrupt_token = interrupt_token or InterruptToken()
@@ -201,6 +202,7 @@ class LLMBridge:
         max_tokens: int,
         entry: ModelEntry | None,
         kwargs: dict[str, Any],
+        reasoning: bool | None = None,
     ) -> dict[str, Any]:
         if isinstance(provider, ChatOllama):
             call_options = self._build_ollama_options(temperature, max_tokens, entry, kwargs)
@@ -209,6 +211,8 @@ class LLMBridge:
             if "num_ctx" not in merged:
                 merged["num_ctx"] = self._model_config.default_num_ctx
             call_kwargs: dict[str, Any] = {"options": merged}
+            if reasoning is not None:
+                call_kwargs["reasoning"] = reasoning
         else:
             call_kwargs = self._build_openai_kwargs(temperature, max_tokens, kwargs)
         call_kwargs.update(kwargs)

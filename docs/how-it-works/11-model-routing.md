@@ -130,7 +130,7 @@ class PriorityLock:
 async def chat(
     messages: list[dict],
     model: str | None = None,       # モデル名 = None でデフォルト
-    enable_thinking: bool = False,
+    reasoning: bool | None = None,  # Ollama reasoning=thinking モード (None=ModelEntry設定)
     temperature: float = 0.7,
     max_tokens: int = 4096,
     tools: list[dict] | None = None,
@@ -150,6 +150,7 @@ async def chat(
 | presence_penalty | presence_penalty |
 | frequency_penalty | frequency_penalty |
 | repeat_penalty | repeat_penalty |
+| reasoning | —（ChatOllama コンストラクタ + call kwarg 上書き） |
 
 ## 繰り返し検出
 

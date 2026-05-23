@@ -102,7 +102,7 @@ class LLMGateway:
             on_token=on_token,
             interrupt_token=interrupt_token,
             priority=priority,
-            enable_thinking=enable_thinking,
+            reasoning=enable_thinking if enable_thinking else None,
         )
 
         self._capture_debug(

@@ -59,6 +59,7 @@ Config
 | presence_penalty | float \| None | None | 新規話題へのペナルティ |
 | frequency_penalty | float \| None | None | 頻出トークンへのペナルティ |
 | repeat_penalty | float \| None | None | 繰り返しトークンへのペナルティ（Ollama） |
+| reasoning | bool | False | Ollama の reasoning/thinking モード有効/無効。`show_thinking=True` の Plan で上書き可能 |
 
 - `roles` は YAML上で1要素なら文字列でも記述可能: `roles: default`
 - モデルが1つだけの場合はシングルモードとなり、全処理にそのモデルを使用
@@ -67,6 +68,7 @@ Config
 - モデル個別の `base_url` / `api_key` は持たない。プロバイダ内で全モデルが同一接続を共有
 - 各プロバイダインスタンスは `(provider, base_url, api_key)` でユニーク化され、同一接続のモデル間で共有される
 - `temperature` / `num_ctx` / `num_gpu` / `context_window` が `None` の場合は `default_*` が使用される
+- `reasoning` は `show_thinking=True` の Plan（タスク応答時）で上書きされる。雑談や abbreviated 応答では自動的に `reasoning=False` となる
 
 **Tokenizer解決順**:
 1. `tokenizer_local_path` → ローカルファイルから直接ロード

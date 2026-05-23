@@ -4,6 +4,8 @@ from dataclasses import dataclass
 import datetime
 from typing import TYPE_CHECKING
 
+from langchain_core.messages import BaseMessage, SystemMessage
+
 if TYPE_CHECKING:
     from iris.limbic.manager import LimbicManager
     from iris.llm.prompt import Personality
@@ -53,10 +55,10 @@ class SystemPromptBuilder:
         response_style: str = "",
         session_roles_summary: str = "",
         situation: str = "",
-    ) -> str:
+    ) -> list[BaseMessage]:
         pctx = self._load_personality_context()
 
-        prompt = self._personality.build_system_prompt(
+        base = self._personality.build_system_prompt(
             agents_md_content=pctx.agents_md,
             user_preferences=pctx.user_prefs,
             session_roles=session_roles_summary,
@@ -66,23 +68,25 @@ class SystemPromptBuilder:
             governance_principles=self._governance_principles,
         )
 
-        prompt += f"\n\n## 現在日時\n{self._build_time_string()}"
+        messages: list[BaseMessage] = [SystemMessage(content=base)]
+
+        messages.append(SystemMessage(content=f"## 現在日時\n{self._build_time_string()}"))
 
         if self._limbic:
             mood_desc = self._limbic.describe_mood()
             if mood_desc:
-                prompt += f"\n\n## 現在の気分\n{mood_desc}"
+                messages.append(SystemMessage(content=f"## 現在の気分\n{mood_desc}"))
 
         if pctx.current_state:
-            prompt += f"\n\n{pctx.current_state}"
+            messages.append(SystemMessage(content=pctx.current_state))
 
         if context_hint:
-            prompt += f"\n\n## 会話コンテキスト\n{context_hint}"
+            messages.append(SystemMessage(content=f"## 会話コンテキスト\n{context_hint}"))
 
         if situation in _SITUATION_INSTRUCTIONS:
-            prompt += "\n\n" + _SITUATION_INSTRUCTIONS[situation]
+            messages.append(SystemMessage(content=_SITUATION_INSTRUCTIONS[situation]))
 
-        return prompt
+        return messages
 
     def _load_personality_context(self) -> _PersonalityContext:
         agents_md = self._agents_md_store.load() if self._agents_md_store else ""

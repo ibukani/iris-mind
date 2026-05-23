@@ -113,6 +113,7 @@ def test_pipeline_injects_datetime():
         memory=None,
         limbic=None,
     )
-    prompt = pipeline._prompt_builder.build(context_hint="テストコンテキスト")
-    assert "## 現在日時" in prompt
-    assert "テストコンテキスト" in prompt
+    sys_msgs = pipeline._prompt_builder.build(context_hint="テストコンテキスト")
+    combined = "\n\n".join(str(m.content) for m in sys_msgs)
+    assert "## 現在日時" in combined
+    assert "テストコンテキスト" in combined

@@ -50,6 +50,10 @@ class LLMGateway:
             limbic=limbic,
         )
 
+    @staticmethod
+    def _system_messages_str(msgs: list[BaseMessage]) -> str:
+        return "\n\n".join(str(m.content) for m in msgs if isinstance(m, SystemMessage))
+
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
 
@@ -65,15 +69,15 @@ class LLMGateway:
         priority: int = 0,
     ) -> AIMessage:
         response_style = self._limbic.generate_response_style() if self._limbic else ""
-        system_prompt = self._prompt_builder.build(
+        system_msgs = self._prompt_builder.build(
             context_hint=context_hint,
             response_style=response_style,
             session_roles_summary=self._session_roles_summary,
         )
-        self._last_system_prompt = system_prompt
+        self._last_system_prompt = self._system_messages_str(system_msgs)
         self._last_call_model_role = model_role
 
-        msgs: list[BaseMessage] = [SystemMessage(content=system_prompt), *messages]
+        msgs: list[BaseMessage] = [*system_msgs, *messages]
 
         resp = await self._llm.chat(
             messages=msgs,
@@ -88,7 +92,7 @@ class LLMGateway:
 
         self._capture_debug(
             model_role=model_role,
-            system_prompt=system_prompt,
+            system_prompt=self._last_system_prompt,
             messages=msgs,
             tools=tools,
             response=str(resp.content) if isinstance(resp.content, str) else "",
@@ -111,14 +115,14 @@ class LLMGateway:
 
         response_style = self._limbic.generate_response_style() if self._limbic and situation == "proactive" else ""
 
-        system_prompt = self._prompt_builder.build(
+        system_msgs = self._prompt_builder.build(
             context_hint=context_hint,
             response_style=response_style,
             session_roles_summary=self._session_roles_summary,
             situation=situation,
         )
 
-        msgs: list[BaseMessage] = [SystemMessage(content=system_prompt)]
+        msgs: list[BaseMessage] = [*system_msgs]
         if messages and content:
             msgs.extend(messages)
         msgs.append(HumanMessage(content=content if content else "..."))
@@ -145,7 +149,7 @@ class LLMGateway:
 
         self._capture_debug(
             model_role=model_role,
-            system_prompt=system_prompt,
+            system_prompt=self._system_messages_str(system_msgs),
             messages=msgs,
             tools=None,
             response=text,

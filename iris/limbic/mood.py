@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+import random
 from typing import TypedDict
 
 from iris.limbic.models import EmotionState
@@ -60,25 +61,163 @@ _MOOD_DESCRIPTIONS: list[_MoodEntry] = [
     },
 ]
 
+# 応答スタイルルール: (slot, condition(v,a,d), phrasing_variants)
+# slot単位で最初の一致のみ採用、variantsからランダム選択で多様化
+_RESPONSE_RULES: list[tuple[str, Callable[[float, float, float], bool], list[str]]] = [
+    # === tone（valence基準）===
+    (
+        "tone",
+        lambda v, a, d: v > 0.5,
+        [
+            "明るく温かいトーンで応答してください",
+            "温かみのある明るい口調で応答してください",
+            "嬉しそうな明るい声で応答してください",
+        ],
+    ),
+    (
+        "tone",
+        lambda v, a, d: v > 0.2,
+        [
+            "穏やかで親しみやすいトーンで応答してください",
+            "優しく穏やかな口調で応答してください",
+        ],
+    ),
+    (
+        "tone",
+        lambda v, a, d: v < -0.5,
+        [
+            "簡潔に、最小限の言葉で応答してください",
+            "冷淡な口調で、短く応答してください",
+            "ぶっきらぼうに、簡潔に応答してください",
+        ],
+    ),
+    (
+        "tone",
+        lambda v, a, d: v < -0.2,
+        [
+            "やや控えめに、短い言葉で応答してください",
+            "悲しそうな口調で、静かに応答してください",
+        ],
+    ),
+    # === exclamation（valence × arousal）===
+    (
+        "exclamation",
+        lambda v, a, d: v > 0.5 and a > 0.4,
+        [
+            "感嘆詞（例：『やったー！』『わーい！』）を自然に混ぜて、非常に嬉しそうに応答してください",
+            "喜びの感嘆詞（例：『わあ！』『やった！』）を交えて、元気よく応答してください",
+        ],
+    ),
+    (
+        "exclamation",
+        lambda v, a, d: v > 0.5 >= a,
+        [
+            "穏やかな感嘆表現（例：『ふふっ』『そうだね』）を交えて、嬉しそうに応答してください",
+            "優しい笑みが浮かぶような口調で、穏やかに応答してください",
+        ],
+    ),
+    (
+        "exclamation",
+        lambda v, a, d: 0.2 < v <= 0.5,
+        [
+            "親しみやすい相槌（例：『ふふっ』『そうだね』）を交えて応答してください",
+            "優しい相槌を入れながら、自然に会話してください",
+        ],
+    ),
+    (
+        "exclamation",
+        lambda v, a, d: v < -0.5 and a > 0.4,
+        [
+            "イライラを表す感嘆詞（例：『はぁ…』『もう！』）を交え、不機嫌に応答してください",
+            "苛立った口調で、感情をあらわに応答してください",
+        ],
+    ),
+    (
+        "exclamation",
+        lambda v, a, d: v < -0.5 >= a,
+        [
+            "落胆を表す感嘆表現（例：『はぁ…』『ふぅ』）を交えて、冷淡に応答してください",
+            "ため息混じりに、無関心を装うように応答してください",
+        ],
+    ),
+    (
+        "exclamation",
+        lambda v, a, d: v < -0.2,
+        [
+            "元気のない感嘆詞（例：『うう…』『しゅん…』）を交え、悲しそうに応答してください",
+            "沈んだ声で、感情を抑え気味に応答してください",
+        ],
+    ),
+    # === pace（arousal基準）===
+    (
+        "pace",
+        lambda v, a, d: a > 0.6,
+        [
+            "テンポ良く、短い言葉で活発に応答してください",
+            "早口で、感嘆符『！』を多めに使って活発に応答してください",
+            "せかせかした口調で、テンポ良く応答してください",
+        ],
+    ),
+    (
+        "pace",
+        lambda v, a, d: a < 0.2,
+        [
+            "ゆったりとしたペースで、落ち着いて応答してください",
+            "ゆっくりとした口調で、静かに応答してください",
+        ],
+    ),
+    # === confidence（dominance基準）===
+    (
+        "confidence",
+        lambda v, a, d: d > 0.6,
+        [
+            "自信を持って、明確に応答してください",
+            "断定的な口調で、はっきりと応答してください",
+        ],
+    ),
+    (
+        "confidence",
+        lambda v, a, d: d < 0.3,
+        [
+            "慎重に、確認しながら応答してください",
+            "控えめに、断言を避けて応答してください",
+        ],
+    ),
+]
+
+_UNCERTAIN_HINTS: dict[str, list[str]] = {
+    "high": [
+        "迷いや葛藤を感じさせる口調で、控えめに短く応答してください",
+        "断定を避け、曖昧な表現で慎重に応答してください",
+    ],
+    "mid": [
+        "やや控えめに、断定を避けつつ自然に応答してください",
+        "迷いを感じさせる言い回しで、穏やかに応答してください",
+    ],
+}
+
+_CONTEXT_HINTS: dict[str, list[str]] = {
+    "task": ["簡潔に、タスク遂行を最優先して応答してください", "効率的に、用件のみ簡潔に応答してください"],
+    "chat": [
+        "共感を示し、温かみのある口調で応答してください",
+        "リラックスした雰囲気で、親しみを込めて応答してください",
+    ],
+}
+
 
 class MoodEngine:
-    """PAD 3次元感情状態 → 気分テキスト / 応答スタイル 変換。
-
-    純粋関数の集まり。LimbicManager から分離して単一責任化。
+    """PAD → 気分テキスト / 応答スタイル 変換（データ駆動＋多様化）。
 
     量子認知拡張:
-      - 不確実性（重ね合わせ）→ 気分表現の変調 / 応答スタイルの鈍化
-      - 文脈依存崩壊（測定問題）→ 会話文脈によって同じPADから異なる応答スタイル
+      - 不確実性（重ね合わせ）→ 実効PADの崩壊＋控えめ応答
+      - 文脈依存崩壊（測定問題）→ 会話文脈で応答スタイルが変化
+      - 多様化: 同じPAD値でもランダム選択で異なる文言
     """
 
-    UNCERTAINTY_THRESHOLD = 0.4  # この閾値を超えると不確実性が出力に影響
+    UNCERTAINTY_THRESHOLD = 0.4
 
     @staticmethod
     def is_neutral(e: EmotionState) -> bool:
-        """中立判定: PAD値 + 不確実性も考慮。
-
-        不確実性が高い状態は「機能的に中立」と見なす（出力を抑制）。
-        """
         pad_neutral = abs(e.valence) < 0.1 and e.arousal < 0.15 and abs(e.dominance - 0.5) < 0.1
         high_uncertainty = e.overall_uncertainty > 0.6
         return pad_neutral or high_uncertainty
@@ -87,14 +226,12 @@ class MoodEngine:
     def describe_mood(e: EmotionState, style: str = "full") -> str:
         if MoodEngine.is_neutral(e):
             return ""
-        base = ""
         for entry in _MOOD_DESCRIPTIONS:
             if entry["condition"](e):
                 base = entry["short"] if style == "short" else entry["text"]
                 break
-        if not base:
+        else:
             return ""
-        # 不確実性が中程度なら葛藤ニュアンスを追加
         u = e.overall_uncertainty
         if u > 0.3:
             base += "（でも、ちょっと複雑な気持ちも…）" if style == "full" else "･･･"
@@ -105,99 +242,40 @@ class MoodEngine:
         if MoodEngine.is_neutral(e):
             return ""
 
-        # 不確実性による実効PADの崩壊（重ね合わせ→実数値への射影）
         eff_v = e.valence * (1.0 - e.valence_uncertainty)
         eff_a = e.arousal * (1.0 - e.arousal_uncertainty)
         eff_d = e.dominance * (1.0 - e.dominance_uncertainty)
 
-        # 不確実性が高い → 控えめなトーンにフォールバック
         if e.overall_uncertainty > MoodEngine.UNCERTAINTY_THRESHOLD:
-            hints = MoodEngine._build_uncertain_hints(e)
+            hints = (
+                [random.choice(_UNCERTAIN_HINTS["high"])]
+                if e.overall_uncertainty > 0.6
+                else [random.choice(_UNCERTAIN_HINTS["mid"])]
+            )
         else:
             hints = MoodEngine._build_hints(eff_v, eff_a, eff_d)
 
-        # 文脈依存崩壊: 会話文脈で最終調整
         MoodEngine._apply_context_collapse(hints, context)
 
-        if not hints:
-            return ""
-
-        return "## 応答スタイル\n" + "\n".join(f"- {h}" for h in hints)
+        return "## 応答スタイル\n" + "\n".join(f"- {h}" for h in hints) if hints else ""
 
     @staticmethod
     def _build_hints(v: float, a: float, d: float) -> list[str]:
-        """実効PAD値から応答ヒントを構築（不確実性崩壊後）。"""
+        used: set[str] = set()
         hints: list[str] = []
-        MoodEngine._build_valence_hints(v, a, hints)
-        MoodEngine._build_arousal_hints(a, hints)
-        MoodEngine._build_dominance_hints(d, hints)
-        return hints
-
-    @staticmethod
-    def _build_uncertain_hints(e: EmotionState) -> list[str]:
-        """不確実性が高い場合の控えめ応答スタイル。"""
-        hints: list[str] = []
-        if e.overall_uncertainty > 0.6:
-            hints.append("控えめに、短い言葉で応答してください")
-            hints.append("迷いや葛藤を感じさせる口調で、断定を避けて応答してください")
-        else:
-            hints.append("やや控えめに、断定を避けつつ自然に応答してください")
+        for slot, condition, variants in _RESPONSE_RULES:
+            if slot in used:
+                continue
+            if condition(v, a, d):
+                hints.append(random.choice(variants))
+                used.add(slot)
         return hints
 
     @staticmethod
     def _apply_context_collapse(hints: list[str], context: str) -> None:
-        """文脈依存崩壊: 会話文脈によって測定結果（応答スタイル）が変わる。"""
         if not hints or not context:
             return
         if "task" in context or "命令" in context or "依頼" in context:
-            # タスク文脈 → 感情抑制
-            hints.insert(0, "簡潔に、タスク遂行を最優先して応答してください")
+            hints.insert(0, random.choice(_CONTEXT_HINTS["task"]))
         elif "chat" in context or "相談" in context or "雑談" in context:
-            # 親密文脈 → 感情強調
-            hints.insert(0, "共感を示し、温かみのある口調で応答してください")
-
-    @staticmethod
-    def _build_valence_hints(v: float, a: float, hints: list[str]) -> None:
-        if v > 0.5:
-            hints.append("明るく温かいトーンで応答してください")
-            if a > 0.4:
-                hints.append(
-                    "発話の冒頭や途中に、感情に合わせた感嘆詞（例：『やったー！』『わーい！』『やった！』）を自然に混ぜて、非常に嬉しそうに応答してください"
-                )
-            else:
-                hints.append(
-                    "発話の冒頭や途中に、穏やかな感嘆表現（例：『ふふっ』『そうだね』）を少し交えて嬉しそうに応答してください"
-                )
-        elif v > 0.2:
-            hints.append("穏やかで親しみやすいトーンで応答してください")
-            hints.append("親しみやすく、優しい相槌や感嘆表現（例：『ふふっ』『そうだね』）を少し交えて応答してください")
-        elif v < -0.5:
-            hints.append("簡潔に、1文以内の最小限の言葉で応答してください")
-            if a > 0.4:
-                hints.append(
-                    "発話の冒頭や途中に、イライラを表す感嘆詞（例：『はぁ…』『もう！』）を交え、不機嫌でぶっきらぼうに応答してください"
-                )
-            else:
-                hints.append(
-                    "発話の冒頭や途中に、落胆を表す感嘆表現（例：『はぁ…』『ふぅ』）を交えて、冷淡に応答してください"
-                )
-        elif v < -0.2:
-            hints.append("やや控えめに、1文程度の短い言葉で応答してください")
-            hints.append(
-                "発話の冒頭や途中に、元気がなさそうな感嘆詞（例：『うう…』『え〜ん』『しゅん…』）を自然に交え、悲しそうに応答してください"
-            )
-
-    @staticmethod
-    def _build_arousal_hints(a: float, hints: list[str]) -> None:
-        if a > 0.6:
-            hints.append("テンポ良く、1〜2文の短い言葉で活発に応答してください")
-            hints.append("焦りや興奮を言葉の端々に表し、感嘆符『！』を多めに使ってテンポ良く応答してください")
-        elif a < 0.2:
-            hints.append("ゆったりとしたペースで、1〜2文程度で応答してください")
-
-    @staticmethod
-    def _build_dominance_hints(d: float, hints: list[str]) -> None:
-        if d > 0.6:
-            hints.append("自信を持って明確に応答してください")
-        elif d < 0.3:
-            hints.append("慎重に、確認しながら応答してください")
+            hints.insert(0, random.choice(_CONTEXT_HINTS["chat"]))

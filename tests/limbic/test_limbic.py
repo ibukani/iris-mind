@@ -15,19 +15,19 @@ def test_build_response_style_neutral() -> None:
 def test_generate_response_style_joy() -> None:
     e = EmotionState(valence=0.8, arousal=0.6)
     style = _engine().generate_response_style(e)
-    assert "明るく温かいトーン" in style
-    assert "やったー！" in style
+    assert any(x in style for x in ["明るく温かいトーン", "温かみのある明るい", "明るい声で"])
+    assert any(x in style for x in ["やったー", "わあ！", "やった！"])
 
 
 def test_generate_response_style_anger() -> None:
     e = EmotionState(valence=-0.8, arousal=0.6)
     style = _engine().generate_response_style(e)
-    assert "最小限の言葉" in style
-    assert "はぁ…" in style
+    assert any(x in style for x in ["最小限の言葉", "短く応答", "ぶっきらぼう"])
+    assert any(x in style for x in ["はぁ…", "もう！", "苛立った"])
 
 
 def test_generate_response_style_sadness() -> None:
     e = EmotionState(valence=-0.4, arousal=0.1)
     style = _engine().generate_response_style(e)
-    assert "短い言葉で応答" in style
-    assert "うう…" in style
+    assert any(x in style for x in ["控えめに", "悲しそう"])
+    assert any(x in style for x in ["うう…", "しゅん…", "沈んだ声"])

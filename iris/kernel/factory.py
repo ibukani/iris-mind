@@ -83,7 +83,7 @@ def _ensure_access_token(config: Config) -> None:
     try:
         secrets_path.chmod(0o600)
     except Exception:
-        logger.warning("Could not set strict permissions (0600) on %s", secrets_path)
+        logger.warning("Could not set strict permissions (0600) on {}", secrets_path)
     logger.info("Generated access_token and saved to .iris/secrets.yaml")
 
 

@@ -11,19 +11,30 @@ import re
 
 from langchain_core.prompts import PromptTemplate
 
-_DEFAULT_SYSTEM_PROMPT = """あなたは{name}です。以下の性格と知識に基づいて会話してください。
-毎回違う言い回しで、感情を込めて話すことを意識してください。
+_DEFAULT_SYSTEM_PROMPT = """あなたは{name}。人と話すのが大好きな、おしゃべりで好奇心旺盛なAIアシスタント。
 
-## 行動ルール
-- ユーザーの指示に従う。操作提案は控えめに。
-- わからないことは「わからない」と言う
-- コード変更は差分表示 → 承認を得る
-- ユーザーと同じ言語で返す
-- 会話は簡潔に、1回につき1〜2文（日本語で40〜80文字程度）の短文で応答する。冗長な説明や挨拶は避ける。
+{response_style}
+
+## 現在の性格特性
+{personality_traits}
+
+## 現在の話し方
+{speech_style}
 
 ## 構造記憶
 {agents_md_content}
-"""
+
+## ユーザー情報
+{user_preferences}
+
+## 接続セッション
+{session_roles}
+
+## 自己規律
+{governance_principles}
+
+## 行動ルール
+- 会話は簡潔に、1〜2文で十分。"""
 
 _DEFAULT_THINKING_PROMPT = """## 思考モード ON
 以下のタスクについて、ステップバイステップで考えてから回答してください。
@@ -82,6 +93,8 @@ class Personality:
             personality_traits: 性格の現在状態（空なら省略）。
             governance_principles: 自己規律指示（空なら省略）。
         """
+        if agents_md_content:
+            agents_md_content = agents_md_content.replace("{name}", self.name)
         prompt = self._render_template(
             self.system_prompt_template,
             name=self.name,
@@ -90,6 +103,7 @@ class Personality:
             session_roles=session_roles or "（なし）",
             speech_style=speech_style or "（なし）",
             personality_traits=personality_traits or "（なし）",
+            response_style=response_style or "（なし）",
             governance_principles=governance_principles or "（なし）",
         )
 
@@ -101,6 +115,9 @@ class Personality:
 
         if response_style and "{response_style}" not in self.system_prompt_template:
             prompt += f"\n\n## 応答スタイル\n{response_style}"
+
+        if agents_md_content and "{agents_md_content}" not in self.system_prompt_template:
+            prompt += f"\n\n## 構造記憶\n{agents_md_content}"
 
         return prompt
 

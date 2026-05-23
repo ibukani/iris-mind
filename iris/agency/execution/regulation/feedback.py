@@ -56,7 +56,7 @@ class FeedbackCoordinator:
         if "talkative" in flags and self._inhibition:
             degree = self._monitor.talkative_degree
             self._inhibition.apply_frequency_penalty(degree)
-            logger.debug("Applied frequency penalty: degree=%d", degree)
+            logger.debug("Applied frequency penalty: degree={}", degree)
 
         if flags:
             self._event_bus.publish(

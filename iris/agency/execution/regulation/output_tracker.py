@@ -81,7 +81,7 @@ class OutputTracker:
             flags.append("frequency_exceeded")
             self._alert_count += 1
             logger.warning(
-                "OutputTracker: frequency exceeded (%d in 5min, alert #%d) emotion=(v=%.2f a=%.2f d=%.2f)",
+                "OutputTracker: frequency exceeded ({} in 5min, alert #{}) emotion=(v={:.2f} a={:.2f} d={:.2f})",
                 len(self._window),
                 self._alert_count,
                 self._valence,
@@ -91,7 +91,7 @@ class OutputTracker:
         if self._outputs_since_input >= self._get_effective_talkative_threshold():
             flags.append("talkative")
             logger.info(
-                "OutputTracker: talkative (%d outputs since last user input, threshold=%d)",
+                "OutputTracker: talkative ({} outputs since last user input, threshold={})",
                 self._outputs_since_input,
                 self._get_effective_talkative_threshold(),
             )

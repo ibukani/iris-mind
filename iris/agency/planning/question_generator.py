@@ -31,5 +31,5 @@ class QuestionGenerator:
             if raw.strip():
                 return raw.strip()
         except Exception as e:
-            logger.error("Failed to generate question from topic: %s", e)
+            logger.error("Failed to generate question from topic: {}", e)
         return f"{topic}についての自発的調査"

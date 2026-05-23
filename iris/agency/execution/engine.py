@@ -21,7 +21,7 @@ class ToolEngine:
             args: dict = tc.get("args", {})
             tool_call_id = tc.get("id", "unknown")
             is_side = self.registry.is_side_effect(func_name)
-            logger.info("ToolExec: executing %s side_effect=%s args=%s", func_name, is_side, _truncate_args(args))
+            logger.info("ToolExec: executing {} side_effect={} args={}", func_name, is_side, _truncate_args(args))
             result = self.registry.execute(func_name, **args)
             if not is_side:
                 ctx.append(
@@ -32,7 +32,7 @@ class ToolEngine:
                     )
                 )
             results.append((func_name, result, is_side))
-            logger.info("ToolExec: %s done (result len=%d)", func_name, len(result))
+            logger.info("ToolExec: {} done (result len={})", func_name, len(result))
         return results
 
     @staticmethod

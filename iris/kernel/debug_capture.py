@@ -22,11 +22,13 @@ class CaptureEntry:
     response: str
     token_counts: dict
     tool_iterations: list[dict] = field(default_factory=list)
+    full_prompt: str = ""
 
     def format(self) -> str:
         lines: list[str] = []
         self._append_header(lines)
         self._append_system_prompt(lines)
+        self._append_full_prompt(lines)
         self._append_messages(lines)
         self._append_tools(lines)
         self._append_tool_iterations(lines)
@@ -56,6 +58,15 @@ class CaptureEntry:
         lines.append("SYSTEM PROMPT")
         lines.append("-" * 80)
         lines.append(self.system_prompt)
+        lines.append("")
+
+    def _append_full_prompt(self, lines: list[str]) -> None:
+        if not self.full_prompt:
+            return
+        lines.append("-" * 80)
+        lines.append("FULL PROMPT (LLM に渡される最終形式)")
+        lines.append("-" * 80)
+        lines.append(self.full_prompt)
         lines.append("")
 
     def _append_messages(self, lines: list[str]) -> None:
@@ -148,7 +159,7 @@ class DebugCapture:
 
     def set_enabled(self, value: bool) -> None:
         self._enabled = value
-        logger.info("DebugCapture: %s", "enabled" if value else "disabled")
+        logger.info("DebugCapture: {}", "enabled" if value else "disabled")
 
     def count_tokens(self, text: str) -> int:
         if not text:
@@ -167,7 +178,7 @@ class DebugCapture:
             self._captures.pop(0)
         if self._auto_dump:
             self._write_file(entry)
-        logger.info("DebugCapture: captured #%d (%d tok)", entry.id, entry.token_counts.get("total", 0))
+        logger.info("DebugCapture: captured #{} ({} tok)", entry.id, entry.token_counts.get("total", 0))
 
     def last(self, n: int = 1) -> list[CaptureEntry]:
         return self._captures[-n:] if self._captures else []
@@ -197,5 +208,5 @@ class DebugCapture:
         self._output_dir.mkdir(parents=True, exist_ok=True)
         path = self._output_dir / f"capture_{entry.id:03d}.txt"
         path.write_text(entry.format(), encoding="utf-8")
-        logger.info("DebugCapture: wrote %s", path)
+        logger.info("DebugCapture: wrote {}", path)
         return path

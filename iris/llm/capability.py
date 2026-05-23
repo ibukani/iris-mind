@@ -22,11 +22,11 @@ class CapabilityChecker:
         caps = self._config.get_model_capabilities(role)
         if caps:
             result = "tools" in caps
-            logger.info("CapabilityChecker: tools=%s for role=%s (explicit)", result, role)
+            logger.info("CapabilityChecker: tools={} for role={} (explicit)", result, role)
             return result
         tier = self._config.get_model_performance_tier(role)
         result = tier in ("balanced", "capable")
-        logger.info("CapabilityChecker: tools=%s for role=%s (tier=%s)", result, role, tier)
+        logger.info("CapabilityChecker: tools={} for role={} (tier={})", result, role, tier)
         return result
 
     @cached(cache=LRUCache(maxsize=32))
@@ -34,11 +34,11 @@ class CapabilityChecker:
         caps = self._config.get_model_capabilities(role)
         if caps:
             result = "thinking" in caps
-            logger.info("CapabilityChecker: thinking=%s for role=%s (explicit)", result, role)
+            logger.info("CapabilityChecker: thinking={} for role={} (explicit)", result, role)
             return result
         tier = self._config.get_model_performance_tier(role)
         result = tier == "capable"
-        logger.info("CapabilityChecker: thinking=%s for role=%s (tier=%s)", result, role, tier)
+        logger.info("CapabilityChecker: thinking={} for role={} (tier={})", result, role, tier)
         return result
 
     def get_performance_tier(self, role: str = "default") -> str:

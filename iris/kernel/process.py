@@ -84,4 +84,4 @@ class KernelProcess:
 
         self._timer_thread = threading.Thread(target=_loop, daemon=True, name="kernel-timer")
         self._timer_thread.start()
-        logger.info("KernelProcess: timer started (interval=%.1fs)", interval)
+        logger.info("KernelProcess: timer started (interval={:.1f}s)", interval)

@@ -53,7 +53,7 @@ class KernelManager:
         old = self._layer_states.get(layer)
         self._layer_states[layer] = state
         if old != state:
-            logger.info("KernelManager: %s state %s -> %s (global=%s)", layer, old or "NONE", state, self.global_state)
+            logger.info("KernelManager: {} state {} -> {} (global={})", layer, old or "NONE", state, self.global_state)
 
     def get_state(self) -> dict:
         return {

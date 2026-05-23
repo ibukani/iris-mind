@@ -146,7 +146,7 @@ class SensoryMemoryManager:
     def store_raw(self, content: str) -> None:
         self._raw_input = content
         self._raw_timestamp = datetime.now(UTC).isoformat()
-        logger.debug("SensoryMemory: stored raw input (len=%d)", len(content))
+        logger.debug("SensoryMemory: stored raw input (len={})", len(content))
 
     def retrieve(self) -> dict[str, str]:
         result: dict[str, str] = {}

@@ -137,7 +137,7 @@ class MemoryManager:
         with self._pending_lock:
             self._pending_input[event.session_id] = event.content
         logger.debug(
-            "MemoryManager: input pending session=%s content=%.80s",
+            "MemoryManager: input pending session={} content={:.80}",
             event.session_id,
             event.content,
         )
@@ -188,7 +188,7 @@ class MemoryManager:
             return
 
         logger.info(
-            "MemoryManager: client connected session=%s role=%s offline_duration=%s",
+            "MemoryManager: client connected session={} role={} offline_duration={}",
             event.session_id,
             event.role,
             event.offline_duration,
@@ -209,12 +209,12 @@ class MemoryManager:
         )
 
     def store(self, stream: str, data: Any) -> None:
-        logger.info("MemoryManager: store stream=%s", stream)
+        logger.info("MemoryManager: store stream={}", stream)
         handler = self._store_handlers.get(stream)
         if handler is not None:
             handler(data)
         else:
-            logger.warning("MemoryManager: unknown stream=%s", stream)
+            logger.warning("MemoryManager: unknown stream={}", stream)
 
     def _store_sensory(self, data: Any) -> None:
         if isinstance(data, dict) and data.get("raw"):
@@ -266,7 +266,7 @@ class MemoryManager:
         return []
 
     def clear(self, stream: str | None = None) -> None:
-        logger.info("MemoryManager: clear stream=%s", stream or "all")
+        logger.info("MemoryManager: clear stream={}", stream or "all")
         if stream == "sensory" or stream is None:
             self.sensory.clear()
         if stream == "short_term" or stream is None:
@@ -296,7 +296,7 @@ class MemoryManager:
             )
 
         self.short_term.mark_consolidated()
-        logger.info("MemoryManager: flushed %d turns, %d topics", len(unconsolidated), len(topics))
+        logger.info("MemoryManager: flushed {} turns, {} topics", len(unconsolidated), len(topics))
 
     def get_user_preferences(self) -> list[dict[str, Any]]:
         return self.long_term.search_semantic("ユーザーの好み 興味 趣味", max_results=2)

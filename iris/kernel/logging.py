@@ -18,7 +18,7 @@ from pathlib import Path
 import re
 import sys
 
-from loguru import Record, logger
+from loguru import logger
 
 from .config import LoggingConfig
 
@@ -47,11 +47,11 @@ def _cleanup_old_sessions(log_dir: Path, keep: int) -> None:
                 f.unlink(missing_ok=True)
 
 
-def _module_level_filter(levels: dict[str, str]) -> Callable[[Record], bool]:
+def _module_level_filter(levels: dict[str, str]) -> Callable[[dict], bool]:
     """loguru フィルタ: 指定モジュールのログレベルを個別制御する。"""
     _level_map = {name: logger.level(lvl).no for name, lvl in levels.items()}
 
-    def _filter(record: Record) -> bool:
+    def _filter(record: dict) -> bool:
         name = record["name"]
         if not name:
             return True
@@ -65,7 +65,8 @@ def _module_level_filter(levels: dict[str, str]) -> Callable[[Record], bool]:
 
 def _console_sink(msg: object) -> None:
     """コンソール出力: 行頭に \\r を挿入し、プロンプト再表示で追従する。"""
-    sys.stderr.write("\r" + str(msg) + "\n> ")
+    text = str(msg).rstrip("\n")
+    sys.stderr.write("\r" + text + "\n> ")
     sys.stderr.flush()
 
 
@@ -86,7 +87,7 @@ def setup_logging(cfg: LoggingConfig) -> None:
         sink=str(log_path),
         level=cfg.file_level.upper(),
         format=_FILE_FORMAT,
-        rotation=f"{cfg.max_bytes} bytes",
+        rotation=cfg.max_bytes,
         retention=3,
         encoding="utf-8",
         filter=filter_fn,

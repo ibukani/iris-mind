@@ -84,7 +84,7 @@ class Consolidator:
             SystemMessage(content=f"## Session Summary\n{summary}"),
             *messages[-keep:],
         ]
-        logger.info("Auto-compacted: summary_len=%d, kept=%d", len(summary), keep)
+        logger.info("Auto-compacted: summary_len={}, kept={}", len(summary), keep)
 
     def flush_memory(self) -> None:
         if self._hippocampal:
@@ -114,7 +114,7 @@ class Consolidator:
             return
 
         logger.info(
-            "Consolidator: idle reflection triggered. elapsed=%.1fs >= timeout=%.1fs, msg_count=%d",
+            "Consolidator: idle reflection triggered. elapsed={:.1f}s >= timeout={:.1f}s, msg_count={}",
             elapsed,
             timeout,
             self._msg_count_since_reflect,

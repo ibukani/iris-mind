@@ -82,7 +82,7 @@ class Reflexion:
             if result:
                 return dict(result.model_dump())
         except Exception as e:
-            logger.error("Proactive evaluation validation failed: %s", e)
+            logger.error("Proactive evaluation validation failed: {}", e)
         return {"satisfaction": 0.0, "summary": "調査結果の評価に失敗しました。", "next_interests": []}
 
     async def reflect(self, conversation_history: list[BaseMessage]) -> dict[str, Any]:
@@ -146,7 +146,7 @@ class Reflexion:
                 return dict(result.model_dump())
             return fallback()
         except Exception as e:
-            logger.error("Structured chat validation failed: %s", e)
+            logger.error("Structured chat validation failed: {}", e)
             return fallback()
 
     @staticmethod

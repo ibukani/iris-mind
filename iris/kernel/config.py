@@ -175,7 +175,7 @@ class ProactiveConfig(BaseModel):
 
 class PersonalityConfig(BaseModel):
     name: str = "Iris"
-    prompt_file: str = ".iris/config/personality_default.md"
+    prompt_file: str = ".iris/config/system_prompt.md"
 
 
 class MemoryConfig(BaseModel):

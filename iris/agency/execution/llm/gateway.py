@@ -52,7 +52,17 @@ class LLMGateway:
 
     @staticmethod
     def _system_messages_str(msgs: list[BaseMessage]) -> str:
+        """已废弃: build() は単一 SystemMessage を返すため不要だが互換性のため維持"""
         return "\n\n".join(str(m.content) for m in msgs if isinstance(m, SystemMessage))
+
+    @staticmethod
+    def _build_full_prompt(msgs: list[BaseMessage]) -> str:
+        lines: list[str] = []
+        for m in msgs:
+            role = getattr(m, "type", "unknown")
+            content = str(m.content) if m.content else ""
+            lines.append(f"[{role}]\n{content}")
+        return "\n\n".join(lines)
 
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
@@ -142,7 +152,7 @@ class LLMGateway:
             )
             text = str(resp.content).strip() if isinstance(resp.content, str) else ""
         except Exception as e:
-            logger.debug("Short generation failed: %s", e)
+            logger.debug("Short generation failed: {}", e)
 
         if not text:
             text = "" if situation == "proactive" else "…"
@@ -191,5 +201,6 @@ class LLMGateway:
                 response=response,
                 token_counts=tc,
                 tool_iterations=tool_iterations or [],
+                full_prompt=self._build_full_prompt(messages),
             )
         )

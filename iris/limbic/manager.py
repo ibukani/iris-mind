@@ -108,7 +108,7 @@ class LimbicManager:
         if hasattr(self._big_five_provider, "update_from_estimate"):
             changes = self._big_five_provider.update_from_estimate(estimate, "emotional_trigger")  # type: ignore[union-attr]
             if changes:
-                logger.info("Limbic: PEM update from emotional trigger -> %s", changes)
+                logger.info("Limbic: PEM update from emotional trigger -> {}", changes)
 
         self._publish_snapshot("emotional_reflection")
 
@@ -187,7 +187,7 @@ class LimbicManager:
             self._publish_snapshot("contagion")
 
         self._emotional_memory.encode(event.content[:200], self._emotion)
-        logger.debug("Limbic: input evaluated -> emotion=%s", self._emotion.to_dict())
+        logger.debug("Limbic: input evaluated -> emotion={}", self._emotion.to_dict())
 
     def _on_timer_tick(self, event: TimerTick) -> None:
         self._drive.accumulate(big_five=self._get_big_five_scores())
@@ -223,7 +223,7 @@ class LimbicManager:
         if delta.valence == 0 and delta.arousal == 0 and delta.dominance == 0:
             return
         self._apply_emotion_change(delta, "monitor_feedback")
-        logger.debug("Limbic: monitor feedback applied -> emotion=%s", self._emotion.to_dict())
+        logger.debug("Limbic: monitor feedback applied -> emotion={}", self._emotion.to_dict())
 
     def _on_proactive_result(self, event: ProactiveResultEvent) -> None:
         delta = EmotionDelta()
@@ -239,7 +239,7 @@ class LimbicManager:
 
         self._apply_emotion_change(delta, "proactive_result")
         logger.debug(
-            "Limbic: proactive result applied -> success=%s emotion=%s", event.success, self._emotion.to_dict()
+            "Limbic: proactive result applied -> success={} emotion={}", event.success, self._emotion.to_dict()
         )
 
     # === 公開インターフェース ===
@@ -327,7 +327,7 @@ class LimbicManager:
             delta.valence -= decay
             delta.dominance -= max(0.05, 0.12 - intensity * 0.015)
             logger.debug(
-                "Limbic: ignore stimulus intensity=%d delta=(v=%.3f, d=%.3f)",
+                "Limbic: ignore stimulus intensity={} delta=(v={:.3f}, d={:.3f})",
                 intensity,
                 delta.valence,
                 delta.dominance,
@@ -335,7 +335,7 @@ class LimbicManager:
         if delta.valence == 0 and delta.arousal == 0 and delta.dominance == 0:
             return
         self._apply_emotion_change(delta, "stimulus")
-        logger.debug("Limbic: stimulus %s applied -> emotion=%s", stimulus_type, self._emotion.to_dict())
+        logger.debug("Limbic: stimulus {} applied -> emotion={}", stimulus_type, self._emotion.to_dict())
 
     def set_big_five(self, big_five: BigFiveProvider | dict[str, float] | None) -> None:
         if isinstance(big_five, dict):

@@ -27,6 +27,38 @@ if TYPE_CHECKING:
 from loguru import logger
 
 
+def _with_state_trace(name: str, node_fn: Any) -> Any:
+    """Wrap a graph node to log state diffs and return values at DEBUG level.
+
+    LangGraph 1.x passes a shallow copy of state to each node.
+    Scalar (str/int/bool) in-place assignments are NOT propagated unless
+    the node returns them as a dict. This wrapper logs both in-place changes
+    (visible in the shallow copy) and the return dict so propagation gaps
+    are immediately visible during development.
+
+    Entry/exit logging is enabled only when loguru is configured for TRACE
+    level; return-value logging activates at DEBUG level.
+    """
+
+    async def wrapped(state: ExecutionState) -> dict[str, Any] | None:
+        # skip verbose entries unless TRACE
+        keys = [k for k in state if k != "messages"]
+        before = {k: repr(state[k]) for k in keys}  # type: ignore[literal-required]
+
+        result = await node_fn(state)
+
+        after = {k: repr(state[k]) for k in keys}  # type: ignore[literal-required]
+        changed = {k: {"before": before[k], "after": after[k]} for k in keys if before[k] != after[k]}
+        if changed:
+            logger.debug("NODE[{}] state diff: {}", name, changed)
+
+        if result is not None:
+            logger.debug("NODE[{}] return: {}", name, {k: repr(v) for k, v in result.items()})
+        return result  # type: ignore[no-any-return]
+
+    return wrapped
+
+
 class ExecutionOrchestrator:
     def __init__(
         self,
@@ -89,11 +121,11 @@ class ExecutionOrchestrator:
     def _build_graph(self) -> Any:
         builder = StateGraph(ExecutionState)
 
-        builder.add_node("prepare_context", self._prepare)
-        builder.add_node("llm_generate", self._generate)
-        builder.add_node("execute_tools", self._execute_tools_node)
-        builder.add_node("finalize", self._finalize)
-        builder.add_node("post_process", self._post_process)
+        builder.add_node("prepare_context", _with_state_trace("prepare_context", self._prepare))
+        builder.add_node("llm_generate", _with_state_trace("llm_generate", self._generate))
+        builder.add_node("execute_tools", _with_state_trace("execute_tools", self._execute_tools_node))
+        builder.add_node("finalize", _with_state_trace("finalize", self._finalize))
+        builder.add_node("post_process", _with_state_trace("post_process", self._post_process))
 
         builder.set_entry_point("prepare_context")
         builder.add_edge("prepare_context", "llm_generate")
@@ -130,7 +162,7 @@ class ExecutionOrchestrator:
         plan = state["plan"]
         max_iters = plan.get("max_tool_iterations", 3)
         if state.get("tool_iterations", 0) >= max_iters:
-            logger.debug("Tool iteration limit reached (%d)", max_iters)
+            logger.debug("Tool iteration limit reached ({})", max_iters)
             return "finalize"
         return "llm_generate"
 

@@ -25,9 +25,9 @@ class LLMCallNode:
         self._capability_checker = capability_checker
         self._dynamic = dynamic or DynamicState()
 
-    async def __call__(self, state: ExecutionState) -> None:
+    async def __call__(self, state: ExecutionState) -> dict[str, Any] | None:
         if state.get("interrupted"):
-            return
+            return None
 
         plan = state["plan"]
         tools_allowed = plan.get("tools_allowed", True)
@@ -44,30 +44,30 @@ class LLMCallNode:
                     priority=priority,
                     interrupt_token=self._dynamic.interrupt_token,
                 )
-                state["response_text"] = response_text
-            else:
-                tools = self._get_tools(plan.get("allow_side_effects", True), model_role)
-                max_tokens = plan.get("max_tokens", 0) or None
-                context_hint = plan.get("context_hint", "")
+                return {"response_text": response_text}
+            tools = self._get_tools(plan.get("allow_side_effects", True), model_role)
+            max_tokens = plan.get("max_tokens", 0) or None
+            context_hint = plan.get("context_hint", "")
 
-                resp = await self._pipeline.chat(
-                    messages=state["messages"],
-                    tools=tools,
-                    on_token=self._dynamic.on_token,
-                    interrupt_token=self._dynamic.interrupt_token,
-                    context_hint=context_hint,
-                    model_role=model_role,
-                    max_tokens=max_tokens,
-                    priority=priority,
-                )
+            resp = await self._pipeline.chat(
+                messages=state["messages"],
+                tools=tools,
+                on_token=self._dynamic.on_token,
+                interrupt_token=self._dynamic.interrupt_token,
+                context_hint=context_hint,
+                model_role=model_role,
+                max_tokens=max_tokens,
+                priority=priority,
+            )
 
-                state["messages"].append(resp)
-                content = resp.content
-                state["response_text"] = str(content).strip() if isinstance(content, str) else ""
+            state["messages"].append(resp)
+            content = resp.content
+            response_text = str(content).strip() if isinstance(content, str) else ""
+            return {"response_text": response_text}
 
         except Exception as e:
             logger.exception("LLM generation failed")
-            state["error"] = str(e)
+            return {"error": str(e)}
 
     def _get_tools(self, allow_side_effects: bool, model_role: str) -> list[dict[str, Any]] | None:
         if self._tool_executor is None:

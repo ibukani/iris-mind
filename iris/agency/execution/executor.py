@@ -93,19 +93,24 @@ class FlowExecutor:
 
         if should_skip_proactive(plan, self._monitor):
             logger.info(
-                "FlowExecutor: suppressed proactive (talkative=%d), skipping LLM",
+                "FlowExecutor: suppressed proactive (talkative={}), skipping LLM",
                 plan.get("talkative_degree", 0),
             )
             return
 
         logger.info(
-            "FlowExecutor: executing plan session=%s abbreviated=%s",
+            "FlowExecutor: executing plan session={} abbreviated={}",
             plan.get("session_id"),
             plan.get("abbreviated"),
         )
-        task = asyncio.create_task(self._run_graph(plan))
-        self._bg_tasks.add(task)
-        task.add_done_callback(self._bg_tasks.discard)
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(self._run_graph(plan))
+        else:
+            task = loop.create_task(self._run_graph(plan))
+            self._bg_tasks.add(task)
+            task.add_done_callback(self._bg_tasks.discard)
 
     async def _run_graph(self, plan: dict[str, Any]) -> None:
         self._interrupt_token = InterruptToken()

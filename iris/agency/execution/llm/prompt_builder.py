@@ -68,25 +68,25 @@ class SystemPromptBuilder:
             governance_principles=self._governance_principles,
         )
 
-        messages: list[BaseMessage] = [SystemMessage(content=base)]
+        parts: list[str] = [base]
 
-        messages.append(SystemMessage(content=f"## 現在日時\n{self._build_time_string()}"))
+        parts.append(f"## 現在日時\n{self._build_time_string()}")
 
         if self._limbic:
-            mood_desc = self._limbic.describe_mood()
-            if mood_desc:
-                messages.append(SystemMessage(content=f"## 現在の気分\n{mood_desc}"))
+            mood_desc = self._limbic.describe_mood() or "落ち着いた状態です。特に強い感情はありません。"
+            parts.append(f"## 現在の気分\n{mood_desc}")
 
         if pctx.current_state:
-            messages.append(SystemMessage(content=pctx.current_state))
+            parts.append(pctx.current_state)
 
         if context_hint:
-            messages.append(SystemMessage(content=f"## 会話コンテキスト\n{context_hint}"))
+            parts.append(f"## 会話コンテキスト\n{context_hint}")
 
         if situation in _SITUATION_INSTRUCTIONS:
-            messages.append(SystemMessage(content=_SITUATION_INSTRUCTIONS[situation]))
+            parts.append(_SITUATION_INSTRUCTIONS[situation])
 
-        return messages
+        parts.append("## 回答ルール【厳守】\n必ず1〜2文で答える。")
+        return [SystemMessage(content="\n\n".join(parts))]
 
     def _load_personality_context(self) -> _PersonalityContext:
         agents_md = self._agents_md_store.load() if self._agents_md_store else ""
@@ -95,11 +95,9 @@ class SystemPromptBuilder:
 
         current_state = ""
         if self._persona_profile:
+            has_traits_in_tpl = "{personality_traits}" in self._personality.system_prompt_template
             has_speech_in_tpl = "{speech_style}" in self._personality.system_prompt_template
-            if has_speech_in_tpl:
-                if personality_traits:
-                    current_state = "## 現在の状態\n" + personality_traits
-            else:
+            if not has_traits_in_tpl and not has_speech_in_tpl:
                 current_state = self._persona_profile.get_current_state_section()
 
         user_prefs = self._build_user_preferences_section()

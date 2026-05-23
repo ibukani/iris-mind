@@ -49,6 +49,10 @@ class IOManager:
         }
 
     def _on_message_event(self, event: MessageEvent) -> None:
+        direction = event.direction or "response"
+        if direction not in ("response", "stream"):
+            return
+
         session_info = self._session_mgr.get_session_info(event.session_id)
         target_role = session_info.role if session_info else event.source_role or "*"
 
@@ -60,10 +64,10 @@ class IOManager:
             source_role="mind",
             target_role=target_role,
             session_id=event.session_id,
-            direction=Direction(event.direction) if event.direction else Direction.RESPONSE,
+            direction=Direction(direction),
         )
         logger.debug(
-            "IOManager: message event session=%s type=%s state=%s target_role=%s content_len=%d",
+            "IOManager: message event session={} type={} state={} target_role={} content_len={}",
             event.session_id,
             event.msg_type,
             event.state,
@@ -74,7 +78,7 @@ class IOManager:
 
     def _on_grpc_message(self, msg: Message) -> None:
         if msg.direction != Direction.REQUEST:
-            logger.warning("IOManager: unexpected direction from client: %s", msg.direction)
+            logger.warning("IOManager: unexpected direction from client: {}", msg.direction)
             return
 
         if msg.target_role != "mind":
@@ -83,7 +87,7 @@ class IOManager:
 
         truncated = msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
         logger.debug(
-            "IOManager: message session=%s dir=%s type=%s source=%s target=%s content=%.200s",
+            "IOManager: message session={} dir={} type={} source={} target={} content={:.200}",
             msg.session_id,
             msg.direction.value,
             msg.msg_type,
@@ -109,7 +113,7 @@ class IOManager:
         content = msg.content
         if not content.startswith("/"):
             result = "Commands start with /"
-            logger.debug("IOManager: command missing slash session=%s", msg.session_id)
+            logger.debug("IOManager: command missing slash session={}", msg.session_id)
             self._session_mgr.route_command_output(
                 msg.session_id,
                 CommandOutput(content=result, session_id=msg.session_id, correlation_id=msg.id),
@@ -120,11 +124,11 @@ class IOManager:
         name = parts[0].lower() if parts else ""
         args = parts[1] if len(parts) > 1 else ""
 
-        logger.debug("IOManager: command session=%s cmd=/%s args=%.100s", msg.session_id, name, args)
+        logger.debug("IOManager: command session={} cmd=/{} args={:.100}", msg.session_id, name, args)
 
         result = self._cmd_handler(name, args) if self._cmd_handler else f"No command handler: /{name}"
 
-        logger.debug("IOManager: command result session=%s result=%.100s", msg.session_id, result)
+        logger.debug("IOManager: command result session={} result={:.100}", msg.session_id, result)
         self._session_mgr.route_command_output(
             msg.session_id,
             CommandOutput(content=result, session_id=msg.session_id, correlation_id=msg.id),

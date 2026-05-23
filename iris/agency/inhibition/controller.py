@@ -61,7 +61,7 @@ class InhibitionController:
 
     def set_generating(self, generating: bool) -> None:
         self._state.generating = generating
-        logger.debug("InhibitionController: generating state set to %s", generating)
+        logger.debug("InhibitionController: generating state set to {}", generating)
 
     def set_output_frequency_state(self, outputs_since_input: int, frequency_exceeded: bool) -> None:
         self._state.outputs_since_input = outputs_since_input
@@ -73,7 +73,7 @@ class InhibitionController:
         self._state.consecutive_ignores = 0
         self._state.confirmation_mode = False
         logger.debug(
-            "User activity recorded: last_user_activity=%.3f, ignores reset",
+            "User activity recorded: last_user_activity={:.3f}, ignores reset",
             self._state.last_user_activity,
         )
 
@@ -86,13 +86,13 @@ class InhibitionController:
             s.ignore_recorded = True
             if s.consecutive_ignores >= 2:
                 s.confirmation_mode = True
-                logger.info("Entered confirmation mode (ignores=%d)", s.consecutive_ignores)
+                logger.info("Entered confirmation mode (ignores={})", s.consecutive_ignores)
             elif s.consecutive_ignores >= 3:
                 logger.info(
-                    "Extended ignore detected: %d consecutive ignores",
+                    "Extended ignore detected: {} consecutive ignores",
                     s.consecutive_ignores,
                 )
-            logger.debug("Ignore detected: consecutive_ignores=%d", s.consecutive_ignores)
+            logger.debug("Ignore detected: consecutive_ignores={}", s.consecutive_ignores)
             return True
         return False
 
@@ -103,11 +103,13 @@ class InhibitionController:
             return GateVerdict(suppressed=True, score=0.0, reason="generating", go_signal=0.0)
 
         if now < s.cooldown_until or s.is_sleeping:
-            logger.debug("Gate suppressed: cooldown_or_sleep (now=%.3f, cooldown_until=%.3f)", now, s.cooldown_until)
+            logger.debug(
+                "Gate suppressed: cooldown_or_sleep (now={:.3f}, cooldown_until={:.3f})", now, s.cooldown_until
+            )
             return GateVerdict(suppressed=True, score=0.0, reason="cooldown_or_sleep", go_signal=0.0)
 
         if s.consecutive_ignores >= 3:
-            logger.debug("Gate suppressed: consecutive_ignores=%d >= 3", s.consecutive_ignores)
+            logger.debug("Gate suppressed: consecutive_ignores={} >= 3", s.consecutive_ignores)
             return GateVerdict(suppressed=True, score=0.0, reason=f"ignored_x{s.consecutive_ignores}", go_signal=0.0)
 
         factors = self._build_factor_list(now)
@@ -116,7 +118,7 @@ class InhibitionController:
         reason = ", ".join(low) if low else "open"
 
         go_signal = self._compute_go_signal(now)
-        logger.debug("Gate: factors=%s score=%.3f reason=%s go_signal=%.3f", factors, score, reason, go_signal)
+        logger.debug("Gate: factors={} score={:.3f} reason={} go_signal={:.3f}", factors, score, reason, go_signal)
         return GateVerdict(suppressed=False, score=score, reason=reason, go_signal=go_signal)
 
     def _build_factor_list(self, now: float) -> list[tuple[str, float]]:
@@ -184,7 +186,7 @@ class InhibitionController:
     def record_proactive_attempt(self) -> None:
         self._state.last_proactive_time = time.time()
         self._state.ignore_recorded = False
-        logger.debug("Proactive attempt recorded: last_proactive_time=%.3f", self._state.last_proactive_time)
+        logger.debug("Proactive attempt recorded: last_proactive_time={:.3f}", self._state.last_proactive_time)
 
     def notify_positive_response(self) -> None:
         self._state.consecutive_ignores = 0
@@ -199,7 +201,7 @@ class InhibitionController:
         s.cooldown_until = time.time() + extra
         s.negative_mood_score = min(1.0, s.negative_mood_score + degree * 0.15)
         logger.info(
-            "Frequency penalty applied: degree=%d cooldown=%.0fs mood=%.2f",
+            "Frequency penalty applied: degree={} cooldown={:.0f}s mood={:.2f}",
             degree,
             extra,
             s.negative_mood_score,
@@ -207,13 +209,13 @@ class InhibitionController:
 
     def set_cooldown(self, duration_sec: float = 600.0) -> None:
         self._state.cooldown_until = time.time() + duration_sec
-        logger.info("Proactive cooldown set for %.0f seconds", duration_sec)
+        logger.info("Proactive cooldown set for {:.0f} seconds", duration_sec)
 
     def record_topic(self, topic: str, duration_sec: float = 3600.0) -> None:
         if not topic:
             return
         self._state.topic_cooldowns[topic] = time.time() + duration_sec
-        logger.info("Topic cooldown set for '%s' for %.0f seconds", topic, duration_sec)
+        logger.info("Topic cooldown set for '{}' for {:.0f} seconds", topic, duration_sec)
 
     def is_topic_suppressed(self, topic: str, now: float) -> bool:
         if not topic:

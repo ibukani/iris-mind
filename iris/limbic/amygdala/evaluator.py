@@ -279,7 +279,7 @@ class Amygdala:
         n_criticism = self._criticism.count(lower)
 
         if n_pos > 2 or n_neg > 2:
-            logger.info("Amygdala: significant emotional input (pos=%d neg=%d arousal=%d)", n_pos, n_neg, n_arousal)
+            logger.info("Amygdala: significant emotional input (pos={} neg={} arousal={})", n_pos, n_neg, n_arousal)
 
         if n_pos == 0 and n_neg == 0 and n_arousal == 0:
             return EmotionDelta()

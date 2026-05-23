@@ -314,7 +314,7 @@ class LLMBridge:
         if key:
             return self._providers[key]
         first = next(iter(self._providers.values()))
-        logger.warning("Model %r not found in provider map, using first provider", model_name)
+        logger.warning("Model {!r} not found in provider map, using first provider", model_name)
         return first
 
     @cached(cache=LRUCache(maxsize=1))  # type: ignore[arg-type]

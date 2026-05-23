@@ -105,7 +105,7 @@ trigger_weights:
 | フィールド | 型 | デフォルト | 説明 |
 |-----------|-----|-----------|------|
 | name | str | "Iris" | AIの名前 |
-| prompt_file | str | ".iris/config/personality_default.md" | システムプロンプトファイル |
+| prompt_file | str | ".iris/config/system_prompt.md" | システムプロンプトファイル |
 
 ## MemoryConfig
 

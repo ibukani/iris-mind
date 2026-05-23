@@ -100,7 +100,7 @@ class PlanningManager:
     def _publish(self, plan: dict, session_id: str, from_timer: bool) -> None:
         plan["session_id"] = session_id
         logger.info(
-            "PlanningManager: plan published session=%s from_timer=%s",
+            "PlanningManager: plan published session={} from_timer={}",
             session_id,
             from_timer,
         )

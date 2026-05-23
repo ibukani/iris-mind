@@ -59,7 +59,7 @@ class _JsonlStore:
             try:
                 entries.append(orjson.loads(line.encode("utf-8")))
             except orjson.JSONDecodeError:
-                logger.warning("%s: skipping corrupt entry: %.80s", type(self).__name__, line)
+                logger.warning("{}: skipping corrupt entry: {:.80}", type(self).__name__, line)
         self._load_cache = entries
         return entries
 
@@ -105,7 +105,7 @@ class AgentsMdStore:
                 self._cache = self.path.read_text(encoding="utf-8")
                 self._cache_mtime = mtime
             except Exception as e:
-                logger.warning("AgentsMdStore: failed to load file: %s", e)
+                logger.warning("AgentsMdStore: failed to load file: {}", e)
                 if self._cache is not None:
                     return self._cache
                 return ""
@@ -121,7 +121,7 @@ class AgentsMdStore:
             self._cache_mtime = self.path.stat().st_mtime
         except OSError:
             self._cache_mtime = None
-        logger.info("AgentsMdStore: updated (%d bytes)", len(new_content.encode("utf-8")))
+        logger.info("AgentsMdStore: updated ({} bytes)", len(new_content.encode("utf-8")))
 
     def _truncate(self, content: str) -> str:
         lines = content.split("\n")
@@ -156,7 +156,7 @@ class EpisodicStore(_JsonlStore):
             if len(entries) > self.max_entries:
                 entries = entries[-self.max_entries :]
             self._write_file(entries)
-            logger.info("EpisodicStore: added entry, total=%d", len(entries))
+            logger.info("EpisodicStore: added entry, total={}", len(entries))
 
     def get_recent(self, n: int = 5) -> list[dict]:
         entries = self.load_all()
@@ -185,7 +185,7 @@ class SemanticStore(_JsonlStore):
         for e in entries[self._synced_count :]:
             self.vector.add(e)
         self._synced_count = len(entries)
-        logger.info("SemanticStore: synced %d entries to vector store", unsynced)
+        logger.info("SemanticStore: synced {} entries to vector store", unsynced)
 
     def add(self, entry: dict) -> None:
         with self._lock:
@@ -202,7 +202,7 @@ class SemanticStore(_JsonlStore):
             self._write_file(entries)
             self.vector.add(entry)
             self._synced_count = len(entries)
-            logger.info("SemanticStore: added entry, total=%d type=%s", len(entries), entry.get("type", "unknown"))
+            logger.info("SemanticStore: added entry, total={} type={}", len(entries), entry.get("type", "unknown"))
 
     def clear(self) -> None:
         if self.path.exists():

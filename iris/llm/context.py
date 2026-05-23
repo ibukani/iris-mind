@@ -112,7 +112,7 @@ class LLMContextWindowManager:
         summary = await self.summarize(messages[:-preserve_last])
         self._summary = summary
         logger.info(
-            "Context compacted: summary_len=%d, kept=%d messages",
+            "Context compacted: summary_len={}, kept={} messages",
             len(summary),
             preserve_last,
         )
@@ -159,7 +159,7 @@ class LLMContextWindowManager:
             )
             return str(resp.content).strip()
         except Exception as e:
-            logger.exception("Summarization failed: %s", e)
+            logger.exception("Summarization failed: {}", e)
             return self._summary
 
     async def compact(self, messages: list[BaseMessage]) -> str:

@@ -81,13 +81,13 @@ class HippocampalManager:
             self._update_big_five(result)
             self._consolidate_short_term(force=force)
             logger.info(
-                "Quick reflect stored: speech_style=%s traits=%s reaction=%s",
+                "Quick reflect stored: speech_style={} traits={} reaction={}",
                 bool(result.get("speech_style")),
                 bool(result.get("expressed_traits")),
                 bool(result.get("user_reaction")),
             )
         except Exception as e:
-            logger.exception("Quick reflect failed: %s", e)
+            logger.exception("Quick reflect failed: {}", e)
 
     def _store_reflection_to_memory(self, result: dict[str, Any]) -> None:
         if self._memory is None:
@@ -127,7 +127,7 @@ class HippocampalManager:
                     trigger="reflection",
                 )
             )
-        logger.info("Big Five updated: %s", changes)
+        logger.info("Big Five updated: {}", changes)
 
     def _parse_big_five_estimate(self, bf_raw: Any) -> dict[str, float] | None:
         if not bf_raw:
@@ -139,7 +139,7 @@ class HippocampalManager:
             if isinstance(estimate, dict):
                 return estimate  # type: ignore[no-any-return]
         except (orjson.JSONDecodeError, TypeError):
-            logger.debug("Could not parse big_five_estimate: %s", bf_raw)
+            logger.debug("Could not parse big_five_estimate: {}", bf_raw)
         return None
 
     def _consolidate_short_term(self, force: bool = False) -> None:
@@ -162,7 +162,7 @@ class HippocampalManager:
                 {"content": topic, "type": "topic", "tags": ["short_term_topic"]},
             )
         self._memory.short_term.mark_consolidated()
-        logger.info("Hippocampal: consolidated %d turns, %d topics", len(unconsolidated), len(topics))
+        logger.info("Hippocampal: consolidated {} turns, {} topics", len(unconsolidated), len(topics))
 
     async def run_session(self, messages: list[BaseMessage], memory: MemoryManagerProtocol | None = None) -> None:
         if self._reflexion is None:
@@ -207,7 +207,7 @@ class HippocampalManager:
 
             logger.info("Session reflect completed")
         except Exception as e:
-            logger.exception("Session reflect failed: %s", e)
+            logger.exception("Session reflect failed: {}", e)
 
     async def _process_proactive_result_async(self, topic: str, content: str) -> dict[str, Any]:
         if self._reflexion is None:
@@ -215,7 +215,7 @@ class HippocampalManager:
         try:
             return await self._reflexion.evaluate_proactive_result(topic, content)
         except Exception as e:
-            logger.exception("Failed to evaluate proactive result with LLM: %s", e)
+            logger.exception("Failed to evaluate proactive result with LLM: {}", e)
             return {"satisfaction": 0.0, "summary": "評価に失敗しました。", "next_interests": []}
 
     def process_proactive_result(self, topic: str, success: bool, content: str) -> None:
@@ -252,7 +252,7 @@ class HippocampalManager:
             import random
 
             if random.random() < 0.5:
-                logger.info("Escalating proactive result to user conversation for topic: %s", topic)
+                logger.info("Escalating proactive result to user conversation for topic: {}", topic)
 
                 self._event_bus.publish(
                     InterruptEvent(

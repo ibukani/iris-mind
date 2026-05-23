@@ -340,7 +340,7 @@ class InhibitionController:
 
 ```python
 # システムプロンプトに動的に注入される感情説明
-# personality_default.md に「## 現在の気分」セクションを追加（予定）
+# system_prompt.md に「## 現在の気分」セクションを追加（予定）
 ```
 
 ### EmotionalMemory → EpisodicStore

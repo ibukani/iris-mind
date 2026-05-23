@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import re
 
 from loguru import logger
@@ -217,4 +218,15 @@ class Amygdala:
 
 
 def _emotion_distance(a: EmotionDelta, b: EmotionDelta) -> float:
-    return (a.valence - b.valence) ** 2 + (a.arousal - b.arousal) ** 2 + (a.dominance - b.dominance) ** 2
+    """ユークリッド距離にコサインペナルティを乗算したハイブリッド距離。"""
+    dv = a.valence - b.valence
+    da = a.arousal - b.arousal
+    dd = a.dominance - b.dominance
+    euclidean = math.sqrt(dv * dv + da * da + dd * dd)
+
+    dot = a.valence * b.valence + a.arousal * b.arousal + a.dominance * b.dominance
+    na = math.sqrt(a.valence**2 + a.arousal**2 + a.dominance**2)
+    nb = math.sqrt(b.valence**2 + b.arousal**2 + b.dominance**2)
+    cosine_sim = dot / (na * nb) if na * nb > 0 else 0.0
+
+    return euclidean * (2.0 - cosine_sim)

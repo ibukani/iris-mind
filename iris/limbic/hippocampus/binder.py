@@ -26,9 +26,33 @@ def _pad_to_tuple(v: EmotionState | Mapping[str, Any]) -> tuple[float, float, fl
 
 
 def _pad_distance(a: EmotionState | Mapping[str, Any], b: Mapping[str, Any] | EmotionState) -> float:
+    """PADユークリッド距離（感情強度の差を測る）"""
     a_v, a_a, a_d = _pad_to_tuple(a)
     b_v, b_a, b_d = _pad_to_tuple(b)
     return math.sqrt((a_v - b_v) ** 2 + (a_a - b_a) ** 2 + (a_d - b_d) ** 2)
+
+
+def _pad_cosine(a: EmotionState | Mapping[str, Any], b: Mapping[str, Any] | EmotionState) -> float:
+    """PADコサイン類似度（感情タイプの方向一致度）"""
+    a_v, a_a, a_d = _pad_to_tuple(a)
+    b_v, b_a, b_d = _pad_to_tuple(b)
+    dot = a_v * b_v + a_a * b_a + a_d * b_d
+    na = math.sqrt(a_v * a_v + a_a * a_a + a_d * a_d)
+    nb = math.sqrt(b_v * b_v + b_a * b_a + b_d * b_d)
+    if na * nb == 0:
+        return 0.0
+    return dot / (na * nb)
+
+
+def _pad_distance_combined(a: EmotionState | Mapping[str, Any], b: Mapping[str, Any] | EmotionState) -> float:
+    """ユークリッド + コサイン ハイブリッド距離。
+
+    コサイン距離 (1 - cos) で方向不一致をペナルティとしてユークリッド距離に乗算。
+    同じ方向ならユークリッド距離そのまま、逆方向なら数倍に増幅。
+    """
+    euclidean = _pad_distance(a, b)
+    cosine_sim = _pad_cosine(a, b)
+    return euclidean * (2.0 - cosine_sim)
 
 
 class EmotionalMemory:
@@ -134,7 +158,7 @@ class EmotionalMemory:
             meta_emotion = meta.get("emotion")
             if not meta_emotion:
                 continue
-            distance = _pad_distance(target, meta_emotion)
+            distance = _pad_distance_combined(target, meta_emotion)
             intensity = meta.get("intensity", 0)
             score = intensity / max(distance, 0.01)
             scored.append((score, entry))

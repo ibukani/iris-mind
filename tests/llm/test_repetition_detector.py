@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock
 
-from langchain_core.messages import AIMessage, AIMessageChunk
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 
 from iris.kernel.config import ModelConfig
 from iris.llm.bridge import LLMBridge
@@ -70,8 +70,8 @@ def test_chat_non_streaming_repetition() -> None:
     mock_provider.ainvoke.return_value = AIMessage(content="同じことを言います。全部、全部、全部、全部、")
     bridge._providers = {next(iter(bridge._providers)): mock_provider}
 
-    resp = asyncio.run(bridge.chat(messages=[{"role": "user", "content": "hello"}]))
-    content = resp["message"]["content"]
+    resp = asyncio.run(bridge.chat(messages=[HumanMessage(content="hello")]))
+    content = resp.content
     assert content == "同じことを言います。全部、全部、… [繰り返し検知により中断]"
 
 
@@ -94,7 +94,7 @@ def test_chat_streaming_repetition() -> None:
 
     resp = asyncio.run(
         bridge.chat(
-            messages=[{"role": "user", "content": "hello"}],
+            messages=[HumanMessage(content="hello")],
             on_token=captured_tokens.append,
             interrupt_token=interrupt_token,
         )
@@ -103,4 +103,4 @@ def test_chat_streaming_repetition() -> None:
     # 4回目の「全部、」の時点でキャンセルされ、それ以降のトークンは呼ばれない
     assert captured_tokens == ["これは", "ストリーム", "です。", "全部、", "全部、", "全部、"]
     # 最終的なレスポンスもトリミングされている
-    assert resp["message"]["content"] == "これはストリームです。全部、全部、… [繰り返し検知により中断]"
+    assert resp.content == "これはストリームです。全部、全部、… [繰り返し検知により中断]"

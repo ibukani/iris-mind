@@ -121,7 +121,7 @@ class ExecutionOrchestrator:
         if state.get("interrupted") or state.get("error"):
             return "finalize"
         messages = state.get("messages", [])
-        if messages and messages[-1].get("tool_calls"):
+        if messages and getattr(messages[-1], "tool_calls", None):
             return "execute_tools"
         return "finalize"
 

@@ -7,10 +7,11 @@ from typing import TYPE_CHECKING, Any, TypedDict
 if TYPE_CHECKING:
     from iris.llm.interrupt_token import InterruptToken
 
+from langchain_core.messages import BaseMessage
 
 class ExecutionState(TypedDict, total=False):
     plan: dict[str, Any]
-    messages: list[dict[str, Any]]
+    messages: list[BaseMessage]
     response_text: str
     tool_iterations: int
     interrupted: bool

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 
+from langchain_core.messages import HumanMessage
 from loguru import logger
 
 from iris.llm.bridge import LLMBridge
@@ -65,14 +66,14 @@ class ReadinessEvaluator:
 
             resp = asyncio.run(
                 self._llm.chat(
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=[HumanMessage(content=prompt)],
                     model=self._llm_model_role,
                     temperature=0.0,
                     max_tokens=10,
                 )
             )
-            content = resp.get("message", {}).get("content", "").strip().lower()
-            return content.startswith("yes")  # type: ignore[no-any-return]
+            content = str(resp.content).strip().lower()
+            return content.startswith("yes")
         except Exception:
             logger.exception("Tier2 readiness evaluation failed")
             return False

@@ -61,11 +61,9 @@ class LLMCallNode:
                     priority=priority,
                 )
 
-                msg = resp.get("message", {})
-                content = msg.get("content", "") or ""
-
-                state["messages"].append(msg)
-                state["response_text"] = str(content).strip()
+                state["messages"].append(resp)
+                content = resp.content
+                state["response_text"] = str(content).strip() if isinstance(content, str) else ""
 
         except Exception as e:
             logger.exception("LLM generation failed")

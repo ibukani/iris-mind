@@ -13,7 +13,7 @@ from typing import Any
 from cachetools import LRUCache, cached
 import httpx
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import AIMessage, convert_to_messages
+from langchain_core.messages import AIMessage, BaseMessage
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 from loguru import logger
@@ -98,7 +98,7 @@ class LLMBridge:
 
     async def chat(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[BaseMessage],
         model: str | None = None,
         enable_thinking: bool = False,
         temperature: float = 0.7,
@@ -108,7 +108,7 @@ class LLMBridge:
         interrupt_token: object | None = None,
         priority: int = 0,
         **kwargs: Any,
-    ) -> dict[str, Any]:
+    ) -> AIMessage:
         """指定されたモデルでチャット生成を実行する。"""
         model_name = model or self._get_default_model()
         provider = self._resolve_provider(model_name)
@@ -162,7 +162,7 @@ class LLMBridge:
             if on_token:
                 on_token(token)
 
-        langchain_messages = convert_to_messages(messages)
+        langchain_messages = messages
 
         async with self._priority_lock(priority):
             if on_token:
@@ -203,24 +203,42 @@ class LLMBridge:
         if content and self._detect_repetition(content):
             content = self._trim_repetition(content)
             logger.warning("Trimmed repetition loop from final LLM response.")
+            if isinstance(resp_message, AIMessage):
+                # We can construct a new AIMessage since content is updated
+                new_msg = AIMessage(content=content)
+                if hasattr(resp_message, "tool_calls"):
+                    new_msg.tool_calls = resp_message.tool_calls
+                return new_msg
+        if not isinstance(resp_message, AIMessage):
+            return AIMessage(content=str(getattr(resp_message, "content", "")))
+        return resp_message
 
-        assistant_msg: dict[str, Any] = {
-            "role": "assistant",
-            "content": content or "",
-        }
+    async def chat_with_structured_output(
+        self,
+        schema: Any,
+        messages: list[BaseMessage],
+        model: str | None = None,
+        temperature: float = 0.3,
+        max_tokens: int = 4096,
+        **kwargs: Any,
+    ) -> Any:
+        """指定されたモデルで with_structured_output を使用したチャット生成を実行する。"""
+        model_name = model or self._get_default_model()
+        provider = self._resolve_provider(model_name)
+        
+        call_kwargs: dict[str, Any] = {}
+        if isinstance(provider, ChatOllama):
+            call_kwargs["options"] = {
+                "temperature": temperature,
+                "num_predict": max_tokens,
+            }
+        else:
+            call_kwargs["temperature"] = temperature
+            call_kwargs["max_tokens"] = max_tokens
+        call_kwargs.update(kwargs)
 
-        # tool_calls の変換
-        if hasattr(resp_message, "tool_calls") and resp_message.tool_calls:
-            assistant_msg["tool_calls"] = [
-                {
-                    "id": tc.get("id") or "",
-                    "type": "function",
-                    "function": {"name": tc["name"], "arguments": tc["args"]},
-                }
-                for tc in resp_message.tool_calls
-            ]
-
-        return {"message": assistant_msg}
+        active_model = provider.with_structured_output(schema)
+        return await active_model.ainvoke(messages, **call_kwargs)
 
     def _detect_repetition(self, text: str) -> bool:
         """Detect abnormal repetitions in generated text."""

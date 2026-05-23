@@ -21,6 +21,7 @@ from iris.event.event_bus import EventBus
 from iris.event.event_types import InterruptEvent
 from iris.llm.capability import CapabilityChecker
 from iris.llm.interrupt_token import InterruptToken
+from langchain_core.messages import BaseMessage, SystemMessage
 
 if TYPE_CHECKING:
     from iris.memory.manager import MemoryManager
@@ -41,14 +42,14 @@ class FlowExecutor:
         session_roles_getter: Callable[[], str] | None = None,
         memory: MemoryManager | None = None,
         capability_checker: CapabilityChecker | None = None,
-        messages: list[dict[str, Any]] | None = None,
+        messages: list[BaseMessage] | None = None,
     ) -> None:
         self._bus = internal_bus
         self._event_bus = event_bus
         self._monitor = monitor
         self._consolidator = consolidator
         self._memory = memory
-        self._messages: list[dict[str, Any]] = messages if messages is not None else []
+        self._messages: list[BaseMessage] = messages if messages is not None else []
         self._interrupt_token: InterruptToken | None = None
         self._bg_tasks: set[asyncio.Task] = set()
 
@@ -126,7 +127,7 @@ class FlowExecutor:
             self._messages[:] = result.get("messages", [])
         except Exception as e:
             logger.exception("Graph execution failed")
-            self._messages.append({"role": "system", "content": f"[Execution Error: {e}]"})
+            self._messages.append(SystemMessage(content=f"[Execution Error: {e}]"))
         finally:
             self._interrupt_token = None
 

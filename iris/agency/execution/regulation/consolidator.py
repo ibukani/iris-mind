@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from iris.agency.inhibition import InhibitionController
 from iris.event.event_bus import EventBus
 from iris.event.event_types import ProactiveResultEvent, TimerTick
+from langchain_core.messages import BaseMessage, SystemMessage
 
 if TYPE_CHECKING:
     from iris.kernel.config import Config, ModelConfig
@@ -20,7 +21,7 @@ class Consolidator:
     def __init__(
         self,
         event_bus: EventBus,
-        messages_getter: Callable[[], list[dict[str, Any]]],
+        messages_getter: Callable[[], list[BaseMessage]],
         hippocampal: HippocampalManager | None = None,
         context_window_mgr: LLMContextWindowManager | None = None,
         model_config: ModelConfig | None = None,
@@ -60,7 +61,7 @@ class Consolidator:
         except Exception:
             logger.exception("Post-process failed")
 
-    def _compact_messages(self, messages: list[dict[str, Any]], plan: dict[str, Any]) -> None:
+    def _compact_messages(self, messages: list[BaseMessage], plan: dict[str, Any]) -> None:
         cwm = self._context_window_mgr
         if cwm is None:
             return
@@ -78,7 +79,7 @@ class Consolidator:
             return
         keep = 6
         messages[:] = [
-            {"role": "system", "content": f"## Session Summary\n{summary}"},
+            SystemMessage(content=f"## Session Summary\n{summary}"),
             *messages[-keep:],
         ]
         logger.info("Auto-compacted: summary_len=%d, kept=%d", len(summary), keep)
@@ -95,7 +96,7 @@ class Consolidator:
             return "Not enough messages to compact"
         summary = self._context_window_mgr.compact(messages)
         keep = 6
-        messages[:] = [{"role": "system", "content": f"## Session Summary\n{summary}"}, *messages[-keep:]]
+        messages[:] = [SystemMessage(content=f"## Session Summary\n{summary}"), *messages[-keep:]]
         return f"Compacted: {len(summary)} chars summary, kept last {keep} messages"
 
     def _on_timer_tick(self, event: TimerTick) -> None:

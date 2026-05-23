@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from iris.agency.execution.state import ExecutionState
 from iris.event.event_types import MessageEvent, ProactiveResultEvent
 from iris.io.models import StreamState
+from langchain_core.messages import AIMessage, ChatMessage
 
 if TYPE_CHECKING:
     from iris.agency.execution.regulation.consolidator import Consolidator
@@ -55,8 +56,10 @@ class FinalizeNode:
             return
 
         if record_history:
-            role = "thought" if silent else "assistant"
-            state["messages"].append({"role": role, "content": response_text})
+            if silent:
+                state["messages"].append(ChatMessage(role="thought", content=response_text))
+            else:
+                state["messages"].append(AIMessage(content=response_text))
             if self._consolidator:
                 self._consolidator.record_activity()
                 self._consolidator.increment_reflect_count()

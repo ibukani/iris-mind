@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Protocol
 
 from iris.kernel.config import ModelConfig, ModelEntry
+
 from . import ollama_env
 
 

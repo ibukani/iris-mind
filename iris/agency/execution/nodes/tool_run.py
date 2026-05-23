@@ -30,13 +30,14 @@ class ToolRunNode:
 
         logger.debug("Tool execution results: %d tools", len(results))
 
+        from langchain_core.messages import ToolMessage
         MAX_TOOL_OUTPUT_LENGTH = 200
         messages = state["messages"]
         for m in messages:
-            if m.get("role") == "tool":
-                content = str(m.get("content", ""))
+            if isinstance(m, ToolMessage):
+                content = str(m.content)
                 if len(content) > MAX_TOOL_OUTPUT_LENGTH:
-                    m["content"] = content[:MAX_TOOL_OUTPUT_LENGTH] + "..."
+                    m.content = content[:MAX_TOOL_OUTPUT_LENGTH] + "..."
 
         if self._tool_executor.all_side_effect(results):
             state["tool_iterations"] = 99

@@ -13,6 +13,7 @@ from loguru import logger
 
 from iris.event.event_types import DebugSnapshotEvent, InputReady, InterruptEvent
 from iris.memory.hippocampal.reflexion import ReflexionProtocol
+from langchain_core.messages import BaseMessage
 
 _REFLECTION_MEMORY_KEYS: list[tuple[str, str, str, list[str]]] = [
     ("speech_style", "trait", "Iris's speech style", ["speech_style"]),
@@ -29,9 +30,9 @@ class HippocampalManagerProtocol(Protocol):
     別のアプローチで差し替え可能にし、テスト容易性と柔軟性を向上させるため。
     """
 
-    def maybe_run(self, messages: list[dict], msg_count_since_reflect: int) -> int: ...
-    def force_run(self, messages: list[dict]) -> None: ...
-    def run_session(self, messages: list[dict], memory: MemoryManagerProtocol | None = None) -> None: ...
+    def maybe_run(self, messages: list[BaseMessage], msg_count_since_reflect: int) -> int: ...
+    def force_run(self, messages: list[BaseMessage]) -> None: ...
+    def run_session(self, messages: list[BaseMessage], memory: MemoryManagerProtocol | None = None) -> None: ...
     def process_proactive_result(self, topic: str, success: bool, content: str) -> None: ...
 
 
@@ -52,7 +53,7 @@ class HippocampalManager:
         self._reflect_interval = reflect_interval
         self._event_bus = event_bus
 
-    def maybe_run(self, messages: list[dict], msg_count_since_reflect: int) -> int:
+    def maybe_run(self, messages: list[BaseMessage], msg_count_since_reflect: int) -> int:
         if self._reflexion is None:
             return msg_count_since_reflect
         if msg_count_since_reflect < self._reflect_interval:
@@ -63,12 +64,12 @@ class HippocampalManager:
         self._reflect_and_consolidate(messages, force=False)
         return 0
 
-    def force_run(self, messages: list[dict]) -> None:
+    def force_run(self, messages: list[BaseMessage]) -> None:
         if self._reflexion is None:
             return
         self._reflect_and_consolidate(messages, force=True)
 
-    def _reflect_and_consolidate(self, messages: list[dict], force: bool = False) -> None:
+    def _reflect_and_consolidate(self, messages: list[BaseMessage], force: bool = False) -> None:
         if self._reflexion is None:
             return
         try:
@@ -162,7 +163,7 @@ class HippocampalManager:
         self._memory.short_term.mark_consolidated()
         logger.info("Hippocampal: consolidated %d turns, %d topics", len(unconsolidated), len(topics))
 
-    def run_session(self, messages: list[dict], memory: MemoryManagerProtocol | None = None) -> None:
+    def run_session(self, messages: list[BaseMessage], memory: MemoryManagerProtocol | None = None) -> None:
         if self._reflexion is None:
             return
         if len(messages) < 2:

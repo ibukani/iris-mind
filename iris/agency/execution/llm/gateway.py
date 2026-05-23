@@ -17,6 +17,7 @@ from iris.llm.prompt import Personality
 from iris.memory.long_term.stores import AgentsMdStore
 from iris.memory.manager import MemoryManager
 from iris.memory.persona_profile import PersonaProfile
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 
 class LLMGateway:
@@ -53,7 +54,7 @@ class LLMGateway:
 
     async def chat(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[BaseMessage],
         tools: list[dict[str, Any]] | None = None,
         on_token: Callable[[str], None] | None = None,
         interrupt_token: InterruptToken | None = None,
@@ -61,7 +62,7 @@ class LLMGateway:
         model_role: str = "default",
         max_tokens: int | None = None,
         priority: int = 0,
-    ) -> dict[str, Any]:
+    ) -> AIMessage:
         response_style = ""
         if self._prompt_builder._limbic:
             response_style = self._prompt_builder._limbic.generate_response_style()
@@ -73,7 +74,7 @@ class LLMGateway:
         self._last_system_prompt = system_prompt
         self._last_call_model_role = model_role
 
-        msgs: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}, *messages]
+        msgs: list[BaseMessage] = [SystemMessage(content=system_prompt), *messages]
 
         return await self._llm.chat(
             messages=msgs,
@@ -88,7 +89,7 @@ class LLMGateway:
 
     async def chat_short(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[BaseMessage],
         plan: dict[str, Any],
         model_role: str = "default",
         max_tokens: int | None = None,
@@ -110,10 +111,10 @@ class LLMGateway:
             session_roles_summary=self._session_roles_summary,
         )
 
-        msgs: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+        msgs: list[BaseMessage] = [SystemMessage(content=system_prompt)]
         if messages and content:
             msgs.extend(messages)
-        msgs.append({"role": "user", "content": content if content else "..."})
+        msgs.append(HumanMessage(content=content if content else "..."))
 
         temperature = plan.get("temperature", 0.5)
         max_tok = max_tokens or 80
@@ -128,7 +129,7 @@ class LLMGateway:
                 interrupt_token=interrupt_token,
                 priority=priority,
             )
-            text = str((resp.get("message", {}) or {}).get("content", "")).strip()
+            text = str(resp.content).strip() if isinstance(resp.content, str) else ""
         except Exception as e:
             logger.debug("Short generation failed: %s", e)
 
@@ -149,7 +150,7 @@ class LLMGateway:
         self,
         model_role: str,
         system_prompt: str,
-        messages: list[dict],
+        messages: list[BaseMessage],
         tools: list[dict] | None,
         response: str,
         tool_iterations: list[dict] | None = None,
@@ -159,10 +160,10 @@ class LLMGateway:
             return
 
         model_name = self._model_config.get_model(model_role)
-        history_msgs = [m for m in messages if m.get("role") != "system"]
+        history_msgs = [m for m in messages if not isinstance(m, SystemMessage)]
         tc = {
             "system": dc.count_tokens(system_prompt),
-            "history": dc.count_tokens(" ".join(m.get("content", "") or "" for m in history_msgs)),
+            "history": dc.count_tokens(" ".join(str(m.content) for m in history_msgs)),
             "tools": dc.count_tokens(str(tools)) if tools else 0,
             "response": dc.count_tokens(response),
         }
@@ -174,7 +175,7 @@ class LLMGateway:
                 timestamp=datetime.datetime.now(),
                 model_name=model_name,
                 system_prompt=system_prompt,
-                messages=history_msgs,
+                messages=[{"role": m.type, "content": m.content} for m in history_msgs],
                 tools=tools,
                 response=response,
                 token_counts=tc,

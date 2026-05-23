@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any
+from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage
 
 from loguru import logger
 
@@ -31,9 +32,9 @@ def estimate_tokens(text: str, tokenizer_mgr: TokenizerManager | None = None) ->
     return int(len(text) * 1.3)
 
 
-def estimate_messages_tokens(messages: list[dict[str, Any]], tokenizer_mgr: TokenizerManager | None = None) -> int:
+def estimate_messages_tokens(messages: list[BaseMessage], tokenizer_mgr: TokenizerManager | None = None) -> int:
     """メッセージ履歴全体の合計トークン数を概算する。"""
-    return sum(estimate_tokens(m.get("content", ""), tokenizer_mgr) for m in messages)
+    return sum(estimate_tokens(str(m.content), tokenizer_mgr) for m in messages)
 
 
 class LLMContextWindowManager:
@@ -75,7 +76,7 @@ class LLMContextWindowManager:
 
     def check_and_summarize(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[BaseMessage],
         context_window: int,
         threshold: float = 0.85,
         preserve_last: int = 6,
@@ -109,7 +110,7 @@ class LLMContextWindowManager:
 
         return self._compact(messages, preserve_last)
 
-    def _compact(self, messages: list[dict[str, Any]], preserve_last: int = 6) -> str:
+    def _compact(self, messages: list[BaseMessage], preserve_last: int = 6) -> str:
         """指定メッセージを切り出し、古いメッセージを要約して圧縮を実行する。"""
         summary = self.summarize(messages[:-preserve_last])
         self._summary = summary
@@ -120,17 +121,16 @@ class LLMContextWindowManager:
         )
         return summary
 
-    def summarize(self, messages: list[dict[str, Any]]) -> str:
+    def summarize(self, messages: list[BaseMessage]) -> str:
         """指定されたメッセージリストをLLMを使って1つの要約テキストにまとめる。"""
         if self._llm is None or not messages:
             return self._summary
 
-        # 過去のセッションサマリーを検出し、新規メッセージと分ける
         previous_summary_from_msg = ""
         new_messages = []
         for m in messages:
-            role = m.get("role", "?")
-            content = str(m.get("content", ""))
+            role = getattr(m, "type", "?")
+            content = str(m.content)
             if role == "system" and content.startswith("## Session Summary"):
                 previous_summary_from_msg = content.replace("## Session Summary\n", "", 1).strip()
             else:
@@ -141,8 +141,8 @@ class LLMContextWindowManager:
         # 新規メッセージをフォーマット（長いメッセージは適宜切り詰め）
         formatted_turns = []
         for m in new_messages:
-            role = m.get("role", "?")
-            content = str(m.get("content", ""))
+            role = getattr(m, "type", "?")
+            content = str(m.content)
             if len(content) > 1000:
                 content = content[:1000] + "... (省略)"
             formatted_turns.append(f"{role}: {content}")
@@ -160,8 +160,8 @@ class LLMContextWindowManager:
             resp = asyncio.run(
                 self._llm.chat(
                     messages=[
-                        {"role": "system", "content": _COMPACT_PROMPT},
-                        {"role": "user", "content": user_prompt},
+                        SystemMessage(content=_COMPACT_PROMPT),
+                        HumanMessage(content=user_prompt),
                     ],
                     model=self._compact_model,
                     temperature=0.3,
@@ -169,12 +169,12 @@ class LLMContextWindowManager:
                     num_ctx=4096,
                 )
             )
-            content = resp.get("message", {}).get("content", "")
+            content = getattr(resp, "content", "")
             return str(content).strip()
         except Exception as e:
             logger.exception("Summarization failed: %s", e)
             return self._summary
 
-    def compact(self, messages: list[dict[str, Any]]) -> str:
+    def compact(self, messages: list[BaseMessage]) -> str:
         """会話履歴全体の圧縮を外部から強制実行する。"""
         return self._compact(messages)

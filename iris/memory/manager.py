@@ -55,6 +55,15 @@ class MemoryManagerProtocol(Protocol):
     def goals(self) -> GoalStore: ...
 
 
+def _safe_count(store: Any | None) -> int:
+    """ストアの全エントリ数を安全に取得する。読み取り失敗は0扱い。"""
+    if store is None:
+        return 0
+    with suppress(Exception):
+        return len(store.load_all())
+    return 0
+
+
 class MemoryManager:
     """記憶マネージャー — 各記憶種別の管理クラスへのディスパッチャ。
 
@@ -108,17 +117,8 @@ class MemoryManager:
             event_bus.subscribe("ClientSessionEvent", self._on_client_session_event)
 
     def get_state(self) -> dict:
-        episodic_count = 0
-        semantic_count = 0
-        if self.long_term is not None:
-            ep = self.long_term.episodic
-            if ep is not None:
-                with suppress(Exception):
-                    episodic_count = len(ep.load_all())
-            sm = self.long_term.semantic
-            if sm is not None:
-                with suppress(Exception):
-                    semantic_count = len(sm.load_all())
+        episodic_count = _safe_count(self.long_term.episodic) if self.long_term else 0
+        semantic_count = _safe_count(self.long_term.semantic) if self.long_term else 0
         return {
             "episodic": episodic_count,
             "semantic": semantic_count,
@@ -145,30 +145,9 @@ class MemoryManager:
     def _on_timer_tick(self, event: TimerTick) -> None:
         if self._event_bus is None:
             return
-        with self._pending_lock:
-            pending = dict(self._pending_input)
-            self._pending_input.clear()
-
+        pending = self._flush_pending_input()
         if pending:
-            for session_id, content in pending.items():
-                self._event_bus.publish(
-                    InputReady(
-                        timestamp=None,
-                        source="memory",
-                        session_id=session_id,
-                        content=content,
-                        context={},
-                    )
-                )
-                self._event_bus.publish(
-                    InterruptEvent(
-                        timestamp=None,
-                        source="memory",
-                        session_id=session_id,
-                    )
-                )
             return
-
         if self._proactive_config is None:
             return
         self._event_bus.publish(
@@ -180,6 +159,34 @@ class MemoryManager:
                 context={"from_timer": True},
             )
         )
+
+    def _flush_pending_input(self) -> dict[str, str]:
+        bus = self._event_bus
+        if bus is None:
+            return {}
+        with self._pending_lock:
+            pending = dict(self._pending_input)
+            self._pending_input.clear()
+        if not pending:
+            return {}
+        for session_id, content in pending.items():
+            bus.publish(
+                InputReady(
+                    timestamp=None,
+                    source="memory",
+                    session_id=session_id,
+                    content=content,
+                    context={},
+                )
+            )
+            bus.publish(
+                InterruptEvent(
+                    timestamp=None,
+                    source="memory",
+                    session_id=session_id,
+                )
+            )
+        return pending
 
     def _on_client_session_event(self, event: ClientSessionEvent) -> None:
         if event.action != "connected":
@@ -249,11 +256,10 @@ class MemoryManager:
         if stream == "sensory":
             result = self.sensory.retrieve()
             return [result] if result else []
+        n = filters.get("n", 5) if isinstance(filters.get("n"), int) else 5
         if stream == "short_term":
-            n = filters.get("n", 5) if isinstance(filters.get("n"), int) else 5
             return self.short_term.get_recent_turns(n)
         if stream == "episodic":
-            n = filters.get("n", 5) if isinstance(filters.get("n"), int) else 5
             return self.long_term.get_episodic_recent(n)
         return []
 

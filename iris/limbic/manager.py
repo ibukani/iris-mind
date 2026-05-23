@@ -44,6 +44,14 @@ class BigFiveProvider(Protocol):
     def get_scores(self) -> dict[str, float]: ...
 
 
+class _PADVector(Protocol):
+    """余弦類似度計算のためのPAD3次元ベクトル共通インターフェース。"""
+
+    valence: float
+    arousal: float
+    dominance: float
+
+
 class LimbicManager:
     """大脳辺縁系: 感情状態管理、EventBus 連携、他層との統合を行うクラス。
 
@@ -72,11 +80,7 @@ class LimbicManager:
         self._last_delta: EmotionDelta | None = None
         self._inertia: float = 1.0
 
-        if event_bus is not None:
-            event_bus.subscribe("MessageEvent", self._on_message_event)
-            event_bus.subscribe("TimerTick", self._on_timer_tick)
-            event_bus.subscribe("MonitorFeedback", self._on_monitor_event)
-            event_bus.subscribe("ProactiveResultEvent", self._on_proactive_result)
+        self._subscribe_to_events()
 
     def set_persona_profile(self, persona_profile: PersonaProfile) -> None:
         self._persona_profile = persona_profile
@@ -88,6 +92,14 @@ class LimbicManager:
         if self._psychometric_state is not None:
             self._psychometric_state.flush()
             logger.debug("Limbic: psychometric state flushed")
+
+    def _subscribe_to_events(self) -> None:
+        if self._event_bus is None:
+            return
+        self._event_bus.subscribe("MessageEvent", self._on_message_event)
+        self._event_bus.subscribe("TimerTick", self._on_timer_tick)
+        self._event_bus.subscribe("MonitorFeedback", self._on_monitor_event)
+        self._event_bus.subscribe("ProactiveResultEvent", self._on_proactive_result)
 
     @staticmethod
     def _has_affect_label(text: str) -> bool:
@@ -143,7 +155,7 @@ class LimbicManager:
             self._trigger_emotional_reflection(delta)
 
     def _apply_interference(self, delta: EmotionDelta) -> EmotionDelta:
-        alignment = _emotion_alignment(delta, self._emotion)
+        alignment = _cosine_similarity(delta, self._emotion)
         interference = 1.0 + 0.3 * alignment
         return delta.scale(interference)
 
@@ -153,7 +165,7 @@ class LimbicManager:
             self._last_delta = delta
             return delta
 
-        with_last = _delta_alignment(delta, self._last_delta)
+        with_last = _cosine_similarity(delta, self._last_delta)
         if with_last > 0.35:
             self._inertia = min(1.5, self._inertia + 0.15)
         elif with_last < -0.35:
@@ -187,13 +199,19 @@ class LimbicManager:
         affect_labeling = self._has_affect_label(event.content)
         self._apply_emotion_change(delta, "message", affect_labeling=affect_labeling)
 
-        # 感情伝染: ユーザの感情に15%同調（認知評価とは別経路）
-        contagion = self._amygdala.contagion(event.content)
-        if contagion.valence != 0:
-            self._emotion.apply(contagion)
-            self._publish_snapshot("contagion")
+        self._process_contagion(event.content)
+        self._encode_emotional_memory(event.content)
 
-        self._emotional_memory.encode(event.content[:200], self._emotion)
+    def _process_contagion(self, content: str) -> None:
+        """ユーザの感情に15%同調（認知評価とは別経路）。"""
+        contagion = self._amygdala.contagion(content)
+        if contagion.valence == 0:
+            return
+        self._emotion.apply(contagion)
+        self._publish_snapshot("contagion")
+
+    def _encode_emotional_memory(self, content: str) -> None:
+        self._emotional_memory.encode(content[:200], self._emotion)
         logger.debug("Limbic: input evaluated -> emotion={}", self._emotion.to_dict())
 
     def _on_timer_tick(self, event: TimerTick) -> None:
@@ -296,21 +314,29 @@ class LimbicManager:
     def retrieve_memories_by_affect(self, max_results: int = 5) -> list[dict[str, Any]]:
         """現在の感情状態に近い感情タグ付き記憶を検索する。"""
         entries = self._emotional_memory.retrieve_by_affect(self.current_emotion(), max_results)
-        # 想起誘発感情: 検索した記憶のvalenceが現在の感情に微量波及
-        if entries:
-            vals = []
-            for e in entries:
-                meta = e.get("metadata", {})
-                emotion = meta.get("emotion") if isinstance(meta, dict) else {}
-                v = float(emotion.get("valence", 0)) if isinstance(emotion, dict) else 0
-                vals.append(v)
-            if vals:
-                avg_v = sum(vals) / len(vals)
-                if abs(avg_v) > 0.3:
-                    ripple = EmotionDelta(valence=avg_v * 0.05, arousal=0, dominance=0)
-                    self._emotion.apply(ripple)
-                    self._publish_snapshot("retrieval_induced")
+        self._apply_retrieval_ripple(entries)
         return entries
+
+    def _apply_retrieval_ripple(self, entries: list[dict[str, Any]]) -> None:
+        if not entries:
+            return
+        vals: list[float] = []
+        for e in entries:
+            meta = e.get("metadata", {})
+            if not isinstance(meta, dict):
+                continue
+            emotion = meta.get("emotion", {})
+            if not isinstance(emotion, dict):
+                continue
+            vals.append(float(emotion.get("valence", 0)))
+        if not vals:
+            return
+        avg_v = sum(vals) / len(vals)
+        if abs(avg_v) <= 0.3:
+            return
+        ripple = EmotionDelta(valence=avg_v * 0.05, arousal=0, dominance=0)
+        self._emotion.apply(ripple)
+        self._publish_snapshot("retrieval_induced")
 
     def get_report(self) -> dict[str, Any]:
         """感情状態のレポートを返す（デバッグ/ステータス用）。"""
@@ -359,24 +385,16 @@ class LimbicManager:
             self._big_five_provider = None
 
 
-def _emotion_alignment(delta: EmotionDelta, state: EmotionState) -> float:
-    """deltaと現在の感情状態の方向一致度 [-1, 1]。
+def _cosine_similarity(a: _PADVector, b: _PADVector) -> float:
+    """2つのPADベクトル間の余弦類似度 [-1, 1]。
 
     量子認知: 干渉項の位相角に対応。一致→建設的干渉、不一致→破壊的干渉。
+    EmotionDelta同士でも EmotionDelta×EmotionState でも計算できるよう
+    _PADVector Protocol で統一。
     """
-    d_mag = math.sqrt(delta.valence**2 + delta.arousal**2 + delta.dominance**2)
-    s_mag = math.sqrt(state.valence**2 + state.arousal**2 + state.dominance**2)
-    if d_mag * s_mag == 0:
-        return 0.0
-    dot = delta.valence * state.valence + delta.arousal * state.arousal + delta.dominance * state.dominance
-    return dot / (d_mag * s_mag)
-
-
-def _delta_alignment(a: EmotionDelta, b: EmotionDelta) -> float:
-    """2つのdelta間の方向一致度 [-1, 1]。慣性用。"""
+    dot = a.valence * b.valence + a.arousal * b.arousal + a.dominance * b.dominance
     a_mag = math.sqrt(a.valence**2 + a.arousal**2 + a.dominance**2)
     b_mag = math.sqrt(b.valence**2 + b.arousal**2 + b.dominance**2)
     if a_mag * b_mag == 0:
         return 0.0
-    dot = a.valence * b.valence + a.arousal * b.arousal + a.dominance * b.dominance
     return dot / (a_mag * b_mag)

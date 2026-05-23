@@ -75,6 +75,8 @@ class LLMBridge:
                 model=entry.name,
                 base_url=base_url,
                 keep_alive=entry.keep_alive or "10m",
+                client_kwargs={"timeout": 120},
+                async_client_kwargs={"timeout": 120},
                 options=options,  # type: ignore[call-arg]
             )
 

@@ -150,6 +150,7 @@ class EmotionalMemory:
 
         all_entries = self._episodic_store.get_recent(self._episodic_store.max_entries)
         scored: list[tuple[float, dict[str, Any]]] = []
+        target_sign = 1 if target.valence >= 0 else -1
 
         for entry in all_entries:
             meta = entry.get("metadata")
@@ -161,6 +162,12 @@ class EmotionalMemory:
             distance = _pad_distance_combined(target, meta_emotion)
             intensity = meta.get("intensity", 0)
             score = intensity / max(distance, 0.01)
+
+            # 気分一致効果: 現在の感情と記憶のvalence方向が一致→促進
+            meta_valence = float(meta_emotion.get("valence", 0))
+            if (meta_valence >= 0) == (target_sign >= 0):
+                score *= 1.2
+
             scored.append((score, entry))
 
         scored.sort(key=lambda x: x[0], reverse=True)

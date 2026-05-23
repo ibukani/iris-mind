@@ -51,6 +51,8 @@ class LimbicManager:
         self._psychometric_state: PsychometricState | None = None
 
         self._last_decay_time: float = time.time()
+        self._last_delta: EmotionDelta | None = None
+        self._inertia: float = 1.0
 
         if event_bus is not None:
             event_bus.subscribe("MessageEvent", self._on_message_event)
@@ -93,6 +95,20 @@ class LimbicManager:
         interference = 1.0 + 0.3 * alignment
         adjusted = adjusted.scale(interference)
 
+        # 感情慣性: 直近のdelta方向と一致→促進、反転→減衰
+        if self._last_delta is not None:
+            with_last = _delta_alignment(adjusted, self._last_delta)
+            if with_last > 0.35:
+                self._inertia = min(1.5, self._inertia + 0.15)
+            elif with_last < -0.35:
+                self._inertia = max(0.3, self._inertia - 0.25)
+            else:
+                self._inertia += (1.0 - self._inertia) * 0.2
+            adjusted = adjusted.scale(self._inertia)
+        else:
+            self._inertia = 1.0
+        self._last_delta = adjusted
+
         self._emotion.apply(adjusted)
         self._publish_snapshot(trigger)
 
@@ -112,6 +128,8 @@ class LimbicManager:
             self._decay()
             if self._persona_profile is not None:
                 self._persona_profile.persona_data.decay_interests()
+        if event.tick_count % 12 == 0:
+            self._apply_drive_effects()
 
     def _decay(self) -> None:
         now = time.time()
@@ -158,6 +176,20 @@ class LimbicManager:
         )
 
     # === 公開インターフェース ===
+
+    def _apply_drive_effects(self) -> None:
+        needs = self._drive.get_dominant_needs()
+        delta = EmotionDelta()
+        for name, value in needs:
+            if name == "curiosity" and value > 0.7:
+                delta.valence -= 0.03 * (value - 0.7) * 2
+                delta.arousal += 0.02 * (value - 0.7)
+            elif name == "social_need" and value > 0.7:
+                delta.valence -= 0.02 * (value - 0.7) * 2
+            elif name == "maintenance" and value > 0.8:
+                delta.dominance -= 0.02 * (value - 0.8) * 2
+        if delta.valence != 0 or delta.arousal != 0 or delta.dominance != 0:
+            self._apply_emotion_change(delta, "drive_coupling")
 
     def get_state(self) -> dict:
         e = self.current_emotion()
@@ -249,3 +281,13 @@ def _emotion_alignment(delta: EmotionDelta, state: EmotionState) -> float:
         return 0.0
     dot = delta.valence * state.valence + delta.arousal * state.arousal + delta.dominance * state.dominance
     return dot / (d_mag * s_mag)
+
+
+def _delta_alignment(a: EmotionDelta, b: EmotionDelta) -> float:
+    """2つのdelta間の方向一致度 [-1, 1]。慣性用。"""
+    a_mag = math.sqrt(a.valence**2 + a.arousal**2 + a.dominance**2)
+    b_mag = math.sqrt(b.valence**2 + b.arousal**2 + b.dominance**2)
+    if a_mag * b_mag == 0:
+        return 0.0
+    dot = a.valence * b.valence + a.arousal * b.arousal + a.dominance * b.dominance
+    return dot / (a_mag * b_mag)

@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import math
 import re
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import numpy as np
 
 from loguru import logger
 
@@ -142,6 +146,81 @@ class _KeywordCounter:
         return sum(1 for w in self._words if w in text)
 
 
+class _EmbeddingScorer:
+    """ONNX MiniLM 埋め込みによる感情スコアラー。
+
+    Phase 2: キーワードでは捉えにくい意味的な感情を検出。
+    8つの基本感情アンカーとのコサイン類似度でPAD deltaを出力。
+    """
+
+    def __init__(self) -> None:
+        self._ef: Any = None
+        self._anchors: dict[str, tuple[np.ndarray, EmotionDelta]] | None = None
+
+    def _lazy_init(self) -> bool:
+        if self._anchors is not None:
+            return True
+        try:
+            from chromadb.utils.embedding_functions import ONNXMiniLM_L6_V2
+            import numpy as np
+
+            self._ef = ONNXMiniLM_L6_V2()
+            anchor_texts = {
+                "joy": "joyful happy delighted cheerful",
+                "sadness": "sad depressed miserable gloomy",
+                "anger": "angry furious irritated frustrated",
+                "fear": "scared anxious fearful worried",
+                "surprise": "surprised amazed shocked astonished",
+                "trust": "trusting grateful appreciative thankful",
+                "anticipation": "anticipating expecting looking forward",
+                "calmness": "calm relaxed peaceful serene",
+            }
+            self._anchors = {}
+            for name, text in anchor_texts.items():
+                vec = self._ef([text])[0]
+                norm = np.linalg.norm(vec)
+                if norm > 0:
+                    vec = vec / norm
+                self._anchors[name] = (vec, BASIC_EMOTIONS[name])
+            return True
+        except Exception:
+            logger.warning("EmbeddingScorer: ONNX model unavailable, falling back to keyword-only")
+            self._anchors = {}
+            return False
+
+    def score(self, text: str) -> EmotionDelta:
+        if not self._lazy_init() or not self._anchors:
+            return EmotionDelta()
+
+        import numpy as np
+
+        vec = self._ef([text])[0]
+        norm = np.linalg.norm(vec)
+        if norm == 0:
+            return EmotionDelta()
+        vec = vec / norm
+
+        total_v = total_a = total_d = 0.0
+        total_w = 0.0
+        for anchor, delta in self._anchors.values():
+            sim = float(np.dot(vec, anchor))
+            if sim > 0.25:
+                w = sim - 0.25
+                total_v += delta.valence * w
+                total_a += delta.arousal * w
+                total_d += delta.dominance * w
+                total_w += w
+
+        if total_w == 0:
+            return EmotionDelta()
+
+        return EmotionDelta(
+            valence=max(-0.8, min(0.8, total_v / total_w * 0.8)),
+            arousal=max(0.0, min(0.8, ((total_a / total_w + 1) / 2) * 0.8)),
+            dominance=max(-0.6, min(0.6, total_d / total_w * 0.6)),
+        )
+
+
 class Amygdala:
     """扁桃体: 入力テキストの感情評価。
 
@@ -149,21 +228,48 @@ class Amygdala:
     Phase 2 (将来): LLMアシスト（高精度）
 
     脳科学:
-       扁桃体は感覚入力の感情的な意義を素早く評価する。
-       特に恐怖・報酬・社会的刺激に対して即時的な価値判断を行う。
+        扁桃体は感覚入力の感情的な意義を素早く評価する。
+        特に恐怖・報酬・社会的刺激に対して即時的な価値判断を行う。
     """
 
-    def __init__(self) -> None:
+    def __init__(self, embedding_scorer: _EmbeddingScorer | None = None) -> None:
         self._positive = _KeywordCounter(_POSITIVE_WORDS)
         self._negative = _KeywordCounter(_NEGATIVE_WORDS)
         self._high_arousal = _KeywordCounter(_HIGH_AROUSAL_MARKERS)
         self._appreciation = _KeywordCounter(_APPRECIATION_WORDS)
         self._criticism = _KeywordCounter(_CRITICISM_WORDS)
+        self._embedding_scorer = embedding_scorer or _EmbeddingScorer()
 
     def assess(self, text: str) -> EmotionDelta:
         if not text:
             return EmotionDelta()
 
+        # 1. キーワード評価（常時実行、高速）
+        keyword_delta = self._keyword_assess(text)
+
+        # 2. 埋め込み評価（ONNX、意味ベース）
+        embedding_delta = self._embedding_scorer.score(text)
+
+        # 3. ハイブリッド統合
+        kw_energy = abs(keyword_delta.valence) + keyword_delta.arousal
+        emb_energy = abs(embedding_delta.valence) + embedding_delta.arousal
+
+        if emb_energy == 0:
+            return keyword_delta
+        if kw_energy == 0:
+            return embedding_delta
+
+        kw_w = kw_energy / (kw_energy + emb_energy + 0.01)
+        emb_w = 1.0 - kw_w
+
+        return EmotionDelta(
+            valence=keyword_delta.valence * kw_w + embedding_delta.valence * emb_w,
+            arousal=keyword_delta.arousal * kw_w + embedding_delta.arousal * emb_w,
+            dominance=keyword_delta.dominance * kw_w + embedding_delta.dominance * emb_w,
+            conflict=max(keyword_delta.conflict, embedding_delta.conflict),
+        )
+
+    def _keyword_assess(self, text: str) -> EmotionDelta:
         lower = text.lower()
         n_pos = self._positive.count(lower)
         n_neg = self._negative.count(lower)
@@ -190,10 +296,8 @@ class Amygdala:
 
         dominance_score = self._estimate_dominance(text)
 
-        # 葛藤度: 正と負のキーワードが同時に存在するほど高い
         total_valence = n_pos + n_neg
         conflict = 2.0 * min(n_pos, n_neg) / max(total_valence, 1) if total_valence > 0 else 0.0
-        # 賞賛と批判の同時存在も葛藤に加算
         if n_appreciation > 0 and n_criticism > 0:
             conflict = max(conflict, 0.5)
 

@@ -168,7 +168,7 @@ class LLMGateway:
             situation=situation,
         )
 
-        msgs: list[BaseMessage] = [*system_msgs]
+        msgs: list[BaseMessage] = []
         if messages and content:
             msgs.extend(messages)
         msgs.append(HumanMessage(content=content if content else "..."))

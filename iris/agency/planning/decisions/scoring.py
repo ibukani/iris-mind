@@ -157,6 +157,12 @@ class ProactiveScoring:
         if last_time == 0:
             return 0.0
         elapsed = now - last_time
+
+        if last_user_activity > 0:
+            elapsed_since_user = now - last_user_activity
+            if elapsed_since_user < 60.0:
+                return 1.0
+
         if elapsed < self._config.min_interval_sec:
             return 0.0
         ratio = (elapsed - self._config.min_interval_sec) / (

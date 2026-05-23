@@ -166,6 +166,7 @@ class ProactiveConfig(BaseModel):
 
     check_interval_sec: float = 5.0
     min_interval_sec: float = 30.0
+    active_min_interval_sec: float = 2.0
     max_interval_sec: float = 300.0
     trigger_weights: dict[str, float] = Field(default_factory=_default_trigger_weights)
     speak_threshold: float = 0.60

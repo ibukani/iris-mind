@@ -80,7 +80,17 @@ class KernelProcess:
                     )
                 )
                 tick_count[0] += 1
-                threading.Event().wait(interval)
+                sleep_time = interval
+                if ctx.agency is not None:
+                    import time
+
+                    now = time.time()
+                    last_active = ctx.agency.inhibition.last_user_activity
+                    if last_active > 0:
+                        elapsed = now - last_active
+                        if elapsed < 60.0:
+                            sleep_time = getattr(self._config.proactive, "active_min_interval_sec", 2.0)
+                threading.Event().wait(sleep_time)
 
         self._timer_thread = threading.Thread(target=_loop, daemon=True, name="kernel-timer")
         self._timer_thread.start()

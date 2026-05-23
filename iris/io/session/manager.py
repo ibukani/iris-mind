@@ -128,15 +128,19 @@ class SessionManager:
         return ControlMessage(msg_type="auth_success", session_id=session_id)
 
     def route_message(self, msg: Message) -> None:
-        # Get target session(s) under lock, then send outside lock
         session: SessionInfo | None = None
         targets: list[SessionInfo] = []
+        skipped: list[str] = []
 
         with self._lock:
             if msg.session_id:
                 s = self._sessions.get(msg.session_id)
                 if s is not None and s.state == SessionState.ACTIVE and s.conn is not None:
                     session = s
+                elif s is None:
+                    logger.debug("route_message: session {} not found", msg.session_id)
+                else:
+                    logger.debug("route_message: session {} not active or no conn", msg.session_id)
             elif msg.target_role == "*":
                 targets = [s for s in self._sessions.values() if s.state == SessionState.ACTIVE and s.conn is not None]
             else:
@@ -153,8 +157,14 @@ class SessionManager:
         permission = _MSG_PERMISSION_MAP.get(msg.msg_type)
         for s in targets:
             if permission is not None and permission not in s.permissions:
+                skipped.append(s.session_id)
                 continue
             self._send_to_session(s, msg)
+
+        if skipped:
+            logger.debug("route_message: skipped {} session(s) due to permission: {}", len(skipped), skipped)
+        if not targets:
+            logger.debug("route_message: no active sessions to route msg_type={}", msg.msg_type)
 
     def route_command_output(self, session_id: str, msg: CommandOutput) -> None:
         with self._lock:

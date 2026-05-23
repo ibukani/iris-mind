@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from iris.agency.inhibition import GateVerdict, InhibitionController
     from iris.agency.planning.context_hint_builder import ContextHintBuilder
-    from iris.agency.planning.decisions.scoring import ProactiveScoring
+    from iris.agency.planning.decisions.scoring import ProactiveScoring, ScoreContext
     from iris.event.event_types import InputReady
     from iris.kernel.config import ProactiveConfig
     from iris.limbic.manager import LimbicManager
@@ -53,7 +53,7 @@ class ProactiveJudge:
             if ignore_detected and self._limbic:
                 self._limbic.apply_stimulus("ignored", self._inhibition.consecutive_ignores)
 
-        total, scores = self._scoring.compute(
+        total, scores = self._scoring.compute(ScoreContext(
             now=time.time(),
             last_proactive_time=self._inhibition.last_proactive_time,
             last_user_activity=self._inhibition.last_user_activity,
@@ -63,7 +63,7 @@ class ProactiveJudge:
             content=event.content,
             context=context,
             ignore_count=self._inhibition.consecutive_ignores,
-        )
+        ))
         if total < self._cfg.speak_threshold:
             logger.debug("Below speak_threshold: total={:.3f} < threshold={:.2f}", total, self._cfg.speak_threshold)
             return None

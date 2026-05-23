@@ -81,11 +81,19 @@ class _JsonlStore:
     def _replace_atomic(self, src: Path) -> None:
         src.replace(self.path)
 
+    def _add_entry(self, entry: dict, max_entries: int) -> None:
+        with self._lock:
+            entries = self.load_all()
+            entries.append(entry)
+            if len(entries) > max_entries:
+                entries = entries[-max_entries:]
+            self._write_file(entries)
+
 
 class AgentsMdStore:
     """構造記憶。.iris/config/iris_profile.mdの読み込み（書き込み禁止）。"""
 
-    def __init__(self, path: str = ".iris/config/iris_profile.md", max_bytes: int = 2048, cache_ttl: float = 10.0):
+    def __init__(self, path: str = ".iris/config/iris_profile.md", max_bytes: int = 2048):
         self.path = Path(path)
         self.max_bytes = max_bytes
         self._cache: str | None = None
@@ -147,16 +155,11 @@ class EpisodicStore(_JsonlStore):
         logger.info("EpisodicStore: cleared")
 
     def add(self, summary: str, metadata: dict | None = None) -> None:
-        with self._lock:
-            entries = self.load_all()
-            entry: dict[str, object] = {"summary": summary, "timestamp": datetime.now(UTC).isoformat()}
-            if metadata:
-                entry["metadata"] = metadata
-            entries.append(entry)
-            if len(entries) > self.max_entries:
-                entries = entries[-self.max_entries :]
-            self._write_file(entries)
-            logger.info("EpisodicStore: added entry, total={}", len(entries))
+        entry: dict[str, object] = {"summary": summary, "timestamp": datetime.now(UTC).isoformat()}
+        if metadata:
+            entry["metadata"] = metadata
+        self._add_entry(entry, self.max_entries)
+        logger.info("EpisodicStore: added entry")
 
     def get_recent(self, n: int = 5) -> list[dict]:
         entries = self.load_all()
@@ -178,14 +181,15 @@ class SemanticStore(_JsonlStore):
         self._synced_count = 0
 
     def sync(self) -> None:
-        entries = self.load_all()
-        unsynced = len(entries) - self._synced_count
-        if unsynced <= 0:
-            return
-        for e in entries[self._synced_count :]:
-            self.vector.add(e)
-        self._synced_count = len(entries)
-        logger.info("SemanticStore: synced {} entries to vector store", unsynced)
+        with self._lock:
+            entries = self.load_all()
+            unsynced = len(entries) - self._synced_count
+            if unsynced <= 0:
+                return
+            for e in entries[self._synced_count :]:
+                self.vector.add(e)
+            self._synced_count = len(entries)
+            logger.info("SemanticStore: synced {} entries to vector store", unsynced)
 
     def add(self, entry: dict) -> None:
         with self._lock:
@@ -198,11 +202,11 @@ class SemanticStore(_JsonlStore):
             entry.setdefault("type", "lesson")
             entries.append(entry)
             if len(entries) > self.max_entries:
-                entries = entries[-self.max_entries :]
+                entries = entries[-self.max_entries:]
             self._write_file(entries)
             self.vector.add(entry)
             self._synced_count = len(entries)
-            logger.info("SemanticStore: added entry, total={} type={}", len(entries), entry.get("type", "unknown"))
+            logger.info("SemanticStore: added entry, type={}", entry.get("type", "unknown"))
 
     def clear(self) -> None:
         if self.path.exists():

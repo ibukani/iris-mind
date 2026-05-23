@@ -51,11 +51,6 @@ class LLMGateway:
         )
 
     @staticmethod
-    def _system_messages_str(msgs: list[BaseMessage]) -> str:
-        """已废弃: build() は単一 SystemMessage を返すため不要だが互換性のため維持"""
-        return "\n\n".join(str(m.content) for m in msgs if isinstance(m, SystemMessage))
-
-    @staticmethod
     def _build_full_prompt(msgs: list[BaseMessage]) -> str:
         lines: list[str] = []
         for m in msgs:
@@ -66,6 +61,19 @@ class LLMGateway:
 
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
+
+    def _build_system_messages(
+        self,
+        context_hint: str,
+        response_style: str = "",
+        situation: str = "",
+    ) -> list[BaseMessage]:
+        return self._prompt_builder.build(
+            context_hint=context_hint,
+            response_style=response_style,
+            session_roles_summary=self._session_roles_summary,
+            situation=situation,
+        )
 
     async def _call_llm(
         self,
@@ -80,7 +88,7 @@ class LLMGateway:
         priority: int = 0,
     ) -> AIMessage:
         msgs: list[BaseMessage] = [*system_msgs, *messages]
-        self._last_system_prompt = self._system_messages_str(system_msgs)
+        self._last_system_prompt = str(system_msgs[0].content) if system_msgs else ""
         self._last_call_model_role = model_role
 
         resp = await self._llm.chat(
@@ -115,10 +123,8 @@ class LLMGateway:
         priority: int = 0,
     ) -> AIMessage:
         response_style = self._limbic.generate_response_style() if self._limbic else ""
-        system_msgs = self._prompt_builder.build(
-            context_hint=context_hint,
-            response_style=response_style,
-            session_roles_summary=self._session_roles_summary,
+        system_msgs = self._build_system_messages(
+            context_hint=context_hint, response_style=response_style,
         )
         return await self._call_llm(
             system_msgs,
@@ -146,11 +152,8 @@ class LLMGateway:
 
         response_style = self._limbic.generate_response_style() if self._limbic and situation == "proactive" else ""
 
-        system_msgs = self._prompt_builder.build(
-            context_hint=context_hint,
-            response_style=response_style,
-            session_roles_summary=self._session_roles_summary,
-            situation=situation,
+        system_msgs = self._build_system_messages(
+            context_hint=context_hint, response_style=response_style, situation=situation,
         )
 
         msgs: list[BaseMessage] = [*system_msgs]

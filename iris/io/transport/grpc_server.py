@@ -203,7 +203,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
         except asyncio.CancelledError:
             pass
         except Exception:
-            logger.exception("GrpcServer error in receive loop for session %s", session_id)
+            logger.exception("GrpcServer error in receive loop for session {}", session_id)
 
     def _parse_message_metadata(self, metadata_proto: Any) -> dict[str, Any]:
         """gRPCのメッセージメタデータをPythonの辞書に変換・パースする。"""

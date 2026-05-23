@@ -73,7 +73,7 @@ class InhibitionController:
         self._state.consecutive_ignores = 0
         self._state.confirmation_mode = False
         logger.debug(
-            "User activity recorded: last_user_activity=%.3f, ignores reset",
+            "User activity recorded: last_user_activity={:.3f}, ignores reset",
             self._state.last_user_activity,
         )
 
@@ -89,7 +89,7 @@ class InhibitionController:
                 logger.info("Entered confirmation mode (ignores={})", s.consecutive_ignores)
             elif s.consecutive_ignores >= 3:
                 logger.info(
-                    "Extended ignore detected: %d consecutive ignores",
+                    "Extended ignore detected: {} consecutive ignores",
                     s.consecutive_ignores,
                 )
             logger.debug("Ignore detected: consecutive_ignores={}", s.consecutive_ignores)
@@ -201,7 +201,7 @@ class InhibitionController:
         s.cooldown_until = time.time() + extra
         s.negative_mood_score = min(1.0, s.negative_mood_score + degree * 0.15)
         logger.info(
-            "Frequency penalty applied: degree=%d cooldown=%.0fs mood=%.2f",
+            "Frequency penalty applied: degree={} cooldown={:.0f}s mood={:.2f}",
             degree,
             extra,
             s.negative_mood_score,

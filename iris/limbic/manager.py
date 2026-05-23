@@ -239,7 +239,7 @@ class LimbicManager:
 
         self._apply_emotion_change(delta, "proactive_result")
         logger.debug(
-            "Limbic: proactive result applied -> success=%s emotion=%s", event.success, self._emotion.to_dict()
+            "Limbic: proactive result applied -> success={} emotion={}", event.success, self._emotion.to_dict()
         )
 
     # === 公開インターフェース ===
@@ -327,7 +327,7 @@ class LimbicManager:
             delta.valence -= decay
             delta.dominance -= max(0.05, 0.12 - intensity * 0.015)
             logger.debug(
-                "Limbic: ignore stimulus intensity=%d delta=(v=%.3f, d=%.3f)",
+                "Limbic: ignore stimulus intensity={} delta=(v={:.3f}, d={:.3f})",
                 intensity,
                 delta.valence,
                 delta.dominance,

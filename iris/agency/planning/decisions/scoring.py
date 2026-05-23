@@ -81,8 +81,8 @@ class ProactiveScoring:
             total = max(total, self._config.speak_threshold + 0.1)
 
         logger.debug(
-            "Scores: time=%.3f mem=%.3f ctx=%.3f mood=%.3f sensory=%.3f stm=%.3f urg=%.3f "
-            "ignore=%d total=%.3f (threshold=%.2f)",
+            "Scores: time={:.3f} mem={:.3f} ctx={:.3f} mood={:.3f} sensory={:.3f} stm={:.3f} urg={:.3f} "
+            "ignore={} total={:.3f} (threshold={:.2f})",
             time_score,
             memory_score,
             context_score,

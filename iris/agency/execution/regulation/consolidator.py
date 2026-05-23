@@ -114,7 +114,7 @@ class Consolidator:
             return
 
         logger.info(
-            "Consolidator: idle reflection triggered. elapsed=%.1fs >= timeout=%.1fs, msg_count=%d",
+            "Consolidator: idle reflection triggered. elapsed={:.1f}s >= timeout={:.1f}s, msg_count={}",
             elapsed,
             timeout,
             self._msg_count_since_reflect,

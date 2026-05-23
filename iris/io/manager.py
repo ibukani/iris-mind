@@ -63,7 +63,7 @@ class IOManager:
             direction=Direction(event.direction) if event.direction else Direction.RESPONSE,
         )
         logger.debug(
-            "IOManager: message event session=%s type=%s state=%s target_role=%s content_len=%d",
+            "IOManager: message event session={} type={} state={} target_role={} content_len={}",
             event.session_id,
             event.msg_type,
             event.state,
@@ -83,7 +83,7 @@ class IOManager:
 
         truncated = msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
         logger.debug(
-            "IOManager: message session=%s dir=%s type=%s source=%s target=%s content=%.200s",
+            "IOManager: message session={} dir={} type={} source={} target={} content={:.200}",
             msg.session_id,
             msg.direction.value,
             msg.msg_type,

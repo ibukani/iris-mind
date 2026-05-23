@@ -25,7 +25,7 @@ class ResponsePlanStrategy:
         abbreviated = gate.suppressed or gate.score < self._cfg.abbreviated_threshold
         context_hint = self._context_builder.build_user_context_hint(content)
         logger.debug(
-            "Plan built: abbreviated=%s suppressed=%s gate_score=%.3f", abbreviated, gate.suppressed, gate.score
+            "Plan built: abbreviated={} suppressed={} gate_score={:.3f}", abbreviated, gate.suppressed, gate.score
         )
 
         is_task = is_task_content(content)

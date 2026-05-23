@@ -137,7 +137,7 @@ class MemoryManager:
         with self._pending_lock:
             self._pending_input[event.session_id] = event.content
         logger.debug(
-            "MemoryManager: input pending session=%s content=%.80s",
+            "MemoryManager: input pending session={} content={:.80}",
             event.session_id,
             event.content,
         )
@@ -188,7 +188,7 @@ class MemoryManager:
             return
 
         logger.info(
-            "MemoryManager: client connected session=%s role=%s offline_duration=%s",
+            "MemoryManager: client connected session={} role={} offline_duration={}",
             event.session_id,
             event.role,
             event.offline_duration,

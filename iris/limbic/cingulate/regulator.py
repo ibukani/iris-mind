@@ -104,8 +104,8 @@ class AnteriorCingulateCortex:
             self._efficacy_history.pop(0)
 
         logger.debug(
-            "ACC modulate: delta=(%.3f, %.3f, %.3f) current=(%.3f, %.3f, %.3f) "
-            "factor=%.3f -> adjusted=(%.3f, %.3f, %.3f)",
+            "ACC modulate: delta=({:.3f}, {:.3f}, {:.3f}) current=({:.3f}, {:.3f}, {:.3f}) "
+            "factor={:.3f} -> adjusted=({:.3f}, {:.3f}, {:.3f})",
             delta.valence,
             delta.arousal,
             delta.dominance,

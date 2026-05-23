@@ -81,13 +81,13 @@ class HippocampalManager:
             self._update_big_five(result)
             self._consolidate_short_term(force=force)
             logger.info(
-                "Quick reflect stored: speech_style=%s traits=%s reaction=%s",
+                "Quick reflect stored: speech_style={} traits={} reaction={}",
                 bool(result.get("speech_style")),
                 bool(result.get("expressed_traits")),
                 bool(result.get("user_reaction")),
             )
         except Exception as e:
-            logger.exception("Quick reflect failed: %s", e)
+            logger.exception("Quick reflect failed: {}", e)
 
     def _store_reflection_to_memory(self, result: dict[str, Any]) -> None:
         if self._memory is None:
@@ -207,7 +207,7 @@ class HippocampalManager:
 
             logger.info("Session reflect completed")
         except Exception as e:
-            logger.exception("Session reflect failed: %s", e)
+            logger.exception("Session reflect failed: {}", e)
 
     async def _process_proactive_result_async(self, topic: str, content: str) -> dict[str, Any]:
         if self._reflexion is None:
@@ -215,7 +215,7 @@ class HippocampalManager:
         try:
             return await self._reflexion.evaluate_proactive_result(topic, content)
         except Exception as e:
-            logger.exception("Failed to evaluate proactive result with LLM: %s", e)
+            logger.exception("Failed to evaluate proactive result with LLM: {}", e)
             return {"satisfaction": 0.0, "summary": "評価に失敗しました。", "next_interests": []}
 
     def process_proactive_result(self, topic: str, success: bool, content: str) -> None:

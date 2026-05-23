@@ -93,13 +93,13 @@ class FlowExecutor:
 
         if should_skip_proactive(plan, self._monitor):
             logger.info(
-                "FlowExecutor: suppressed proactive (talkative=%d), skipping LLM",
+                "FlowExecutor: suppressed proactive (talkative={}), skipping LLM",
                 plan.get("talkative_degree", 0),
             )
             return
 
         logger.info(
-            "FlowExecutor: executing plan session=%s abbreviated=%s",
+            "FlowExecutor: executing plan session={} abbreviated={}",
             plan.get("session_id"),
             plan.get("abbreviated"),
         )

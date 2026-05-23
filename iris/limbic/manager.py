@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import random
 import time
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
@@ -227,6 +228,17 @@ class LimbicManager:
         now = time.time()
         old = self._emotion.to_dict()
         self._emotion.decay(now - self._last_decay_time)
+
+        scores = self._get_big_five_scores()
+        neuroticism = scores.get("neuroticism", 50) / 100.0 if scores else 0.5
+        noise_scale = 0.01 + 0.02 * neuroticism
+        noise = EmotionDelta(
+            valence=random.uniform(-noise_scale, noise_scale),
+            arousal=random.uniform(-noise_scale, noise_scale),
+            dominance=random.uniform(-noise_scale, noise_scale)
+        )
+        self._emotion.apply(noise)
+
         self._last_decay_time = now
         if self._emotion.to_dict() != old:
             self._publish_snapshot("decay")

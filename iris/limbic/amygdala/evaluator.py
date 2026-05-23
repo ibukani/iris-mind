@@ -114,7 +114,7 @@ class Amygdala:
         特に恐怖・報酬・社会的刺激に対して即時的な価値判断を行う。
     """
 
-    def __init__(self, embedding_scorer: _EmbeddingScorer | None = None) -> None:
+    def __init__(self, embedding_scorer: _EmbeddingScorer | None = None, sensitivity: float = 1.5) -> None:
         self._positive = _KeywordCounter(POSITIVE_WORDS)
         self._negative = _KeywordCounter(NEGATIVE_WORDS)
         self._high_arousal = _KeywordCounter(HIGH_AROUSAL_MARKERS)
@@ -122,6 +122,7 @@ class Amygdala:
         self._criticism = _KeywordCounter(CRITICISM_WORDS)
         self._embedding_scorer = embedding_scorer or _EmbeddingScorer()
         self._cumulative_keywords: int = 0  # 扁桃体stateful適応用: 累積キーワード数
+        self._sensitivity = sensitivity
 
     def assess(self, text: str) -> EmotionDelta:
         if not text:
@@ -146,9 +147,9 @@ class Amygdala:
         emb_w = 1.0 - kw_w
 
         return EmotionDelta(
-            valence=keyword_delta.valence * kw_w + embedding_delta.valence * emb_w,
-            arousal=keyword_delta.arousal * kw_w + embedding_delta.arousal * emb_w,
-            dominance=keyword_delta.dominance * kw_w + embedding_delta.dominance * emb_w,
+            valence=(keyword_delta.valence * kw_w + embedding_delta.valence * emb_w) * self._sensitivity,
+            arousal=(keyword_delta.arousal * kw_w + embedding_delta.arousal * emb_w) * self._sensitivity,
+            dominance=(keyword_delta.dominance * kw_w + embedding_delta.dominance * emb_w) * self._sensitivity,
             conflict=max(keyword_delta.conflict, embedding_delta.conflict),
         )
 
@@ -179,9 +180,9 @@ class Amygdala:
         )
 
         return EmotionDelta(
-            valence=max(-1.0, min(1.0, valence_raw)) * 0.8,
-            arousal=max(0.0, min(1.0, arousal_raw)) * 0.8,
-            dominance=max(-1.0, min(1.0, dominance_score)) * 0.6,
+            valence=max(-1.0, min(1.0, valence_raw)) * 0.95,
+            arousal=max(0.0, min(1.0, arousal_raw)) * 0.95,
+            dominance=max(-1.0, min(1.0, dominance_score)) * 0.8,
             conflict=min(1.0, conflict),
         )
 

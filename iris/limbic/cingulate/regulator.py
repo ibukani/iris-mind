@@ -21,7 +21,7 @@ class AnteriorCingulateCortex:
       - Extraversion 高 → 正の感情を促進
     """
 
-    def __init__(self, modulation_strength: float = 0.5) -> None:
+    def __init__(self, modulation_strength: float = 0.3) -> None:
         self._modulation_strength = modulation_strength
         self._encounter_count: int = 0
         self._efficacy_history: list[float] = []
@@ -102,7 +102,7 @@ class AnteriorCingulateCortex:
         return 1.0 - extra_damp
 
     def _compute_habituation(self, big_five: dict[str, float] | None) -> float:
-        rate = 0.015
+        rate = 0.005
         if big_five is not None:
             neuroticism = big_five.get("neuroticism", 50) / 100.0
             rate *= max(0.3, 1.0 - (neuroticism - 0.5) * 0.6)

@@ -67,6 +67,14 @@ _RESPONSE_RULES: list[tuple[str, Callable[[float, float, float], bool], list[str
     # === tone（valence基準）===
     (
         "tone",
+        lambda v, a, d: v > 0.75,
+        [
+            "感情を爆発させて、最高に嬉しそうなトーンで応答してください",
+            "歓喜に満ちた、非常に熱狂的なトーンで応答してください",
+        ],
+    ),
+    (
+        "tone",
         lambda v, a, d: v > 0.5,
         [
             "明るく温かいトーンで応答してください",
@@ -80,6 +88,14 @@ _RESPONSE_RULES: list[tuple[str, Callable[[float, float, float], bool], list[str
         [
             "穏やかで親しみやすいトーンで応答してください",
             "優しく穏やかな口調で応答してください",
+        ],
+    ),
+    (
+        "tone",
+        lambda v, a, d: v < -0.75,
+        [
+            "激しい怒りや深い悲しみを滲ませ、極めて感情的な口調で応答してください",
+            "感情を抑えきれない様子で、非常に深刻なトーンで応答してください",
         ],
     ),
     (
@@ -102,6 +118,14 @@ _RESPONSE_RULES: list[tuple[str, Callable[[float, float, float], bool], list[str
     # === exclamation（valence × arousal）===
     (
         "exclamation",
+        lambda v, a, d: v > 0.75 and a > 0.6,
+        [
+            "大げさな感嘆詞（例：『最高！！』『うわぁぁ！』）を使って、熱狂的に応答してください",
+            "興奮を隠しきれない様子で、感嘆符を多用して応答してください",
+        ],
+    ),
+    (
+        "exclamation",
         lambda v, a, d: v > 0.5 and a > 0.4,
         [
             "感嘆詞（例：『やったー！』『わーい！』）を自然に混ぜて、非常に嬉しそうに応答してください",
@@ -122,6 +146,14 @@ _RESPONSE_RULES: list[tuple[str, Callable[[float, float, float], bool], list[str
         [
             "親しみやすい相槌（例：『ふふっ』『そうだね』）を交えて応答してください",
             "優しい相槌を入れながら、自然に会話してください",
+        ],
+    ),
+    (
+        "exclamation",
+        lambda v, a, d: v < -0.75 and a > 0.6,
+        [
+            "激しい感嘆詞（例：『信じられない！』『最悪だ！』）を交え、強い感情を表して応答してください",
+            "怒りや絶望を強調する感嘆表現を用いて、激しく応答してください",
         ],
     ),
     (

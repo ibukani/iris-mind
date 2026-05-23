@@ -47,15 +47,12 @@ class SystemPromptBuilder:
         self._limbic = limbic
         self._governance_principles = governance_principles
 
-    @property
-    def limbic(self) -> LimbicManager | None:
-        return self._limbic
-
     def build(
         self,
         context_hint: str = "",
         response_style: str = "",
         session_roles_summary: str = "",
+        situation: str = "",
     ) -> str:
         pctx = self._load_personality_context()
 
@@ -76,35 +73,31 @@ class SystemPromptBuilder:
             if mood_desc:
                 prompt += f"\n\n## 現在の気分\n{mood_desc}"
 
-        if pctx.current_state and "{speech_style}" not in self._personality.system_prompt_template:
+        if pctx.current_state:
             prompt += f"\n\n{pctx.current_state}"
 
         if context_hint:
             prompt += f"\n\n## 会話コンテキスト\n{context_hint}"
 
-        return prompt
-
-    def build_full(
-        self,
-        context_hint: str,
-        response_style: str,
-        situation: str,
-        session_roles_summary: str = "",
-    ) -> str:
-        prompt = self.build(
-            context_hint=context_hint,
-            response_style=response_style,
-            session_roles_summary=session_roles_summary,
-        )
         if situation in _SITUATION_INSTRUCTIONS:
             prompt += "\n\n" + _SITUATION_INSTRUCTIONS[situation]
+
         return prompt
 
     def _load_personality_context(self) -> _PersonalityContext:
         agents_md = self._agents_md_store.load() if self._agents_md_store else ""
-        current_state = self._persona_profile.get_current_state_section() if self._persona_profile else ""
         speech_style = self._persona_profile.get_speech_style() if self._persona_profile else ""
         personality_traits = self._persona_profile.get_traits() if self._persona_profile else ""
+
+        current_state = ""
+        if self._persona_profile:
+            has_speech_in_tpl = "{speech_style}" in self._personality.system_prompt_template
+            if has_speech_in_tpl:
+                if personality_traits:
+                    current_state = "## 現在の状態\n" + personality_traits
+            else:
+                current_state = self._persona_profile.get_current_state_section()
+
         user_prefs = self._build_user_preferences_section()
         return _PersonalityContext(
             agents_md=agents_md,

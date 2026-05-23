@@ -35,6 +35,7 @@ class LLMGateway:
     ) -> None:
         self._llm = llm
         self._model_config = model_config
+        self._limbic = limbic
         self._capability_checker = capability_checker
         self._debug_capture = debug_capture
         self._session_roles_summary: str = ""
@@ -63,10 +64,7 @@ class LLMGateway:
         max_tokens: int | None = None,
         priority: int = 0,
     ) -> AIMessage:
-        response_style = ""
-        limbic = self._prompt_builder.limbic
-        if limbic:
-            response_style = limbic.generate_response_style()
+        response_style = self._limbic.generate_response_style() if self._limbic else ""
         system_prompt = self._prompt_builder.build(
             context_hint=context_hint,
             response_style=response_style,
@@ -77,7 +75,7 @@ class LLMGateway:
 
         msgs: list[BaseMessage] = [SystemMessage(content=system_prompt), *messages]
 
-        return await self._llm.chat(
+        resp = await self._llm.chat(
             messages=msgs,
             model=self._model_config.get_model(model_role),
             temperature=self._model_config.get_effective_temperature(model_role),
@@ -87,6 +85,16 @@ class LLMGateway:
             interrupt_token=interrupt_token,
             priority=priority,
         )
+
+        self._capture_debug(
+            model_role=model_role,
+            system_prompt=system_prompt,
+            messages=msgs,
+            tools=tools,
+            response=str(resp.content) if isinstance(resp.content, str) else "",
+        )
+
+        return resp
 
     async def chat_short(
         self,
@@ -101,16 +109,13 @@ class LLMGateway:
         situation = plan.get("situation", "")
         content = plan.get("content", "")
 
-        response_style = ""
-        limbic = self._prompt_builder.limbic
-        if situation == "proactive" and limbic:
-            response_style = limbic.generate_response_style()
+        response_style = self._limbic.generate_response_style() if self._limbic and situation == "proactive" else ""
 
-        system_prompt = self._prompt_builder.build_full(
+        system_prompt = self._prompt_builder.build(
             context_hint=context_hint,
             response_style=response_style,
-            situation=situation,
             session_roles_summary=self._session_roles_summary,
+            situation=situation,
         )
 
         msgs: list[BaseMessage] = [SystemMessage(content=system_prompt)]

@@ -13,11 +13,9 @@ from .context import LLMContextWindowManager, estimate_messages_tokens, estimate
 from .interrupt_token import InterruptToken
 from .priority_lock import PriorityLock
 from .prompt import Personality
-from .protocol import LLMProvider, ProviderFactory
 from .providers import (
     GoogleProvider,
     OllamaProvider,
-    OpenAICompatibleProvider,
     OpenRouterProvider,
     get_provider_class,
 )
@@ -29,13 +27,10 @@ __all__ = [
     "InterruptToken",
     "LLMBridge",
     "LLMContextWindowManager",
-    "LLMProvider",
     "OllamaProvider",
-    "OpenAICompatibleProvider",
     "OpenRouterProvider",
     "Personality",
     "PriorityLock",
-    "ProviderFactory",
     "TokenizerManager",
     "estimate_messages_tokens",
     "estimate_tokens",

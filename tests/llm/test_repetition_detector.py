@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import asyncio
+from unittest.mock import AsyncMock
+
+from langchain_core.messages import AIMessage, AIMessageChunk
+
 from iris.kernel.config import ModelConfig
 from iris.llm.bridge import LLMBridge
 from iris.llm.interrupt_token import InterruptToken
@@ -54,25 +59,16 @@ def test_trim_repetition_single() -> None:
     bridge = _make_bridge()
     text = "応答します。" + "あ" * 10
     expected = "応答します。あああ… [繰り返し検知により中断]"
-    # "応答します。あ" * 10 = 応答します。ああああああああああ
-    # match_single = re.search(r"((.)\2{9,})", text)
-    # マッチするのは "あ" * 10
-    # トリミング後は "あ" * 3
     assert bridge._trim_repetition(text) == expected
 
 
 def test_chat_non_streaming_repetition() -> None:
     bridge = _make_bridge()
-    from unittest.mock import AsyncMock
 
     mock_provider = AsyncMock()
-    # 返り値に繰り返しを含める
-    mock_provider.chat.return_value = {
-        "message": {"role": "assistant", "content": "同じことを言います。全部、全部、全部、全部、"}
-    }
+    # ainvoke の戻り値に繰り返しを含めた AIMessage を設定
+    mock_provider.ainvoke.return_value = AIMessage(content="同じことを言います。全部、全部、全部、全部、")
     bridge._providers = {next(iter(bridge._providers)): mock_provider}
-
-    import asyncio
 
     resp = asyncio.run(bridge.chat(messages=[{"role": "user", "content": "hello"}]))
     content = resp["message"]["content"]
@@ -81,34 +77,20 @@ def test_chat_non_streaming_repetition() -> None:
 
 def test_chat_streaming_repetition() -> None:
     bridge = _make_bridge()
-    from unittest.mock import AsyncMock
 
     mock_provider = AsyncMock()
 
-    # ストリーミングのモック動作
-    # chatを呼んだときに on_token を順次呼び出し、最終的な返り値を返す
-    async def mock_chat(*args, **kwargs) -> dict:
-        on_token = kwargs.get("on_token")
-        interrupt_token = kwargs.get("interrupt_token")
-
+    # astream の非同期ジェネレータモック
+    async def mock_astream(*args, **kwargs):
         tokens = ["これは", "ストリーム", "です。", "全部、", "全部、", "全部、", "全部、", "全部、"]
-        content_parts = []
         for t in tokens:
-            if interrupt_token and getattr(interrupt_token, "is_cancelled", False):
-                break
-            content_parts.append(t)
-            if on_token:
-                on_token(t)
+            yield AIMessageChunk(content=t)
 
-        return {"message": {"role": "assistant", "content": "".join(content_parts)}}
-
-    mock_provider.chat.side_effect = mock_chat
+    mock_provider.astream = mock_astream
     bridge._providers = {next(iter(bridge._providers)): mock_provider}
 
     captured_tokens = []
     interrupt_token = InterruptToken()
-
-    import asyncio
 
     resp = asyncio.run(
         bridge.chat(

@@ -4,7 +4,7 @@ import re
 
 from loguru import logger
 
-from iris.llm.protocol import LLMProvider
+from iris.llm.bridge import LLMBridge
 
 _QUESTION_RE = re.compile(r"[？?]$")
 
@@ -15,7 +15,7 @@ class ReadinessEvaluator:
         min_fragments: int = 2,
         question_detect: bool = True,
         confidence_threshold: float = 0.6,
-        llm: LLMProvider | None = None,
+        llm: LLMBridge | None = None,
         llm_model_role: str = "fast",
     ) -> None:
         self._min_fragments = min_fragments

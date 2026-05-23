@@ -1,7 +1,6 @@
-"""
-LLM Bridge — マルチプロバイダルーター。
+"""LLM Bridge — マルチプロバイダルーター。
 
-ModelConfig に基づき複数の LLMProvider インスタンスを管理し、
+ModelConfig に基づき複数の LangChain ChatModel インスタンスを管理し、
 モデル名に応じて適切なプロバイダへルーティングする。
 """
 
@@ -12,20 +11,24 @@ import re
 from typing import Any
 
 from cachetools import LRUCache, cached
+import httpx
+from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import AIMessage, convert_to_messages
+from langchain_ollama import ChatOllama
+from langchain_openai import ChatOpenAI
 from loguru import logger
+from pydantic import SecretStr
 
 from iris.kernel.config import ModelConfig, ModelEntry
 
 from .priority_lock import PriorityLock
-from .protocol import LLMProvider
-from .providers import get_provider_class
 
 
 class LLMBridge:
     """複数の LLM プロバイダへのアクセスを抽象化し、ルーティングを行うブリッジクラス。"""
 
     def __init__(self, model_config: ModelConfig) -> None:
-        self._providers: dict[str, LLMProvider] = {}
+        self._providers: dict[str, BaseChatModel] = {}
         self._model_map: dict[str, str] = {}
         self._entries: dict[str, ModelEntry] = {}
         self._model_config = model_config
@@ -35,7 +38,7 @@ class LLMBridge:
             base_url, api_key = self._resolve_connection(entry)
             key = f"{entry.provider}|{base_url}|{api_key}"
             if key not in self._providers:
-                self._providers[key] = self._create_provider(entry, base_url, api_key)
+                self._providers[key] = self._create_chat_model(entry, base_url, api_key)
             self._model_map[entry.name] = key
             self._entries[entry.name] = entry
 
@@ -51,27 +54,46 @@ class LLMBridge:
             base_url = base_url or "https://generativelanguage.googleapis.com/v1beta/openai"
         return base_url, api_key
 
-    def _create_provider(self, entry: ModelEntry, base_url: str, api_key: str) -> LLMProvider:
-        """モデル設定に基づいてプロバイダインスタンスを生成する。"""
-        provider_cls = get_provider_class(entry.provider)
+    def _create_chat_model(self, entry: ModelEntry, base_url: str, api_key: str) -> BaseChatModel:
+        """モデル設定に基づいて LangChain ChatModel インスタンスを生成する。"""
+        if entry.provider == "ollama":
+            options: dict[str, Any] = {
+                "num_ctx": entry.num_ctx if entry.num_ctx is not None else self._model_config.default_num_ctx,
+                "num_gpu": entry.num_gpu if entry.num_gpu is not None else self._model_config.default_num_gpu,
+            }
+            if entry.presence_penalty is not None:
+                options["presence_penalty"] = entry.presence_penalty
+            if entry.frequency_penalty is not None:
+                options["frequency_penalty"] = entry.frequency_penalty
+            if entry.repeat_penalty is not None:
+                options["repeat_penalty"] = entry.repeat_penalty
+            return ChatOllama(
+                model=entry.name,
+                base_url=base_url,
+                keep_alive=entry.keep_alive or "10m",
+                options=options,  # type: ignore[call-arg]
+            )
+
+        # openrouter / google 等の OpenAI 互換プロバイダ
+        extra_headers = {}
         if entry.provider == "openrouter":
-            return provider_cls(
-                api_key=api_key,
-                default_model=entry.name,
-                base_url=base_url,
-            )
-        if entry.provider == "google":
-            return provider_cls(
-                api_key=api_key,
-                default_model=entry.name,
-                base_url=base_url,
-            )
-        return provider_cls(
-            model_name=entry.name,
+            extra_headers = {
+                "HTTP-Referer": "https://github.com/ibukani/iris-kernel",
+                "X-Title": "Iris Kernel",
+            }
+
+        model_kwargs: dict[str, Any] = {}
+        if entry.presence_penalty is not None:
+            model_kwargs["presence_penalty"] = entry.presence_penalty
+        if entry.frequency_penalty is not None:
+            model_kwargs["frequency_penalty"] = entry.frequency_penalty
+
+        return ChatOpenAI(
+            model=entry.name,
+            api_key=SecretStr(api_key),
             base_url=base_url,
-            num_gpu=entry.num_gpu if entry.num_gpu is not None else self._model_config.default_num_gpu,
-            num_ctx=entry.num_ctx if entry.num_ctx is not None else self._model_config.default_num_ctx,
-            keep_alive=entry.keep_alive or "10m",
+            default_headers=extra_headers if extra_headers else None,
+            model_kwargs=model_kwargs,
         )
 
     async def chat(
@@ -87,24 +109,35 @@ class LLMBridge:
         priority: int = 0,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """指定されたモデルでチャット生成を実行する。
-
-        適切なプロバイダへルーティングし、設定されたコンテキスト上限やGPU数などのパラメータを適用する。
-        """
+        """指定されたモデルでチャット生成を実行する。"""
         model_name = model or self._get_default_model()
         provider = self._resolve_provider(model_name)
         entry = self._entries.get(model_name)
-        if entry is not None:
-            if entry.num_ctx is not None:
-                kwargs.setdefault("num_ctx", entry.num_ctx)
-            if entry.num_gpu is not None:
-                kwargs.setdefault("num_gpu", entry.num_gpu)
-            if entry.presence_penalty is not None:
-                kwargs.setdefault("presence_penalty", entry.presence_penalty)
-            if entry.frequency_penalty is not None:
-                kwargs.setdefault("frequency_penalty", entry.frequency_penalty)
-            if entry.repeat_penalty is not None:
-                kwargs.setdefault("repeat_penalty", entry.repeat_penalty)
+
+        call_kwargs: dict[str, Any] = {}
+        if isinstance(provider, ChatOllama):
+            options = {
+                "temperature": temperature,
+                "num_predict": max_tokens,
+            }
+            if entry and entry.repeat_penalty is not None:
+                options["repeat_penalty"] = entry.repeat_penalty
+            for k in ["presence_penalty", "frequency_penalty", "repeat_penalty"]:
+                if k in kwargs:
+                    options[k] = kwargs.pop(k)
+            call_kwargs["options"] = options
+        else:
+            call_kwargs["temperature"] = temperature
+            call_kwargs["max_tokens"] = max_tokens
+            for k in ["presence_penalty", "frequency_penalty"]:
+                if k in kwargs:
+                    call_kwargs[k] = kwargs.pop(k)
+
+        call_kwargs.update(kwargs)
+
+        active_model: Any = provider
+        if tools:
+            active_model = provider.bind_tools(tools)
 
         # Resolve interrupt token
         local_interrupt_token = interrupt_token
@@ -129,27 +162,65 @@ class LLMBridge:
             if on_token:
                 on_token(token)
 
+        langchain_messages = convert_to_messages(messages)
+
         async with self._priority_lock(priority):
-            resp = await provider.chat(
-                messages=messages,
-                model=model_name,
-                enable_thinking=enable_thinking,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                tools=tools,
-                on_token=wrapped_on_token if on_token else None,
-                interrupt_token=local_interrupt_token,
-                **kwargs,
-            )
+            if on_token:
+                full_message = None
+                try:
+                    async for chunk in active_model.astream(langchain_messages, **call_kwargs):
+                        if getattr(local_interrupt_token, "is_cancelled", False):
+                            break
+                        if full_message is None:
+                            full_message = chunk
+                        else:
+                            full_message += chunk
+
+                        if chunk.content and isinstance(chunk.content, str):
+                            wrapped_on_token(chunk.content)
+                except Exception as e:
+                    logger.error("LangChain stream error: {}", e)
+                    raise
+
+                if full_message is None:
+                    full_message = AIMessage(content="")
+
+                resp_message: Any = full_message
+            else:
+                resp_message = await active_model.ainvoke(langchain_messages, **call_kwargs)
+
+        content = resp_message.content
+        if isinstance(content, list):
+            content_str = ""
+            for c in content:
+                if isinstance(c, dict) and "text" in c:
+                    content_str += c["text"]
+                elif isinstance(c, str):
+                    content_str += c
+            content = content_str
 
         # Check and trim repetition in final response
-        if "message" in resp and resp["message"].get("content"):
-            content = resp["message"]["content"]
-            if self._detect_repetition(content):
-                resp["message"]["content"] = self._trim_repetition(content)
-                logger.warning("Trimmed repetition loop from final LLM response.")
+        if content and self._detect_repetition(content):
+            content = self._trim_repetition(content)
+            logger.warning("Trimmed repetition loop from final LLM response.")
 
-        return resp
+        assistant_msg: dict[str, Any] = {
+            "role": "assistant",
+            "content": content or "",
+        }
+
+        # tool_calls の変換
+        if hasattr(resp_message, "tool_calls") and resp_message.tool_calls:
+            assistant_msg["tool_calls"] = [
+                {
+                    "id": tc.get("id") or "",
+                    "type": "function",
+                    "function": {"name": tc["name"], "arguments": tc["args"]},
+                }
+                for tc in resp_message.tool_calls
+            ]
+
+        return {"message": assistant_msg}
 
     def _detect_repetition(self, text: str) -> bool:
         """Detect abnormal repetitions in generated text."""
@@ -190,11 +261,18 @@ class LLMBridge:
     def is_available(self) -> bool:
         """登録されているプロバイダのいずれかが利用可能かどうかを判定する。"""
         any_ok = False
-        for name, provider in self._providers.items():
-            ok = provider.is_available()
-            if not ok:
-                logger.warning("Provider %s is unavailable", name)
-            any_ok = any_ok or ok
+        for provider in self._providers.values():
+            if isinstance(provider, ChatOllama):
+                try:
+                    url = getattr(provider, "base_url", None)
+                    if url:
+                        r = httpx.get(url, timeout=1.0)
+                        if r.status_code == 200:
+                            any_ok = True
+                except Exception:
+                    logger.warning("Ollama provider at {} is unavailable", getattr(provider, "base_url", None))
+            elif isinstance(provider, ChatOpenAI) and provider.openai_api_key:
+                any_ok = True
         return any_ok
 
     def unload_model(self, model_name: str | None = None) -> None:
@@ -202,10 +280,21 @@ class LLMBridge:
         if model_name:
             key = self._model_map.get(model_name)
             if key:
-                self._providers[key].unload_model(model_name)
+                provider = self._providers[key]
+                if isinstance(provider, ChatOllama):
+                    from ollama import Client
 
-    @cached(cache=LRUCache(maxsize=32))
-    def _resolve_provider(self, model_name: str) -> LLMProvider:
+                    try:
+                        Client(host=getattr(provider, "base_url", None)).chat(
+                            model=model_name,
+                            messages=[{"role": "user", "content": ""}],
+                            keep_alive=0,
+                        )
+                    except Exception as e:
+                        logger.warning("Failed to unload ollama model {}: {}", model_name, e)
+
+    @cached(cache=LRUCache(maxsize=32))  # type: ignore[arg-type]
+    def _resolve_provider(self, model_name: str) -> BaseChatModel:
         """モデル名から対応するプロバイダインスタンスを解決する。"""
         key = self._model_map.get(model_name)
         if key:
@@ -214,9 +303,9 @@ class LLMBridge:
         logger.warning("Model %r not found in provider map, using first provider", model_name)
         return first
 
-    @cached(cache=LRUCache(maxsize=1))
+    @cached(cache=LRUCache(maxsize=1))  # type: ignore[arg-type]
     def _get_default_model(self) -> str:
-        """デフォルトのモデル名を取得する（マップの最初のモデル）。"""
+        """デフォルト of モデル名を取得する（マップの最初のモデル）。"""
         for name in self._model_map:
             return name
         return ""

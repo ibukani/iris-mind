@@ -7,7 +7,7 @@ from loguru import logger
 import orjson
 from pydantic import BaseModel, Field
 
-from iris.llm.protocol import LLMProvider
+from iris.llm.bridge import LLMBridge
 
 
 class QuickReflexionResult(BaseModel):
@@ -58,7 +58,7 @@ class ReflexionProtocol(Protocol):
 
 
 class Reflexion:
-    def __init__(self, llm: LLMProvider, compact_model: str | None = None) -> None:
+    def __init__(self, llm: LLMBridge, compact_model: str | None = None) -> None:
         self._llm = llm
         self._compact_model = compact_model
 

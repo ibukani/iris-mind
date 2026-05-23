@@ -5,8 +5,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from iris.io.session.manager import SessionManager
     from iris.kernel.config import Config
-    from iris.limbic.prefrontal.personality import BigFiveProfile
     from iris.limbic.manager import LimbicManager
+    from iris.limbic.prefrontal.personality import BigFiveProfile
     from iris.llm.bridge import LLMBridge
     from iris.tools.registry import ToolRegistry
 

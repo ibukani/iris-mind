@@ -4,7 +4,7 @@ from typing import Any
 
 from loguru import logger
 
-from .protocol import LLMProvider
+from .bridge import LLMBridge
 from .tokenizer import TokenizerManager
 
 _COMPACT_PROMPT = """これまでの会話要約（もしあれば）と、新規の会話履歴を統合し、最新の会話要約を更新・作成してください。
@@ -49,7 +49,7 @@ class LLMContextWindowManager:
 
     def __init__(
         self,
-        llm: LLMProvider | None = None,
+        llm: LLMBridge | None = None,
         compact_model: str | None = None,
         tokenizers: dict[str, TokenizerManager] | None = None,
         default_model_name: str | None = None,
@@ -169,7 +169,8 @@ class LLMContextWindowManager:
                     num_ctx=4096,
                 )
             )
-            return resp.get("message", {}).get("content", "").strip()
+            content = resp.get("message", {}).get("content", "")
+            return str(content).strip()
         except Exception as e:
             logger.exception("Summarization failed: %s", e)
             return self._summary

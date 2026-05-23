@@ -4,13 +4,13 @@ import asyncio
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from iris.llm.protocol import LLMProvider
+    from iris.llm.bridge import LLMBridge
 
 from loguru import logger
 
 
 class QuestionGenerator:
-    def __init__(self, llm: LLMProvider | None = None) -> None:
+    def __init__(self, llm: LLMBridge | None = None) -> None:
         self._llm = llm
 
     def generate(self, topic: str) -> str:

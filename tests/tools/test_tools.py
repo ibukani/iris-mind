@@ -1,25 +1,36 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from textwrap import dedent
 
-from iris.tools.decorator import _generate_schema, get_tool_def, register_tools, tool
+from langchain_core.tools import StructuredTool
+
+from iris.tools.decorator import get_tool_def, register_tools, tool
 from iris.tools.models import ToolDef
 from iris.tools.registry import ToolRegistry
 
 # ── ToolDef ────────────────────────────────────────────────────
 
 
-def test_tooldef_to_openai_tool() -> None:
-    td = ToolDef(
-        name="test_fn",
-        description="A test function",
-        parameters={
-            "type": "object",
-            "properties": {"x": {"type": "string"}},
-            "required": ["x"],
-        },
-        fn=lambda x: x,
+def _make_tool_def(
+    name: str = "test_fn",
+    description: str = "A test function",
+    fn: Callable = lambda x: x,
+    allowed_roles: set[str] | None = None,
+    side_effect: bool = False,
+) -> ToolDef:
+    structured = StructuredTool.from_function(func=fn, name=name, description=description)
+    return ToolDef(
+        name=name,
+        description=description,
+        tool=structured,
+        allowed_roles=allowed_roles,
+        side_effect=side_effect,
     )
+
+
+def test_tooldef_to_openai_tool() -> None:
+    td = _make_tool_def(description="A test function")
     result = td.to_openai_tool()
     assert result["type"] == "function"
     assert result["function"]["name"] == "test_fn"
@@ -28,12 +39,12 @@ def test_tooldef_to_openai_tool() -> None:
 
 
 def test_tooldef_execute() -> None:
-    td = ToolDef(name="echo", description="", parameters={}, fn=lambda msg: f"echo:{msg}")
+    td = _make_tool_def(fn=lambda msg: f"echo:{msg}")
     assert td.execute(msg="hello") == "echo:hello"
 
 
 def test_tooldef_side_effect_default() -> None:
-    td = ToolDef(name="t", description="", parameters={}, fn=lambda: "")
+    td = _make_tool_def(name="t", fn=lambda: "")
     assert td.side_effect is False
 
 
@@ -102,25 +113,19 @@ def test_tool_decorator_allowed_roles() -> None:
     assert td.allowed_roles == {"smart"}
 
 
-# ── _generate_schema ───────────────────────────────────────────
+# ── _generate_schema (replaced by StructuredTool) ──────────────
 
 
-def test_generate_schema_str_int() -> None:
+def test_structured_tool_schema_str_int() -> None:
     def fn(name: str, count: int = 1) -> str:
         return f"{name}:{count}"
 
-    schema = _generate_schema(fn)
+    structured = StructuredTool.from_function(func=fn, description="test")
+    schema = structured.get_input_jsonschema()
     assert schema["properties"]["name"]["type"] == "string"
     assert schema["properties"]["count"]["type"] == "integer"
+    # Default values may or may not appear in schema
     assert "required" not in schema or "count" not in schema["required"]
-
-
-def test_generate_schema_descriptions() -> None:
-    def fn(x: str) -> str:
-        return x
-
-    schema = _generate_schema(fn, descriptions={"x": "The input value"})
-    assert schema["properties"]["x"]["description"] == "The input value"
 
 
 # ── ToolRegistry ───────────────────────────────────────────────
@@ -128,16 +133,16 @@ def test_generate_schema_descriptions() -> None:
 
 def test_registry_register_and_get() -> None:
     r = ToolRegistry()
-    td = ToolDef(name="hello", description="", parameters={}, fn=lambda: "hi")
+    td = _make_tool_def(fn=lambda: "hi")
     r.register(td)
-    assert r.get("hello") is td
+    assert r.get("test_fn") is td
     assert r.get("missing") is None
 
 
 def test_registry_list_tools() -> None:
     r = ToolRegistry()
-    r.register(ToolDef(name="a", description="AA", parameters={}, fn=lambda: ""))
-    r.register(ToolDef(name="b", description="BB", parameters={}, fn=lambda: ""))
+    r.register(_make_tool_def(name="a", description="AA", fn=lambda: ""))
+    r.register(_make_tool_def(name="b", description="BB", fn=lambda: ""))
     tools = r.list_tools()
     assert len(tools) == 2
     names = {t["function"]["name"] for t in tools}
@@ -146,8 +151,8 @@ def test_registry_list_tools() -> None:
 
 def test_registry_list_tools_for_role() -> None:
     r = ToolRegistry()
-    r.register(ToolDef(name="all", description="", parameters={}, fn=lambda: "", allowed_roles=None))
-    r.register(ToolDef(name="smart_only", description="", parameters={}, fn=lambda: "", allowed_roles={"smart"}))
+    r.register(_make_tool_def(name="all", fn=lambda: "", allowed_roles=None))
+    r.register(_make_tool_def(name="smart_only", fn=lambda: "", allowed_roles={"smart"}))
     all_tools = r.list_tools_for_role("base")
     assert len(all_tools) == 1
     assert all_tools[0]["function"]["name"] == "all"
@@ -157,15 +162,15 @@ def test_registry_list_tools_for_role() -> None:
 
 def test_registry_execute() -> None:
     r = ToolRegistry()
-    r.register(ToolDef(name="echo", description="", parameters={}, fn=lambda msg: f"echo:{msg}"))
+    r.register(_make_tool_def(name="echo", fn=lambda msg: f"echo:{msg}"))
     assert r.execute("echo", msg="test") == "echo:test"
     assert r.execute("unknown") == "Error: tool 'unknown' not found"
 
 
 def test_registry_is_side_effect() -> None:
     r = ToolRegistry()
-    r.register(ToolDef(name="normal", description="", parameters={}, fn=lambda: ""))
-    r.register(ToolDef(name="side", description="", parameters={}, fn=lambda: "", side_effect=True))
+    r.register(_make_tool_def(name="normal", fn=lambda: "", side_effect=False))
+    r.register(_make_tool_def(name="side", fn=lambda: "", side_effect=True))
     assert r.is_side_effect("side") is True
     assert r.is_side_effect("normal") is False
     assert r.is_side_effect("unknown") is False

@@ -3,11 +3,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any, Protocol
 
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from loguru import logger
 import orjson
 from pydantic import BaseModel, Field
 
-from iris.llm.protocol import LLMProvider
+from iris.llm.bridge import LLMBridge
 
 
 class QuickReflexionResult(BaseModel):
@@ -52,115 +53,101 @@ class ReflexionProtocol(Protocol):
     テスト容易性と柔軟性を向上させるため。
     """
 
-    def reflect(self, conversation_history: list[dict]) -> dict[str, Any]: ...
-    def quick_reflect(self, conversation_slice: list[dict]) -> dict[str, Any]: ...
-    def evaluate_proactive_result(self, topic: str, content: str) -> dict[str, Any]: ...
+    async def reflect(self, conversation_history: list[BaseMessage]) -> dict[str, Any]: ...
+    async def quick_reflect(self, conversation_slice: list[BaseMessage]) -> dict[str, Any]: ...
+    async def evaluate_proactive_result(self, topic: str, content: str) -> dict[str, Any]: ...
 
 
 class Reflexion:
-    def __init__(self, llm: LLMProvider, compact_model: str | None = None) -> None:
+    def __init__(self, llm: LLMBridge, compact_model: str | None = None) -> None:
         self._llm = llm
         self._compact_model = compact_model
 
-    def evaluate_proactive_result(self, topic: str, content: str) -> dict[str, Any]:
-        schema_json = orjson.dumps(ProactiveEvaluationResult.model_json_schema()).decode("utf-8")
+    async def evaluate_proactive_result(self, topic: str, content: str) -> dict[str, Any]:
         system_prompt = (
             "You are Iris's self-reflection engine evaluating a proactive investigation.\n"
-            f"You must strictly output a valid JSON object matching this schema:\n{schema_json}\n"
-            "All string values must be in Japanese. Respond in JSON only."
+            "All string values must be in Japanese."
         )
         user_content = f"調査したトピック: {topic}\n\n調査によって得られた内容:\n{content}"
-        msgs = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_content}]
-        import asyncio
+        msgs: list[BaseMessage] = [SystemMessage(content=system_prompt), HumanMessage(content=user_content)]
 
-        resp = asyncio.run(self._llm.chat(messages=msgs, model=self._compact_model, temperature=0.3, max_tokens=400))
-        raw = resp.get("message", {}).get("content")
-        content_str = raw if isinstance(raw, str) else ""
         try:
-            result = orjson.loads(content_str.encode("utf-8"))
-            if isinstance(result, dict):
-                return dict(ProactiveEvaluationResult.model_validate(result).model_dump())
+            result = await self._llm.chat_with_structured_output(
+                schema=ProactiveEvaluationResult,
+                messages=msgs,
+                model=self._compact_model,
+                temperature=0.3,
+                max_tokens=400,
+            )
+            if result:
+                return dict(result.model_dump())
         except Exception as e:
             logger.error("Proactive evaluation validation failed: %s", e)
         return {"satisfaction": 0.0, "summary": "調査結果の評価に失敗しました。", "next_interests": []}
 
-    def reflect(self, conversation_history: list[dict]) -> dict[str, Any]:
-        schema_json = orjson.dumps(ReflexionResult.model_json_schema()).decode("utf-8")
+    async def reflect(self, conversation_history: list[BaseMessage]) -> dict[str, Any]:
         system_prompt = (
             "You are Iris's reflection engine. Analyze the conversation and extract the required fields.\n"
-            f"You must strictly output a valid JSON object matching this schema:\n{schema_json}\n"
-            "All string values must be in Japanese. Respond in JSON only."
+            "All string values must be in Japanese."
         )
 
-        raw_dict = self._chat_parse_json(
+        return await self._chat_structured(
+            schema=ReflexionResult,
             system_prompt=system_prompt,
             conversation=conversation_history,
             max_history=10,
             max_tokens=600,
-            fallback=lambda raw: {**self._empty(), "summary": raw[:100]},
+            fallback=lambda: self._empty(),
         )
-        try:
-            return dict(ReflexionResult.model_validate(raw_dict).model_dump())
-        except Exception as e:
-            logger.error("Reflexion validation failed: %s", e)
-            return self._empty()
 
-    def quick_reflect(self, conversation_slice: list[dict]) -> dict[str, Any]:
-        schema_json = orjson.dumps(QuickReflexionResult.model_json_schema()).decode("utf-8")
-        system_prompt = (
-            "You are Iris's light-weight reflection engine. Briefly analyze this short conversation.\n"
-            f"You must strictly output a valid JSON object matching this schema:\n{schema_json}\n"
-            "Respond in JSON only."
-        )
-        raw_dict = self._chat_parse_json(
+    async def quick_reflect(self, conversation_slice: list[BaseMessage]) -> dict[str, Any]:
+        system_prompt = "You are Iris's light-weight reflection engine. Briefly analyze this short conversation.\n"
+        return await self._chat_structured(
+            schema=QuickReflexionResult,
             system_prompt=system_prompt,
             conversation=conversation_slice,
             max_history=4,
             max_tokens=300,
-            fallback=lambda _: self._empty_quick(),
+            fallback=lambda: self._empty_quick(),
         )
-        try:
-            return dict(QuickReflexionResult.model_validate(raw_dict).model_dump())
-        except Exception as e:
-            logger.error("Quick Reflexion validation failed: %s", e)
-            return self._empty_quick()
 
-    def _chat_parse_json(
+    async def _chat_structured(
         self,
+        schema: Any,
         system_prompt: str,
-        conversation: list[dict],
+        conversation: list[BaseMessage],
         max_history: int,
         max_tokens: int,
-        fallback: Callable[[str], dict[str, Any]],
+        fallback: Callable[[], dict[str, Any]],
     ) -> dict[str, Any]:
         if len(conversation) < 2:
-            return fallback("")
-        msgs = [
-            {"role": "system", "content": system_prompt},
-            {
-                "role": "user",
-                "content": orjson.dumps(
-                    [
-                        {"role": m["role"], "content": str(m.get("content", ""))[:200]}
-                        for m in conversation[-max_history:]
-                    ],
-                ).decode("utf-8"),
-            },
-        ]
-        import asyncio
+            return fallback()
 
-        resp = asyncio.run(
-            self._llm.chat(messages=msgs, model=self._compact_model, temperature=0.3, max_tokens=max_tokens)
-        )
-        raw = resp.get("message", {}).get("content")
-        content = raw if isinstance(raw, str) else ""
+        conv_text_list = []
+        for m in conversation[-max_history:]:
+            role = m.type
+            content = str(m.content)[:200]
+            conv_text_list.append({"role": role, "content": content})
+
+        msgs: list[BaseMessage] = [
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=orjson.dumps(conv_text_list).decode("utf-8")),
+        ]
+
         try:
-            result = orjson.loads(content.encode("utf-8"))
-            if isinstance(result, dict):
-                return result
-            return fallback(content)
-        except (orjson.JSONDecodeError, TypeError):
-            return fallback(content)
+            result = await self._llm.chat_with_structured_output(
+                schema=schema,
+                messages=msgs,
+                model=self._compact_model,
+                temperature=0.3,
+                max_tokens=max_tokens,
+            )
+            if result:
+                return dict(result.model_dump())
+            return fallback()
+        except Exception as e:
+            logger.error("Structured chat validation failed: %s", e)
+            return fallback()
 
     @staticmethod
     def should_add_capability(reflection: dict[str, str | None]) -> bool:

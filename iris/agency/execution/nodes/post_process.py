@@ -26,6 +26,6 @@ class PostProcessNode:
         run_compression = plan.get("run_compression", False)
 
         try:
-            self._consolidator.run_post_process(plan, run_reflexion, run_compression)
+            await self._consolidator.run_post_process(plan, run_reflexion, run_compression)
         except Exception:
             logger.exception("Post-process failed")

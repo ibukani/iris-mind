@@ -154,7 +154,7 @@ class DebugCapture:
         if not text:
             return 0
         if self._tokenizer_mgr is not None:
-            return self._tokenizer_mgr.estimate_tokens(text)
+            return int(self._tokenizer_mgr.estimate_tokens(text))
         return int(len(text) * 1.3)
 
     def capture(self, entry: CaptureEntry) -> None:

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import re
 
+from langchain_core.messages import HumanMessage
 from loguru import logger
 
-from iris.llm.protocol import LLMProvider
+from iris.llm.bridge import LLMBridge
 
 _QUESTION_RE = re.compile(r"[？?]$")
 
@@ -15,7 +17,7 @@ class ReadinessEvaluator:
         min_fragments: int = 2,
         question_detect: bool = True,
         confidence_threshold: float = 0.6,
-        llm: LLMProvider | None = None,
+        llm: LLMBridge | None = None,
         llm_model_role: str = "fast",
     ) -> None:
         self._min_fragments = min_fragments
@@ -61,18 +63,16 @@ class ReadinessEvaluator:
             "If the user's input is a question, complete thought, or continuation of conversation, answer Yes."
         )
         try:
-            import asyncio
-
             resp = asyncio.run(
                 self._llm.chat(
-                    messages=[{"role": "user", "content": prompt}],
+                    messages=[HumanMessage(content=prompt)],
                     model=self._llm_model_role,
                     temperature=0.0,
                     max_tokens=10,
                 )
             )
-            content = resp.get("message", {}).get("content", "").strip().lower()
-            return content.startswith("yes")  # type: ignore[no-any-return]
+            content = str(resp.content).strip().lower()
+            return content.startswith("yes")
         except Exception:
             logger.exception("Tier2 readiness evaluation failed")
             return False

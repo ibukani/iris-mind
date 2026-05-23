@@ -4,6 +4,7 @@ from collections.abc import Callable
 import datetime
 from typing import Any
 
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from loguru import logger
 
 from iris.agency.execution.llm.prompt_builder import SystemPromptBuilder
@@ -34,6 +35,7 @@ class LLMGateway:
     ) -> None:
         self._llm = llm
         self._model_config = model_config
+        self._limbic = limbic
         self._capability_checker = capability_checker
         self._debug_capture = debug_capture
         self._session_roles_summary: str = ""
@@ -48,12 +50,16 @@ class LLMGateway:
             limbic=limbic,
         )
 
+    @staticmethod
+    def _system_messages_str(msgs: list[BaseMessage]) -> str:
+        return "\n\n".join(str(m.content) for m in msgs if isinstance(m, SystemMessage))
+
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
 
     async def chat(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[BaseMessage],
         tools: list[dict[str, Any]] | None = None,
         on_token: Callable[[str], None] | None = None,
         interrupt_token: InterruptToken | None = None,
@@ -61,21 +67,19 @@ class LLMGateway:
         model_role: str = "default",
         max_tokens: int | None = None,
         priority: int = 0,
-    ) -> dict[str, Any]:
-        response_style = ""
-        if self._prompt_builder._limbic:
-            response_style = self._prompt_builder._limbic.generate_response_style()
-        system_prompt = self._prompt_builder.build(
+    ) -> AIMessage:
+        response_style = self._limbic.generate_response_style() if self._limbic else ""
+        system_msgs = self._prompt_builder.build(
             context_hint=context_hint,
             response_style=response_style,
             session_roles_summary=self._session_roles_summary,
         )
-        self._last_system_prompt = system_prompt
+        self._last_system_prompt = self._system_messages_str(system_msgs)
         self._last_call_model_role = model_role
 
-        msgs: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}, *messages]
+        msgs: list[BaseMessage] = [*system_msgs, *messages]
 
-        return await self._llm.chat(
+        resp = await self._llm.chat(
             messages=msgs,
             model=self._model_config.get_model(model_role),
             temperature=self._model_config.get_effective_temperature(model_role),
@@ -86,9 +90,19 @@ class LLMGateway:
             priority=priority,
         )
 
+        self._capture_debug(
+            model_role=model_role,
+            system_prompt=self._last_system_prompt,
+            messages=msgs,
+            tools=tools,
+            response=str(resp.content) if isinstance(resp.content, str) else "",
+        )
+
+        return resp
+
     async def chat_short(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[BaseMessage],
         plan: dict[str, Any],
         model_role: str = "default",
         max_tokens: int | None = None,
@@ -99,21 +113,19 @@ class LLMGateway:
         situation = plan.get("situation", "")
         content = plan.get("content", "")
 
-        response_style = ""
-        if situation == "proactive" and self._prompt_builder._limbic:
-            response_style = self._prompt_builder._limbic.generate_response_style()
+        response_style = self._limbic.generate_response_style() if self._limbic and situation == "proactive" else ""
 
-        system_prompt = self._prompt_builder.build_full(
+        system_msgs = self._prompt_builder.build(
             context_hint=context_hint,
             response_style=response_style,
-            situation=situation,
             session_roles_summary=self._session_roles_summary,
+            situation=situation,
         )
 
-        msgs: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+        msgs: list[BaseMessage] = [*system_msgs]
         if messages and content:
             msgs.extend(messages)
-        msgs.append({"role": "user", "content": content if content else "..."})
+        msgs.append(HumanMessage(content=content if content else "..."))
 
         temperature = plan.get("temperature", 0.5)
         max_tok = max_tokens or 80
@@ -128,7 +140,7 @@ class LLMGateway:
                 interrupt_token=interrupt_token,
                 priority=priority,
             )
-            text = str((resp.get("message", {}) or {}).get("content", "")).strip()
+            text = str(resp.content).strip() if isinstance(resp.content, str) else ""
         except Exception as e:
             logger.debug("Short generation failed: %s", e)
 
@@ -137,7 +149,7 @@ class LLMGateway:
 
         self._capture_debug(
             model_role=model_role,
-            system_prompt=system_prompt,
+            system_prompt=self._system_messages_str(system_msgs),
             messages=msgs,
             tools=None,
             response=text,
@@ -149,7 +161,7 @@ class LLMGateway:
         self,
         model_role: str,
         system_prompt: str,
-        messages: list[dict],
+        messages: list[BaseMessage],
         tools: list[dict] | None,
         response: str,
         tool_iterations: list[dict] | None = None,
@@ -159,10 +171,10 @@ class LLMGateway:
             return
 
         model_name = self._model_config.get_model(model_role)
-        history_msgs = [m for m in messages if m.get("role") != "system"]
+        history_msgs = [m for m in messages if not isinstance(m, SystemMessage)]
         tc = {
             "system": dc.count_tokens(system_prompt),
-            "history": dc.count_tokens(" ".join(m.get("content", "") or "" for m in history_msgs)),
+            "history": dc.count_tokens(" ".join(str(m.content) for m in history_msgs)),
             "tools": dc.count_tokens(str(tools)) if tools else 0,
             "response": dc.count_tokens(response),
         }
@@ -174,7 +186,7 @@ class LLMGateway:
                 timestamp=datetime.datetime.now(),
                 model_name=model_name,
                 system_prompt=system_prompt,
-                messages=history_msgs,
+                messages=[{"role": m.type, "content": m.content} for m in history_msgs],
                 tools=tools,
                 response=response,
                 token_counts=tc,

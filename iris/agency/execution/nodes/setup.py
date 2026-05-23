@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from langchain_core.messages import ChatMessage, HumanMessage
+
 from iris.agency.execution.regulation.talk_control import (
     apply_talkative_overrides,
 )
@@ -64,8 +66,10 @@ class SetupNode:
 
         record_history = plan.get("record_history", True)
         if record_history and content:
-            role = "thought" if silent else "user"
-            state["messages"].append({"role": role, "content": content})
+            if silent:
+                state["messages"].append(ChatMessage(role="thought", content=content))
+            else:
+                state["messages"].append(HumanMessage(content=content))
             if self._consolidator:
                 self._consolidator.record_activity()
 

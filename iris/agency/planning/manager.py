@@ -17,7 +17,7 @@ from iris.memory.manager import MemoryManager
 if TYPE_CHECKING:
     from iris.limbic.manager import LimbicManager
     from iris.limbic.models import EmotionState
-    from iris.llm.protocol import LLMProvider
+    from iris.llm.bridge import LLMBridge
     from iris.memory.persona_profile import PersonaProfile
 
 from loguru import logger
@@ -34,7 +34,7 @@ class PlanningManager:
         memory: MemoryManager | None = None,
         limbic: LimbicManager | None = None,
         persona_profile: PersonaProfile | None = None,
-        llm: LLMProvider | None = None,
+        llm: LLMBridge | None = None,
     ) -> None:
         self._bus = internal_bus
         self._inhibition = inhibition

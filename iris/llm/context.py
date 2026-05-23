@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
-
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from loguru import logger
 
-from .protocol import LLMProvider
+from .bridge import LLMBridge
 from .tokenizer import TokenizerManager
 
 _COMPACT_PROMPT = """これまでの会話要約（もしあれば）と、新規の会話履歴を統合し、最新の会話要約を更新・作成してください。
@@ -26,14 +25,14 @@ def estimate_tokens(text: str, tokenizer_mgr: TokenizerManager | None = None) ->
     if not text:
         return 0
     if tokenizer_mgr is not None:
-        return tokenizer_mgr.estimate_tokens(text)
+        return int(tokenizer_mgr.estimate_tokens(text))
     # 日本語等のマルチバイトを考慮し、安全側に倒す (1文字あたり約1.3トークン)
     return int(len(text) * 1.3)
 
 
-def estimate_messages_tokens(messages: list[dict[str, Any]], tokenizer_mgr: TokenizerManager | None = None) -> int:
+def estimate_messages_tokens(messages: list[BaseMessage], tokenizer_mgr: TokenizerManager | None = None) -> int:
     """メッセージ履歴全体の合計トークン数を概算する。"""
-    return sum(estimate_tokens(m.get("content", ""), tokenizer_mgr) for m in messages)
+    return sum(estimate_tokens(str(m.content), tokenizer_mgr) for m in messages)
 
 
 class LLMContextWindowManager:
@@ -49,7 +48,7 @@ class LLMContextWindowManager:
 
     def __init__(
         self,
-        llm: LLMProvider | None = None,
+        llm: LLMBridge | None = None,
         compact_model: str | None = None,
         tokenizers: dict[str, TokenizerManager] | None = None,
         default_model_name: str | None = None,
@@ -73,9 +72,9 @@ class LLMContextWindowManager:
         """現在の会話の要約テキストを取得する。"""
         return self._summary
 
-    def check_and_summarize(
+    async def check_and_summarize(
         self,
-        messages: list[dict[str, Any]],
+        messages: list[BaseMessage],
         context_window: int,
         threshold: float = 0.85,
         preserve_last: int = 6,
@@ -107,11 +106,10 @@ class LLMContextWindowManager:
         if total < context_window * threshold:
             return self._summary
 
-        return self._compact(messages, preserve_last)
+        return await self._compact(messages, preserve_last)
 
-    def _compact(self, messages: list[dict[str, Any]], preserve_last: int = 6) -> str:
-        """指定メッセージを切り出し、古いメッセージを要約して圧縮を実行する。"""
-        summary = self.summarize(messages[:-preserve_last])
+    async def _compact(self, messages: list[BaseMessage], preserve_last: int = 6) -> str:
+        summary = await self.summarize(messages[:-preserve_last])
         self._summary = summary
         logger.info(
             "Context compacted: summary_len=%d, kept=%d messages",
@@ -120,32 +118,26 @@ class LLMContextWindowManager:
         )
         return summary
 
-    def summarize(self, messages: list[dict[str, Any]]) -> str:
-        """指定されたメッセージリストをLLMを使って1つの要約テキストにまとめる。"""
+    async def summarize(self, messages: list[BaseMessage]) -> str:
         if self._llm is None or not messages:
             return self._summary
 
-        # 過去のセッションサマリーを検出し、新規メッセージと分ける
         previous_summary_from_msg = ""
         new_messages = []
         for m in messages:
-            role = m.get("role", "?")
-            content = str(m.get("content", ""))
-            if role == "system" and content.startswith("## Session Summary"):
-                previous_summary_from_msg = content.replace("## Session Summary\n", "", 1).strip()
+            if m.type == "system" and str(m.content).startswith("## Session Summary"):
+                previous_summary_from_msg = str(m.content).replace("## Session Summary\n", "", 1).strip()
             else:
                 new_messages.append(m)
 
         prev_summary = previous_summary_from_msg or self._summary
 
-        # 新規メッセージをフォーマット（長いメッセージは適宜切り詰め）
         formatted_turns = []
         for m in new_messages:
-            role = m.get("role", "?")
-            content = str(m.get("content", ""))
+            content = str(m.content)
             if len(content) > 1000:
                 content = content[:1000] + "... (省略)"
-            formatted_turns.append(f"{role}: {content}")
+            formatted_turns.append(f"{m.type}: {content}")
 
         text = "\n".join(formatted_turns)
 
@@ -155,25 +147,20 @@ class LLMContextWindowManager:
         user_prompt += f"■ 新規の会話履歴:\n{text}"
 
         try:
-            import asyncio
-
-            resp = asyncio.run(
-                self._llm.chat(
-                    messages=[
-                        {"role": "system", "content": _COMPACT_PROMPT},
-                        {"role": "user", "content": user_prompt},
-                    ],
-                    model=self._compact_model,
-                    temperature=0.3,
-                    max_tokens=500,
-                    num_ctx=4096,
-                )
+            resp = await self._llm.chat(
+                messages=[
+                    SystemMessage(content=_COMPACT_PROMPT),
+                    HumanMessage(content=user_prompt),
+                ],
+                model=self._compact_model,
+                temperature=0.3,
+                max_tokens=500,
+                num_ctx=4096,
             )
-            return resp.get("message", {}).get("content", "").strip()
+            return str(resp.content).strip()
         except Exception as e:
             logger.exception("Summarization failed: %s", e)
             return self._summary
 
-    def compact(self, messages: list[dict[str, Any]]) -> str:
-        """会話履歴全体の圧縮を外部から強制実行する。"""
-        return self._compact(messages)
+    async def compact(self, messages: list[BaseMessage]) -> str:
+        return await self._compact(messages)

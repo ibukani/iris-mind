@@ -99,7 +99,7 @@ class DebugCommands:
         if state is None:
             return f"Path not found: '{sa.path}'" if sa.path else "No state available"
         if sa.as_json:
-            return orjson.dumps(state, option=orjson.OPT_INDENT_2).decode("utf-8")
+            return str(orjson.dumps(state, option=orjson.OPT_INDENT_2).decode("utf-8"))
         return _format_state(state, sa.path)
 
     def _format_state_history(self, diag: SystemDiagnostics, path: str, n: int) -> str:

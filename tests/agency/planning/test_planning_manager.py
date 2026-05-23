@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import datetime
 from unittest.mock import MagicMock
 
+from langchain_core.messages import AIMessage
+
 from iris.agency.bus import InternalBus, PlanDecided
 from iris.agency.inhibition import GateVerdict, InhibitionController
 from iris.agency.planning.decisions import ProactiveScoring
@@ -38,9 +40,7 @@ def test_planning_manager_silent_proactive_interest_sampling() -> None:
     persona_data.add_interest("宇宙の起源", 0.8)
     persona_profile = FakePersonaProfile(persona_data=persona_data)
 
-    llm = FakeLLMProvider(
-        responses=[{"message": {"content": "ビッグバン以前には何が存在したのか？", "role": "assistant"}}]
-    )
+    llm = FakeLLMProvider(responses=[AIMessage(content="ビッグバン以前には何が存在したのか？")])
 
     PlanningManager(
         internal_bus=internal_bus,

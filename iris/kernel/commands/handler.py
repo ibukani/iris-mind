@@ -12,8 +12,8 @@ if TYPE_CHECKING:
     from iris.io.session.manager import SessionManager
     from iris.kernel.debug_capture import DebugCapture
     from iris.kernel.diagnostics import SystemDiagnostics
-    from iris.limbic.prefrontal.personality import BigFiveProfile
     from iris.limbic.manager import LimbicManager
+    from iris.limbic.prefrontal.personality import BigFiveProfile
     from iris.llm.bridge import LLMBridge
     from iris.memory.manager import MemoryManager
     from iris.tools.registry import ToolRegistry

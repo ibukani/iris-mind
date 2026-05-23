@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Any, Protocol
 
 import orjson
@@ -9,6 +10,7 @@ if TYPE_CHECKING:
     from iris.memory.manager import MemoryManagerProtocol
     from iris.memory.persona_profile import PersonaProfile
 
+from langchain_core.messages import BaseMessage
 from loguru import logger
 
 from iris.event.event_types import DebugSnapshotEvent, InputReady, InterruptEvent
@@ -29,9 +31,9 @@ class HippocampalManagerProtocol(Protocol):
     別のアプローチで差し替え可能にし、テスト容易性と柔軟性を向上させるため。
     """
 
-    def maybe_run(self, messages: list[dict], msg_count_since_reflect: int) -> int: ...
-    def force_run(self, messages: list[dict]) -> None: ...
-    def run_session(self, messages: list[dict], memory: MemoryManagerProtocol | None = None) -> None: ...
+    async def maybe_run(self, messages: list[BaseMessage], msg_count_since_reflect: int) -> int: ...
+    def force_run(self, messages: list[BaseMessage]) -> None: ...
+    async def run_session(self, messages: list[BaseMessage], memory: MemoryManagerProtocol | None = None) -> None: ...
     def process_proactive_result(self, topic: str, success: bool, content: str) -> None: ...
 
 
@@ -52,7 +54,7 @@ class HippocampalManager:
         self._reflect_interval = reflect_interval
         self._event_bus = event_bus
 
-    def maybe_run(self, messages: list[dict], msg_count_since_reflect: int) -> int:
+    async def maybe_run(self, messages: list[BaseMessage], msg_count_since_reflect: int) -> int:
         if self._reflexion is None:
             return msg_count_since_reflect
         if msg_count_since_reflect < self._reflect_interval:
@@ -60,19 +62,19 @@ class HippocampalManager:
         if len(messages) < 2:
             return msg_count_since_reflect
 
-        self._reflect_and_consolidate(messages, force=False)
+        await self._reflect_and_consolidate(messages, force=False)
         return 0
 
-    def force_run(self, messages: list[dict]) -> None:
+    def force_run(self, messages: list[BaseMessage]) -> None:
         if self._reflexion is None:
             return
-        self._reflect_and_consolidate(messages, force=True)
+        asyncio.run(self._reflect_and_consolidate(messages, force=True))
 
-    def _reflect_and_consolidate(self, messages: list[dict], force: bool = False) -> None:
+    async def _reflect_and_consolidate(self, messages: list[BaseMessage], force: bool = False) -> None:
         if self._reflexion is None:
             return
         try:
-            result = self._reflexion.quick_reflect(messages)
+            result = await self._reflexion.quick_reflect(messages)
             self._store_reflection_to_memory(result)
             if self._persona_profile is not None:
                 self._persona_profile.update_from_reflection(result)
@@ -162,7 +164,7 @@ class HippocampalManager:
         self._memory.short_term.mark_consolidated()
         logger.info("Hippocampal: consolidated %d turns, %d topics", len(unconsolidated), len(topics))
 
-    def run_session(self, messages: list[dict], memory: MemoryManagerProtocol | None = None) -> None:
+    async def run_session(self, messages: list[BaseMessage], memory: MemoryManagerProtocol | None = None) -> None:
         if self._reflexion is None:
             return
         if len(messages) < 2:
@@ -173,7 +175,7 @@ class HippocampalManager:
             return
 
         try:
-            result = self._reflexion.reflect(messages)
+            result = await self._reflexion.reflect(messages)
             if result.get("summary"):
                 mem.add_episodic(
                     content=f"[session summary] {result['summary']}",
@@ -207,6 +209,15 @@ class HippocampalManager:
         except Exception as e:
             logger.exception("Session reflect failed: %s", e)
 
+    async def _process_proactive_result_async(self, topic: str, content: str) -> dict[str, Any]:
+        if self._reflexion is None:
+            return {"satisfaction": 0.0, "summary": "調査に失敗しました。", "next_interests": []}
+        try:
+            return await self._reflexion.evaluate_proactive_result(topic, content)
+        except Exception as e:
+            logger.exception("Failed to evaluate proactive result with LLM: %s", e)
+            return {"satisfaction": 0.0, "summary": "評価に失敗しました。", "next_interests": []}
+
     def process_proactive_result(self, topic: str, success: bool, content: str) -> None:
         if self._persona_profile is None or not topic:
             return
@@ -215,15 +226,11 @@ class HippocampalManager:
         summary = "調査に失敗しました。"
         next_interests = []
 
-        if success and self._reflexion is not None:
-            try:
-                if hasattr(self._reflexion, "evaluate_proactive_result"):
-                    eval_res = self._reflexion.evaluate_proactive_result(topic, content)
-                    satisfaction = eval_res.get("satisfaction", 0.0)
-                    summary = eval_res.get("summary", "")
-                    next_interests = eval_res.get("next_interests", [])
-            except Exception as e:
-                logger.exception("Failed to evaluate proactive result with LLM: %s", e)
+        if success:
+            eval_res = asyncio.run(self._process_proactive_result_async(topic, content))
+            satisfaction = eval_res.get("satisfaction", 0.0)
+            summary = eval_res.get("summary", "")
+            next_interests = eval_res.get("next_interests", [])
 
         # 納得度評価に基づく減衰/維持
         delta = -0.3 if satisfaction >= 0.7 else 0.1

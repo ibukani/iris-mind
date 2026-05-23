@@ -23,8 +23,8 @@ from iris.kernel.commands.handler import CommandHandler
 from iris.kernel.debug_capture import DebugCapture
 from iris.kernel.diagnostics import SystemDiagnostics
 from iris.limbic.hippocampus.binder import EmotionalMemory
-from iris.limbic.prefrontal.personality import BigFiveProfile
 from iris.limbic.manager import LimbicManager
+from iris.limbic.prefrontal.personality import BigFiveProfile
 from iris.llm.bridge import LLMBridge
 from iris.llm.capability import CapabilityChecker
 from iris.llm.context import LLMContextWindowManager

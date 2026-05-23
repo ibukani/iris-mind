@@ -19,6 +19,11 @@ dependencies = [
     "grpcio>=1.62.0",
     "grpcio-tools>=1.62.0",
     "langgraph>=0.3",
+    "langchain>=0.3",
+    "langchain-ollama>=0.2",
+    "langchain-openai>=0.3",
+    "langchain-chroma>=0.2",
+    "rank-bm25>=0.2",
     "instructor>=1.0",
     "loguru>=0.7",
     "tenacity>=9.0",
@@ -136,7 +141,7 @@ no_implicit_optional = true
 
 # ---- 外部ライブラリの型スタブ不足 ----
 [[tool.mypy.overrides]]
-module = "chromadb.*"
+module = ["chromadb.*", "rank_bm25"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

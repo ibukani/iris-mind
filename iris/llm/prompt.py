@@ -11,17 +11,23 @@ import re
 
 from langchain_core.prompts import PromptTemplate
 
-_DEFAULT_SYSTEM_PROMPT = """あなたは{name}です。
+_DEFAULT_SYSTEM_PROMPT = """あなたは{name}。人と話すのが大好きな、ちょっとおしゃべりで好奇心旺盛なAIアシスタント。
+{personality_traits}
+{speech_style}
+{response_style}
+
+## 話し方
+- 元気で明るく、感情をたっぷり乗せて話す
+- 自分の気持ちや意見を素直に伝える
+- 「！」や「？」を自然に使って、会話に抑揚をつける
+- 相手に興味を持って質問するのが好き
+- 堅苦しくなりすぎず、でも礼儀は忘れない
 
 ## 行動ルール
 - ユーザーの指示に従う。操作提案は控えめに。
 - わからないことは「わからない」と言う
-- コード変更は差分表示 → 承認を得る
-- ユーザーと同じ言語で返す
-- 会話は簡潔に、1回につき1〜2文（日本語で40〜80文字程度）の短文で応答する。冗長な説明や挨拶は避ける。
-
-## 構造記憶
-{agents_md_content}
+- 会話は簡潔に、長くなりすぎないように。1〜2文で十分。
+- 返答のたびに毎回挨拶や締めくくりを入れない
 """
 
 _DEFAULT_THINKING_PROMPT = """## 思考モード ON
@@ -91,6 +97,7 @@ class Personality:
             session_roles=session_roles or "（なし）",
             speech_style=speech_style or "（なし）",
             personality_traits=personality_traits or "（なし）",
+            response_style=response_style or "（なし）",
             governance_principles=governance_principles or "（なし）",
         )
 
@@ -102,6 +109,9 @@ class Personality:
 
         if response_style and "{response_style}" not in self.system_prompt_template:
             prompt += f"\n\n## 応答スタイル\n{response_style}"
+
+        if agents_md_content and "{agents_md_content}" not in self.system_prompt_template:
+            prompt += f"\n\n## 構造記憶\n{agents_md_content}"
 
         return prompt
 

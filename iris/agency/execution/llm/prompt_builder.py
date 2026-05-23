@@ -73,9 +73,8 @@ class SystemPromptBuilder:
         parts.append(f"## 現在日時\n{self._build_time_string()}")
 
         if self._limbic:
-            mood_desc = self._limbic.describe_mood()
-            if mood_desc:
-                parts.append(f"## 現在の気分\n{mood_desc}")
+            mood_desc = self._limbic.describe_mood() or "落ち着いた状態です。特に強い感情はありません。"
+            parts.append(f"## 現在の気分\n{mood_desc}")
 
         if pctx.current_state:
             parts.append(pctx.current_state)
@@ -86,8 +85,6 @@ class SystemPromptBuilder:
         if situation in _SITUATION_INSTRUCTIONS:
             parts.append(_SITUATION_INSTRUCTIONS[situation])
 
-        parts.append("【最重要】1〜2文（40〜80文字程度）で答えてください。冗長な説明、挨拶、装飾は禁止です。")
-
         return [SystemMessage(content="\n\n".join(parts))]
 
     def _load_personality_context(self) -> _PersonalityContext:
@@ -97,11 +94,9 @@ class SystemPromptBuilder:
 
         current_state = ""
         if self._persona_profile:
+            has_traits_in_tpl = "{personality_traits}" in self._personality.system_prompt_template
             has_speech_in_tpl = "{speech_style}" in self._personality.system_prompt_template
-            if has_speech_in_tpl:
-                if personality_traits:
-                    current_state = "## 現在の状態\n" + personality_traits
-            else:
+            if not has_traits_in_tpl and not has_speech_in_tpl:
                 current_state = self._persona_profile.get_current_state_section()
 
         user_prefs = self._build_user_preferences_section()

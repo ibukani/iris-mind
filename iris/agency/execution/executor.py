@@ -52,6 +52,7 @@ class FlowExecutor:
         self._memory = memory
         self._messages: list[BaseMessage] = messages if messages is not None else []
         self._interrupt_token: InterruptToken | None = None
+        self._bg_tasks: set[asyncio.Task] = set()
 
         coordinator = FeedbackCoordinator(event_bus, monitor, inhibition)
 
@@ -102,7 +103,14 @@ class FlowExecutor:
             plan.get("session_id"),
             plan.get("abbreviated"),
         )
-        asyncio.run(self._run_graph(plan))
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            asyncio.run(self._run_graph(plan))
+        else:
+            task = loop.create_task(self._run_graph(plan))
+            self._bg_tasks.add(task)
+            task.add_done_callback(self._bg_tasks.discard)
 
     async def _run_graph(self, plan: dict[str, Any]) -> None:
         self._interrupt_token = InterruptToken()

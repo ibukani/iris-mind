@@ -85,6 +85,7 @@ class SystemPromptBuilder:
         if situation in _SITUATION_INSTRUCTIONS:
             parts.append(_SITUATION_INSTRUCTIONS[situation])
 
+        parts.append("## 回答ルール【厳守】\n必ず1〜2文で答える。")
         return [SystemMessage(content="\n\n".join(parts))]
 
     def _load_personality_context(self) -> _PersonalityContext:

@@ -3,7 +3,7 @@
 # 人格設定 — Iris の名前とシステムプロンプト
 personality:
     name: Iris
-    prompt_file: .iris/config/personality_default.md
+    prompt_file: .iris/config/system_prompt.md
 
 # 記憶系 — 各記憶層の保存先と上限
 memory:

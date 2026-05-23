@@ -213,7 +213,7 @@ iris-mind/
 ├── .agents/                     # コーディングエージェント用導線・Skills
 ├── .iris/                       # 設定・データ
 │   ├── config/
-│   │   └── personality_default.md
+│   │   └── system_prompt.md
 │   └── data/                    # 記憶データ (runtime generated)
 ├── docs/                        # 設計ドキュメント
 │   ├── adr/                     # Architecture Decision Records

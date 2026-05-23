@@ -4,6 +4,8 @@ import asyncio
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
+from langchain_core.messages import BaseMessage, SystemMessage
+
 from iris.agency.bus import InternalBus, PlanDecided
 from iris.agency.execution.engine import ToolEngine
 from iris.agency.execution.llm.gateway import LLMGateway
@@ -21,7 +23,6 @@ from iris.event.event_bus import EventBus
 from iris.event.event_types import InterruptEvent
 from iris.llm.capability import CapabilityChecker
 from iris.llm.interrupt_token import InterruptToken
-from langchain_core.messages import BaseMessage, SystemMessage
 
 if TYPE_CHECKING:
     from iris.memory.manager import MemoryManager

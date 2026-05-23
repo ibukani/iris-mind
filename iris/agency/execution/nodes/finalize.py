@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from langchain_core.messages import AIMessage, ChatMessage
+
 from iris.agency.execution.state import ExecutionState
 from iris.event.event_types import MessageEvent, ProactiveResultEvent
 from iris.io.models import StreamState
-from langchain_core.messages import AIMessage, ChatMessage
 
 if TYPE_CHECKING:
     from iris.agency.execution.regulation.consolidator import Consolidator

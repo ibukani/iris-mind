@@ -4,10 +4,11 @@ from collections.abc import Callable
 import time
 from typing import TYPE_CHECKING, Any
 
+from langchain_core.messages import BaseMessage, SystemMessage
+
 from iris.agency.inhibition import InhibitionController
 from iris.event.event_bus import EventBus
 from iris.event.event_types import ProactiveResultEvent, TimerTick
-from langchain_core.messages import BaseMessage, SystemMessage
 
 if TYPE_CHECKING:
     from iris.kernel.config import Config, ModelConfig

@@ -31,6 +31,7 @@ class ToolRunNode:
         logger.debug("Tool execution results: %d tools", len(results))
 
         from langchain_core.messages import ToolMessage
+
         MAX_TOOL_OUTPUT_LENGTH = 200
         messages = state["messages"]
         for m in messages:

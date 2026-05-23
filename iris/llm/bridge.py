@@ -225,7 +225,7 @@ class LLMBridge:
         """指定されたモデルで with_structured_output を使用したチャット生成を実行する。"""
         model_name = model or self._get_default_model()
         provider = self._resolve_provider(model_name)
-        
+
         call_kwargs: dict[str, Any] = {}
         if isinstance(provider, ChatOllama):
             call_kwargs["options"] = {

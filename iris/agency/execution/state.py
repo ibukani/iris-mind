@@ -9,6 +9,7 @@ if TYPE_CHECKING:
 
 from langchain_core.messages import BaseMessage
 
+
 class ExecutionState(TypedDict, total=False):
     plan: dict[str, Any]
     messages: list[BaseMessage]

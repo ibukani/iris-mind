@@ -9,11 +9,11 @@ if TYPE_CHECKING:
     from iris.memory.manager import MemoryManagerProtocol
     from iris.memory.persona_profile import PersonaProfile
 
+from langchain_core.messages import BaseMessage
 from loguru import logger
 
 from iris.event.event_types import DebugSnapshotEvent, InputReady, InterruptEvent
 from iris.memory.hippocampal.reflexion import ReflexionProtocol
-from langchain_core.messages import BaseMessage
 
 _REFLECTION_MEMORY_KEYS: list[tuple[str, str, str, list[str]]] = [
     ("speech_style", "trait", "Iris's speech style", ["speech_style"]),

@@ -3,13 +3,14 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from langchain_core.messages import ChatMessage, HumanMessage
+
 from iris.agency.execution.regulation.talk_control import (
     apply_talkative_overrides,
 )
 from iris.agency.execution.state import DynamicState, ExecutionState
 from iris.event.event_types import MessageEvent
 from iris.io.models import StreamState
-from langchain_core.messages import ChatMessage, HumanMessage
 
 if TYPE_CHECKING:
     from iris.agency.execution.llm.gateway import LLMGateway

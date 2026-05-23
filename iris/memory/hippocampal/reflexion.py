@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Any, Protocol
-from langchain_core.messages import BaseMessage, SystemMessage, HumanMessage
 
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from loguru import logger
 import orjson
 from pydantic import BaseModel, Field
@@ -104,9 +104,7 @@ class Reflexion:
         )
 
     def quick_reflect(self, conversation_slice: list[BaseMessage]) -> dict[str, Any]:
-        system_prompt = (
-            "You are Iris's light-weight reflection engine. Briefly analyze this short conversation.\n"
-        )
+        system_prompt = "You are Iris's light-weight reflection engine. Briefly analyze this short conversation.\n"
         return self._chat_structured(
             schema=QuickReflexionResult,
             system_prompt=system_prompt,
@@ -127,18 +125,16 @@ class Reflexion:
     ) -> dict[str, Any]:
         if len(conversation) < 2:
             return fallback()
-        
+
         conv_text_list = []
         for m in conversation[-max_history:]:
             role = getattr(m, "type", "user")
             content = str(m.content)[:200]
             conv_text_list.append({"role": role, "content": content})
-            
+
         msgs: list[BaseMessage] = [
             SystemMessage(content=system_prompt),
-            HumanMessage(
-                content=orjson.dumps(conv_text_list).decode("utf-8")
-            ),
+            HumanMessage(content=orjson.dumps(conv_text_list).decode("utf-8")),
         ]
         import asyncio
 

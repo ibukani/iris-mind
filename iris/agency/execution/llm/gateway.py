@@ -4,6 +4,7 @@ from collections.abc import Callable
 import datetime
 from typing import Any
 
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from loguru import logger
 
 from iris.agency.execution.llm.prompt_builder import SystemPromptBuilder
@@ -17,7 +18,6 @@ from iris.llm.prompt import Personality
 from iris.memory.long_term.stores import AgentsMdStore
 from iris.memory.manager import MemoryManager
 from iris.memory.persona_profile import PersonaProfile
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 
 class LLMGateway:

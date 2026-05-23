@@ -1,6 +1,6 @@
 from __future__ import annotations
-from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 
+from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 from loguru import logger
 
 from iris.tools.registry import ToolRegistry

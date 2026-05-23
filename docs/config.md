@@ -14,7 +14,8 @@ Config
 ├── proactive: ProactiveConfig  — 自発発話
 ├── quasi_sync: QuasiSyncConfig — 準同期入力制御
 ├── session: SessionConfig      — セッション・通信
-└── logging: LoggingConfig      — ログ出力
+├── logging: LoggingConfig      — ログ出力
+└── debug: DebugConfig          — デバッグ・トレース
 ```
 
 ## ModelConfig
@@ -23,6 +24,7 @@ Config
 |-----------|-----|-----------|------|
 | providers | dict[str, ProviderConnection] | {} | プロバイダ接続設定（base_url / api_key） |
 | hf_token | str | "" | HuggingFace gated repo 用トークン（全モデル共通） |
+| models | list[ModelEntry] | qwen3.5:9b (default) | 使用モデル一覧 |
 | models | list[ModelEntry] | qwen3.5:9b (default) | 使用モデル一覧 |
 | default_temperature | float | 0.7 | LLM生成温度（各ModelEntryで未指定時のフォールバック） |
 | default_num_ctx | int | 8192 | コンテキスト長（各ModelEntryで未指定時のフォールバック） |
@@ -53,6 +55,10 @@ Config
 | performance_tier | str | "balanced" | 性能区分（"fast" / "balanced" / "capable"） |
 | tokenizer_repo_id | str | "" | HuggingFace Hub のリポジトリID（例: "Qwen/Qwen3.5-9B"） |
 | tokenizer_local_path | str | "" | ローカル tokenizer.json のパス |
+| keep_alive | str \| None | None | モデル維持時間（Ollama, 例: "5m"） |
+| presence_penalty | float \| None | None | 新規話題へのペナルティ |
+| frequency_penalty | float \| None | None | 頻出トークンへのペナルティ |
+| repeat_penalty | float \| None | None | 繰り返しトークンへのペナルティ（Ollama） |
 
 - `roles` は YAML上で1要素なら文字列でも記述可能: `roles: default`
 - モデルが1つだけの場合はシングルモードとなり、全処理にそのモデルを使用
@@ -77,6 +83,7 @@ Config
 | `get_effective_num_ctx(role)` | int | role 別実効コンテキスト長。モデル個別設定がなければ `default_num_ctx` |
 | `get_effective_num_gpu(role)` | int | role 別実効GPUレイヤー数。モデル個別設定がなければ `default_num_gpu` |
 | `get_effective_context_window(role)` | int | role 別実効圧縮閾値。モデル個別設定がなければ `default_context_window` |
+| `get_effective_max_tokens(role)` | int | role 別最大トークン数。モデル設定がなければ 4096 |
 | `get_model_capabilities(role)` | list[str] | role 別の機能ラベル一覧 |
 | `get_model_performance_tier(role)` | str | role 別の性能区分 |
 
@@ -90,6 +97,7 @@ Config
 | trigger_weights | dict | see below | トリガー重み |
 | speak_threshold | float | 0.60 | 発話開始閾値 |
 | abbreviated_threshold | float | 0.25 | 短縮発話のスコア閾値 |
+| idle_reflection_timeout_sec | float | 180.0 | idle状態でのReflexion有効タイムアウト |
 
 **trigger_weights デフォルト**:
 ```yaml
@@ -118,6 +126,9 @@ trigger_weights:
 | semantic_max_entries | int | 100 | 意味記憶上限 |
 | agents_md_path | str | ".iris/data/iris_profile.md" | 構造記憶ファイル |
 | agents_md_max_bytes | int | 2048 | 構造記憶最大サイズ |
+| persona_data_path | str | ".iris/data/persona_data.json" | ペルソナデータファイル |
+| persona_data_max_entries | int | 100 | ペルソナデータ最大エントリ数 |
+| psychometric_state_path | str | ".iris/data/psychometric_state.json" | 心理状態永続化ファイル |
 
 ## QuasiSyncConfig
 
@@ -153,6 +164,22 @@ trigger_weights:
 | dir | str | "logs" | ログ出力ディレクトリ |
 | max_bytes | int | 5242880 | ログファイル最大サイズ |
 | backup_count | int | 14 | 保持する起動世代数 |
+| loggers | dict[str, str] | {} | ロガー別レベル設定（例: {"iris.kernel": "DEBUG"}） |
+| console_format | str | "" | コンソールログフォーマット（空文字=デフォルト） |
+
+## DebugConfig
+
+デバッグ・トレース機能の設定。
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| enabled | bool | False | デバッグ機能の有効/無効 |
+| trace_max_entries | int | 500 | EventTracer リングバッファ最大数 |
+| emotion_history_enabled | bool | True | 感情履歴の記録有効/無効 |
+| personality_history_enabled | bool | True | 性格履歴の記録有効/無効 |
+| capture_enabled | bool | False | DebugCapture の有効/無効 |
+| capture_auto_dump | bool | False | 終了時の自動ダンプ |
+| capture_max_entries | int | 10 | DebugCapture の保持上限 |
 
 ## config.yaml 例
 

@@ -17,10 +17,10 @@
 
 | 部位 | ファイル | 機能 |
 |------|----------|------|
-| **扁桃体（Amygdala）** | `amygdala.py` | 入力テキストの感情価を評価。キーワード+ONNX MiniLM埋め込みのハイブリッド。conflict（葛藤度）も出力。stateful適応で繰り返し刺激に慣れる。 |
-| **前帯状皮質（ACC）** | `acc.py` | 感情制御。扁桃体からの感情シグナルと行動計画（PFC由来）の間の葛藤を検出し、抑制信号を調整。メタ認知的再評価（efficacy履歴）+ 慣れの性格変調あり。 |
-| **島皮質（Insula）** | `manager.py` に統合 | 内部状態の認識。現在の感情状態を言語化し、「今どんな気分か」の説明文を生成。自己認識的な感情表現。不確実性に応じて粒度可変。 |
-| **扁桃体-海馬相互作用** | `emotional_memory.py` | EpisodicStore のエントリに感情タグ（valence, arousal, dominance）を付与。感情強度の高い記憶を検索・強調。気分一致効果・想起誘発効果あり。 |
+| **扁桃体（Amygdala）** | `amygdala/evaluator.py` | 入力テキストの感情価を評価。キーワード+ONNX MiniLM埋め込みのハイブリッド。conflict（葛藤度）も出力。stateful適応で繰り返し刺激に慣れる。 |
+| **前帯状皮質（ACC）** | `cingulate/regulator.py` | 感情制御。扁桃体からの感情シグナルと行動計画（PFC由来）の間の葛藤を検出し、抑制信号を調整。メタ認知的再評価（efficacy履歴）+ 慣れの性格変調あり。 |
+| **島皮質（Insula）** | `manager.py` に統合 / `mood.py` | 内部状態の認識。現在の感情状態を言語化し、「今どんな気分か」の説明文を生成。自己認識的な感情表現。不確実性に応じて粒度可変。 |
+| **扁桃体-海馬相互作用** | `hippocampus/binder.py` | EpisodicStore のエントリに感情タグ（valence, arousal, dominance）を付与。感情強度の高い記憶を検索・強調。気分一致効果・想起誘発効果あり。 |
 
 ## 感情状態モデル
 
@@ -92,7 +92,7 @@ class DriveState:
     maintenance: float    # 記憶整理欲求（Reflexionで低下）
     updated_at: float
 
-    def accumulate(self, dt: float | None = None) -> None   # 時間蓄積
+    def accumulate(self, dt: float | None = None, big_five: dict[str, float] | None = None) -> None   # 時間蓄積（BigFiveで変調）
     def satisfy(self, need_type: str, amount: float) -> None # 行動充足
     def get_dominant_needs(self) -> list[tuple[str, float]]  # 欲求順位
 ```
@@ -110,7 +110,7 @@ EmotionState(t) = EmotionState(0) · exp(-λ · Δt)
 
 - λ (decay factor): 次元ごとに異なる。Arousal は早く減衰、Valence は比較的持続。
 - モード別減速率:
-  - 通常: λ_valence=0.05, λ_arousal=0.1, λ_dominance=0.03 (per minute)
+  - 通常: λ_valence=0.02, λ_arousal=0.04, λ_dominance=0.01 (per minute)
   - 睡眠中: λ を 1/10 に低減（感情の持続）
 
 ## コンポーネント詳細設計
@@ -120,32 +120,37 @@ EmotionState(t) = EmotionState(0) · exp(-λ · Δt)
 ```python
 class LimbicManager:
     """大脳辺縁系全体の統括。
-    EventBus から InputReceived を購読し、感情評価・制御・タグ付けを
-    オーケストレーションする。
+    EventBus から MessageEvent / TimerTick / MonitorFeedback を購読し、
+    感情評価・制御・タグ付けをオーケストレーションする。
     """
 
     # === 購読イベント ===
-    # subscribe: InputReceived  → amygdala.evaluate() → 感情更新
-    # subscribe: TimerTick      → decay()
+    # subscribe: MessageEvent      → _on_message_event() → 感情評価
+    # subscribe: TimerTick         → _on_timer_tick() → decay()
+    # subscribe: MonitorFeedback   → _on_monitor_event() → 感情変調
+    # subscribe: ProactiveResultEvent → _on_proactive_result()
 
-    def __init__(self, amygdala: Amygdala, acc: AnteriorCingulateCortex,
-                 emotional_memory: EmotionalMemory, event_bus: EventBus):
+    def __init__(self, event_bus: EventBus | None = None,
+                 amygdala: Amygdala | None = None,
+                 acc: AnteriorCingulateCortex | None = None,
+                 emotional_memory: EmotionalMemory | None = None):
+        # None の場合はデフォルトインスタンス生成
         ...
 
     def current_emotion(self) -> EmotionState
         """現在の感情状態を返す（減衰適用済み）。"""
 
-    def build_mood_description(self) -> str
+    def describe_mood(self, style: str = "full") -> str
         """島皮質相当: 現在の感情状態から自然言語での気分説明を生成。
-        例: 「穏やかな気分です」「少しイライラしています」"""
+        例: 「穏やかな気分です」「少しイライラしています」
+        style: "full" / "short" で粒度切替。"""
 
-    def tag_recent_memory(self, conversation: list[dict]) -> None
-        """直近の会話エピソードに感情タグを付与。"""
-
-    def on_input_received(self, event: InputReceived) -> None
-        """入力受信時の感情評価。"""
-        emotion = self.amygdala.evaluate(event.content)
-        self._emotion = self.acc.regulate(emotion, self._emotion, self._big_five)
+    def _on_message_event(self, event: MessageEvent) -> None
+        """メッセージ受信時の感情評価。"""
+        delta = self._amygdala.assess(event.content)
+        adjusted = self._acc.modulate(delta, self._emotion, big_five_scores)
+        self._emotion.apply(adjusted)
+        self._emotional_memory.encode(event.content, self._emotion)
 ```
 
 ### EmotionDelta
@@ -237,7 +242,7 @@ class AnteriorCingulateCortex:
 ```python
 class EmotionalMemory:
     """扁桃体-海馬相互作用: 記憶への感情タグ付け。
-    EpisodicStore のエントリに感情タグを付与し、
+    EpisodicStore/SemanticStore のエントリに感情タグを付与し、
     感情強度に基づく記憶検索・強調を可能にする。
 
     気分一致効果: 現在のvalence符号と記憶のvalenceが一致→スコア1.2倍。
@@ -257,8 +262,6 @@ class EmotionalMemory:
     def get_recent_tags(self, n: int = 5) -> list[EmotionTag]
         """直近の感情タグを強度降順で返す。"""
 ```
-
----
 
 ## 最近の機能拡張
 
@@ -360,7 +363,7 @@ EpisodicStore のエントリ形式に `emotion` フィールドを追加:
 ProactiveScoring の mood 因子を LimbicManager の感情状態から算出:
 
 ```python
-# agency/planning/decisions/scoring.py 内での利用イメージ
+# agency/planning/scoring.py 内での利用イメージ
 def _compute_mood_score(self, limbic: LimbicManager | None) -> float:
     if not limbic:
         return 1.0
@@ -371,7 +374,7 @@ def _compute_mood_score(self, limbic: LimbicManager | None) -> float:
 
 ## Big Five 性格特性モデル
 
-`iris/limbic/big_five.py` で管理（大脳辺縁系が性格特性を管理）。
+`iris/limbic/prefrontal/personality.py` で管理（前頭前野が性格特性を管理）。
 
 ```python
 @dataclass

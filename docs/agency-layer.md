@@ -47,13 +47,13 @@ sequenceDiagram
 
     alt ユーザー入力
         EB-->>PL: InputReady(content, from_timer=False)
-        PL->>PL: limbic.apply_limbic_modulation()
+        PL->>PL: inhibition.apply_limbic_modulation()
         PL->>PL: _inhibition.evaluate(now)
         PL->>PL: notify_user_activity()
         PL->>PL: _build_plan(content, context, gate, limbic_mood)
     else 自発発話トリガー（タイマー）
         EB-->>PL: InputReady(content="", from_timer=True)
-        PL->>PL: limbic.apply_limbic_modulation()
+        PL->>PL: inhibition.apply_limbic_modulation()
         PL->>PL: _inhibition.evaluate(now)
         PL->>PL: suppressed? → abort
         PL->>PL: ProactiveScoring.compute(content=event.content, ...)
@@ -92,7 +92,7 @@ class PlanningManager:
     # subscribe: InputReady (global EventBus を直接購読)
 
     def _on_input_ready(self, event: InputReady) -> None
-        # 1. limbic.apply_limbic_modulation(emotion) → 感情変調 (Phase 4)
+        # 1. inhibition.apply_limbic_modulation(emotion) → 感情変調
         # 2. gate = inhibition.evaluate(now)
         # 3. context.escalation → エスカレーション用の話しかけプラン (silent=False) → PlanDecided
         # 4. from_timer → scoring + threshold → abort or plan (silent判定時は興味サンプリング + 疑問生成)
@@ -103,7 +103,7 @@ class PlanningManager:
 
 ### ProactiveScoring（PFC スコアリング）
 
-`agency/planning/decisions/scoring.py` — PFC が自発発話の価値を評価する。
+`agency/planning/scoring.py` — PFC が自発発話の価値を評価する。
 
 ```python
 class ProactiveScoring:
@@ -117,12 +117,24 @@ class ProactiveScoring:
 
     sensory/short_termは個別に算出され、totalを上方補正する。
     """
-    def compute(self, now, last_proactive_time, last_user_activity, negative_mood_score,
-                limbic_mood: dict | None = None, content: str = "", context: dict | None = None) -> tuple[float, dict]:
+    def compute(
+        self,
+        now: float,
+        last_proactive_time: float,
+        last_user_activity: float,
+        negative_mood_score: float,
+        limbic_mood: EmotionState | None = None,
+        limbic_drive: DriveState | None = None,
+        content: str = "",
+        context: dict[str, Any] | None = None,
+        ignore_count: int = 0,
+    ) -> tuple[float, dict[str, float]]:
         # limbic_mood あり → PAD 3次元の重み付きスコアリング
         # limbic_mood なし → 従来の negative_mood_score ベース
+        # limbic_drive  → Drive蓄積による欲求スコア
         # content が空以外 → content_urgency で上方補正
         # context に "system_event" = "connected" がある場合 → 閾値を超えるようブースト
+        # ignore_count → 無視回数によるペナルティ
 ```
 
 ### Plan 定義

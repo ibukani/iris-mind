@@ -158,11 +158,17 @@ iris/
 ├── limbic/                    # 大脳辺縁系: 感情処理 + 性格特性
 │   ├── __init__.py
 │   ├── manager.py             LimbicManager（感情状態管理, EventBus連携）
-│   ├── models.py              EmotionState（PAD 3次元モデル）
-│   ├── amygdala.py            扁桃体（感情評価・価値判断）
-│   ├── acc.py                 前帯状皮質（感情制御・葛藤調整）
-│   ├── emotional_memory.py    扁桃体-海馬相互作用（感情タグ付け）
-│   └── big_five.py            BigFiveProfile + 性格進化
+│   ├── models.py              EmotionState, EmotionDelta, DriveState
+│   ├── mood.py                MoodEngine（気分記述・応答スタイル生成）
+│   ├── state.py               PsychometricState（永続化可能な心理状態）
+│   ├── amygdala/
+│   │   └── evaluator.py       Amygdala（キーワード+ONNX埋め込み評価）
+│   ├── cingulate/
+│   │   └── regulator.py       AnteriorCingulateCortex（感情制御・葛藤調整）
+│   ├── hippocampus/
+│   │   └── binder.py          EmotionalMemory（感情タグ付け・検索）
+│   └── prefrontal/
+│       └── personality.py     BigFiveProvider（性格特性+PEM進化）
 │
 ├── memory/                    # 記憶系: 感覚野 + 海馬 + 皮質（3層構造）
 │   ├── __init__.py
@@ -182,10 +188,10 @@ iris/
 │   ├── hippocampal/           # 海馬: 記憶整理
 │   │   ├── __init__.py
 │   │   ├── manager.py         HippocampalManager（Reflexionスケジューリング）
-│   │   └── reflexion.py       Reflexion（自己反省, 特性抽出）
-│   │   ├── goal_store.py              GoalStore（長期目標管理）
-│   │   ├── persona_data.py            PersonaData（話し方・自己状態の動的管理）
-│   │   └── persona_profile.py         PersonaProfile（ペルソナ情報の統合IF）
+│   │   ├── reflexion.py       Reflexion（自己反省, 特性抽出）
+│   │   ├── goal_store.py      GoalStore（長期目標管理）
+│   ├── persona_data.py        PersonaData（話し方・自己状態の動的管理）
+│   ├── persona_profile.py     PersonaProfile（ペルソナ情報の統合IF）
 │
 ├── agency/                    # 高度認知: PFC + 基底核 + 運動野
 │   ├── __init__.py

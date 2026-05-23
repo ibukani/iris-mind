@@ -94,7 +94,15 @@ class PsychometricState:
         try:
             raw = orjson.loads(self._path.read_bytes())
             if "emotion" in raw:
-                self.emotion = EmotionState(**{k: float(v) for k, v in raw["emotion"].items() if k != "updated_at"})
+                emo = raw["emotion"]
+                self.emotion = EmotionState(
+                    valence=float(emo.get("valence", 0)),
+                    arousal=float(emo.get("arousal", 0)),
+                    dominance=float(emo.get("dominance", 0.5)),
+                    valence_uncertainty=float(emo.get("valence_uncertainty", 0)),
+                    arousal_uncertainty=float(emo.get("arousal_uncertainty", 0)),
+                    dominance_uncertainty=float(emo.get("dominance_uncertainty", 0)),
+                )
             if "drive" in raw:
                 self.drive = DriveState(
                     curiosity=raw["drive"].get("curiosity", 0.0),

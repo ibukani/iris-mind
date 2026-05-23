@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import time
 from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
@@ -86,6 +87,12 @@ class LimbicManager:
     def _apply_emotion_change(self, delta: EmotionDelta, trigger: str) -> None:
         self._decay()
         adjusted = self._acc.modulate(delta, self._emotion, self._get_big_five_scores())
+
+        # 干渉効果: deltaが現在の感情方向と一致→増幅、逆→減衰（量子認知干渉項）
+        alignment = _emotion_alignment(adjusted, self._emotion)
+        interference = 1.0 + 0.3 * alignment
+        adjusted = adjusted.scale(interference)
+
         self._emotion.apply(adjusted)
         self._publish_snapshot(trigger)
 
@@ -177,8 +184,8 @@ class LimbicManager:
     def describe_mood(self, style: str = "full") -> str:
         return self._mood_engine.describe_mood(self.current_emotion(), style)
 
-    def generate_response_style(self) -> str:
-        return self._mood_engine.generate_response_style(self.current_emotion())
+    def generate_response_style(self, context: str = "") -> str:
+        return self._mood_engine.generate_response_style(self.current_emotion(), context)
 
     def retrieve_memories_by_affect(self, max_results: int = 5) -> list[dict[str, Any]]:
         """現在の感情状態に近い感情タグ付き記憶を検索する。"""
@@ -229,3 +236,16 @@ class LimbicManager:
             self._big_five_provider = big_five
         else:
             self._big_five_provider = None
+
+
+def _emotion_alignment(delta: EmotionDelta, state: EmotionState) -> float:
+    """deltaと現在の感情状態の方向一致度 [-1, 1]。
+
+    量子認知: 干渉項の位相角に対応。一致→建設的干渉、不一致→破壊的干渉。
+    """
+    d_mag = math.sqrt(delta.valence**2 + delta.arousal**2 + delta.dominance**2)
+    s_mag = math.sqrt(state.valence**2 + state.arousal**2 + state.dominance**2)
+    if d_mag * s_mag == 0:
+        return 0.0
+    dot = delta.valence * state.valence + delta.arousal * state.arousal + delta.dominance * state.dominance
+    return dot / (d_mag * s_mag)

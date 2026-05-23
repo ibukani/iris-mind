@@ -190,10 +190,18 @@ class Amygdala:
 
         dominance_score = self._estimate_dominance(text)
 
+        # 葛藤度: 正と負のキーワードが同時に存在するほど高い
+        total_valence = n_pos + n_neg
+        conflict = 2.0 * min(n_pos, n_neg) / max(total_valence, 1) if total_valence > 0 else 0.0
+        # 賞賛と批判の同時存在も葛藤に加算
+        if n_appreciation > 0 and n_criticism > 0:
+            conflict = max(conflict, 0.5)
+
         return EmotionDelta(
             valence=max(-1.0, min(1.0, valence_raw)) * 0.8,
             arousal=max(0.0, min(1.0, arousal_raw)) * 0.8,
             dominance=max(-1.0, min(1.0, dominance_score)) * 0.6,
+            conflict=min(1.0, conflict),
         )
 
     def classify_emotion(self, text: str) -> str | None:

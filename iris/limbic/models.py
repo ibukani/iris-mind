@@ -17,12 +17,18 @@ class EmotionState:
         valence:   快-不快 (-1.0=不快, 0.0=中立, 1.0=快)
         arousal:   覚醒度 (0.0=鎮静, 1.0=興奮)
         dominance: 支配性 (0.0=無力, 1.0=支配)
+        valence_uncertainty:   valenceの不確実性/葛藤 (0.0=明確, 1.0=最大葛藤)
+        arousal_uncertainty:   arousalの不確実性
+        dominance_uncertainty: dominanceの不確実性
         updated_at: 最終更新時刻 (time.time)
     """
 
     valence: float = 0.0
     arousal: float = 0.0
     dominance: float = 0.5
+    valence_uncertainty: float = 0.0
+    arousal_uncertainty: float = 0.0
+    dominance_uncertainty: float = 0.0
     updated_at: float = field(default_factory=time.time)
 
     def decay(self, dt: float | None = None) -> None:
@@ -39,6 +45,9 @@ class EmotionState:
             self.valence = 0.0
             self.arousal = 0.0
             self.dominance = 0.5
+            self.valence_uncertainty = 1.0
+            self.arousal_uncertainty = 1.0
+            self.dominance_uncertainty = 1.0
             return
         lambda_v = 0.02
         lambda_a = 0.04
@@ -46,13 +55,35 @@ class EmotionState:
         self.valence *= math.exp(-lambda_v * minutes)
         self.arousal *= math.exp(-lambda_a * minutes)
         self.dominance = 0.5 + (self.dominance - 0.5) * math.exp(-lambda_d * minutes)
+        # 不確実性は時間経過で上昇（記憶減衰）
+        u_rate = 0.015
+        self.valence_uncertainty = min(1.0, self.valence_uncertainty + u_rate * minutes)
+        self.arousal_uncertainty = min(1.0, self.arousal_uncertainty + u_rate * minutes)
+        self.dominance_uncertainty = min(1.0, self.dominance_uncertainty + u_rate * minutes)
         self._clamp()
 
     def apply(self, delta: EmotionDelta, intensity: float = 1.0) -> None:
-        """感情変化量を適用する。"""
+        """感情変化量と不確実性を同時に適用する。
+
+        量子認知: 新たな測定（感情刺激）が状態ベクトルを更新する。
+        信号に葛藤があると不確実性が上昇（重ね合わせの拡大）、
+        明確な信号は不確実性を減少させる（収束）。
+        """
         self.valence += delta.valence * intensity
         self.arousal += delta.arousal * intensity
         self.dominance += delta.dominance * intensity
+
+        delta_mag = math.sqrt(delta.valence**2 + delta.arousal**2 + delta.dominance**2)
+
+        for dim_name in ("valence", "arousal", "dominance"):
+            u_field = f"{dim_name}_uncertainty"
+            delta_val = getattr(delta, dim_name)
+            u = getattr(self, u_field)
+            u *= 0.9  # 既存不確実性の緩やかな減衰（新情報による収束）
+            u += delta.conflict * max(0.2, min(1.0, delta_mag)) * 0.3  # 葛藤→不確実性増
+            u = max(0.0, u - (1.0 - delta.conflict) * abs(delta_val) * intensity * 0.15)  # 明確→減少
+            setattr(self, u_field, max(0.0, min(1.0, u)))
+
         self._clamp()
         self.updated_at = time.time()
 
@@ -60,28 +91,41 @@ class EmotionState:
         self.valence = max(-1.0, min(1.0, self.valence))
         self.arousal = max(0.0, min(1.0, self.arousal))
         self.dominance = max(0.0, min(1.0, self.dominance))
+        self.valence_uncertainty = max(0.0, min(1.0, self.valence_uncertainty))
+        self.arousal_uncertainty = max(0.0, min(1.0, self.arousal_uncertainty))
+        self.dominance_uncertainty = max(0.0, min(1.0, self.dominance_uncertainty))
 
     def to_dict(self) -> dict[str, float]:
         return {
             "valence": round(self.valence, 3),
             "arousal": round(self.arousal, 3),
             "dominance": round(self.dominance, 3),
+            "valence_uncertainty": round(self.valence_uncertainty, 3),
+            "arousal_uncertainty": round(self.arousal_uncertainty, 3),
+            "dominance_uncertainty": round(self.dominance_uncertainty, 3),
         }
+
+    @property
+    def overall_uncertainty(self) -> float:
+        """3次元の平均不確実性（全体の葛藤度）"""
+        return (self.valence_uncertainty + self.arousal_uncertainty + self.dominance_uncertainty) / 3.0
 
 
 @dataclass
 class EmotionDelta:
-    """扁桃体が出力する感情変化量。"""
+    """扁桃体が出力する感情変化量（PAD + 葛藤度）。"""
 
     valence: float = 0.0
     arousal: float = 0.0
     dominance: float = 0.0
+    conflict: float = 0.0  # [0, 1] 信号葛藤度。0=単一方向, 1=最大葛藤
 
     def scale(self, factor: float) -> EmotionDelta:
         return EmotionDelta(
             valence=self.valence * factor,
             arousal=self.arousal * factor,
             dominance=self.dominance * factor,
+            conflict=self.conflict,  # 葛藤度はスケーリングしない（信号品質は不変）
         )
 
 

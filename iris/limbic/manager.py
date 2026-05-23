@@ -18,6 +18,24 @@ from iris.limbic.models import DriveState, EmotionDelta, EmotionState
 from iris.limbic.mood import MoodEngine
 from iris.limbic.state import PsychometricState
 
+_LABEL_WORDS: frozenset[str] = frozenset(
+    {
+        "嬉しい",
+        "悲しい",
+        "怒って",
+        "怖い",
+        "楽しい",
+        "つらい",
+        "happy",
+        "sad",
+        "angry",
+        "scared",
+        "excited",
+        "anxious",
+        "lonely",
+    }
+)
+
 
 @runtime_checkable
 class BigFiveProvider(Protocol):
@@ -71,6 +89,10 @@ class LimbicManager:
             self._psychometric_state.flush()
             logger.debug("Limbic: psychometric state flushed")
 
+    @staticmethod
+    def _has_affect_label(text: str) -> bool:
+        return any(w in text.lower() for w in _LABEL_WORDS)
+
     def _publish_snapshot(self, trigger: str) -> None:
         if self._event_bus is not None:
             self._event_bus.publish(
@@ -86,7 +108,7 @@ class LimbicManager:
                 )
             )
 
-    def _apply_emotion_change(self, delta: EmotionDelta, trigger: str) -> None:
+    def _apply_emotion_change(self, delta: EmotionDelta, trigger: str, affect_labeling: bool = False) -> None:
         self._decay()
         adjusted = self._acc.modulate(delta, self._emotion, self._get_big_five_scores())
 
@@ -109,6 +131,10 @@ class LimbicManager:
             self._inertia = 1.0
         self._last_delta = adjusted
 
+        # 感情ラベリング効果: ユーザが感情名を明示→前頭前野が扁桃体反応を抑制
+        if affect_labeling:
+            adjusted = adjusted.scale(0.85)
+
         self._emotion.apply(adjusted)
         self._publish_snapshot(trigger)
 
@@ -118,7 +144,15 @@ class LimbicManager:
         if event.direction not in ("request", "event") or event.msg_type not in ("chat", "system"):
             return
         delta = self._amygdala.assess(event.content)
-        self._apply_emotion_change(delta, "message")
+        affect_labeling = self._has_affect_label(event.content)
+        self._apply_emotion_change(delta, "message", affect_labeling=affect_labeling)
+
+        # 感情伝染: ユーザの感情に15%同調（認知評価とは別経路）
+        contagion = self._amygdala.contagion(event.content)
+        if contagion.valence != 0:
+            self._emotion.apply(contagion)
+            self._publish_snapshot("contagion")
+
         self._emotional_memory.encode(event.content[:200], self._emotion)
         logger.debug("Limbic: input evaluated -> emotion=%s", self._emotion.to_dict())
 
@@ -221,7 +255,22 @@ class LimbicManager:
 
     def retrieve_memories_by_affect(self, max_results: int = 5) -> list[dict[str, Any]]:
         """現在の感情状態に近い感情タグ付き記憶を検索する。"""
-        return self._emotional_memory.retrieve_by_affect(self.current_emotion(), max_results)
+        entries = self._emotional_memory.retrieve_by_affect(self.current_emotion(), max_results)
+        # 想起誘発感情: 検索した記憶のvalenceが現在の感情に微量波及
+        if entries:
+            vals = []
+            for e in entries:
+                meta = e.get("metadata", {})
+                emotion = meta.get("emotion") if isinstance(meta, dict) else {}
+                v = float(emotion.get("valence", 0)) if isinstance(emotion, dict) else 0
+                vals.append(v)
+            if vals:
+                avg_v = sum(vals) / len(vals)
+                if abs(avg_v) > 0.3:
+                    ripple = EmotionDelta(valence=avg_v * 0.05, arousal=0, dominance=0)
+                    self._emotion.apply(ripple)
+                    self._publish_snapshot("retrieval_induced")
+        return entries
 
     def get_report(self) -> dict[str, Any]:
         """感情状態のレポートを返す（デバッグ/ステータス用）。"""

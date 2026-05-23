@@ -317,6 +317,16 @@ class Amygdala:
             key=lambda name: _emotion_distance(delta, BASIC_EMOTIONS[name]),
         )
 
+    def contagion(self, text: str) -> EmotionDelta:
+        """感情伝染: ユーザの感情を15%ミラーリング（ACC bypass推奨）。"""
+        lower = text.lower()
+        n_pos = self._positive.count(lower)
+        n_neg = self._negative.count(lower)
+        if n_pos == 0 and n_neg == 0:
+            return EmotionDelta()
+        raw = (n_pos - n_neg) / max(n_pos + n_neg, 1) * 0.15
+        return EmotionDelta(valence=raw, arousal=0, dominance=0)
+
     @staticmethod
     def _estimate_dominance(text: str) -> float:
         score = 0.0

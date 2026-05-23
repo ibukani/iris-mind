@@ -270,6 +270,14 @@ class MoodEngine:
 
         MoodEngine._apply_context_collapse(hints, context)
 
+        # 4a: 粒度反映 - 低不確実性→自己開示スタイル
+        if hints and e.overall_uncertainty < 0.2:
+            hints.append("自信を持って自分の考えや気持ちを表現してください")
+
+        # 4b: アンビバレント表現 - 高不確実性→極端語彙を中和
+        if e.overall_uncertainty > 0.5:
+            hints.append("「最高」「最悪」などの極端な表現を避け、バランスの取れた言い回しを使ってください")
+
         return "## 応答スタイル\n" + "\n".join(f"- {h}" for h in hints) if hints else ""
 
     @staticmethod

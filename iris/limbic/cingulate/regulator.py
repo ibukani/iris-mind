@@ -83,9 +83,15 @@ class AnteriorCingulateCortex:
                 factor *= 1.0 - extra_damp
 
         # 慣れ: 延べ遭遇数に応じた制御強度の低下（刺激への適応）
+        # ACC学習率の性格変調: Neuroticism高→慣れが遅い（負感情が減衰しにくい）
+        habituation_rate = 0.015
+        if big_five is not None:
+            neuroticism = big_five.get("neuroticism", 50) / 100.0
+            habituation_rate *= max(0.3, 1.0 - (neuroticism - 0.5) * 0.6)
+
         self._encounter_count += 1
         if self._encounter_count > 10:
-            habituation = max(0.7, 1.0 - 0.015 * min(self._encounter_count - 10, 20))
+            habituation = max(0.7, 1.0 - habituation_rate * min(self._encounter_count - 10, 20))
             factor *= habituation
 
         factor = max(0.3, factor)

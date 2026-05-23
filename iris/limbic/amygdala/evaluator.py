@@ -239,6 +239,7 @@ class Amygdala:
         self._appreciation = _KeywordCounter(_APPRECIATION_WORDS)
         self._criticism = _KeywordCounter(_CRITICISM_WORDS)
         self._embedding_scorer = embedding_scorer or _EmbeddingScorer()
+        self._cumulative_keywords: int = 0  # 扁桃体stateful適応用: 累積キーワード数
 
     def assess(self, text: str) -> EmotionDelta:
         if not text:
@@ -300,6 +301,14 @@ class Amygdala:
         conflict = 2.0 * min(n_pos, n_neg) / max(total_valence, 1) if total_valence > 0 else 0.0
         if n_appreciation > 0 and n_criticism > 0:
             conflict = max(conflict, 0.5)
+
+        # 扁桃体stateful適応: 累積キーワード数に応じた慣れ（同じ刺激の繰り返しで反応減衰）
+        self._cumulative_keywords += n_pos + n_neg + n_arousal
+        if self._cumulative_keywords > 10:
+            cumulative_damp = max(0.4, 1.0 - 0.02 * min(self._cumulative_keywords - 10, 30))
+            valence_raw *= cumulative_damp
+            arousal_raw *= cumulative_damp
+            dominance_score *= cumulative_damp
 
         return EmotionDelta(
             valence=max(-1.0, min(1.0, valence_raw)) * 0.8,

@@ -145,6 +145,16 @@ class LimbicManager:
                 self._inertia = max(0.3, self._inertia - 0.25)
             else:
                 self._inertia += (1.0 - self._inertia) * 0.2
+            # 慣性の性格変調: Neuroticism→不安定化、Conscientiousness→安定化
+            scores = self._get_big_five_scores()
+            if scores:
+                neuroticism = scores.get("neuroticism", 50) / 100.0
+                conscientiousness = scores.get("conscientiousness", 50) / 100.0
+                neuro_factor = 1.0 - (neuroticism - 0.5) * 0.4
+                self._inertia *= max(0.5, neuro_factor)
+                con_factor = 0.5 + conscientiousness
+                self._inertia *= max(0.5, con_factor)
+                self._inertia = max(0.3, min(1.5, self._inertia))
             adjusted = adjusted.scale(self._inertia)
         else:
             self._inertia = 1.0

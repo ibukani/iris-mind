@@ -90,7 +90,7 @@ def setup_logging(cfg: LoggingConfig) -> None:
         rotation=cfg.max_bytes,
         retention=3,
         encoding="utf-8",
-        filter=filter_fn,
+        filter=filter_fn,  # type: ignore[arg-type]
     )
 
     # コンソール sink（条件付き。Kernel 診断用、UI 表示とは無関係）
@@ -100,7 +100,7 @@ def setup_logging(cfg: LoggingConfig) -> None:
             sink=_console_sink,
             level=cfg.console_level.upper(),
             format=fmt,
-            filter=filter_fn,
+            filter=filter_fn,  # type: ignore[arg-type]
         )
 
     # 起動世代クリーンアップ

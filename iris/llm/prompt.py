@@ -70,8 +70,7 @@ class Personality:
         pt = PromptTemplate.from_template(template)
         for ph in _extract_placeholders(template):
             kwargs.setdefault(ph, "")
-        result = pt.format(**kwargs)
-        return result if isinstance(result, str) else ""
+        return pt.format(**kwargs)
 
     def build_system_prompt(
         self,

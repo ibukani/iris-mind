@@ -9,7 +9,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from cachetools import LRUCache, cached
 import httpx
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
@@ -191,9 +190,7 @@ class LLMBridge:
             if getattr(resp_message, "tool_calls", None):
                 new_msg.tool_calls = resp_message.tool_calls
             return new_msg
-        if isinstance(resp_message, AIMessage):
-            return resp_message
-        return AIMessage(content=str(getattr(resp_message, "content", "")))
+        return resp_message
 
     def _build_call_kwargs(
         self,
@@ -305,7 +302,6 @@ class LLMBridge:
         except Exception as e:
             logger.warning("Failed to unload ollama model {}: {}", model_name, e)
 
-    @cached(cache=LRUCache(maxsize=32))  # type: ignore[arg-type]
     def _resolve_provider(self, model_name: str) -> BaseChatModel:
         """モデル名から対応するプロバイダインスタンスを解決する。"""
         key = self._model_map.get(model_name)
@@ -315,7 +311,6 @@ class LLMBridge:
         logger.warning("Model {!r} not found in provider map, using first provider", model_name)
         return first
 
-    @cached(cache=LRUCache(maxsize=1))  # type: ignore[arg-type]
     def _get_default_model(self) -> str:
         """デフォルト of モデル名を取得する（マップの最初のモデル）。"""
         for name in self._model_map:

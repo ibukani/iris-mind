@@ -72,9 +72,7 @@ class FlowExecutor:
 
         self._loop = asyncio.new_event_loop()
         self._plan_queue: queue.Queue[dict[str, Any] | None] = queue.Queue()
-        self._worker_thread = threading.Thread(
-            target=self._worker_run, daemon=True, name="executor-worker"
-        )
+        self._worker_thread = threading.Thread(target=self._worker_run, daemon=True, name="executor-worker")
         self._worker_thread.start()
 
         self._bus.subscribe("PlanDecided", self._on_plan)

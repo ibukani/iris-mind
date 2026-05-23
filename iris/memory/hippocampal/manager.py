@@ -65,9 +65,7 @@ class HippocampalManager:
             return False
         if msg_count_since_reflect < self._reflect_interval:
             return False
-        if message_count < 2:
-            return False
-        return True
+        return message_count >= 2
 
     def force_run(self, messages: list[BaseMessage]) -> None:
         if self._reflexion is None:

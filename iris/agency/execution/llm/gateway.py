@@ -35,6 +35,7 @@ class LLMGateway:
     ) -> None:
         self._llm = llm
         self._model_config = model_config
+        self._personality = personality
         self._limbic = limbic
         self._capability_checker = capability_checker
         self._debug_capture = debug_capture
@@ -86,6 +87,7 @@ class LLMGateway:
         on_token: Callable[[str], None] | None = None,
         interrupt_token: InterruptToken | None = None,
         priority: int = 0,
+        enable_thinking: bool = False,
     ) -> AIMessage:
         msgs: list[BaseMessage] = [*system_msgs, *messages]
         self._last_system_prompt = str(system_msgs[0].content) if system_msgs else ""
@@ -100,6 +102,7 @@ class LLMGateway:
             on_token=on_token,
             interrupt_token=interrupt_token,
             priority=priority,
+            enable_thinking=enable_thinking,
         )
 
         self._capture_debug(
@@ -121,11 +124,17 @@ class LLMGateway:
         model_role: str = "default",
         max_tokens: int | None = None,
         priority: int = 0,
+        show_thinking: bool = False,
     ) -> AIMessage:
         response_style = self._limbic.generate_response_style() if self._limbic else ""
         system_msgs = self._build_system_messages(
-            context_hint=context_hint, response_style=response_style,
+            context_hint=context_hint,
+            response_style=response_style,
         )
+        if show_thinking and messages and isinstance(messages[-1], HumanMessage):
+            last_msg = messages[-1]
+            last_msg.content = self._personality.build_thinking_prompt(str(last_msg.content))
+
         return await self._call_llm(
             system_msgs,
             messages,
@@ -135,6 +144,7 @@ class LLMGateway:
             on_token=on_token,
             interrupt_token=interrupt_token,
             priority=priority,
+            enable_thinking=show_thinking,
         )
 
     async def chat_short(
@@ -153,7 +163,9 @@ class LLMGateway:
         response_style = self._limbic.generate_response_style() if self._limbic and situation == "proactive" else ""
 
         system_msgs = self._build_system_messages(
-            context_hint=context_hint, response_style=response_style, situation=situation,
+            context_hint=context_hint,
+            response_style=response_style,
+            situation=situation,
         )
 
         msgs: list[BaseMessage] = [*system_msgs]

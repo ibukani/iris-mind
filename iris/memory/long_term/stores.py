@@ -202,7 +202,7 @@ class SemanticStore(_JsonlStore):
             entry.setdefault("type", "lesson")
             entries.append(entry)
             if len(entries) > self.max_entries:
-                entries = entries[-self.max_entries:]
+                entries = entries[-self.max_entries :]
             self._write_file(entries)
             self.vector.add(entry)
             self._synced_count = len(entries)

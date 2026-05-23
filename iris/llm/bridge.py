@@ -272,7 +272,7 @@ class LLMBridge:
             if not url:
                 return False
             try:
-                return httpx.get(url, timeout=1.0).status_code == 200
+                return bool(httpx.get(url, timeout=1.0).status_code == 200)
             except Exception:
                 logger.warning("Ollama provider at {} is unavailable", url)
                 return False

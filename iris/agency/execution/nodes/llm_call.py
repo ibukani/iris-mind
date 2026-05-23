@@ -58,6 +58,7 @@ class LLMCallNode:
                 model_role=model_role,
                 max_tokens=max_tokens,
                 priority=priority,
+                show_thinking=plan.get("show_thinking", False),
             )
 
             state["messages"].append(resp)

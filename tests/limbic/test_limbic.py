@@ -18,7 +18,7 @@ def test_generate_response_style_joy() -> None:
     assert any(
         x in style for x in ["明るく温かいトーン", "温かみのある明るい", "明るい声で", "最高に嬉しそう", "歓喜に満ちた"]
     )
-    assert any(x in style for x in ["やったー", "わあ！", "やった！", "最高！！", "うわぁぁ！", "興奮を隠しきれない"])
+    assert any(x in style for x in ["まじで！", "うそっ！", "最高！！", "うわぁぁ！", "興奮を隠しきれない", "元気よく"])
 
 
 def test_generate_response_style_anger() -> None:

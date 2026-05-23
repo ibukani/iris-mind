@@ -158,7 +158,7 @@ class DriveState:
     maintenance: float = 0.0
     updated_at: float = field(default_factory=time.time)
 
-    def accumulate(self, dt: float | None = None) -> None:
+    def accumulate(self, dt: float | None = None, big_five: dict[str, float] | None = None) -> None:
         """時間経過による欲求の自然蓄積。"""
         if dt is None:
             now = time.time()
@@ -175,6 +175,15 @@ class DriveState:
         rate_curiosity = 0.015
         rate_social = 0.01
         rate_maintenance = 0.005
+
+        # 性格-欲求結合: BigFiveが蓄積速度を変調
+        if big_five:
+            openness = big_five.get("openness", 50) / 50.0  # 1.0 baseline
+            neuroticism = big_five.get("neuroticism", 50) / 50.0
+            extraversion = big_five.get("extraversion", 50) / 50.0
+            rate_curiosity *= max(0.5, openness)
+            rate_social *= max(0.5, (neuroticism + extraversion) / 2)
+            rate_maintenance *= max(0.5, 2.0 - neuroticism)
 
         self.curiosity += rate_curiosity * minutes
         self.social_need += rate_social * minutes

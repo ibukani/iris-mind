@@ -93,6 +93,25 @@ class LimbicManager:
     def _has_affect_label(text: str) -> bool:
         return any(w in text.lower() for w in _LABEL_WORDS)
 
+    def _trigger_emotional_reflection(self, delta: EmotionDelta) -> None:
+        estimate: dict[str, float] = {}
+        if delta.valence > 0:
+            estimate["openness"] = 50 + delta.valence * 12
+            estimate["extraversion"] = 50 + delta.valence * 15
+        elif delta.valence < 0:
+            estimate["neuroticism"] = 50 + abs(delta.valence) * 10
+            estimate["agreeableness"] = 50 - abs(delta.valence) * 8
+
+        if not estimate:
+            return
+
+        if hasattr(self._big_five_provider, "update_from_estimate"):
+            changes = self._big_five_provider.update_from_estimate(estimate, "emotional_trigger")  # type: ignore[union-attr]
+            if changes:
+                logger.info("Limbic: PEM update from emotional trigger -> %s", changes)
+
+        self._publish_snapshot("emotional_reflection")
+
     def _publish_snapshot(self, trigger: str) -> None:
         if self._event_bus is not None:
             self._event_bus.publish(
@@ -138,6 +157,10 @@ class LimbicManager:
         self._emotion.apply(adjusted)
         self._publish_snapshot(trigger)
 
+        # 極端な感情→自己内省→PEM更新
+        if abs(self._emotion.valence) > 0.75 and trigger not in ("contagion", "retrieval_induced", "drive_coupling"):
+            self._trigger_emotional_reflection(delta)
+
     def _on_message_event(self, event: MessageEvent) -> None:
         if not event.content:
             return
@@ -157,7 +180,7 @@ class LimbicManager:
         logger.debug("Limbic: input evaluated -> emotion=%s", self._emotion.to_dict())
 
     def _on_timer_tick(self, event: TimerTick) -> None:
-        self._drive.accumulate()
+        self._drive.accumulate(big_five=self._get_big_five_scores())
         if event.tick_count % 6 == 0:
             self._decay()
             if self._persona_profile is not None:

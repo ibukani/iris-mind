@@ -233,8 +233,21 @@ class MoodEngine:
         else:
             return ""
         u = e.overall_uncertainty
-        if u > 0.3:
-            base += "（でも、ちょっと複雑な気持ちも…）" if style == "full" else "･･･"
+        if u < 0.2:
+            if style == "full":
+                base = "とても" + base
+            else:
+                base += "◎"
+        elif u > 0.5:
+            if style == "full":
+                base += "（何とも言えない複雑な気分です）"
+            else:
+                base = "複雑"
+        elif u > 0.3:
+            if style == "full":
+                base += "（でも、ちょっと複雑な気持ちも…）"
+            else:
+                base += "･･･"
         return base
 
     @staticmethod

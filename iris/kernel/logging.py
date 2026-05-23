@@ -57,7 +57,7 @@ def _module_level_filter(levels: dict[str, str]) -> Callable[[Record], bool]:
             return True
         for prefix, lvl_no in _level_map.items():
             if name.startswith(prefix):
-                return record["level"].no >= lvl_no
+                return bool(record["level"].no >= lvl_no)
         return True
 
     return _filter

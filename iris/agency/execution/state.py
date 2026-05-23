@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, TypedDict
+from typing import TYPE_CHECKING, Any, NotRequired, TypedDict
 
 if TYPE_CHECKING:
     from iris.llm.interrupt_token import InterruptToken
@@ -10,13 +10,13 @@ if TYPE_CHECKING:
 from langchain_core.messages import BaseMessage
 
 
-class ExecutionState(TypedDict, total=False):
+class ExecutionState(TypedDict):
     plan: dict[str, Any]
     messages: list[BaseMessage]
-    response_text: str
+    response_text: NotRequired[str]
     tool_iterations: int
     interrupted: bool
-    error: str | None
+    error: NotRequired[str | None]
     completed: bool
 
 

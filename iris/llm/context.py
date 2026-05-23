@@ -25,7 +25,7 @@ def estimate_tokens(text: str, tokenizer_mgr: TokenizerManager | None = None) ->
     if not text:
         return 0
     if tokenizer_mgr is not None:
-        return tokenizer_mgr.estimate_tokens(text)
+        return int(tokenizer_mgr.estimate_tokens(text))
     # 日本語等のマルチバイトを考慮し、安全側に倒す (1文字あたり約1.3トークン)
     return int(len(text) * 1.3)
 

@@ -18,7 +18,7 @@ from pathlib import Path
 import re
 import sys
 
-from loguru import Record, logger
+from loguru import logger
 
 from .config import LoggingConfig
 
@@ -47,11 +47,11 @@ def _cleanup_old_sessions(log_dir: Path, keep: int) -> None:
                 f.unlink(missing_ok=True)
 
 
-def _module_level_filter(levels: dict[str, str]) -> Callable[[Record], bool]:
+def _module_level_filter(levels: dict[str, str]) -> Callable[[dict], bool]:
     """loguru フィルタ: 指定モジュールのログレベルを個別制御する。"""
     _level_map = {name: logger.level(lvl).no for name, lvl in levels.items()}
 
-    def _filter(record: Record) -> bool:
+    def _filter(record: dict) -> bool:
         name = record["name"]
         if not name:
             return True

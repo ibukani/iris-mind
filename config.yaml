@@ -81,7 +81,7 @@ debug:
 logging:
     backup_count: 14
     console_format: "{time:YYYY-MM-DD HH:mm:ss} [{level}] {message}"
-    console_level: INFO
+    console_level: DEBUG
     dir: logs
     file_level: INFO
     # 特定ロガーのレベル上書き（例: iris.io: DEBUG）

@@ -181,6 +181,7 @@ class SessionManager:
         try:
             conn.send_bytes(raw)
             session.last_activity = datetime.now()
+            logger.debug("Sent {} bytes to session={}", len(raw), session.session_id)
         except (BrokenPipeError, ConnectionError, EOFError):
             logger.warning("Connection lost for session: {}", session.session_id)
             session.conn = None

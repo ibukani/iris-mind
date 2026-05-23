@@ -85,6 +85,6 @@ logging:
     dir: logs
     file_level: INFO
     # 特定ロガーのレベル上書き（例: iris.io: DEBUG）
-    # loggers:
-    #   iris.io: DEBUG
+    loggers:
+        iris.io: DEBUG
     max_bytes: 5242880

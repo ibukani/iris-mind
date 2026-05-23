@@ -3,10 +3,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from iris.kernel.config import ProactiveConfig
-from iris.memory.manager import MemoryManager
 
 if TYPE_CHECKING:
     from iris.limbic.models import DriveState, EmotionState
+    from iris.memory.manager import MemoryManager
 
 from loguru import logger
 
@@ -40,7 +40,6 @@ class ProactiveScoring:
         context: dict[str, Any] | None = None,
         ignore_count: int = 0,
     ) -> tuple[float, dict[str, float]]:
-        w = self._config.trigger_weights
         time_score = self._compute_time_score(now, last_proactive_time, last_user_activity)
         memory_score = self._compute_memory_score()
         context_score = self._compute_context_score()
@@ -51,34 +50,19 @@ class ProactiveScoring:
         urgency_score = self._compute_content_urgency(content)
         context_score = max(context_score, stm_score) if stm_score > 0 else context_score
 
-        if limbic_mood:
-            v = limbic_mood.valence
-            a = limbic_mood.arousal
-            d = limbic_mood.dominance
-            intensity = abs(v) * 0.5 + a * 0.3 + abs(d - 0.5) * 0.2
-            mood_weight = 0.10 + intensity * 0.25
-        else:
-            mood_weight = w.get("mood", 0.15)
-
-        total = (
-            w.get("time", 0.25) * time_score
-            + w.get("memory", 0.45) * memory_score
-            + w.get("context", 0.15) * context_score
-            + mood_weight * mood_score
-            + w.get("drive", 0.20) * drive_score
+        mood_weight = self._compute_mood_weight(limbic_mood)
+        total, ignore_penalty = self._aggregate_scores(
+            time_score,
+            memory_score,
+            context_score,
+            mood_score,
+            mood_weight,
+            drive_score,
+            sensory_score,
+            urgency_score,
+            ignore_count,
+            context,
         )
-        if sensory_score > 0:
-            total = max(total, sensory_score * 0.3)
-        total = max(total, urgency_score * 0.15)
-
-        ignore_penalty = 1.0
-        if ignore_count > 0:
-            ignore_penalty = max(0.2, 1.0 - ignore_count * 0.25)
-            total *= ignore_penalty
-
-        is_system_event = context and context.get("system_event") == "connected"
-        if is_system_event:
-            total = max(total, self._config.speak_threshold + 0.1)
 
         logger.debug(
             "Scores: time={:.3f} mem={:.3f} ctx={:.3f} mood={:.3f} sensory={:.3f} stm={:.3f} urg={:.3f} "
@@ -105,6 +89,50 @@ class ProactiveScoring:
             "urgency": urgency_score,
             "ignore_penalty": ignore_penalty if ignore_count > 0 else 1.0,
         }
+
+    @staticmethod
+    def _compute_mood_weight(limbic_mood: EmotionState | None) -> float:
+        if not limbic_mood:
+            return 0.15
+        v = limbic_mood.valence
+        a = limbic_mood.arousal
+        d = limbic_mood.dominance
+        intensity = abs(v) * 0.5 + a * 0.3 + abs(d - 0.5) * 0.2
+        return 0.10 + intensity * 0.25
+
+    def _aggregate_scores(
+        self,
+        time_score: float,
+        memory_score: float,
+        context_score: float,
+        mood_score: float,
+        mood_weight: float,
+        drive_score: float,
+        sensory_score: float,
+        urgency_score: float,
+        ignore_count: int,
+        context: dict[str, Any] | None,
+    ) -> tuple[float, float]:
+        w = self._config.trigger_weights
+        total = (
+            w.get("time", 0.25) * time_score
+            + w.get("memory", 0.45) * memory_score
+            + w.get("context", 0.15) * context_score
+            + mood_weight * mood_score
+            + w.get("drive", 0.20) * drive_score
+        )
+        if sensory_score > 0:
+            total = max(total, sensory_score * 0.3)
+        total = max(total, urgency_score * 0.15)
+
+        ignore_penalty = 1.0
+        if ignore_count > 0:
+            ignore_penalty = max(0.2, 1.0 - ignore_count * 0.25)
+            total *= ignore_penalty
+
+        if context and context.get("system_event") == "connected":
+            total = max(total, self._config.speak_threshold + 0.1)
+        return total, ignore_penalty
 
     def _compute_time_score(self, now: float, last_proactive_time: float, last_user_activity: float) -> float:
         last_time = max(last_proactive_time, last_user_activity)

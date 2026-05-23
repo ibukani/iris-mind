@@ -189,10 +189,10 @@ self._inertia *= max(0.5, con_factor)
 
 | 特性 | 効果 |
 |------|------|
-| Openness 高 | curiosity 蓄積加速 (1.0 + (O-50)*0.003) |
-| Extraversion 高 | social_need 蓄積減少 (1.0 - (E-50)*0.002) |
-| Neuroticism 高 | social_need 蓄積加速 (1.0 + (N-50)*0.003) |
-| Conscientiousness 低 | maintenance 蓄積加速 (1.0 + (50-C)*0.003) |
+| Openness 高 | curiosity 蓄積加速 (xOpenness/50, max 2x at O=100) |
+| Neuroticism + Extraversion 高 (平均) | social_need 蓄積加速 (x(N+E)/100, max 2x) |
+| Neuroticism 低 | maintenance 蓄積加速 (x(2 - N/50), max 2x at N=0) |
+| Neuroticism 高 | maintenance 蓄積減速 (min 0.5x at N=100) |
 
 ### 感情トリガーによる性格更新 (PEM)
 

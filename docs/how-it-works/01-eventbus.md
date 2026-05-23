@@ -68,6 +68,7 @@ classDiagram
     Event <|-- AgentStateChangeEvent
     Event <|-- MemoryUpdateEvent
     Event <|-- AgentAnomalyEvent
+    Event <|-- InterruptEvent
     Event <|-- MonitorFeedback
     Event <|-- DebugSnapshotEvent
     Event <|-- ProactiveResultEvent
@@ -97,6 +98,10 @@ classDiagram
         +identity: str
         +offline_duration: str
     }
+    class InterruptEvent {
+        +reason: str
+        +trace_id: str
+    }
 ```
 
 ## 主要イベントの配送パス
@@ -110,6 +115,7 @@ classDiagram
 | MessageEvent(stream) | Agency/Execution | IO層 | direction="stream" | トークン逐次出力 |
 | MessageEvent(response) | Agency/Execution | IO層 | direction="response" | 応答確定 |
 | ClientSessionEvent | IO層 | 全層 | action="connected"/"disconnected" | Client接続状態 |
+| InterruptEvent | 任意 | FlowExecutor | InputReady到着時 | LLM生成中断 |
 | ProactiveResultEvent | Agency/Execution | Limbic, Memory | 自発調査完了後 | 調査結果 |
 | MonitorFeedback | Agency/Execution | Limbic | talkative/flags検出時 | 出力頻度監視 |
 | DebugSnapshotEvent | 任意 | EventTracer | Debug有効時 | 状態変化記録 |

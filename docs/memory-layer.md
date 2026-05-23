@@ -96,7 +96,7 @@ class ShortTermMemoryManager:
 ```
 
 **add_turn のタイミング**:
-- `FlowExecutor._execute_general()` Plan決定後、LLM呼出直前に `add_turn("user", content)`
+- `FlowExecutor._on_plan()` Plan決定後、LLM呼出直前に `add_turn("user", content)`
 - LLM応答受信直後に `add_turn("assistant", response_text)`
 - Planning段階では short_term に最新ターンは存在しない（Planの `content` フィールド経由でアクセスする）
 

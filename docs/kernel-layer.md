@@ -160,25 +160,33 @@ class KernelFactory:
     """
 
     @staticmethod
-    def build(config: Config) -> KernelContext
-        # 1. EventBus 生成
-        # 2. MemoryManager + plugins 生成
-        # 3. PlanningManager + FlowExecutor 生成
-        # 4. AgencyManager 生成（global↔internal 接続）
-        # 5. IOManager + transport/session/auth 生成
-        # 6. KernelManager 生成
-        # 7. CommandHandler 生成
-        # 8. EventBus subscribe 設定
-        # 9. KernelContext として返す
+    def build(config: Config, debug: bool = False) -> KernelContext
+        # 1. EventBus + EventTracer + SessionManager + GrpcListener 生成
+        # 2. IOManager 生成（transport/session/auth 注入）
+        # 3. Stores（episodic, semantic）生成
+        # 4. MemoryManager 生成
+        # 5. PsychometricState + BigFiveProfile 読込
+        # 6. LimbicManager 生成（Amygdala / ACC / EmotionalMemory 注入）
+        # 7. LLMBridge + TokenizerManager 生成
+        # 8. ToolRegistry + ToolEngine 生成
+        # 9. PlanningManager + FlowExecutor（ExecutionOrchestrator）生成
+        # 10. AgencyManager 生成（global↔internal 接続）
+        # 11. KernelManager + CommandHandler + SystemDiagnostics 生成
+        # 12. EventBus subscribe 設定
+        # 13. KernelContext として返す
 
 @dataclass
 class KernelContext:
     event_bus: EventBus
     kernel: KernelManager
     io: IOManager
-    memory: MemoryManager
-    agency: AgencyManager
+    limbic: LimbicManager | None
+    memory: MemoryManager | None
+    agency: AgencyManager | None
     cmd_handler: CommandHandler
+    grpc_listener: GrpcListener
+    session_mgr: SessionManager
+    diagnostics: SystemDiagnostics | None = None
     shutdown_requested: bool = False
 ```
 

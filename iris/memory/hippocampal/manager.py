@@ -55,15 +55,19 @@ class HippocampalManager:
         self._event_bus = event_bus
 
     async def maybe_run(self, messages: list[BaseMessage], msg_count_since_reflect: int) -> int:
-        if self._reflexion is None:
+        if not self._can_reflect(msg_count_since_reflect, len(messages)):
             return msg_count_since_reflect
-        if msg_count_since_reflect < self._reflect_interval:
-            return msg_count_since_reflect
-        if len(messages) < 2:
-            return msg_count_since_reflect
-
         await self._reflect_and_consolidate(messages, force=False)
         return 0
+
+    def _can_reflect(self, msg_count_since_reflect: int, message_count: int) -> bool:
+        if self._reflexion is None:
+            return False
+        if msg_count_since_reflect < self._reflect_interval:
+            return False
+        if message_count < 2:
+            return False
+        return True
 
     def force_run(self, messages: list[BaseMessage]) -> None:
         if self._reflexion is None:
@@ -92,6 +96,12 @@ class HippocampalManager:
     def _store_reflection_to_memory(self, result: dict[str, Any]) -> None:
         if self._memory is None:
             return
+        self._store_reflection_keys(result)
+        self._store_new_goals(result, self._memory)
+
+    def _store_reflection_keys(self, result: dict[str, Any]) -> None:
+        if self._memory is None:
+            return
         for key, entry_type, prefix, tags in _REFLECTION_MEMORY_KEYS:
             val = result.get(key)
             if val:
@@ -101,11 +111,42 @@ class HippocampalManager:
                     tags=tags,
                 )
 
+    def _store_new_interests(self, result: dict[str, Any]) -> None:
+        if self._persona_profile is None:
+            return
+        new_interests = result.get("new_interests")
+        if not new_interests or not isinstance(new_interests, list):
+            return
+        for topic in new_interests:
+            if isinstance(topic, str) and topic.strip():
+                self._persona_profile.persona_data.add_interest(topic.strip(), 0.3)
+
+    def _store_session_result(self, result: dict[str, Any], mem: MemoryManagerProtocol) -> None:
+        if result.get("summary"):
+            mem.add_episodic(
+                content=f"[session summary] {result['summary']}",
+                kind="system",
+            )
+        for key, entry_type in [
+            ("lesson", "lesson"),
+            ("preference", "preference"),
+            ("improvement", "lesson"),
+        ]:
+            val = result.get(key, "")
+            if val:
+                mem.add_semantic_by_type(entry_type=entry_type, content=val)
+
+        self._store_new_goals(result, mem)
+        self._store_new_interests(result)
+
+    @staticmethod
+    def _store_new_goals(result: dict[str, Any], memory: MemoryManagerProtocol) -> None:
         new_goals = result.get("new_goals")
-        if new_goals and isinstance(new_goals, list):
-            for goal_desc in new_goals:
-                if isinstance(goal_desc, str) and goal_desc.strip():
-                    self._memory.goals.add_goal(description=goal_desc, weight=1.0)
+        if not new_goals or not isinstance(new_goals, list):
+            return
+        for goal_desc in new_goals:
+            if isinstance(goal_desc, str) and goal_desc.strip():
+                memory.goals.add_goal(description=goal_desc, weight=1.0)
 
     def _update_big_five(self, result: dict[str, Any]) -> None:
         if self._big_five is None:
@@ -176,35 +217,7 @@ class HippocampalManager:
 
         try:
             result = await self._reflexion.reflect(messages)
-            if result.get("summary"):
-                mem.add_episodic(
-                    content=f"[session summary] {result['summary']}",
-                    kind="system",
-                )
-            for key, entry_type in [
-                ("lesson", "lesson"),
-                ("preference", "preference"),
-                ("improvement", "lesson"),
-            ]:
-                val = result.get(key, "")
-                if val:
-                    mem.add_semantic_by_type(
-                        entry_type=entry_type,
-                        content=val,
-                    )
-
-            new_goals = result.get("new_goals")
-            if new_goals and isinstance(new_goals, list):
-                for goal_desc in new_goals:
-                    if isinstance(goal_desc, str) and goal_desc.strip():
-                        mem.goals.add_goal(description=goal_desc, weight=1.0)
-
-            new_interests = result.get("new_interests")
-            if new_interests and isinstance(new_interests, list) and self._persona_profile is not None:
-                for topic in new_interests:
-                    if isinstance(topic, str) and topic.strip():
-                        self._persona_profile.persona_data.add_interest(topic.strip(), 0.3)
-
+            self._store_session_result(result, mem)
             logger.info("Session reflect completed")
         except Exception as e:
             logger.exception("Session reflect failed: {}", e)

@@ -2,16 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
-import orjson
 
-_DEFAULT_PATH = ".iris/data/big_five.json"
+if TYPE_CHECKING:
+    from iris.limbic.score import PsychometricState
 
 _PEM_LAMBDA = 0.8
-
 _CHANGE_THRESHOLD = 1.0
 
 
@@ -40,6 +38,7 @@ class BigFiveProfile:
 
     特性値は 0-100 の範囲で管理。
     会話からの推定値（p_turn）を指数移動平均（PEM）で更新する。
+    永続化は PsychometricState 経由。
     """
 
     openness: float = 50.0
@@ -48,40 +47,18 @@ class BigFiveProfile:
     agreeableness: float = 50.0
     neuroticism: float = 50.0
     evolution_history: list[dict[str, Any]] = field(default_factory=list)
-    _path: str = _DEFAULT_PATH
 
-    @classmethod
-    def load(cls, path: str = _DEFAULT_PATH) -> BigFiveProfile:
-        p = Path(path)
-        if not p.exists():
-            profile = cls(_path=path)
-            profile._save()
-            logger.info("BigFiveProfile: created new profile")
-            return profile
-        try:
-            data = orjson.loads(p.read_bytes())
-            logger.info("BigFiveProfile: loaded from %s", path)
-            return cls(
-                openness=data.get("openness", 50.0),
-                conscientiousness=data.get("conscientiousness", 50.0),
-                extraversion=data.get("extraversion", 50.0),
-                agreeableness=data.get("agreeableness", 50.0),
-                neuroticism=data.get("neuroticism", 50.0),
-                evolution_history=data.get("evolution_history", []),
-                _path=path,
-            )
-        except (orjson.JSONDecodeError, Exception):
-            return cls(_path=path)
+    def set_state(self, state: PsychometricState) -> None:
+        self._state = state
 
-    def save(self) -> None:
-        self._save()
+    _state: Any | None = field(default=None, repr=False, compare=False)
 
     def _save(self) -> None:
-        p = Path(self._path)
-        p.parent.mkdir(parents=True, exist_ok=True)
-        p.write_bytes(
-            orjson.dumps(self.to_dict(), option=orjson.OPT_INDENT_2),
-        )
+        if self._state is None:
+            return
+        self._state.big_five = {k: float(v) for k, v in self.get_scores().items()}
+        self._state.big_five_history = self.evolution_history
+        self._state.mark_dirty()
 
     def to_dict(self) -> dict[str, Any]:
         return {

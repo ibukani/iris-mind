@@ -15,6 +15,7 @@ from iris.limbic.amygdala.evaluator import Amygdala
 from iris.limbic.cingulate.regulator import AnteriorCingulateCortex
 from iris.limbic.hippocampus.binder import EmotionalMemory
 from iris.limbic.models import DriveState, EmotionDelta, EmotionState
+from iris.limbic.score import PsychometricState
 
 
 class _MoodEntry(TypedDict):
@@ -100,6 +101,7 @@ class LimbicManager:
         self._drive = DriveState()
         self._big_five_provider: BigFiveProvider | None = None
         self._persona_profile: PersonaProfile | None = None
+        self._psychometric_state: PsychometricState | None = None
 
         self._last_decay_time: float = time.time()
 
@@ -111,6 +113,14 @@ class LimbicManager:
 
     def set_persona_profile(self, persona_profile: PersonaProfile) -> None:
         self._persona_profile = persona_profile
+
+    def set_psychometric_state(self, state: PsychometricState) -> None:
+        self._psychometric_state = state
+
+    def flush_state(self) -> None:
+        if self._psychometric_state is not None:
+            self._psychometric_state.flush()
+            logger.debug("Limbic: psychometric state flushed")
 
     def _publish_snapshot(self, trigger: str) -> None:
         if self._event_bus is not None:

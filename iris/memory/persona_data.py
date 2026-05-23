@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from loguru import logger
-import orjson
 
-_DEFAULT_PATH = ".iris/data/persona_data.json"
+if TYPE_CHECKING:
+    from iris.limbic.score import PsychometricState
 
 _PERSONA_CATEGORIES = {
     "speech_quirks": "speech_quirks",
@@ -14,45 +14,29 @@ _PERSONA_CATEGORIES = {
     "interests": "interests",
 }
 
-# 後方互換: 旧フィールド名のマッピング
 _LEGACY_FIELD_MAP = {
     "speech_styles": "speech_quirks",
     "personality_traits": "state_traits",
 }
 
-# カテゴリ別の最大保持エントリ数（上位N件 = 直近の状態のみ保持）
 _MAX_ENTRIES = 5
 
 
 class PersonaData:
-    """ペルソナの現在状態データを専用JSONで管理。
+    """ペルソナの現在状態データを管理。
 
-    SemanticStore（Vector DB）を経由せず、軽量なJSONファイルで
-    speech_quirks（話し方の現在状態）と state_traits（性格の現在状態）を管理する。
-    各カテゴリは最大5件のみ保持し、累積肥大化を防ぐ。
-    iris_profile.md（不変ベース）とは完全に分離。
+    PsychometricState を永続化先とし、メモリ上の _data で更新を行う。
     """
 
-    def __init__(self, path: str = _DEFAULT_PATH) -> None:
-        self.path = Path(path)
-        self._data: dict[str, list] = self._load()
+    def __init__(self) -> None:
+        self._state: PsychometricState | None = None
+        self._data: dict[str, list] = {"speech_quirks": [], "state_traits": [], "interests": []}
 
-    def _load(self) -> dict[str, list]:
-        if self.path.exists():
-            try:
-                raw: dict = orjson.loads(self.path.read_bytes())
-                # 旧フィールド名を新フィールド名にマイグレート
-                for old, new in _LEGACY_FIELD_MAP.items():
-                    if old in raw and new not in raw:
-                        raw[new] = raw.pop(old)
-                return {
-                    "speech_quirks": raw.get("speech_quirks", []),
-                    "state_traits": raw.get("state_traits", []),
-                    "interests": raw.get("interests", []),
-                }
-            except (orjson.JSONDecodeError, Exception):
-                pass
-        return {"speech_quirks": [], "state_traits": [], "interests": []}
+    def set_state(self, state: PsychometricState) -> None:
+        self._state = state
+        self._data["speech_quirks"] = state.speech_quirks
+        self._data["state_traits"] = state.state_traits
+        self._data["interests"] = state.interests
 
     def _resolve_category(self, category: str) -> str | None:
         category = _LEGACY_FIELD_MAP.get(category, category)
@@ -63,10 +47,12 @@ class PersonaData:
         return text.replace(" ", "").replace("\u3000", "").replace("\n", "").replace("\r", "")
 
     def _save(self) -> None:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_bytes(
-            orjson.dumps(self._data, option=orjson.OPT_INDENT_2),
-        )
+        if self._state is None:
+            return
+        self._state.speech_quirks = self._data.get("speech_quirks", [])
+        self._state.state_traits = self._data.get("state_traits", [])
+        self._state.interests = self._data.get("interests", [])
+        self._state.mark_dirty()
 
     def add_entry(self, category: str, text: str, source: str = "reflection") -> None:
         key = self._resolve_category(category)
@@ -95,7 +81,7 @@ class PersonaData:
         entries.sort(key=lambda e: (e.get("count", 1), e.get("updated_at", "")), reverse=True)
         self._data[key] = entries[:_MAX_ENTRIES]
         self._save()
-        logger.info("PersonaData: added %s entry (%d total)", category, len(self._data[key]))
+        logger.info("PersonaData: added {} entry ({} total)", category, len(self._data[key]))
 
     def get_top(self, category: str, n: int = 3) -> list[dict]:
         key = self._resolve_category(category)
@@ -123,7 +109,6 @@ class PersonaData:
         self._save()
 
     def add_interest(self, topic: str, weight_delta: float) -> None:
-        """興味トピックを追加または加重する。"""
         interests = self._data.setdefault("interests", [])
         now = datetime.now().isoformat(timespec="minutes")
         normalized_topic = topic.strip()
@@ -135,15 +120,12 @@ class PersonaData:
                 self._save()
                 return
 
-        # 新規追加
         interests.append({"topic": normalized_topic, "weight": max(0.0, min(1.0, weight_delta)), "updated_at": now})
         interests.sort(key=lambda x: x["weight"], reverse=True)
-        # 上限数制限（上位10件まで）
         self._data["interests"] = interests[:10]
         self._save()
 
     def decay_interests(self, decay_rate: float = 0.05) -> None:
-        """すべての興味の重みを自然減衰させ、閾値以下のものを削除する。"""
         interests = self._data.get("interests", [])
         if not interests:
             return
@@ -159,5 +141,4 @@ class PersonaData:
         self._save()
 
     def get_interests(self) -> list[dict]:
-        """現在の興味リストを取得する。"""
         return self._data.get("interests", [])

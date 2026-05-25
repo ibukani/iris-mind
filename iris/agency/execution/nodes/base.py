@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from iris.agency.execution.llm.gateway import LLMGateway
     from iris.event.event_bus import EventBus
     from iris.llm.capability import CapabilityChecker
+    from iris.memory.manager import MemoryManager
 
 from loguru import logger
 
@@ -38,12 +39,14 @@ class BaseLLMNode(ABC):
         capability_checker: CapabilityChecker | None = None,
         dynamic: DynamicState | None = None,
         event_bus: EventBus | None = None,
+        memory: MemoryManager | None = None,
     ) -> None:
         self._pipeline = pipeline
         self._tool_executor = tool_executor
         self._capability_checker = capability_checker
         self._dynamic = dynamic or DynamicState()
         self._event_bus = event_bus
+        self._memory = memory
 
     @property
     @abstractmethod
@@ -124,6 +127,10 @@ class BaseLLMNode(ABC):
 
             raw = resp.content
             response_text = raw.strip() if isinstance(raw, str) else ""
+
+            if response_text and self._memory:
+                role = "thought" if plan.get("silent", False) else "assistant"
+                self._memory.short_term.add_turn(role, response_text)
 
             return {"response_text": response_text}
         except Exception:

@@ -14,6 +14,7 @@ if TYPE_CHECKING:
     from iris.event.event_bus import EventBus
     from iris.limbic.manager import LimbicManager
     from iris.llm.capability import CapabilityChecker
+    from iris.memory.manager import MemoryManager
 
 
 class GeneralTaskNode(BaseLLMNode):
@@ -27,6 +28,7 @@ class GeneralTaskNode(BaseLLMNode):
         dynamic: DynamicState | None = None,
         event_bus: EventBus | None = None,
         limbic: LimbicManager | None = None,
+        memory: MemoryManager | None = None,
     ) -> None:
         super().__init__(
             pipeline=pipeline,
@@ -34,6 +36,7 @@ class GeneralTaskNode(BaseLLMNode):
             capability_checker=capability_checker,
             dynamic=dynamic,
             event_bus=event_bus,
+            memory=memory,
         )
         self._limbic = limbic
 

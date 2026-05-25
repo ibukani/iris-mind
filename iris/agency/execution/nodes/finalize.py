@@ -46,10 +46,6 @@ class FinalizeNode:
             self._consolidator.record_activity()
             self._consolidator.increment_reflect_count()
 
-        if self._memory:
-            role = "thought" if silent else "assistant"
-            self._memory.short_term.add_turn(role, response_text)
-
         logger.info("ExecutionGraph: response session={} len={}", session_id, len(response_text))
 
         self._process_feedback()

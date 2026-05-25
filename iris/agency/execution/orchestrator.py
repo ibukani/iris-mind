@@ -76,6 +76,7 @@ class ExecutionOrchestrator:
             capability_checker=capability_checker,
             dynamic=self._dynamic,
             event_bus=event_bus,
+            memory=memory,
         )
         self._general_task = GeneralTaskNode(
             pipeline=pipeline,
@@ -83,6 +84,7 @@ class ExecutionOrchestrator:
             capability_checker=capability_checker,
             dynamic=self._dynamic,
             event_bus=event_bus,
+            memory=memory,
             limbic=None,
         )
         self._execute_tools_node = ToolRunNode(

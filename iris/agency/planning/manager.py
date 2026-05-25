@@ -8,7 +8,7 @@ from iris.agency.inhibition import InhibitionController
 from iris.agency.planning.context_hint_builder import ContextHintBuilder
 from iris.agency.planning.decisions import ProactiveJudge, ProactiveScoring
 from iris.agency.planning.level_profile import resolve_level
-from iris.agency.planning.models import Plan, PlanReason
+from iris.agency.planning.models import Plan
 from iris.agency.planning.question_generator import QuestionGenerator
 from iris.agency.planning.strategies import ProactivePlanStrategy, ResponsePlanStrategy
 from iris.event.event_bus import EventBus
@@ -107,13 +107,12 @@ class PlanningManager:
         resolved["silent"] = plan.silent
         if plan.silent:
             resolved["show_thinking"] = False
-        resolved["record_history"] = True
         resolved["session_id"] = session_id
-        resolved["situation"] = (
-            "proactive"
-            if plan.reason in (PlanReason.PROACTIVE_CURIOSITY, PlanReason.PROACTIVE_ESCALATION, PlanReason.TIMER_EVENT)
-            else ""
-        )
+        resolved["reason"] = plan.reason.value
+        if plan.silent:
+            resolved["allow_side_effects"] = False
+            resolved["max_tool_iterations"] = 3
+            resolved["priority"] = 1
 
         logger.info(
             "PlanningManager: plan published session={} from_timer={} level={}",

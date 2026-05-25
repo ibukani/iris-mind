@@ -158,15 +158,16 @@ class LLMGateway:
         interrupt_token: InterruptToken | None = None,
     ) -> str:
         context_hint = plan.get("context_hint", "")
-        situation = plan.get("situation", "")
+        reason = plan.get("reason", "")
         content = plan.get("content", "")
 
-        response_style = self._limbic.generate_response_style() if self._limbic and situation == "proactive" else ""
+        is_proactive = reason in ("proactive_curiosity", "proactive_escalation", "timer")
+        response_style = self._limbic.generate_response_style() if self._limbic and is_proactive else ""
 
         system_msgs = self._build_system_messages(
             context_hint=context_hint,
             response_style=response_style,
-            situation=situation,
+            situation="proactive" if is_proactive else "",
         )
 
         msgs: list[BaseMessage] = []
@@ -197,7 +198,7 @@ class LLMGateway:
             text = ""
 
         if not text:
-            text = "" if situation == "proactive" else "…"
+            text = "" if is_proactive else "…"
 
         return text
 

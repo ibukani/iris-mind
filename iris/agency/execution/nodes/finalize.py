@@ -37,7 +37,6 @@ class FinalizeNode:
         plan = state["plan"]
         response_text = state.get("response_text", "")
         show_thinking = plan.get("show_thinking", False)
-        record_history = plan.get("record_history", True)
         silent = plan.get("silent", False)
         session_id = plan.get("session_id", "")
 
@@ -46,8 +45,7 @@ class FinalizeNode:
             state["completed"] = True
             return {"completed": True}
 
-        if record_history:
-            self._record_history(state, response_text, silent)
+        self._record_history(state, response_text, silent)
 
         if response_text and self._memory:
             role = "thought" if silent else "assistant"

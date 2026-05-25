@@ -46,8 +46,7 @@ class ResponsePlanStrategy:
         }
 
         if limbic_mood:
-            EmotionTemperatureModulator.apply(overrides, limbic_mood)
-        overrides["current_emotion"] = limbic_mood
+            EmotionTemperatureModulator.apply_execution_params(overrides, limbic_mood)
 
         return Plan(
             content=content,

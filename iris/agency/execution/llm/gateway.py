@@ -8,6 +8,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from loguru import logger
 
 from iris.agency.execution.llm.prompt_builder import SystemPromptBuilder
+from iris.agency.planning.emotion_temperature import EmotionTemperatureModulator
 from iris.kernel.config import ModelConfig
 from iris.kernel.debug_capture import CaptureEntry, DebugCapture
 from iris.limbic.manager import LimbicManager
@@ -173,7 +174,11 @@ class LLMGateway:
             msgs.extend(messages)
         msgs.append(HumanMessage(content=content if content else "..."))
 
-        temperature = plan.get("temperature", 0.5)
+        temperature = (
+            EmotionTemperatureModulator.compute_temperature(self._limbic.current_emotion())
+            if self._limbic
+            else EmotionTemperatureModulator.DEFAULT_TEMPERATURE
+        )
         max_tok = max_tokens or 80
 
         try:

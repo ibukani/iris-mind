@@ -71,7 +71,6 @@ def test_planning_manager_silent_proactive_interest_sampling() -> None:
     assert isinstance(call_args, PlanDecided)
     plan = call_args.plan
     assert plan["silent"] is True
-    assert plan["tools_allowed"] is True
     assert plan["proactive_reason"] == "ビッグバン以前には何が存在したのか？"
     assert plan["interest_topic"] == "宇宙の起源"
 
@@ -117,7 +116,6 @@ def test_planning_manager_escalation_event() -> None:
     assert isinstance(call_args, PlanDecided)
     plan = call_args.plan
     assert plan["silent"] is False
-    assert plan["streaming"] is True
     assert "宇宙の起源" in plan["content"]
     assert "ビッグバンによる宇宙の膨張" in plan["content"]
     assert "システムからの内部指示" in plan["content"]

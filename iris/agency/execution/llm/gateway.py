@@ -103,7 +103,7 @@ class LLMGateway:
             on_token=on_token,
             interrupt_token=interrupt_token,
             priority=priority,
-            reasoning=enable_thinking if enable_thinking else None,
+            reasoning=enable_thinking or None,
         )
 
         self._capture_debug(
@@ -173,7 +173,7 @@ class LLMGateway:
         msgs: list[BaseMessage] = []
         if messages and content:
             msgs.extend(messages)
-        msgs.append(HumanMessage(content=content if content else "..."))
+        msgs.append(HumanMessage(content=content or "..."))
 
         temperature = (
             EmotionTemperatureModulator.compute_temperature(self._limbic.current_emotion())
@@ -237,5 +237,5 @@ class LLMGateway:
                 token_counts=tc,
                 tool_iterations=tool_iterations or [],
                 full_prompt=self._build_full_prompt(messages),
-            )
+            ),
         )

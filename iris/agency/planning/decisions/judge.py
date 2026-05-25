@@ -66,7 +66,7 @@ class ProactiveJudge:
                 content=event.content,
                 context=context,
                 ignore_count=self._inhibition.consecutive_ignores,
-            )
+            ),
         )
         if total < self._cfg.speak_threshold:
             logger.debug("Below speak_threshold: total={:.3f} < threshold={:.2f}", total, self._cfg.speak_threshold)

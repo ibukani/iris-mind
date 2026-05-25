@@ -33,17 +33,12 @@ class EmotionTemperatureModulator:
             current = plan.get("max_tokens", 0)
             if current > 0:
                 plan["max_tokens"] = min(current, 256)
-            if plan.get("abbreviated", False) is False:
-                plan["tools_allowed"] = False
-                plan["streaming"] = False
 
         if a > EmotionTemperatureModulator.AROUSAL_HIGH_THRESHOLD:
             current = plan.get("max_tokens", 0)
             if current > 0:
                 plan["max_tokens"] = min(current, 256)
 
-        if d < EmotionTemperatureModulator.DOMINANCE_LOW_THRESHOLD and plan.get("abbreviated", False) and plan.get("max_tokens", 0) == 80:
-            plan["max_tokens"] = 50
         if d > EmotionTemperatureModulator.DOMINANCE_HIGH_THRESHOLD:
             current = plan.get("max_tokens", 0)
             if current > 0:

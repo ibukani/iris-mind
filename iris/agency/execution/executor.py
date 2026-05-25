@@ -11,6 +11,7 @@ from langchain_core.messages import BaseMessage, SystemMessage
 from iris.agency.bus import InternalBus, PlanDecided
 from iris.agency.execution.engine import ToolEngine
 from iris.agency.execution.llm.gateway import LLMGateway
+from iris.agency.execution.node_types import NODE_TYPES
 from iris.agency.execution.orchestrator import ExecutionOrchestrator
 from iris.agency.execution.regulation.consolidator import Consolidator
 from iris.agency.execution.regulation.feedback import FeedbackCoordinator
@@ -105,9 +106,8 @@ class FlowExecutor:
             return
 
         logger.info(
-            "FlowExecutor: queueing plan session={} abbreviated={}",
+            "FlowExecutor: queueing plan session={}",
             plan.get("session_id"),
-            plan.get("abbreviated"),
         )
         self._plan_queue.put(plan)
 
@@ -137,6 +137,10 @@ class FlowExecutor:
             interrupt_token=self._interrupt_token,
         )
 
+        nt = NODE_TYPES["general_chat"]
+        entry = plan.get("task_level", nt.entry_level)
+        level_idx = nt.available_levels.index(entry) if entry in nt.available_levels else 0
+
         state: ExecutionState = {
             "plan": plan,
             "messages": self._messages,
@@ -145,6 +149,9 @@ class FlowExecutor:
             "interrupted": False,
             "error": None,
             "completed": False,
+            "current_node_type": "general_chat",
+            "current_level_idx": level_idx,
+            "chain_depth": 0,
         }
 
         try:

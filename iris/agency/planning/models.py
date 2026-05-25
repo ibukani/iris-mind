@@ -15,7 +15,7 @@ class PlanReason(StrEnum):
 @dataclass
 class Plan:
     content: str
-    task_level: int = 2
+    task_level: str = "normal"
     silent: bool = False
     reason: PlanReason = PlanReason.USER_INPUT
     context_hint: str = ""

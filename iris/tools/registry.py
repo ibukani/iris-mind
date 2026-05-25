@@ -81,6 +81,13 @@ class ToolRegistry:
             if (role in (t.allowed_roles or _DEFAULT_ALLOWED_ROLES)) and (allow_side_effects or not t.side_effect)
         ]
 
+    def list_tools_by_name(self, names: list[str], allow_side_effects: bool = True) -> list[dict]:
+        return [
+            t.to_openai_tool()
+            for t in self._tools.values()
+            if t.name in names and (allow_side_effects or not t.side_effect)
+        ]
+
     def execute(self, name: str, **kwargs: object) -> str:
         """ツールを実行する。
 

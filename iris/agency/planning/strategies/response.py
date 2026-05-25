@@ -27,11 +27,11 @@ class ResponsePlanStrategy:
         is_task = is_task_content(content)
 
         if abbreviated:
-            level = 1
+            level = "chat"
         elif not is_task:
-            level = 2
+            level = "light"
         else:
-            level = 3
+            level = "normal"
 
         logger.debug(
             "Plan built: level={} abbreviated={} suppressed={} gate_score={:.3f}",

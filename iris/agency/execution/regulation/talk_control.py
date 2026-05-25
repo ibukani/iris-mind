@@ -16,16 +16,15 @@ def apply_talkative_overrides(plan: dict[str, Any], degree: int) -> None:
     if degree <= 0:
         return
     if degree >= TALKATIVE_ABBREVIATED_THRESHOLD:
-        plan["abbreviated"] = True
+        plan["task_level"] = "chat"
     if degree >= TALKATIVE_TOKEN_LIMIT_THRESHOLD:
         current = plan.get("max_tokens", 0)
-        if current > 0:
+        if current and current > 0:
             plan["max_tokens"] = min(current, 256)
     if degree >= TALKATIVE_SKIP_POSTPROCESS_THRESHOLD:
         plan["run_reflexion"] = False
         plan["run_compression"] = False
     if degree >= TALKATIVE_DISABLE_STREAM_THRESHOLD:
-        plan["streaming"] = False
         plan["show_thinking"] = False
 
 

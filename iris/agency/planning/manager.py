@@ -7,10 +7,10 @@ from iris.agency.bus import InternalBus, PlanDecided
 from iris.agency.inhibition import InhibitionController
 from iris.agency.planning.context_hint_builder import ContextHintBuilder
 from iris.agency.planning.decisions import ProactiveJudge, ProactiveScoring
-from iris.agency.planning.level_profile import resolve_level
 from iris.agency.planning.models import Plan
 from iris.agency.planning.question_generator import QuestionGenerator
 from iris.agency.planning.strategies import ProactivePlanStrategy, ResponsePlanStrategy
+from iris.agency.task_level import resolve_level
 from iris.event.event_bus import EventBus
 from iris.event.event_types import InputReady
 from iris.kernel.config import Config

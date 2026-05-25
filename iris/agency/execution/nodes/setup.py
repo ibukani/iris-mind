@@ -36,9 +36,7 @@ class SetupNode:
     async def __call__(self, state: ExecutionState) -> None:
         plan = state["plan"]
         content = plan.get("content", "")
-        abbreviated = plan.get("abbreviated", False)
-        show_thinking = plan.get("show_thinking", not abbreviated)
-        streaming = plan.get("streaming", not abbreviated)
+        show_thinking = plan.get("show_thinking", False)
         silent = plan.get("silent", False)
 
         if silent and not content:
@@ -48,8 +46,7 @@ class SetupNode:
                 content = base_instruction
                 plan["content"] = content
 
-        if streaming:
-            self._set_on_token_callback()
+        self._set_on_token_callback()
 
         if content:
             if silent:
@@ -72,10 +69,10 @@ class SetupNode:
                     content="",
                     state=StreamState.THINKING.value,
                     direction="stream",
-                )
+                ),
             )
 
-        if self._session_roles_getter and not abbreviated:
+        if self._session_roles_getter:
             self._pipeline.set_session_roles_summary(self._session_roles_getter())
 
     def _set_on_token_callback(self) -> None:
@@ -92,7 +89,7 @@ class SetupNode:
                     content=delta,
                     state=StreamState.SPEAKING.value,
                     direction="stream",
-                )
+                ),
             )
 
         self._dynamic.on_token = _on_token

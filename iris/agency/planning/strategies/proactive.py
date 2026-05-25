@@ -23,7 +23,7 @@ class ProactivePlanStrategy:
         self._question_gen = question_gen
 
     def build_proactive(
-        self, context: dict[str, Any], gate: GateVerdict, limbic_mood: EmotionState | None = None
+        self, context: dict[str, Any], gate: GateVerdict, limbic_mood: EmotionState | None = None,
     ) -> Plan:
         context_hint: str = context.get("context_hint", "")
         overrides: dict[str, Any] = {}
@@ -50,7 +50,7 @@ class ProactivePlanStrategy:
 
             plan = Plan(
                 content="",
-                task_level=3,
+                task_level="normal",
                 silent=True,
                 reason=PlanReason.PROACTIVE_CURIOSITY,
                 context_hint=context_hint,
@@ -62,7 +62,7 @@ class ProactivePlanStrategy:
             content = f"システムからの内部指示: あなたは自発的に『{topic}』に関する調査を行い、次のことが分かりました：『{summary}』。この知見を元に、ユーザーに対して『ねえ、さっき〜について考えていたんだけど……』というように、あなたの言葉で自然に自発的な話しかけを行ってください。"
             plan = Plan(
                 content=content,
-                task_level=4,
+                task_level="deep",
                 silent=False,
                 reason=PlanReason.PROACTIVE_ESCALATION,
                 context_hint=context_hint,
@@ -71,7 +71,7 @@ class ProactivePlanStrategy:
         else:
             plan = Plan(
                 content="",
-                task_level=2,
+                task_level="light",
                 silent=True,
                 reason=PlanReason.TIMER_EVENT,
                 context_hint=context_hint,

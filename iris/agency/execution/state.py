@@ -18,6 +18,9 @@ class ExecutionState(TypedDict):
     interrupted: bool
     error: NotRequired[str | None]
     completed: bool
+    current_node_type: str
+    current_level_idx: int
+    chain_depth: int
 
 
 @dataclass

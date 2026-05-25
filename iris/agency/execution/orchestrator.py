@@ -85,7 +85,6 @@ class ExecutionOrchestrator:
             dynamic=self._dynamic,
             event_bus=event_bus,
             memory=memory,
-            limbic=None,
         )
         self._execute_tools_node = ToolRunNode(
             tool_executor=tool_executor,

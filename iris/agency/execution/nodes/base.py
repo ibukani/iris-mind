@@ -86,9 +86,28 @@ class BaseLLMNode(ABC):
             targets = nt.routing_targets
         return [_routing_tool_schema(name) for name in targets]
 
-    @abstractmethod
-    def _build_prompt(self, state: ExecutionState, level: TaskLevel) -> list[BaseMessage] | None:
-        ...
+    def _build_system_prompt(
+        self,
+        state: ExecutionState,
+        level: TaskLevel,
+        plan: dict[str, Any],
+    ) -> list[BaseMessage] | None:
+        return self._pipeline.build_system_messages(
+            context_hint=plan.get("context_hint", ""),
+        )
+
+    def _build_chat_params(
+        self,
+        state: ExecutionState,
+        level: TaskLevel,
+        plan: dict[str, Any],
+    ) -> dict[str, Any]:
+        return {
+            "model_role": level.model_role,
+            "max_tokens": level.max_tokens or None,
+            "priority": level.priority,
+            "show_thinking": level.show_thinking,
+        }
 
     async def __call__(self, state: ExecutionState) -> dict[str, Any] | None:
         if state.get("interrupted"):
@@ -99,11 +118,7 @@ class BaseLLMNode(ABC):
         level = TASK_LEVELS[level_name]
 
         try:
-            extra_prompt = self._build_prompt(state, level)
-            messages = list(state["messages"])
-            if extra_prompt:
-                messages = list(extra_prompt) + messages
-
+            system_msgs = self._build_system_prompt(state, level, plan)
             tools = self._get_tools(level_name, plan)
             routing_tools = self._build_routing_tools(state)
 
@@ -112,15 +127,12 @@ class BaseLLMNode(ABC):
                 all_tools = (tools or []) + routing_tools
 
             resp = await self._pipeline.chat(
-                messages=messages,
+                messages=list(state["messages"]),
+                system_msgs=system_msgs,
                 tools=all_tools,
                 on_token=self._dynamic.on_token,
                 interrupt_token=self._dynamic.interrupt_token,
-                context_hint=plan.get("context_hint", ""),
-                model_role=level.model_role,
-                max_tokens=level.max_tokens or None,
-                priority=level.priority,
-                show_thinking=level.show_thinking,
+                **self._build_chat_params(state, level, plan),
             )
 
             state["messages"].append(resp)

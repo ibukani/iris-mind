@@ -64,7 +64,7 @@ class LLMGateway:
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
 
-    def _build_system_messages(
+    def build_system_messages(
         self,
         context_hint: str,
         response_style: str = "",
@@ -118,6 +118,7 @@ class LLMGateway:
     async def chat(
         self,
         messages: list[BaseMessage],
+        system_msgs: list[BaseMessage] | None = None,
         tools: list[dict[str, Any]] | None = None,
         on_token: Callable[[str], None] | None = None,
         interrupt_token: InterruptToken | None = None,
@@ -128,10 +129,11 @@ class LLMGateway:
         show_thinking: bool = False,
     ) -> AIMessage:
         response_style = self._limbic.generate_response_style() if self._limbic else ""
-        system_msgs = self._build_system_messages(
-            context_hint=context_hint,
-            response_style=response_style,
-        )
+        if system_msgs is None:
+            system_msgs = self.build_system_messages(
+                context_hint=context_hint,
+                response_style=response_style,
+            )
         if show_thinking and messages and isinstance(messages[-1], HumanMessage):
             last_msg = messages[-1]
             last_msg.content = self._personality.build_thinking_prompt(str(last_msg.content))
@@ -164,7 +166,7 @@ class LLMGateway:
         is_proactive = reason in ("proactive_curiosity", "proactive_escalation", "timer")
         response_style = self._limbic.generate_response_style() if self._limbic and is_proactive else ""
 
-        system_msgs = self._build_system_messages(
+        system_msgs = self.build_system_messages(
             context_hint=context_hint,
             response_style=response_style,
             situation="proactive" if is_proactive else "",

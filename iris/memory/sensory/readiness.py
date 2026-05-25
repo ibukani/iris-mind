@@ -18,7 +18,7 @@ class ReadinessEvaluator:
         question_detect: bool = True,
         confidence_threshold: float = 0.6,
         llm: LLMBridge | None = None,
-        llm_model_role: str = "fast",
+        llm_model_role: str = "low",
     ) -> None:
         self._min_fragments = min_fragments
         self._question_detect = question_detect

@@ -18,11 +18,11 @@ class TaskLevel:
 
 
 TASK_LEVELS: dict[str, TaskLevel] = {
-    "chat": TaskLevel("chat", 1, "fast", 80, 0, 0, False, False, False),
-    "light": TaskLevel("light", 2, "fast", 256, 1, 1, False, False, True),
-    "normal": TaskLevel("normal", 3, "default", 0, 5, 2, True, True, True),
-    "deep": TaskLevel("deep", 4, "default", 4096, 10, 3, True, True, True),
-    "research": TaskLevel("research", 5, "smart", 8192, 20, 4, True, True, True),
+    "chat": TaskLevel("chat", 1, "low", 80, 0, 0, False, False, False),
+    "light": TaskLevel("light", 2, "low", 256, 1, 1, False, False, True),
+    "normal": TaskLevel("normal", 3, "medium", 0, 5, 2, True, True, True),
+    "deep": TaskLevel("deep", 4, "medium", 4096, 10, 3, True, True, True),
+    "research": TaskLevel("research", 5, "high", 8192, 20, 4, True, True, True),
 }
 
 

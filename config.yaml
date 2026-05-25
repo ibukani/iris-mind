@@ -48,6 +48,7 @@ model:
     default_temperature: 0.85
 
     # モデル定義（接続情報は providers に集約）
+    # roles: モデルが担当する役割（low/medium/high）。fallbackとしてdefaultも使用可。
     models:
         - name: qwen3.5:4b
           roles: [default]

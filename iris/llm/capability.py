@@ -16,7 +16,7 @@ class CapabilityChecker:
     def __init__(self, config: ModelConfig) -> None:
         self._config = config
 
-    def supports_tools(self, role: str = "default") -> bool:
+    def supports_tools(self, role: str = "medium") -> bool:
         caps = self._config.get_model_capabilities(role)
         if caps:
             result = "tools" in caps
@@ -27,7 +27,7 @@ class CapabilityChecker:
         logger.info("CapabilityChecker: tools={} for role={} (tier={})", result, role, tier)
         return result
 
-    def supports_thinking(self, role: str = "default") -> bool:
+    def supports_thinking(self, role: str = "medium") -> bool:
         caps = self._config.get_model_capabilities(role)
         if caps:
             result = "thinking" in caps
@@ -38,5 +38,5 @@ class CapabilityChecker:
         logger.info("CapabilityChecker: thinking={} for role={} (tier={})", result, role, tier)
         return result
 
-    def get_performance_tier(self, role: str = "default") -> str:
+    def get_performance_tier(self, role: str = "medium") -> str:
         return self._config.get_model_performance_tier(role)

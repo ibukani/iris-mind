@@ -430,7 +430,7 @@ class KernelFactory:
         if limbic is not None:
             limbic.set_persona_profile(persona_profile)
 
-        reflexion = Reflexion(llm=llm, compact_model=config.model.get_model("default"))
+        reflexion = Reflexion(llm=llm, compact_model=config.model.get_model("medium"))
         hippocampal = HippocampalManager(
             reflexion=reflexion,
             memory=memory,
@@ -470,9 +470,9 @@ class KernelFactory:
         monitor = OutputTracker(internal_bus=internal_bus)
         context_window_mgr = LLMContextWindowManager(
             llm=llm,
-            compact_model=config.model.get_model("default"),
+            compact_model=config.model.get_model("medium"),
             tokenizers=tokenizers,
-            default_model_name=config.model.get_model("default"),
+            default_model_name=config.model.get_model("medium"),
         )
         # consolidator needs a messages_getter referencing execution;
         # late binding resolves execution after FlowExecutor is constructed

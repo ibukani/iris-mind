@@ -197,7 +197,7 @@ class ResponseReadinessConfig(BaseModel):
     tier1_min_fragments: int = 2
     tier1_question_detect: bool = True
     confidence_threshold: float = 0.6
-    llm_model_role: str = "fast"
+    llm_model_role: str = "low"
 
 
 class QuasiSyncConfig(BaseModel):

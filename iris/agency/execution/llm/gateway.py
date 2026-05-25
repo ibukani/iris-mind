@@ -42,7 +42,7 @@ class LLMGateway:
         self._debug_capture = debug_capture
         self._session_roles_summary: str = ""
         self._last_system_prompt: str = ""
-        self._last_call_model_role: str = "default"
+        self._last_call_model_role: str = "medium"
 
         self._prompt_builder = SystemPromptBuilder(
             personality=personality,
@@ -122,7 +122,7 @@ class LLMGateway:
         on_token: Callable[[str], None] | None = None,
         interrupt_token: InterruptToken | None = None,
         context_hint: str = "",
-        model_role: str = "default",
+        model_role: str = "medium",
         max_tokens: int | None = None,
         priority: int = 0,
         show_thinking: bool = False,

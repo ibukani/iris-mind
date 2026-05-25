@@ -8,7 +8,7 @@ from loguru import logger
 from iris.tools.decorator import get_tool_def, register_decorated_tools
 from iris.tools.models import ToolDef
 
-_DEFAULT_ALLOWED_ROLES = {"base", "smart"}
+_DEFAULT_ALLOWED_ROLES = {"medium", "high"}
 
 
 class ToolRegistry:

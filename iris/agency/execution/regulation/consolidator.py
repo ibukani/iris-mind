@@ -67,7 +67,7 @@ class Consolidator:
         cwm = self._context_window_mgr
         if cwm is None:
             return
-        model_role = plan.get("model_role", "default")
+        model_role = plan.get("model_role", "medium")
         effective_ctx = (
             self._model_config.get_effective_context_window(model_role) if self._model_config else self._context_window
         )

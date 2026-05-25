@@ -5,9 +5,6 @@ from typing import TYPE_CHECKING
 
 from langchain_core.messages import ChatMessage, HumanMessage
 
-from iris.agency.execution.regulation.talk_control import (
-    apply_talkative_overrides,
-)
 from iris.agency.execution.state import DynamicState, ExecutionState
 from iris.event.event_types import MessageEvent
 from iris.io.models import StreamState
@@ -91,8 +88,6 @@ class SetupNode:
 
         if self._session_roles_getter and not abbreviated:
             self._pipeline.set_session_roles_summary(self._session_roles_getter())
-
-        apply_talkative_overrides(plan)
 
     def _set_on_token_callback(self) -> None:
         event_bus = self._event_bus

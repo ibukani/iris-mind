@@ -91,17 +91,16 @@ class FlowExecutor:
 
     def _on_plan(self, event: PlanDecided) -> None:
         plan = event.plan
-        if self._monitor:
-            if plan.get("content", ""):
-                self._monitor.record_user_input()
-            plan["talkative_degree"] = self._monitor.talkative_degree
+        degree = self._monitor.talkative_degree if self._monitor else 0
+        if self._monitor and plan.get("content", ""):
+            self._monitor.record_user_input()
 
-        apply_talkative_overrides(plan)
+        apply_talkative_overrides(plan, degree)
 
-        if should_skip_proactive(plan, self._monitor):
+        if should_skip_proactive(plan, degree, self._monitor):
             logger.info(
                 "FlowExecutor: suppressed proactive (talkative={}), skipping LLM",
-                plan.get("talkative_degree", 0),
+                degree,
             )
             return
 

@@ -164,6 +164,7 @@ iris/                             ← アプリケーションコア
 - `limbic/` → `memory/`（感情タグ）、`limbic/` → `agency/`（感情変調）のインターフェースあり
 
 詳細は `docs/architecture.md` と `docs/adr/` を参照。
+構成図やシーケンス図の作成・レンダリングは `.agents/skills/iris-visualize/SKILL.md` を参照。
 
 ## 6. 記憶体系
 

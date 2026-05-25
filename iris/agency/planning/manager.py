@@ -102,7 +102,6 @@ class PlanningManager:
         plan.session_id = session_id
         if plan.silent:
             plan.overrides["allow_side_effects"] = False
-            plan.overrides["show_thinking"] = False
             plan.overrides["max_tool_iterations"] = 3
             plan.overrides["priority"] = 1
 

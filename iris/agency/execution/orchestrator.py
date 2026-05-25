@@ -13,7 +13,6 @@ from iris.agency.execution.nodes.post_process import PostProcessNode
 from iris.agency.execution.nodes.setup import SetupNode
 from iris.agency.execution.nodes.tool_run import ToolRunNode
 from iris.agency.execution.state import DynamicState, ExecutionState
-from iris.agency.planning.models import Plan
 from iris.agency.task_level import TASK_LEVELS
 from iris.llm.interrupt_token import InterruptToken
 
@@ -209,8 +208,7 @@ class ExecutionOrchestrator:
 
     @staticmethod
     def _route_after_tools(state: ExecutionState) -> str:
-        plan: Plan = state["plan"]
-        max_iters = plan.overrides.get("max_tool_iterations", TASK_LEVELS[plan.task_level].max_tool_iterations)
+        max_iters = TASK_LEVELS[state["plan"].task_level].max_tool_iterations
         if state.get("tool_iterations", 0) >= max_iters:
             logger.debug("Tool iteration limit reached ({})", max_iters)
             return "finalize"
@@ -218,9 +216,15 @@ class ExecutionOrchestrator:
 
     @staticmethod
     def _route_after_finalize(state: ExecutionState) -> str:
-        plan: Plan = state["plan"]
-        run_reflexion = plan.overrides.get("run_reflexion", TASK_LEVELS[plan.task_level].run_reflexion)
-        run_compression = plan.overrides.get("run_compression", TASK_LEVELS[plan.task_level].run_compression)
+        level = TASK_LEVELS[state["plan"].task_level]
+        run_reflexion = level.run_reflexion
+        run_compression = level.run_compression
+        adj = state.get("talkative_adjustments")
+        if adj:
+            if adj.run_reflexion is not None:
+                run_reflexion = adj.run_reflexion
+            if adj.run_compression is not None:
+                run_compression = adj.run_compression
         if run_reflexion or run_compression:
             return "post_process"
         return "__end__"

@@ -17,7 +17,7 @@ from iris.agency.execution.regulation.consolidator import Consolidator
 from iris.agency.execution.regulation.feedback import FeedbackCoordinator
 from iris.agency.execution.regulation.output_tracker import OutputTracker
 from iris.agency.execution.regulation.talk_control import (
-    apply_talkative_overrides,
+    get_talkative_adjustments,
     should_skip_proactive,
 )
 from iris.agency.execution.state import ExecutionState
@@ -97,8 +97,6 @@ class FlowExecutor:
         if self._monitor and plan.content:
             self._monitor.record_user_input()
 
-        apply_talkative_overrides(plan, degree)
-
         if should_skip_proactive(plan, degree, self._monitor):
             logger.info(
                 "FlowExecutor: suppressed proactive (talkative={}), skipping LLM",
@@ -139,8 +137,12 @@ class FlowExecutor:
         )
 
         nt = NODE_TYPES["general_chat"]
-        entry = plan.task_level if plan.task_level in nt.available_levels else nt.entry_level
-        level_idx = nt.available_levels.index(entry) if entry in nt.available_levels else 0
+        degree = self._monitor.talkative_degree if self._monitor else 0
+        adj = get_talkative_adjustments(degree)
+        entry = adj.task_level or plan.task_level
+        if entry not in nt.available_levels:
+            entry = nt.entry_level
+        level_idx = nt.available_levels.index(entry)
 
         state: ExecutionState = {
             "plan": plan,
@@ -153,6 +155,7 @@ class FlowExecutor:
             "current_node_type": "general_chat",
             "current_level_idx": level_idx,
             "chain_depth": 0,
+            "talkative_adjustments": adj,
         }
 
         try:

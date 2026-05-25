@@ -132,11 +132,17 @@ class BaseLLMNode(ABC):
         plan: Plan,
     ) -> dict[str, Any]:
         params = self._build_chat_params(state, level, plan)
-        # Plan overrides take precedence (from _publish, talk_control)
-        for key in ("temperature", "max_tokens", "priority", "show_thinking"):
-            if key in plan.overrides:
-                params[key] = plan.overrides[key]
-        # TaskLevel caps: node/override can only reduce, never exceed TaskLevel
+        # Talkative adjustments override
+        adj = state.get("talkative_adjustments")
+        if adj:
+            if adj.max_tokens is not None:
+                params["max_tokens"] = adj.max_tokens
+            if adj.show_thinking is not None:
+                params["show_thinking"] = adj.show_thinking
+        # Planning overrides
+        if "priority" in plan.overrides:
+            params["priority"] = plan.overrides["priority"]
+        # TaskLevel caps: can only reduce, never exceed TaskLevel
         if params.get("max_tokens") is not None and level.max_tokens > 0:
             params["max_tokens"] = min(params["max_tokens"], level.max_tokens)
         if params.get("temperature") is not None and level.temperature is not None:

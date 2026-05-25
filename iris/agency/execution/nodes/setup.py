@@ -39,7 +39,12 @@ class SetupNode:
         plan: Plan = state["plan"]
         content = plan.content
         silent = plan.silent
-        show_thinking = plan.overrides.get("show_thinking", TASK_LEVELS[plan.task_level].show_thinking)
+        show_thinking = TASK_LEVELS[plan.task_level].show_thinking
+        if silent:
+            show_thinking = False
+        adj = state.get("talkative_adjustments")
+        if adj and adj.show_thinking is not None:
+            show_thinking = adj.show_thinking
 
         if silent and not content:
             base_instruction = "システムからの内部指示: 現在の目標や欲求に基づき、Web検索や記憶検索を用いて知識を深めるための自律的な調査を行ってください。"

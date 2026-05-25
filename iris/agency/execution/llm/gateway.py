@@ -8,9 +8,10 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, System
 from loguru import logger
 
 from iris.agency.execution.llm.prompt_builder import SystemPromptBuilder
-from iris.agency.planning.emotion_temperature import EmotionTemperatureModulator
+from iris.agency.planning.models import Plan
 from iris.kernel.config import ModelConfig
 from iris.kernel.debug_capture import CaptureEntry, DebugCapture
+from iris.limbic.emotion_temperature import EmotionTemperatureModulator
 from iris.limbic.manager import LimbicManager
 from iris.llm.bridge import LLMBridge
 from iris.llm.capability import CapabilityChecker
@@ -147,6 +148,16 @@ class LLMGateway:
             last_msg = messages[-1]
             last_msg.content = self._personality.build_thinking_prompt(str(last_msg.content))
 
+        # Resolve temperature: node override → model config default → emotion modulation
+        if temperature is None:
+            temperature = self._model_config.get_effective_temperature(model_role)
+        # Resolve max_tokens: emotion modulation (reduce-only)
+        if self._limbic:
+            emotion = self._limbic.current_emotion()
+            temperature = EmotionTemperatureModulator.compute_temperature(emotion, temperature)
+            if max_tokens is not None:
+                max_tokens = EmotionTemperatureModulator.modulate_max_tokens(max_tokens, emotion)
+
         return await self._call_llm(
             system_msgs,
             messages,
@@ -163,15 +174,15 @@ class LLMGateway:
     async def chat_short(
         self,
         messages: list[BaseMessage],
-        plan: dict[str, Any],
+        plan: Plan,
         model_role: str = "default",
         max_tokens: int | None = None,
         priority: int = 0,
         interrupt_token: InterruptToken | None = None,
     ) -> str:
-        context_hint = plan.get("context_hint", "")
-        reason = plan.get("reason", "")
-        content = plan.get("content", "")
+        context_hint = plan.context_hint
+        reason = plan.reason.value
+        content = plan.content
 
         is_proactive = reason in ("proactive_curiosity", "proactive_escalation", "timer")
         response_style = self._limbic.generate_response_style() if self._limbic and is_proactive else ""

@@ -7,6 +7,7 @@ from langchain_core.messages import BaseMessage
 
 from iris.agency.execution.node_types import NODE_TYPES, ROUTING_TOOLS
 from iris.agency.execution.state import DynamicState, ExecutionState
+from iris.agency.planning.models import Plan
 from iris.agency.task_level import TASK_LEVELS, TaskLevel
 
 if TYPE_CHECKING:
@@ -60,22 +61,15 @@ class BaseLLMNode(ABC):
         logger.warning("level_idx {} out of range for {}, fallback to entry", idx, nt.name)
         return nt.entry_level
 
-    def _get_tools(self, level_name: str, plan: dict[str, Any]) -> list[dict[str, Any]] | None:
+    def _get_tools(self, level_name: str, plan: Plan) -> list[dict[str, Any]] | None:
         if self._tool_executor is None:
             return None
         nt = NODE_TYPES[self.node_type_name]
         names = nt.tool_list_by_level.get(level_name)
+        allow_side_effects = plan.overrides.get("allow_side_effects", True)
         if names is not None:
-            return (
-                self._tool_executor.list_tools_by_name(
-                    names,
-                    plan.get("allow_side_effects", True),
-                )
-                or None
-            )
-        tools = self._tool_executor.registry.list_tools(
-            allow_side_effects=plan.get("allow_side_effects", True),
-        )
+            return self._tool_executor.list_tools_by_name(names, allow_side_effects) or None
+        tools = self._tool_executor.registry.list_tools(allow_side_effects=allow_side_effects)
         if tools and self._capability_checker:
             level = TASK_LEVELS[level_name]
             if not self._capability_checker.supports_tools(level.model_role):
@@ -94,10 +88,10 @@ class BaseLLMNode(ABC):
         self,
         state: ExecutionState,
         level: TaskLevel,
-        plan: dict[str, Any],
+        plan: Plan,
     ) -> list[BaseMessage] | None:
         return self._pipeline.build_system_messages(
-            context_hint=plan.get("context_hint", ""),
+            context_hint=plan.context_hint,
             node_type=self.node_type_name,
             recent_turns=self._get_recent_turns(),
         )
@@ -121,7 +115,7 @@ class BaseLLMNode(ABC):
         self,
         state: ExecutionState,
         level: TaskLevel,
-        plan: dict[str, Any],
+        plan: Plan,
     ) -> dict[str, Any]:
         return {
             "model_role": level.model_role,
@@ -130,6 +124,24 @@ class BaseLLMNode(ABC):
             "priority": level.priority,
             "show_thinking": level.show_thinking,
         }
+
+    def _resolve_chat_params(
+        self,
+        state: ExecutionState,
+        level: TaskLevel,
+        plan: Plan,
+    ) -> dict[str, Any]:
+        params = self._build_chat_params(state, level, plan)
+        # Plan overrides take precedence (from _publish, talk_control)
+        for key in ("temperature", "max_tokens", "priority", "show_thinking"):
+            if key in plan.overrides:
+                params[key] = plan.overrides[key]
+        # TaskLevel caps: node/override can only reduce, never exceed TaskLevel
+        if params.get("max_tokens") is not None and level.max_tokens > 0:
+            params["max_tokens"] = min(params["max_tokens"], level.max_tokens)
+        if params.get("temperature") is not None and level.temperature is not None:
+            params["temperature"] = min(params["temperature"], level.temperature)
+        return params
 
     async def __call__(self, state: ExecutionState) -> dict[str, Any] | None:
         if state.get("interrupted"):
@@ -154,7 +166,7 @@ class BaseLLMNode(ABC):
                 tools=all_tools,
                 on_token=self._dynamic.on_token,
                 interrupt_token=self._dynamic.interrupt_token,
-                **self._build_chat_params(state, level, plan),
+                **self._resolve_chat_params(state, level, plan),
             )
 
             state["messages"].append(resp)
@@ -163,7 +175,7 @@ class BaseLLMNode(ABC):
             response_text = raw.strip() if isinstance(raw, str) else ""
 
             if response_text and self._memory:
-                role = "thought" if plan.get("silent", False) else "assistant"
+                role = "thought" if plan.silent else "assistant"
                 self._memory.short_term.add_turn(role, response_text)
 
             return {"response_text": response_text}

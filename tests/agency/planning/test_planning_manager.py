@@ -70,9 +70,9 @@ def test_planning_manager_silent_proactive_interest_sampling() -> None:
     call_args = internal_bus.publish.call_args[0][0]
     assert isinstance(call_args, PlanDecided)
     plan = call_args.plan
-    assert plan["silent"] is True
-    assert plan["proactive_reason"] == "ビッグバン以前には何が存在したのか？"
-    assert plan["interest_topic"] == "宇宙の起源"
+    assert plan.silent is True
+    assert plan.overrides["proactive_reason"] == "ビッグバン以前には何が存在したのか？"
+    assert plan.overrides["interest_topic"] == "宇宙の起源"
 
 
 def test_planning_manager_escalation_event() -> None:
@@ -115,7 +115,7 @@ def test_planning_manager_escalation_event() -> None:
     call_args = internal_bus.publish.call_args[0][0]
     assert isinstance(call_args, PlanDecided)
     plan = call_args.plan
-    assert plan["silent"] is False
-    assert "宇宙の起源" in plan["content"]
-    assert "ビッグバンによる宇宙の膨張" in plan["content"]
-    assert "システムからの内部指示" in plan["content"]
+    assert plan.silent is False
+    assert "宇宙の起源" in plan.content
+    assert "ビッグバンによる宇宙の膨張" in plan.content
+    assert "システムからの内部指示" in plan.content

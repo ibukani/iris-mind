@@ -10,7 +10,6 @@ from iris.agency.planning.decisions import ProactiveJudge, ProactiveScoring
 from iris.agency.planning.models import Plan
 from iris.agency.planning.question_generator import QuestionGenerator
 from iris.agency.planning.strategies import ProactivePlanStrategy, ResponsePlanStrategy
-from iris.agency.task_level import resolve_level
 from iris.event.event_bus import EventBus
 from iris.event.event_types import InputReady
 from iris.kernel.config import Config
@@ -100,24 +99,17 @@ class PlanningManager:
         return emotion
 
     def _publish(self, plan: Plan, session_id: str, from_timer: bool) -> None:
-        resolved = resolve_level(plan.task_level, plan.overrides)
-        resolved["content"] = plan.content
-        resolved["context_hint"] = plan.context_hint
-        resolved["streaming"] = not plan.silent
-        resolved["silent"] = plan.silent
+        plan.session_id = session_id
         if plan.silent:
-            resolved["show_thinking"] = False
-        resolved["session_id"] = session_id
-        resolved["reason"] = plan.reason.value
-        if plan.silent:
-            resolved["allow_side_effects"] = False
-            resolved["max_tool_iterations"] = 3
-            resolved["priority"] = 1
+            plan.overrides["allow_side_effects"] = False
+            plan.overrides["show_thinking"] = False
+            plan.overrides["max_tool_iterations"] = 3
+            plan.overrides["priority"] = 1
 
         logger.info(
             "PlanningManager: plan published session={} from_timer={} level={}",
-            session_id,
+            plan.session_id,
             from_timer,
             plan.task_level,
         )
-        self._bus.publish(PlanDecided(plan=resolved))
+        self._bus.publish(PlanDecided(plan=plan))

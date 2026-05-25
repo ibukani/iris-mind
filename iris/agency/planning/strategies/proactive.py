@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, Any
 
-from iris.agency.planning.emotion_temperature import EmotionTemperatureModulator
 from iris.agency.planning.models import Plan, PlanReason
 
 if TYPE_CHECKING:
@@ -80,8 +79,5 @@ class ProactivePlanStrategy:
                 context_hint=context_hint,
                 overrides=overrides,
             )
-
-        if limbic_mood:
-            EmotionTemperatureModulator.apply_execution_params(overrides, limbic_mood)
 
         return plan

@@ -19,4 +19,5 @@ class Plan:
     silent: bool = False
     reason: PlanReason = PlanReason.USER_INPUT
     context_hint: str = ""
+    session_id: str = ""
     overrides: dict[str, Any] = field(default_factory=dict)

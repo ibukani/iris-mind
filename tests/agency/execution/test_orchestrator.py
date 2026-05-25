@@ -7,6 +7,7 @@ import pytest
 
 from iris.agency.execution.orchestrator import ExecutionOrchestrator
 from iris.agency.execution.state import ExecutionState
+from iris.agency.planning.models import Plan
 
 
 @pytest.fixture
@@ -30,38 +31,23 @@ def _make_orchestrator(mock_llm: AsyncMock) -> ExecutionOrchestrator:
     )
 
 
-def _chat_plan(content: str = "", is_silent: bool = False) -> dict:
-    return {
-        "content": content,
-        "task_level": "chat",
-        "model_role": "fast",
-        "max_tokens": 80,
-        "max_tool_iterations": 0,
-        "priority": 0,
-        "show_thinking": False,
-        "run_reflexion": False,
-        "run_compression": False,
-        "session_id": "test-session-001",
-        "silent": is_silent,
-        "context_hint": "",
-    }
+def _chat_plan(content: str = "", is_silent: bool = False) -> Plan:
+    return Plan(
+        content=content,
+        task_level="chat",
+        silent=is_silent,
+        session_id="test-session-001",
+    )
 
 
-def _normal_plan(content: str = "hello") -> dict:
-    return {
-        "content": content,
-        "task_level": "normal",
-        "model_role": "default",
-        "max_tokens": 0,
-        "max_tool_iterations": 5,
-        "priority": 2,
-        "show_thinking": True,
-        "run_reflexion": False,
-        "run_compression": False,
-        "session_id": "test-session-001",
-        "silent": False,
-        "context_hint": "test",
-    }
+def _normal_plan(content: str = "hello") -> Plan:
+    return Plan(
+        content=content,
+        task_level="normal",
+        silent=False,
+        context_hint="test",
+        session_id="test-session-001",
+    )
 
 
 def _base_state(plan: dict, messages: list | None = None) -> ExecutionState:

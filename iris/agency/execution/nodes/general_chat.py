@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from iris.agency.execution.nodes.base import BaseLLMNode
+from iris.agency.execution.state import ExecutionState
+from iris.agency.planning.models import Plan
+from iris.agency.task_level import TaskLevel
 
 if TYPE_CHECKING:
     from iris.agency.execution.engine import ToolEngine
@@ -35,3 +38,17 @@ class GeneralChatNode(BaseLLMNode):
             event_bus=event_bus,
             memory=memory,
         )
+
+    def _build_chat_params(
+        self,
+        state: ExecutionState,
+        level: TaskLevel,
+        plan: Plan,
+    ) -> dict[str, Any]:
+        return {
+            "model_role": "low",
+            "temperature": 0.85 if level.temperature is None else level.temperature,
+            "max_tokens": 256,
+            "priority": level.priority,
+            "show_thinking": False,
+        }

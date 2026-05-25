@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 from langchain_core.messages import ChatMessage, HumanMessage
 
 from iris.agency.execution.state import DynamicState, ExecutionState
+from iris.agency.planning.models import Plan
+from iris.agency.task_level import TASK_LEVELS
 from iris.event.event_types import MessageEvent
 from iris.io.models import StreamState
 
@@ -34,17 +36,18 @@ class SetupNode:
         self._dynamic = dynamic or DynamicState()
 
     async def __call__(self, state: ExecutionState) -> None:
-        plan = state["plan"]
-        content = plan.get("content", "")
-        show_thinking = plan.get("show_thinking", False)
-        silent = plan.get("silent", False)
+        plan: Plan = state["plan"]
+        content = plan.content
+        silent = plan.silent
+        show_thinking = plan.overrides.get("show_thinking", TASK_LEVELS[plan.task_level].show_thinking)
 
         if silent and not content:
             base_instruction = "システムからの内部指示: 現在の目標や欲求に基づき、Web検索や記憶検索を用いて知識を深めるための自律的な調査を行ってください。"
-            if "proactive_reason" in plan:
-                base_instruction += f" (理由: {plan['proactive_reason']})"
+            proactive_reason = plan.overrides.get("proactive_reason", "")
+            if proactive_reason:
+                base_instruction += f" (理由: {proactive_reason})"
             content = base_instruction
-            plan["content"] = content
+            plan.content = content
 
         self._set_on_token_callback()
 

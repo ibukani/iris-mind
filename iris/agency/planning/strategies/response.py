@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from iris.agency.planning.emotion_temperature import EmotionTemperatureModulator
 from iris.agency.planning.models import Plan, PlanReason
 from iris.agency.planning.task_content import is_task_content
 
@@ -42,9 +41,6 @@ class ResponsePlanStrategy:
         )
 
         overrides: dict[str, Any] = {}
-
-        if limbic_mood:
-            EmotionTemperatureModulator.apply_execution_params(overrides, limbic_mood)
 
         return Plan(
             content=content,

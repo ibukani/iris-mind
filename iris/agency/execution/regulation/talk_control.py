@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
+
+from iris.agency.planning.models import Plan
 
 if TYPE_CHECKING:
     from iris.agency.execution.regulation.output_tracker import OutputTracker
@@ -12,24 +14,24 @@ TALKATIVE_SKIP_POSTPROCESS_THRESHOLD = 3
 TALKATIVE_DISABLE_STREAM_THRESHOLD = 5
 
 
-def apply_talkative_overrides(plan: dict[str, Any], degree: int) -> None:
+def apply_talkative_overrides(plan: Plan, degree: int) -> None:
     if degree <= 0:
         return
     if degree >= TALKATIVE_ABBREVIATED_THRESHOLD:
-        plan["task_level"] = "chat"
+        plan.task_level = "chat"
     if degree >= TALKATIVE_TOKEN_LIMIT_THRESHOLD:
-        current = plan.get("max_tokens", 0)
+        current = plan.overrides.get("max_tokens", 0)
         if current and current > 0:
-            plan["max_tokens"] = min(current, 256)
+            plan.overrides["max_tokens"] = min(current, 256)
     if degree >= TALKATIVE_SKIP_POSTPROCESS_THRESHOLD:
-        plan["run_reflexion"] = False
-        plan["run_compression"] = False
+        plan.overrides["run_reflexion"] = False
+        plan.overrides["run_compression"] = False
     if degree >= TALKATIVE_DISABLE_STREAM_THRESHOLD:
-        plan["show_thinking"] = False
+        plan.overrides["show_thinking"] = False
 
 
-def should_skip_proactive(plan: dict[str, Any], degree: int, monitor: OutputTracker | None) -> bool:
-    content: str = plan.get("content", "")
+def should_skip_proactive(plan: Plan, degree: int, monitor: OutputTracker | None) -> bool:
+    content: str = plan.content
     if content:
         return False
     if not monitor:

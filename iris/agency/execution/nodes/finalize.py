@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from iris.agency.execution.state import ExecutionState
+from iris.agency.planning.models import Plan
 from iris.event.event_types import MessageEvent, ProactiveResultEvent
 from iris.io.models import StreamState
 
@@ -32,10 +33,10 @@ class FinalizeNode:
         self._coordinator = coordinator
 
     async def __call__(self, state: ExecutionState) -> dict[str, Any] | None:
-        plan = state["plan"]
+        plan: Plan = state["plan"]
         response_text = state.get("response_text", "")
-        silent = plan.get("silent", False)
-        session_id = plan.get("session_id", "")
+        silent = plan.silent
+        session_id = plan.session_id
 
         if not response_text:
             self._publish_done(session_id)
@@ -79,7 +80,7 @@ class FinalizeNode:
         if self._coordinator:
             self._coordinator.process_feedback(flags)
 
-    def _publish_proactive_result(self, plan: dict[str, Any], response_text: str) -> None:
+    def _publish_proactive_result(self, plan: Plan, response_text: str) -> None:
         if not self._event_bus:
             return
         success = bool(response_text and not response_text.startswith("[Error:"))
@@ -87,7 +88,7 @@ class FinalizeNode:
             ProactiveResultEvent(
                 timestamp=None,
                 source="execution",
-                topic=plan.get("interest_topic", plan.get("proactive_reason", "")),
+                topic=(plan.overrides.get("interest_topic") or plan.overrides.get("proactive_reason", "")),
                 success=success,
                 content=response_text,
             ),

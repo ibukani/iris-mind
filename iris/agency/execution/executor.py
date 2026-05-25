@@ -4,7 +4,7 @@ import asyncio
 from collections.abc import Callable
 import queue
 import threading
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from langchain_core.messages import BaseMessage, SystemMessage
 
@@ -22,6 +22,7 @@ from iris.agency.execution.regulation.talk_control import (
 )
 from iris.agency.execution.state import ExecutionState
 from iris.agency.inhibition import InhibitionController
+from iris.agency.planning.models import Plan
 from iris.event.event_bus import EventBus
 from iris.event.event_types import InterruptEvent
 from iris.llm.capability import CapabilityChecker
@@ -72,7 +73,7 @@ class FlowExecutor:
         )
 
         self._loop = asyncio.new_event_loop()
-        self._plan_queue: queue.Queue[dict[str, Any] | None] = queue.Queue()
+        self._plan_queue: queue.Queue[Plan | None] = queue.Queue()
         self._worker_thread = threading.Thread(target=self._worker_run, daemon=True, name="executor-worker")
         self._worker_thread.start()
 
@@ -93,7 +94,7 @@ class FlowExecutor:
     def _on_plan(self, event: PlanDecided) -> None:
         plan = event.plan
         degree = self._monitor.talkative_degree if self._monitor else 0
-        if self._monitor and plan.get("content", ""):
+        if self._monitor and plan.content:
             self._monitor.record_user_input()
 
         apply_talkative_overrides(plan, degree)
@@ -107,7 +108,7 @@ class FlowExecutor:
 
         logger.info(
             "FlowExecutor: queueing plan session={}",
-            plan.get("session_id"),
+            plan.session_id,
         )
         self._plan_queue.put(plan)
 
@@ -131,14 +132,14 @@ class FlowExecutor:
             except Exception:
                 logger.exception("FlowExecutor worker: graph execution failed")
 
-    async def _run_graph(self, plan: dict[str, Any]) -> None:
+    async def _run_graph(self, plan: Plan) -> None:
         self._interrupt_token = InterruptToken()
         self._graph.set_callbacks(
             interrupt_token=self._interrupt_token,
         )
 
         nt = NODE_TYPES["general_chat"]
-        entry = plan.get("task_level", nt.entry_level)
+        entry = plan.task_level if plan.task_level in nt.available_levels else nt.entry_level
         level_idx = nt.available_levels.index(entry) if entry in nt.available_levels else 0
 
         state: ExecutionState = {

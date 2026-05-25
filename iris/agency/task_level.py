@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
 
 
 @dataclass(frozen=True)
@@ -25,21 +24,3 @@ TASK_LEVELS: dict[str, TaskLevel] = {
     "deep": TaskLevel("deep", 4, "medium", 4096, 10, 3, True, True, True),
     "research": TaskLevel("research", 5, "high", 8192, 20, 4, True, True, True),
 }
-
-
-def resolve_level(name: str, overrides: dict[str, Any] | None = None) -> dict[str, Any]:
-    tl = TASK_LEVELS[name]
-    result: dict[str, Any] = {
-        "task_level": tl.name,
-        "model_role": tl.model_role,
-        "temperature": tl.temperature,
-        "max_tokens": tl.max_tokens,
-        "max_tool_iterations": tl.max_tool_iterations,
-        "priority": tl.priority,
-        "show_thinking": tl.show_thinking,
-        "run_reflexion": tl.run_reflexion,
-        "run_compression": tl.run_compression,
-    }
-    if overrides:
-        result.update(overrides)
-    return result

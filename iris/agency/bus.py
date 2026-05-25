@@ -8,10 +8,12 @@ import threading
 
 from loguru import logger
 
+from iris.agency.planning.models import Plan
+
 
 @dataclass
 class PlanDecided:
-    plan: dict
+    plan: Plan
 
 
 class InternalBus:

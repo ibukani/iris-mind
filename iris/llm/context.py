@@ -141,9 +141,7 @@ class LLMContextWindowManager:
             logger.exception("Summarization failed: {}", e)
             return self._summary
 
-    def _extract_previous_summary(
-        self, messages: list[BaseMessage]
-    ) -> tuple[str, list[BaseMessage]]:
+    def _extract_previous_summary(self, messages: list[BaseMessage]) -> tuple[str, list[BaseMessage]]:
         previous_summary = ""
         new_messages: list[BaseMessage] = []
         for m in messages:

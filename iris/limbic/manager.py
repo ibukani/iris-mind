@@ -235,7 +235,7 @@ class LimbicManager:
         noise = EmotionDelta(
             valence=random.uniform(-noise_scale, noise_scale),
             arousal=random.uniform(-noise_scale, noise_scale),
-            dominance=random.uniform(-noise_scale, noise_scale)
+            dominance=random.uniform(-noise_scale, noise_scale),
         )
         self._emotion.apply(noise)
 

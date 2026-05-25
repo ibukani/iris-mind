@@ -70,21 +70,41 @@ class ProactiveScoring:
 
         mood_weight = self._compute_mood_weight(ctx.limbic_mood)
         total, ignore_penalty = self._aggregate_scores(
-            time_score, memory_score, context_score, mood_score, mood_weight,
-            drive_score, sensory_score, urgency_score, ctx.ignore_count, ctx.context,
+            time_score,
+            memory_score,
+            context_score,
+            mood_score,
+            mood_weight,
+            drive_score,
+            sensory_score,
+            urgency_score,
+            ctx.ignore_count,
+            ctx.context,
         )
 
         logger.debug(
             "Scores: time={:.3f} mem={:.3f} ctx={:.3f} mood={:.3f} sensory={:.3f} stm={:.3f} urg={:.3f} "
             "ignore={} total={:.3f} (threshold={:.2f})",
-            time_score, memory_score, context_score, mood_score,
-            sensory_score, stm_score, urgency_score,
-            ctx.ignore_count, total, self._config.speak_threshold,
+            time_score,
+            memory_score,
+            context_score,
+            mood_score,
+            sensory_score,
+            stm_score,
+            urgency_score,
+            ctx.ignore_count,
+            total,
+            self._config.speak_threshold,
         )
         return total, {
-            "time": time_score, "memory": memory_score, "context": context_score,
-            "mood": mood_score, "drive": drive_score, "sensory": sensory_score,
-            "short_term": stm_score, "urgency": urgency_score,
+            "time": time_score,
+            "memory": memory_score,
+            "context": context_score,
+            "mood": mood_score,
+            "drive": drive_score,
+            "sensory": sensory_score,
+            "short_term": stm_score,
+            "urgency": urgency_score,
             "ignore_penalty": ignore_penalty if ctx.ignore_count > 0 else 1.0,
         }
 
@@ -137,6 +157,12 @@ class ProactiveScoring:
         if last_time == 0:
             return 0.0
         elapsed = now - last_time
+
+        if last_user_activity > 0:
+            elapsed_since_user = now - last_user_activity
+            if elapsed_since_user < 60.0:
+                return 1.0
+
         if elapsed < self._config.min_interval_sec:
             return 0.0
         ratio = (elapsed - self._config.min_interval_sec) / (

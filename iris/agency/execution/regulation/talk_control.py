@@ -12,8 +12,7 @@ TALKATIVE_SKIP_POSTPROCESS_THRESHOLD = 3
 TALKATIVE_DISABLE_STREAM_THRESHOLD = 5
 
 
-def apply_talkative_overrides(plan: dict[str, Any]) -> None:
-    degree: int = plan.get("talkative_degree", 0)
+def apply_talkative_overrides(plan: dict[str, Any], degree: int) -> None:
     if degree <= 0:
         return
     if degree >= TALKATIVE_ABBREVIATED_THRESHOLD:
@@ -30,11 +29,10 @@ def apply_talkative_overrides(plan: dict[str, Any]) -> None:
         plan["show_thinking"] = False
 
 
-def should_skip_proactive(plan: dict[str, Any], monitor: OutputTracker | None) -> bool:
+def should_skip_proactive(plan: dict[str, Any], degree: int, monitor: OutputTracker | None) -> bool:
     content: str = plan.get("content", "")
     if content:
         return False
     if not monitor:
         return False
-    talkative: int = plan.get("talkative_degree", 0) or monitor.talkative_degree
-    return talkative >= 2 or (monitor.frequency_exceeded and talkative >= 1)
+    return degree >= 2 or (monitor.frequency_exceeded and degree >= 1)

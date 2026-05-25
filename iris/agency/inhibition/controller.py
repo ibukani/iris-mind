@@ -166,9 +166,9 @@ class InhibitionController:
         if s.last_user_activity > 0:
             elapsed = now - s.last_user_activity
             if elapsed < 10:
-                go = 0.3
+                go = 0.7
             elif elapsed < 60:
-                go = 0.5
+                go = 0.6
             elif elapsed < 300:
                 go = 0.7
             else:

@@ -41,11 +41,8 @@ Iris は自律的に行動・進化できるAIアシスタント。Python 製で
 git clone https://github.com/your-org/iris-mind.git
 cd iris-mind
 
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-
-pip install -e .
-pip install -e ".[dev]"
+uv venv
+uv sync
 ```
 
 ## Usage
@@ -76,8 +73,8 @@ OPENROUTER_API_KEY=sk-or-...
 ### Starting Iris
 
 ```powershell
-python main.py
-python main.py --verbose
+uv run python main.py
+uv run python main.py --verbose
 ```
 
 ### Slash Commands
@@ -252,11 +249,11 @@ iris-mind/
 ### Lint / Typecheck / Test
 
 ```powershell
-ruff check .                          # lint
-ruff format --check .                 # format check
-ruff check --fix .                    # lint + auto-fix
-mypy .                                # type check
-pytest tests/                         # 全テスト実行
+uv run ruff check .                   # lint
+uv run ruff format --check .          # format check
+uv run ruff check --fix .             # lint + auto-fix
+uv run mypy .                         # type check
+uv run pytest tests/                  # 全テスト実行
 ```
 
 ### Capability Additions
@@ -297,7 +294,8 @@ pytest tests/                         # 全テスト実行
 - **ベクトル検索**: ChromaDB + ONNX MiniLM-L6-v2
 - **IPC**: gRPC（HTTP/2）— 1ポート多重
 - **UI**: Rich（TUI）, prompt_toolkit
-- **テスト**: pytest（138 tests）, ruff, mypy
+- **テスト**: pytest, ruff, mypy（`uv run` 経由）
+- **パッケージ管理**: uv
 
 ## Contributing
 

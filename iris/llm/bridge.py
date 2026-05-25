@@ -9,7 +9,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from cachetools import LRUCache, cached
 import httpx
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
@@ -76,6 +75,9 @@ class LLMBridge:
                 model=entry.name,
                 base_url=base_url,
                 keep_alive=entry.keep_alive or "10m",
+                reasoning=entry.reasoning,
+                client_kwargs={"timeout": 120},
+                async_client_kwargs={"timeout": 120},
                 options=options,  # type: ignore[call-arg]
             )
 
@@ -145,7 +147,7 @@ class LLMBridge:
         self,
         messages: list[BaseMessage],
         model: str | None = None,
-        enable_thinking: bool = False,
+        reasoning: bool | None = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
         tools: list[dict[str, Any]] | None = None,
@@ -158,7 +160,7 @@ class LLMBridge:
         provider = self._resolve_provider(model_name)
         entry = self._entries.get(model_name)
 
-        call_kwargs = self._build_call_kwargs(provider, temperature, max_tokens, entry, kwargs)
+        call_kwargs = self._build_call_kwargs(provider, temperature, max_tokens, entry, kwargs, reasoning=reasoning)
         active_model = provider.bind_tools(tools) if tools else provider
 
         local_interrupt_token = interrupt_token or InterruptToken()
@@ -191,9 +193,7 @@ class LLMBridge:
             if getattr(resp_message, "tool_calls", None):
                 new_msg.tool_calls = resp_message.tool_calls
             return new_msg
-        if isinstance(resp_message, AIMessage):
-            return resp_message
-        return AIMessage(content=str(getattr(resp_message, "content", "")))
+        return resp_message
 
     def _build_call_kwargs(
         self,
@@ -202,11 +202,17 @@ class LLMBridge:
         max_tokens: int,
         entry: ModelEntry | None,
         kwargs: dict[str, Any],
+        reasoning: bool | None = None,
     ) -> dict[str, Any]:
         if isinstance(provider, ChatOllama):
-            call_kwargs: dict[str, Any] = {
-                "options": self._build_ollama_options(temperature, max_tokens, entry, kwargs),
-            }
+            call_options = self._build_ollama_options(temperature, max_tokens, entry, kwargs)
+            instance_options = dict(getattr(provider, "options", None) or {})
+            merged = {**instance_options, **call_options}
+            if "num_ctx" not in merged:
+                merged["num_ctx"] = self._model_config.default_num_ctx
+            call_kwargs: dict[str, Any] = {"options": merged}
+            if reasoning is not None:
+                call_kwargs["reasoning"] = reasoning
         else:
             call_kwargs = self._build_openai_kwargs(temperature, max_tokens, kwargs)
         call_kwargs.update(kwargs)
@@ -261,7 +267,7 @@ class LLMBridge:
         return self._repetition_detector.trim(text)
 
     def is_available(self) -> bool:
-        for provider in self._providers.values():
+        for provider in self._providers.values():  # noqa: SIM110
             if self._check_provider_available(provider):
                 return True
         return False
@@ -272,7 +278,7 @@ class LLMBridge:
             if not url:
                 return False
             try:
-                return httpx.get(url, timeout=1.0).status_code == 200
+                return bool(httpx.get(url, timeout=1.0).status_code == 200)
             except Exception:
                 logger.warning("Ollama provider at {} is unavailable", url)
                 return False
@@ -302,7 +308,6 @@ class LLMBridge:
         except Exception as e:
             logger.warning("Failed to unload ollama model {}: {}", model_name, e)
 
-    @cached(cache=LRUCache(maxsize=32))  # type: ignore[arg-type]
     def _resolve_provider(self, model_name: str) -> BaseChatModel:
         """モデル名から対応するプロバイダインスタンスを解決する。"""
         key = self._model_map.get(model_name)
@@ -312,7 +317,6 @@ class LLMBridge:
         logger.warning("Model {!r} not found in provider map, using first provider", model_name)
         return first
 
-    @cached(cache=LRUCache(maxsize=1))  # type: ignore[arg-type]
     def _get_default_model(self) -> str:
         """デフォルト of モデル名を取得する（マップの最初のモデル）。"""
         for name in self._model_map:

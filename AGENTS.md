@@ -177,18 +177,18 @@ iris/                             ← アプリケーションコア
 
 ```powershell
 # 1. テスト（最優先）
-pytest tests/ -q
+uv run pytest tests/ -q
 
 # 2. lint + auto-fix
-ruff check --fix .
+uv run ruff check --fix .
 
 # 3. format確認
-ruff format --check .
+uv run ruff format --check .
 
 # 4. type check（mypy or pyright）
-mypy .
+uv run mypy .
 # または
-npx pyright .
+uv run pyright .
 ```
 
 ※ 設定は `pyproject.toml` に集約

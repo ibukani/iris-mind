@@ -98,8 +98,17 @@ def test_inhibition_controller_cooldown_and_planning_scoring():
     # 接続イベント付きの評価
     context = {"system_event": "connected", "role": "user", "offline_duration": "3時間"}
 
+    from iris.agency.planning.decisions.scoring import ScoreContext
+
     total, _ = scoring.compute(
-        now=time.time(), last_proactive_time=0.0, last_user_activity=0.0, negative_mood_score=0.0, context=context
+        ScoreContext(
+            now=time.time(),
+            last_proactive_time=0.0,
+            last_user_activity=0.0,
+            negative_mood_score=0.0,
+            context=context,
+            ignore_count=0,
+        )
     )
     # 接続イベント時は強制的に speak_threshold + 0.1 を超える
     assert total >= 0.6

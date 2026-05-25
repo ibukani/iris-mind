@@ -18,11 +18,11 @@ dependencies = [
     "tokenizers>=0.21",
     "grpcio>=1.62.0",
     "grpcio-tools>=1.62.0",
-    "langgraph>=0.3",
-    "langchain>=0.3",
-    "langchain-ollama>=0.2",
-    "langchain-openai>=0.3",
-    "langchain-chroma>=0.2",
+    "langgraph>=1.2",
+    "langchain>=1.3",
+    "langchain-ollama>=1.1",
+    "langchain-openai>=1.2",
+    "langchain-chroma>=1.1",
     "rank-bm25>=0.2",
     "instructor>=1.0",
     "loguru>=0.7",
@@ -39,6 +39,7 @@ dev = [
     "hypothesis>=6",
     "pre-commit>=4",
     "types-PyYAML",
+    "pyright>=1.1",
 ]
 
 [tool.setuptools.packages.find]
@@ -50,26 +51,13 @@ line-length = 120
 exclude = ["*_pb2.py", "*_pb2_grpc.py"]
 
 [tool.ruff.lint]
-# 既存プロジェクト向けの現実的なルールセット
-# E, F, W: 標準的なエラー・構文チェック
-# I: importのソート
-# B: バグの温床になりやすいコードの検知 (Bugbear)
-# UP: Python3.13向けのモダンな構文への自動アップグレード
 select = ["E", "F", "W", "I", "B", "UP", "RUF", "C4", "SIM", "RET", "PERF", "PIE", "FA", "ISC"]
-
-# ▼ 除外したルール（将来的に余裕があれば追加）
-# "N" (pep8-naming): 関数名や変数名の命名規則。既存のキャメルケース等に大量反応する
-# "PTH" (flake8-use-pathlib): os.path を pathlib に書き換えろと大量に怒られる
-# "ARG" (flake8-unused-arguments): インターフェースやコールバックの未使用引数で怒られる
-# "S" (flake8-bandit): セキュリティチェック。「subprocessを使ってはいけない」等でうるさい
-# "D" (pydocstyle): Docstringの改行位置やピリオドの有無など、細かすぎるフォーマット警察
-
 ignore = [
-    "E501", # 行の長さ制限はフォーマッターに任せるため無視
-    "B008", # 関数のデフォルト引数での関数呼び出しを許容（FastAPIやTyperでよく使うため）
-    "RUF001", # 日本語docstringに多数ヒットするambiguous-characters
-    "RUF002", # 同上
-    "RUF003", # 同上
+    "E501",
+    "B008",
+    "RUF001",
+    "RUF002",
+    "RUF003",
 ]
 
 [tool.ruff.lint.isort]
@@ -81,17 +69,6 @@ known-first-party = ["iris", "tests"]
 quote-style = "double"
 docstring-code-format = true
 
-# ==========================================
-# Mypy 設定（段階的レベルアップ対応）
-# ==========================================
-# レベル上げ方は各フラグの値を false → true に書き換える。
-#    Level 1 (今): 全フラグ false、一部モジュール ignore_errors
-#    Level 2:      check_untyped_defs = true
-#    Level 3:      disallow_incomplete_defs = true
-#    Level 4:      disallow_untyped_defs = true
-#    Level 5:      no_implicit_optional = true
-#    Level 6:      overrides の ignore_errors を削除（モジュール単位で対応）
-# ==========================================
 [tool.mypy]
 python_version = "3.13"
 warn_unused_configs = false
@@ -99,47 +76,11 @@ warn_redundant_casts = true
 strict_equality = true
 warn_return_any = true
 warn_unreachable = true
-
-# ----- Level 1: 未型定義関数の内部までチェックしない -----
-# check_untyped_defs = false
-# ----- Level 2 (current): 未型定義関数の内部もチェック -----
 check_untyped_defs = true
-
-# ----- Level 1: 不完全な型定義を許容 -----
-# disallow_incomplete_defs = false
-# ----- Level 3 (current): 関数シグネチャには型必須 -----
 disallow_incomplete_defs = true
-
-# ----- Level 1: 無型関数を許容 -----
-# disallow_untyped_defs = false
-# ----- Level 4 (current): 全関数に型注釈必須 -----
 disallow_untyped_defs = true
-
-# ----- Level 1: Optional 明示不要 -----
-# no_implicit_optional = false
-# ----- Level 5 (current): Optional は明示必須 -----
 no_implicit_optional = true
 
-# ==========================================
-# overrides: モジュール単位の緩和（段階的に削除）
-# ==========================================
-# Level 1 ではエラーが多いモジュールを丸ごとスキップ。
-# Level 6 で ignore_errors を削除し、必要なら個別抑制に置き換える。
-# ==========================================
-
-# ---- Level 1 (過去): 全面許可 → Level 6 で削除 ----
-# 対象モジュールは型注釈完備につき ignore_errors 不要
-# [[tool.mypy.overrides]]
-# module = [
-#   "iris.llm.llm_bridge",
-#   "iris.llm.ollama_provider",
-#   "iris.memory.vector_store",
-# ]
-# ignore_errors = true
-# ---- Level 6: 消す（段階的にモジュールをリストから外す） ----
-# 例: module = ["iris.llm.ollama_provider"]  # 1個ずつ減らす
-
-# ---- 外部ライブラリの型スタブ不足 ----
 [[tool.mypy.overrides]]
 module = ["chromadb.*", "rank_bm25"]
 ignore_missing_imports = true
@@ -148,7 +89,6 @@ ignore_missing_imports = true
 module = ["ollama", "httpx", "tokenizers", "langgraph.*", "instructor.*"]
 ignore_missing_imports = true
 
-# ---- テストは常に緩め ----
 [[tool.mypy.overrides]]
 module = "tests.*"
 ignore_errors = true

@@ -5,9 +5,6 @@ from typing import TYPE_CHECKING
 
 from langchain_core.messages import ChatMessage, HumanMessage
 
-from iris.agency.execution.regulation.talk_control import (
-    apply_talkative_overrides,
-)
 from iris.agency.execution.state import DynamicState, ExecutionState
 from iris.event.event_types import MessageEvent
 from iris.io.models import StreamState
@@ -44,28 +41,17 @@ class SetupNode:
         streaming = plan.get("streaming", not abbreviated)
         silent = plan.get("silent", False)
 
-        if silent:
-            plan["streaming"] = False
-            plan["show_thinking"] = False
-            plan["allow_side_effects"] = False
-            plan["max_tool_iterations"] = 3
-            plan["priority"] = 1
-
-            if not content:
+        if silent and not content:
                 base_instruction = "システムからの内部指示: 現在の目標や欲求に基づき、Web検索や記憶検索を用いて知識を深めるための自律的な調査を行ってください。"
                 if "proactive_reason" in plan:
                     base_instruction += f" (理由: {plan['proactive_reason']})"
                 content = base_instruction
                 plan["content"] = content
 
-        if content:
-            plan["tools_allowed"] = True
-
         if streaming:
             self._set_on_token_callback()
 
-        record_history = plan.get("record_history", True)
-        if record_history and content:
+        if content:
             if silent:
                 state["messages"].append(ChatMessage(role="thought", content=content))
             else:
@@ -91,8 +77,6 @@ class SetupNode:
 
         if self._session_roles_getter and not abbreviated:
             self._pipeline.set_session_roles_summary(self._session_roles_getter())
-
-        apply_talkative_overrides(plan)
 
     def _set_on_token_callback(self) -> None:
         event_bus = self._event_bus

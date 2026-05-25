@@ -25,9 +25,8 @@ class ProactivePlanStrategy:
     def build_proactive(
         self, context: dict[str, Any], gate: GateVerdict, limbic_mood: EmotionState | None = None
     ) -> Plan:
-        overrides: dict[str, Any] = {
-            "context_hint": context.get("context_hint", ""),
-        }
+        context_hint: str = context.get("context_hint", "")
+        overrides: dict[str, Any] = {}
 
         if context.get("is_silent_proactive", False):
             topic = context.get("topic", "general")
@@ -54,6 +53,7 @@ class ProactivePlanStrategy:
                 task_level=3,
                 silent=True,
                 reason=PlanReason.PROACTIVE_CURIOSITY,
+                context_hint=context_hint,
                 overrides=overrides,
             )
         elif context.get("escalation"):
@@ -65,6 +65,7 @@ class ProactivePlanStrategy:
                 task_level=4,
                 silent=False,
                 reason=PlanReason.PROACTIVE_ESCALATION,
+                context_hint=context_hint,
                 overrides=overrides,
             )
         else:
@@ -73,6 +74,7 @@ class ProactivePlanStrategy:
                 task_level=2,
                 silent=True,
                 reason=PlanReason.TIMER_EVENT,
+                context_hint=context_hint,
                 overrides=overrides,
             )
 

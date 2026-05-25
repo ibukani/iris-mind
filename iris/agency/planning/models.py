@@ -18,4 +18,5 @@ class Plan:
     task_level: int = 2
     silent: bool = False
     reason: PlanReason = PlanReason.USER_INPUT
+    context_hint: str = ""
     overrides: dict[str, Any] = field(default_factory=dict)

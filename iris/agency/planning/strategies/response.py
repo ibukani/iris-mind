@@ -41,9 +41,7 @@ class ResponsePlanStrategy:
             gate.score,
         )
 
-        overrides: dict[str, Any] = {
-            "context_hint": context_hint,
-        }
+        overrides: dict[str, Any] = {}
 
         if limbic_mood:
             EmotionTemperatureModulator.apply_execution_params(overrides, limbic_mood)
@@ -53,5 +51,6 @@ class ResponsePlanStrategy:
             task_level=level,
             silent=False,
             reason=PlanReason.USER_INPUT,
+            context_hint=context_hint,
             overrides=overrides,
         )

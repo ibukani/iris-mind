@@ -102,6 +102,7 @@ class PlanningManager:
     def _publish(self, plan: Plan, session_id: str, from_timer: bool) -> None:
         resolved = resolve_level(plan.task_level, plan.overrides)
         resolved["content"] = plan.content
+        resolved["context_hint"] = plan.context_hint
         resolved["streaming"] = not plan.silent
         resolved["silent"] = plan.silent
         if plan.silent:

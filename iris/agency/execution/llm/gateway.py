@@ -11,8 +11,8 @@ from iris.agency.execution.llm.prompt_builder import SystemPromptBuilder
 from iris.agency.planning.models import Plan
 from iris.kernel.config import ModelConfig
 from iris.kernel.debug_capture import CaptureEntry, DebugCapture
-from iris.limbic.emotion_temperature import EmotionTemperatureModulator
 from iris.limbic.manager import LimbicManager
+from iris.limbic.modulator import EmotionTemperatureModulator
 from iris.llm.bridge import LLMBridge
 from iris.llm.capability import CapabilityChecker
 from iris.llm.interrupt_token import InterruptToken

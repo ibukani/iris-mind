@@ -57,6 +57,7 @@ class FinalizeNode:
         if silent:
             self._publish_proactive_result(plan, response_text)
 
+        self._publish_done(session_id)
         state["completed"] = True
         return {"completed": True}
 

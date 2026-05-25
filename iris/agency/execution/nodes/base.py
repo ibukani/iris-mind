@@ -8,8 +8,6 @@ from langchain_core.messages import BaseMessage
 from iris.agency.execution.node_types import NODE_TYPES, ROUTING_TOOLS
 from iris.agency.execution.state import DynamicState, ExecutionState
 from iris.agency.task_level import TASK_LEVELS, TaskLevel
-from iris.event.event_types import MessageEvent
-from iris.io.models import StreamState
 
 if TYPE_CHECKING:
     from iris.agency.execution.engine import ToolEngine
@@ -85,21 +83,6 @@ class BaseLLMNode(ABC):
             targets = nt.routing_targets
         return [_routing_tool_schema(name) for name in targets]
 
-    def _publish_output(self, plan: dict[str, Any], response_text: str) -> None:
-        if not self._event_bus or not response_text:
-            return
-        self._event_bus.publish(
-            MessageEvent(
-                session_id=plan.get("session_id", ""),
-                timestamp=None,
-                source="execution",
-                msg_type="chat",
-                content=response_text,
-                state=StreamState.SPEAKING.value,
-                direction="stream",
-            ),
-        )
-
     @abstractmethod
     def _build_prompt(self, state: ExecutionState, level: TaskLevel) -> list[BaseMessage] | None:
         ...
@@ -141,8 +124,6 @@ class BaseLLMNode(ABC):
 
             raw = resp.content
             response_text = raw.strip() if isinstance(raw, str) else ""
-
-            self._publish_output(plan, response_text)
 
             return {"response_text": response_text}
         except Exception:

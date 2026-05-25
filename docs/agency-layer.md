@@ -137,39 +137,38 @@ class ProactiveScoring:
         # ignore_count → 無視回数によるペナルティ
 ```
 
-### Plan 定義
+### Plan 定義と TaskLevel
 
-plan は dict で表現され、`action` フィールドを持たない。動作の振り分けは以下の属性で制御する:
+plan は dict で表現される。`task_level`（文字列）が動作の基本設定を決定し、`overrides` で一部上書き可能。
+
+**TaskLevel**（`iris/agency/task_level.py`）:
+
+| レベル | model_role | max_tokens | priority | 用途 |
+|--------|-----------|-----------|----------|------|
+| `chat` | `low` | 80 | 0 | 最短応答（talkative抑制時） |
+| `light` | `low` | 256 | 0 | 簡易会話（ツール制限あり） |
+| `normal` | `medium` | 0 | 0 | 通常会話 |
+| `deep` | `medium` | 4096 | 1 | 深い調査・タスク |
+| `research` | `high` | 8192 | 2 | 高負荷リサーチ |
+
+- `resolve_level(task_level_str, overrides)` → dict に展開
+- `model_role` は `low` / `medium` / `high` の3段階。`ModelConfig.get_model(role)` で解決、未知なら `models[0]` にフォールバック
+
+**plan の主要フィールド**:
 
 | 属性 | 型 | 意味 |
 |------|-----|------|
 | `content` | str | ユーザー入力内容（proactive時は空文字） |
-| `model_role` | str | 使用モデルのロール（"default" / "fast"）。abbreviated時は"fast" |
-| `abbreviated` | bool | 抑制時・閾値未満 → 短縮応答 |
-| `tools_allowed` | bool | ツール利用の可否 |
-| `streaming` | bool | ストリーミング出力の有無 |
-| `short_prompt` | str | 短縮応答時用 system prompt（proactive用） |
-| `short_user_message` | str | 短縮応答時用 user message（proactive用） |
-| `run_reflexion` | bool | 実行後のReflexionの有無 |
-| `run_compression` | bool | 実行後のContextWindow圧縮の有無 |
-| `record_history` | bool | 会話履歴への保存の有無 |
-| `max_tokens` | int | 最大出力トークン数 |
-| `temperature` | float | 生成温度 |
+| `task_level` | str | TaskLevel名（"chat" / "light" / "normal" / "deep" / "research"） |
+| `model_role` | str | 解決済みモデルロール（"low" / "medium" / "high"） → 上書き可 |
+| `silent` | bool | サイレント（内部思考/調査）モード |
+| `reason` | PlanReason | 発動理由 |
+| `context_hint` | str | LLMへの文脈ヒント |
+| `overrides` | dict | レベルプロファイルの上書き値 |
 
-**感情による動的調整 (Phase 4)**: `PlanningManager._apply_emotion_to_plan()` が
-PAD 感情状態に応じて temperature/max_tokens/abbreviated/tools_allowed を上書きする。
-例: valence < -0.3 → 短文+高温度（ぶっきらぼう）、arousal > 0.6 → 低温度+短文（興奮）。
-
-```mermaid
-flowchart LR
-    INPUT["InputReady(content)"] --> GATE{"gate.evaluate()"}
-    GATE --> |from_timer| SCORE["ProactiveScoring.compute()"]
-    SCORE --> |閾値未満| ABORT["abort"]
-    SCORE --> |閾値以上| PROACTIVE["plan(content='', <br/>abbreviated=False, <br/>tools_allowed=False)"]
-    GATE --> |respond| RESPOND{"gate.suppressed<br/>or score < threshold?"}
-    RESPOND -->|No| FULL["plan(abbreviated=False, <br/>tools_allowed=True, <br/>streaming=True)"]
-    RESPOND -->|Yes| SHORT["plan(abbreviated=True, <br/>tools_allowed=False, <br/>streaming=False)"]
-```
+**感情による動的調整**: `EmotionTemperatureModulator.apply_execution_params()` が
+`overrides.max_tokens` をPAD感情に応じて制限する。
+例: valence < -0.3 → max_tokens ≤ 256、arousal > 0.6 → max_tokens ≤ 256。
 
 ## FlowExecutor
 
@@ -185,10 +184,10 @@ class FlowExecutor:
         self._graph.ainvoke(state)  # LangGraph 状態マシン
 
     # グラフノード内で:
-    #   SetupNode: silent/streaming設定, short_term.add_turn, ストリーミングコールバック
-    #   LLMCallNode: LLMGateway.chat() 呼出
+    #   SetupNode: メッセージ設定, ストリーミングコールバック, THINKING publish
+    #   GeneralChatNode / GeneralTaskNode: LLMGateway.chat() 呼出 + on_token ストリーム
     #   ToolRunNode: ToolEngine.run_tool_calls() 実行
-    #   FinalizeNode: 応答出力, monitor記録, ProactiveResultEvent
+    #   FinalizeNode: memory保存, monitor記録, フィードバック, DONE publish
     #   PostProcessNode: reflexion / context compression
 ```
 
@@ -203,33 +202,40 @@ def is_topic_suppressed(self, topic: str, now: float) -> bool
 
 ### 実行ルート
 
-| 条件 | 実行内容 |
-|------|----------|
-| plan.abbreviated=False | LLMGateway.chat: 通常 system prompt + ツールループ有効 |
-| plan.abbreviated=True | LLMGateway.chat: plan.short_prompt 使用、ツールループ無効、streaming無効 |
-| plan.from_timer=True | 同上（abbreviated=False固定、tools_allowed=False） |
-| plan.model_role="fast" | 軽量モデルで短縮応答。abbreviated時に自動設定 |
-| plan.model_role="default" | 標準モデルで応答 |
+| 条件 | エントリノード | ルーティング |
+|------|--------------|-------------|
+| plan.task_level="chat" / "light" | GeneralChatNode | 軽量system prompt + ルーティングツール |
+| plan.task_level="normal" / "deep" / "research" | GeneralChatNode（固定） → 必要時GeneralTaskNodeへ切替 | ルーティングツールで制御 |
+| Routing: general_chat | chain_depth+1, 同一ノード継続 | 同一レベル連続呼出（最大chain_depth回） |
+| Routing: general_task | chain_depth=0, GeneralTaskNodeに切替, entry_levelから開始 | 通常タスクモード |
+| Routing: deep_task | level_idx+1, 同一ノード継続 | より深い推論レベルへ |
+| Routing: finish | 即座にFinalizeNodeへ | 実行完了 |
 
-LLMGateway は `plan.model_role` に従って `ModelConfig.get_model(role)` で使用モデルを決定する。
+全ノードは `on_token` コールバック経由でストリーミング出力を行う（`MessageEvent(state=SPEAKING, content=delta)`）。
+最終出力は `FinalizeNode` が `MessageEvent(state=DONE)` を発行して完了を通知する。
+
+`model_role` → `ModelConfig.get_model(role)` → config.yaml のモデル名。
 FlowExecutor は圧縮実行時に `get_effective_context_window(role)` でper-modelの閾値を使用する。
 
 ### ExecutionOrchestrator（LangGraph 状態マシン）
 
 `agency/execution/orchestrator.py` — LangGraph StateGraph を利用した LLM + ツールループ。
+ルーティングツール（general_chat / general_task / deep_task / finish）でノード遷移を制御。
 
 ```python
 # グラフトポロジ:
-# START → SetupNode → LLMCallNode
-#   ├─(tool_calls)→ ToolRunNode → LLMCallNode (loop)
-#   └─(no tools) → FinalizeNode → PostProcessNode (optional) → END
+# START → prepare_context → general_chat (fixed entry)
+#   ├─ルーティングツール→ general_chat / general_task (switch)
+#   ├─実ツールtool_calls→ ToolRunNode → 元ノード復帰
+#   └─no tools → finalize → post_process (optional) → END
 
 # 各ノード:
-#   SetupNode:      plan属性設定, short_term.add_turn, ストリーミングコールバック
-#   LLMCallNode:   LLMGateway.chat() 呼出（ツール有無で分岐）
-#   ToolRunNode:   ToolEngine.run_tool_calls() 実行, 結果truncate
-#   FinalizeNode:  応答出力, monitor記録, イベント発行
-#   PostProcessNode: reflexion / context compression
+#   SetupNode:         メッセージ設定, ストリーミングコールバック
+#   GeneralChatNode:   LLMGateway.chat()（chat/light レベル, 短いsystem prompt）
+#   GeneralTaskNode:   LLMGateway.chat()（normal/deep/research レベル, デフォルトprompt）
+#   ToolRunNode:       ToolEngine.run_tool_calls() 実行, 結果truncate
+#   FinalizeNode:      memory保存, monitor記録, フィードバック, DONE publish
+#   PostProcessNode:   reflexion / context compression
 ```
 
 ```mermaid
@@ -242,17 +248,20 @@ sequenceDiagram
     IB-->>EX: PlanDecided(plan)
 
     Note over EX,LLM: LangGraph 状態マシン起動
-    EX->>LLM: LLMGateway.chat(messages, tools, ...)
 
-    alt streaming=True
-        loop トークン生成
-            LLM-->>EX: delta token
-            EX->>EB: MessageEvent(stream, delta)
-        end
+    loop ルーティングツールまで
+        EX->>LLM: LLMGateway.chat(messages, tools + routing tools)
+        Note over LLM: ルーティングツール or 実tool_calls or 通常応答
     end
 
-    EX->>EB: MessageEvent(done)
-    EX->>EB: MessageEvent(response, text)
+    Note over EX: 最終LLM応答
+
+    loop トークン生成
+        LLM-->>EX: delta token (via on_token)
+        EX->>EB: MessageEvent(stream, state=speaking, content=delta)
+    end
+
+    EX->>EB: MessageEvent(state=done)
 
     alt run_reflexion=True
         EX->>EX: consolidator.run()

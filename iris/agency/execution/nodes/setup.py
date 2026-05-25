@@ -40,11 +40,11 @@ class SetupNode:
         silent = plan.get("silent", False)
 
         if silent and not content:
-                base_instruction = "システムからの内部指示: 現在の目標や欲求に基づき、Web検索や記憶検索を用いて知識を深めるための自律的な調査を行ってください。"
-                if "proactive_reason" in plan:
-                    base_instruction += f" (理由: {plan['proactive_reason']})"
-                content = base_instruction
-                plan["content"] = content
+            base_instruction = "システムからの内部指示: 現在の目標や欲求に基づき、Web検索や記憶検索を用いて知識を深めるための自律的な調査を行ってください。"
+            if "proactive_reason" in plan:
+                base_instruction += f" (理由: {plan['proactive_reason']})"
+            content = base_instruction
+            plan["content"] = content
 
         self._set_on_token_callback()
 

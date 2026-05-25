@@ -188,10 +188,7 @@ class ShortTermMemoryManager:
     def search_entities(self, entity_name: str) -> list[TurnData]:
         """エンティティ名が含まれる会話ターンを検索する。"""
         entity_lower = entity_name.lower().strip()
-        results: list[TurnData] = [
-            turn for turn in self._turns
-            if entity_lower in turn.get("content", "").lower()
-        ]
+        results: list[TurnData] = [turn for turn in self._turns if entity_lower in turn.get("content", "").lower()]
         return results[-5:]
 
     def render_context(self, max_chars: int = _MAX_CONTEXT_CHARS, query: str | None = None) -> str:

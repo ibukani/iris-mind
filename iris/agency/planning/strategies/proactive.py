@@ -23,7 +23,10 @@ class ProactivePlanStrategy:
         self._question_gen = question_gen
 
     def build_proactive(
-        self, context: dict[str, Any], gate: GateVerdict, limbic_mood: EmotionState | None = None,
+        self,
+        context: dict[str, Any],
+        gate: GateVerdict,
+        limbic_mood: EmotionState | None = None,
     ) -> Plan:
         context_hint: str = context.get("context_hint", "")
         overrides: dict[str, Any] = {}

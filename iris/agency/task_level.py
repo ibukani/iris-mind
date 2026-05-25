@@ -15,6 +15,7 @@ class TaskLevel:
     show_thinking: bool
     run_reflexion: bool
     run_compression: bool
+    temperature: float | None = None
 
 
 TASK_LEVELS: dict[str, TaskLevel] = {
@@ -31,6 +32,7 @@ def resolve_level(name: str, overrides: dict[str, Any] | None = None) -> dict[st
     result: dict[str, Any] = {
         "task_level": tl.name,
         "model_role": tl.model_role,
+        "temperature": tl.temperature,
         "max_tokens": tl.max_tokens,
         "max_tool_iterations": tl.max_tool_iterations,
         "priority": tl.priority,

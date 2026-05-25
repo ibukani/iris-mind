@@ -66,9 +66,13 @@ class BaseLLMNode(ABC):
         nt = NODE_TYPES[self.node_type_name]
         names = nt.tool_list_by_level.get(level_name)
         if names is not None:
-            return self._tool_executor.list_tools_by_name(
-                names, plan.get("allow_side_effects", True),
-            ) or None
+            return (
+                self._tool_executor.list_tools_by_name(
+                    names,
+                    plan.get("allow_side_effects", True),
+                )
+                or None
+            )
         tools = self._tool_executor.registry.list_tools(
             allow_side_effects=plan.get("allow_side_effects", True),
         )
@@ -94,7 +98,24 @@ class BaseLLMNode(ABC):
     ) -> list[BaseMessage] | None:
         return self._pipeline.build_system_messages(
             context_hint=plan.get("context_hint", ""),
+            node_type=self.node_type_name,
+            recent_turns=self._get_recent_turns(),
         )
+
+    def _get_recent_turns(self) -> str:
+        if not self._memory:
+            return ""
+        turns = self._memory.short_term.get_recent_turns(3)
+        if not turns:
+            return ""
+        ctx_lines: list[str] = []
+        for t in turns:
+            content = t.get("content", "")
+            if content:
+                ctx_lines.append(f"{t['role']}: {content}")
+        if not ctx_lines:
+            return ""
+        return "## 直近の会話\n" + "\n".join(ctx_lines)
 
     def _build_chat_params(
         self,
@@ -104,6 +125,7 @@ class BaseLLMNode(ABC):
     ) -> dict[str, Any]:
         return {
             "model_role": level.model_role,
+            "temperature": level.temperature,
             "max_tokens": level.max_tokens or None,
             "priority": level.priority,
             "show_thinking": level.show_thinking,

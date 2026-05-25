@@ -33,6 +33,7 @@ class LLMGateway:
         limbic: LimbicManager | None = None,
         capability_checker: CapabilityChecker | None = None,
         debug_capture: DebugCapture | None = None,
+        prompts_dir: str | None = None,
     ) -> None:
         self._llm = llm
         self._model_config = model_config
@@ -50,6 +51,7 @@ class LLMGateway:
             persona_profile=persona_profile,
             memory=memory,
             limbic=limbic,
+            prompts_dir=prompts_dir,
         )
 
     @staticmethod
@@ -69,12 +71,18 @@ class LLMGateway:
         context_hint: str,
         response_style: str = "",
         situation: str = "",
+        node_type: str = "general_task",
+        recent_turns: str = "",
+        include_profile: bool = True,
     ) -> list[BaseMessage]:
         return self._prompt_builder.build(
+            node_type=node_type,
             context_hint=context_hint,
             response_style=response_style,
             session_roles_summary=self._session_roles_summary,
             situation=situation,
+            recent_turns=recent_turns,
+            include_profile=include_profile,
         )
 
     async def _call_llm(
@@ -91,7 +99,7 @@ class LLMGateway:
         enable_thinking: bool = False,
     ) -> AIMessage:
         msgs: list[BaseMessage] = [*system_msgs, *messages]
-        self._last_system_prompt = str(system_msgs[0].content) if system_msgs else ""
+        self._last_system_prompt = "\n\n".join(str(m.content) for m in system_msgs) if system_msgs else ""
         self._last_call_model_role = model_role
 
         resp = await self._llm.chat(
@@ -124,6 +132,7 @@ class LLMGateway:
         interrupt_token: InterruptToken | None = None,
         context_hint: str = "",
         model_role: str = "medium",
+        temperature: float | None = None,
         max_tokens: int | None = None,
         priority: int = 0,
         show_thinking: bool = False,
@@ -143,6 +152,7 @@ class LLMGateway:
             messages,
             model_role,
             max_tokens,
+            temperature=temperature,
             tools=tools,
             on_token=on_token,
             interrupt_token=interrupt_token,

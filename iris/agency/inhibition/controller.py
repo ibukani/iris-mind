@@ -104,7 +104,9 @@ class InhibitionController:
 
         if now < s.cooldown_until or s.is_sleeping:
             logger.debug(
-                "Gate suppressed: cooldown_or_sleep (now={:.3f}, cooldown_until={:.3f})", now, s.cooldown_until,
+                "Gate suppressed: cooldown_or_sleep (now={:.3f}, cooldown_until={:.3f})",
+                now,
+                s.cooldown_until,
             )
             return GateVerdict(suppressed=True, score=0.0, reason="cooldown_or_sleep", go_signal=0.0)
 

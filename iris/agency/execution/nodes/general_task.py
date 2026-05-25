@@ -14,7 +14,9 @@ if TYPE_CHECKING:
 
 
 class GeneralTaskNode(BaseLLMNode):
-    node_type_name = "general_task"
+    @property
+    def node_type_name(self) -> str:
+        return "general_task"
 
     def __init__(
         self,

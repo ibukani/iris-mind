@@ -450,6 +450,7 @@ class KernelFactory:
             limbic=limbic,
             capability_checker=capability_checker,
             debug_capture=debug_capture,
+            prompts_dir=config.personality.node_prompts_dir,
         )
         return pipeline, hippocampal, persona_profile
 

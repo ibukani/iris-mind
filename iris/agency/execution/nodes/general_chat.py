@@ -1,34 +1,37 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
-
-from langchain_core.messages import BaseMessage, SystemMessage
+from typing import TYPE_CHECKING
 
 from iris.agency.execution.nodes.base import BaseLLMNode
 
 if TYPE_CHECKING:
-    from iris.agency.execution.state import ExecutionState
-    from iris.agency.task_level import TaskLevel
+    from iris.agency.execution.engine import ToolEngine
+    from iris.agency.execution.llm.gateway import LLMGateway
+    from iris.agency.execution.state import DynamicState
+    from iris.event.event_bus import EventBus
+    from iris.llm.capability import CapabilityChecker
+    from iris.memory.manager import MemoryManager
 
 
 class GeneralChatNode(BaseLLMNode):
-    node_type_name = "general_chat"
+    @property
+    def node_type_name(self) -> str:
+        return "general_chat"
 
-    def _build_system_prompt(
+    def __init__(
         self,
-        state: ExecutionState,
-        level: TaskLevel,
-        plan: dict[str, Any],
-    ) -> list[BaseMessage] | None:
-        parts = ["You are Iris, a helpful AI assistant. Answer concisely."]
-
-        if self._memory:
-            turns = self._memory.short_term.get_recent_turns(3)
-            if turns:
-                ctx = "\n".join(
-                    f"{t['role']}: {t['content']}" for t in turns if t.get("content")
-                )
-                if ctx:
-                    parts.append("## 直近の会話\n" + ctx)
-
-        return [SystemMessage(content="\n\n".join(parts))]
+        pipeline: LLMGateway,
+        tool_executor: ToolEngine | None = None,
+        capability_checker: CapabilityChecker | None = None,
+        dynamic: DynamicState | None = None,
+        event_bus: EventBus | None = None,
+        memory: MemoryManager | None = None,
+    ) -> None:
+        super().__init__(
+            pipeline=pipeline,
+            tool_executor=tool_executor,
+            capability_checker=capability_checker,
+            dynamic=dynamic,
+            event_bus=event_bus,
+            memory=memory,
+        )

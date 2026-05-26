@@ -17,7 +17,7 @@ def build_agency(manager: PluginManager) -> dict:
         ToolEngine,
     )
     from iris.agency.manager import AgencyManager
-    from iris.agency.planning import PlanningManager, ProactiveScoring
+    from iris.agency.planning import PlanningManager, ProactiveScorer
     from iris.event.event_bus import EventBus
     from iris.io.session.manager import SessionManager
     from iris.kernel.debug_capture import DebugCapture
@@ -68,7 +68,7 @@ def build_agency(manager: PluginManager) -> dict:
         capability_checker=CapabilityChecker(config=config.model),
     )
 
-    scoring = ProactiveScoring(config=config.proactive, memory=memory)
+    scoring = ProactiveScorer(config=config.proactive, memory=memory)
     planning = PlanningManager(
         internal_bus=internal_bus,
         event_bus=event_bus,

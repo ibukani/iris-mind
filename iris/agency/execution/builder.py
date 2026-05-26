@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from langchain_core.messages import BaseMessage
 
-from iris.agency.execution.state import ExecutionState
+from iris.agency.execution.models import ExecutionState
 
 if TYPE_CHECKING:
     from iris.agency.planning.models import Plan

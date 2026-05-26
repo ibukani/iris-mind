@@ -15,8 +15,8 @@ from iris.memory.dispatcher import (
     dispatch_retrieve,
     dispatch_search,
 )
-from iris.memory.goal_store import GoalStore
 from iris.memory.handler import _MemoryEventHandler
+from iris.memory.long_term.goal_store import GoalStore
 
 
 class MemoryManager:

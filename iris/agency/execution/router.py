@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from loguru import logger
 
+from iris.agency.execution.models import ExecutionState
 from iris.agency.execution.node_types import NODE_TYPES
-from iris.agency.execution.state import ExecutionState
 from iris.agency.task_level import TASK_LEVELS
 
 

@@ -5,13 +5,13 @@ from typing import TYPE_CHECKING, Any
 
 from langgraph.graph import END, StateGraph
 
+from iris.agency.execution.models import DynamicState, ExecutionState
 from iris.agency.execution.nodes.finalize import FinalizeNode
 from iris.agency.execution.nodes.general_chat import GeneralChatNode
 from iris.agency.execution.nodes.general_task import GeneralTaskNode
 from iris.agency.execution.nodes.setup import SetupNode
 from iris.agency.execution.nodes.tool_run import ToolRunNode
 from iris.agency.execution.router import route_after_llm, route_after_tools
-from iris.agency.execution.state import DynamicState, ExecutionState
 from iris.llm.interrupt_token import InterruptToken
 
 if TYPE_CHECKING:

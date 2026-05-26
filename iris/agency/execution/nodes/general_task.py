@@ -7,7 +7,7 @@ from iris.agency.execution.nodes.base import BaseLLMNode
 if TYPE_CHECKING:
     from iris.agency.execution.engine import ToolEngine
     from iris.agency.execution.llm.gateway import LLMGateway
-    from iris.agency.execution.state import DynamicState
+    from iris.agency.execution.models import DynamicState
     from iris.event.event_bus import EventBus
     from iris.llm.capability import CapabilityChecker
     from iris.memory.manager import MemoryManager

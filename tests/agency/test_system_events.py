@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 import time
 
-from iris.agency import LLMGateway, ProactiveScoring
+from iris.agency import LLMGateway, ProactiveScorer
 from iris.event.event_bus import EventBus
 from iris.event.event_types import ClientSessionEvent
 from iris.io.models import AuthMessage
@@ -83,7 +83,7 @@ def test_scoring_with_system_event_context():
     cfg = Config()
     cfg.proactive.speak_threshold = 0.5
     memory_mgr = MemoryManager(event_bus=event_bus, proactive_config=cfg.proactive)
-    scoring = ProactiveScoring(config=cfg.proactive, memory=memory_mgr)
+    scoring = ProactiveScorer(config=cfg.proactive, memory=memory_mgr)
 
     context = {"system_event": "connected", "role": "user", "offline_duration": "3時間"}
 

@@ -9,7 +9,7 @@ from iris.agency import (
     InternalBus,
     PlanDecided,
     PlanningManager,
-    ProactiveScoring,
+    ProactiveScorer,
 )
 from iris.event.event_bus import EventBus
 from iris.event.event_types import InputReady
@@ -19,7 +19,7 @@ from iris.kernel.config import Config, ProactiveConfig
 def test_planning_manager_silent_proactive_interest_sampling() -> None:
     internal_bus = MagicMock(spec=InternalBus)
     event_bus = EventBus()
-    scoring = MagicMock(spec=ProactiveScoring)
+    scoring = MagicMock(spec=ProactiveScorer)
     scoring.compute.return_value = (0.6, {"drive": 0.5, "context": 0.1})
 
     config = Config()
@@ -56,7 +56,7 @@ def test_planning_manager_silent_proactive_interest_sampling() -> None:
 def test_planning_manager_escalation_event() -> None:
     internal_bus = MagicMock(spec=InternalBus)
     event_bus = EventBus()
-    scoring = MagicMock(spec=ProactiveScoring)
+    scoring = MagicMock(spec=ProactiveScorer)
 
     config = Config()
     config.proactive = ProactiveConfig()

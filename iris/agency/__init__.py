@@ -19,7 +19,7 @@ from iris.agency.planning import (
     PlanningManager,
     PlanReason,
     ProactiveJudge,
-    ProactiveScoring,
+    ProactiveScorer,
     ScoreContext,
 )
 from iris.agency.task_level import TASK_LEVELS, TaskLevel
@@ -88,7 +88,7 @@ __all__ = [
     "PlanReason",
     "PlanningManager",
     "ProactiveJudge",
-    "ProactiveScoring",
+    "ProactiveScorer",
     "ScoreContext",
     "TaskLevel",
     "ToolEngine",

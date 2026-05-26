@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from langchain_core.messages import ChatMessage, HumanMessage
 
-from iris.agency.execution.state import DynamicState, ExecutionState
+from iris.agency.execution.models import DynamicState, ExecutionState
 from iris.agency.planning.models import Plan
 from iris.agency.task_level import TASK_LEVELS
 from iris.event.event_types import MessageEvent

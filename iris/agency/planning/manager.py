@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from iris.agency.bus import InternalBus, PlanDecided
 from iris.agency.planning.context_hint_builder import ContextHintBuilder
-from iris.agency.planning.decisions import ProactiveJudge, ProactiveScoring
+from iris.agency.planning.decisions import ProactiveJudge, ProactiveScorer
 from iris.agency.planning.models import Plan
 from iris.agency.planning.question_generator import QuestionGenerator
 from iris.agency.planning.strategies import ProactivePlanStrategy, ResponsePlanStrategy
@@ -24,7 +24,7 @@ class PlanningManager:
         self,
         internal_bus: InternalBus,
         event_bus: EventBus,
-        scoring: ProactiveScoring,
+        scoring: ProactiveScorer,
         config: Config,
         memory: MemoryManager | None = None,
         llm: LLMBridge | None = None,

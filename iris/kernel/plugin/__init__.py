@@ -1,6 +1,6 @@
-from iris.kernel.plugin.di import ServiceContainer
 from iris.kernel.plugin.hook_points import HOOK_POINTS, HookPoint, HookPriority
 from iris.kernel.plugin.hooks import HookRegistry
+from iris.kernel.plugin.kernel_state import KernelState
 from iris.kernel.plugin.lifecycle import PluginInstance, PluginLifecycle
 from iris.kernel.plugin.loader import discover_plugin_manifests, discover_sub_plugins
 from iris.kernel.plugin.manifest import (
@@ -10,7 +10,7 @@ from iris.kernel.plugin.manifest import (
     PluginState,
 )
 from iris.kernel.plugin.protocol import PluginProtocol
-from iris.kernel.plugin.state import KernelState
+from iris.kernel.plugin.service_container import ServiceContainer
 
 __all__ = [
     "HOOK_POINTS",

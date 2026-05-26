@@ -5,19 +5,19 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from iris.agency.planning.context_hint_builder import ContextHintBuilder
-    from iris.agency.planning.decisions.scoring import ProactiveScoring, ScoreContext
+    from iris.agency.planning.decisions.scorer import ProactiveScorer, ScoreContext
     from iris.event.event_types import InputReady
     from iris.kernel.config import ProactiveConfig
 
 from loguru import logger
 
-from iris.agency.planning.decisions.scoring import ScoreContext
+from iris.agency.planning.decisions.scorer import ScoreContext
 
 
 class ProactiveJudge:
     def __init__(
         self,
-        scoring: ProactiveScoring,
+        scoring: ProactiveScorer,
         config: ProactiveConfig,
         context_builder: ContextHintBuilder | None = None,
     ) -> None:

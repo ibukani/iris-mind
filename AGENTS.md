@@ -40,8 +40,8 @@ iris/                             ← アプリケーションコア
 │   │   ├── manifest.py           ← PluginManifest, PluginCategory, PluginPhase, PluginState
 │   │   ├── protocol.py           ← PluginProtocol（プラグイン契約）
 │   │   ├── lifecycle.py          ← PluginLifecycle（build order + init/start/stop）
-│   │   ├── di.py                 ← ServiceContainer（DIコンテナ）
-│   │   ├── state.py              ← KernelState（層状態 + shutdown管理）
+│   │   ├── service_container.py  ← ServiceContainer（DIコンテナ）
+│   │   ├── kernel_state.py       ← KernelState（層状態 + shutdown管理）
 │   │   ├── hook_points.py        ← HookPoint, HookPriority, HOOK_POINTS定義
 │   │   ├── hooks.py              ← HookRegistry（フックチェイン実行）
 │   │   └── loader.py             ← プラグイン／サブプラグイン自動発見
@@ -75,6 +75,7 @@ iris/                             ← アプリケーションコア
 │   │   ├── extractor.py          ← エンティティ抽出
 │   │   └── renderer.py           ← コンテキストレンダリング
 │   ├── long_term/
+│   │   ├── goal_store.py         ← GoalStore（LongTermGoal 管理）
 │   │   ├── manager.py            ← LongTermMemoryManager
 │   │   ├── stores.py             ← EpisodicStore, SemanticStore, AgentsMdStore
 │   │   ├── protocols.py          ← Store プロトコル定義
@@ -90,7 +91,7 @@ iris/                             ← アプリケーションコア
 │   ├── bus.py                    ← 内部 EventBus（planning→execution）
 │   ├── planning/                 ← 前頭前野: 意思決定 + PFCスコアリング
 │   │   ├── manager.py            ← PlanningManager
-│   │   ├── scoring.py            ← ProactiveScoring
+│   │   ├── scorer.py             ← ProactiveScorer
 │   │   ├── context_hint_builder.py ← コンテキストヒント生成
 │   │   └── utils.py              ← ユーティリティ（時間ラベル等）
 │   └── execution/                ← 基底核+運動野: 行動実行
@@ -247,6 +248,7 @@ uv run pyright .
 - 新規プラグイン: `.agents/skills/iris-plugin-create/SKILL.md`
 - Hook追加: `.agents/skills/iris-plugin-hook/SKILL.md`
 - プロバイダ/サブプラグイン: `.agents/skills/iris-plugin-provider/SKILL.md`
+- 内部構造・コンポーネント命名: `.agents/skills/iris-plugin-structure/SKILL.md`
 
 ## 9. Tool追加ルール
 

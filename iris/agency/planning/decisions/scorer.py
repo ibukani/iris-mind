@@ -33,7 +33,7 @@ class ScoreContext:
     context: dict[str, Any] | None = None
 
 
-class ProactiveScoring:
+class ProactiveScorer:
     def __init__(self, config: ProactiveConfig, memory: MemoryManager) -> None:
         self._config = config
         self._memory = memory

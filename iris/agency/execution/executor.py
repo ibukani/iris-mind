@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from langchain_core.messages import BaseMessage, SystemMessage
 
 from iris.agency.bus import InternalBus, PlanDecided
-from iris.agency.execution.builders import build_execution_state
+from iris.agency.execution.builder import build_execution_state
 from iris.agency.execution.engine import ToolEngine
 from iris.agency.execution.llm.gateway import LLMGateway
 from iris.agency.execution.orchestrator import ExecutionOrchestrator

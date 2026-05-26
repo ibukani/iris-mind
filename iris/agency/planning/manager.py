@@ -112,3 +112,9 @@ class PlanningManager:
             plan.task_level,
         )
         self._bus.publish(PlanDecided(plan=plan))
+
+    def get_state(self) -> dict:
+        return {
+            "strategy_type": type(self._response_strategy).__name__,
+            "proactive_judge_available": self._proactive_judge is not None,
+        }

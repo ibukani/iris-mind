@@ -18,6 +18,14 @@ class AgencyManager:
 
     def get_state(self) -> dict:
         return {
+            "planning": self.planning.get_state(),
             "execution": self.execution.get_state(),
             "inhibition": self.inhibition.get_state(),
         }
+
+    def shutdown(self) -> None:
+        self.execution.flush_memory()
+        self.execution.shutdown()
+
+    def compact_context(self) -> str:
+        return self.execution.compact_context()

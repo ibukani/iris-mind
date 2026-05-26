@@ -5,10 +5,14 @@ from unittest.mock import MagicMock
 
 from langchain_core.messages import AIMessage
 
-from iris.agency.bus import InternalBus, PlanDecided
-from iris.agency.inhibition import GateVerdict, InhibitionController
-from iris.agency.planning.decisions import ProactiveScoring
-from iris.agency.planning.manager import PlanningManager
+from iris.agency import (
+    GateVerdict,
+    InhibitionController,
+    InternalBus,
+    PlanDecided,
+    PlanningManager,
+    ProactiveScoring,
+)
 from iris.event.event_bus import EventBus
 from iris.event.event_types import InputReady
 from iris.kernel.config import Config, ProactiveConfig

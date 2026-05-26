@@ -4,7 +4,7 @@ from collections.abc import Callable
 
 import pytest
 
-from iris.agency.execution.regulation.output_tracker import OutputTracker
+from iris.agency import OutputTracker
 
 
 @pytest.fixture

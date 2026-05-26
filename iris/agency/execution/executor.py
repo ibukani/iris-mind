@@ -1,26 +1,19 @@
 from __future__ import annotations
 
-import asyncio
 from collections.abc import Callable
-import queue
-import threading
 from typing import TYPE_CHECKING
 
 from langchain_core.messages import BaseMessage, SystemMessage
 
 from iris.agency.bus import InternalBus, PlanDecided
+from iris.agency.execution.builders import build_execution_state, should_skip_plan
 from iris.agency.execution.engine import ToolEngine
 from iris.agency.execution.llm.gateway import LLMGateway
-from iris.agency.execution.node_types import NODE_TYPES
 from iris.agency.execution.orchestrator import ExecutionOrchestrator
 from iris.agency.execution.regulation.consolidator import Consolidator
 from iris.agency.execution.regulation.feedback import FeedbackCoordinator
 from iris.agency.execution.regulation.output_tracker import OutputTracker
-from iris.agency.execution.regulation.talk_control import (
-    get_talkative_adjustments,
-    should_skip_proactive,
-)
-from iris.agency.execution.state import ExecutionState
+from iris.agency.execution.worker import AsyncWorker
 from iris.agency.inhibition import InhibitionController
 from iris.agency.planning.models import Plan
 from iris.event.event_bus import EventBus
@@ -34,7 +27,7 @@ if TYPE_CHECKING:
 from loguru import logger
 
 
-class FlowExecutor:
+class FlowExecutor(AsyncWorker):
     def __init__(
         self,
         internal_bus: InternalBus,
@@ -49,9 +42,12 @@ class FlowExecutor:
         capability_checker: CapabilityChecker | None = None,
         messages: list[BaseMessage] | None = None,
     ) -> None:
+        super().__init__(name="executor-worker")
+
         self._bus = internal_bus
         self._event_bus = event_bus
         self._monitor = monitor
+        self._inhibition = inhibition
         self._consolidator = consolidator
         self._memory = memory
         self._messages: list[BaseMessage] = messages if messages is not None else []
@@ -72,11 +68,6 @@ class FlowExecutor:
             capability_checker=capability_checker,
         )
 
-        self._loop = asyncio.new_event_loop()
-        self._plan_queue: queue.Queue[Plan | None] = queue.Queue()
-        self._worker_thread = threading.Thread(target=self._worker_run, daemon=True, name="executor-worker")
-        self._worker_thread.start()
-
         self._bus.subscribe("PlanDecided", self._on_plan)
         self._event_bus.subscribe("InterruptEvent", self._on_interrupt)
 
@@ -93,11 +84,11 @@ class FlowExecutor:
 
     def _on_plan(self, event: PlanDecided) -> None:
         plan = event.plan
-        degree = self._monitor.talkative_degree if self._monitor else 0
         if self._monitor and plan.content:
             self._monitor.record_user_input()
 
-        if should_skip_proactive(plan, degree, self._monitor):
+        if should_skip_plan(plan, self._monitor):
+            degree = self._monitor.talkative_degree if self._monitor else 0
             logger.info(
                 "FlowExecutor: suppressed proactive (talkative={}), skipping LLM",
                 degree,
@@ -108,55 +99,15 @@ class FlowExecutor:
             "FlowExecutor: queueing plan session={}",
             plan.session_id,
         )
-        self._plan_queue.put(plan)
+        self.enqueue(plan)
 
-    def shutdown(self) -> None:
-        """Signal the worker thread to stop and wait for completion."""
-        self._plan_queue.put(None)
-        self._worker_thread.join(timeout=5.0)
-        if self._worker_thread.is_alive():
-            logger.warning("FlowExecutor worker thread did not finish within 5s timeout")
-        self._loop.close()
-
-    def _worker_run(self) -> None:
-        """Dedicated worker thread: owns the event loop, processes plans from queue."""
-        asyncio.set_event_loop(self._loop)
-        while True:
-            plan = self._plan_queue.get()
-            if plan is None:
-                break
-            try:
-                self._loop.run_until_complete(self._run_graph(plan))
-            except Exception:
-                logger.exception("FlowExecutor worker: graph execution failed")
-
-    async def _run_graph(self, plan: Plan) -> None:
+    async def process(self, plan: Plan) -> None:  # type: ignore[override]
         self._interrupt_token = InterruptToken()
         self._graph.set_callbacks(
             interrupt_token=self._interrupt_token,
         )
 
-        nt = NODE_TYPES["general_chat"]
-        degree = self._monitor.talkative_degree if self._monitor else 0
-        adj = get_talkative_adjustments(degree)
-        entry = adj.task_level or plan.task_level
-        if entry not in nt.available_levels:
-            entry = nt.entry_level
-        level_idx = nt.available_levels.index(entry)
-
-        state: ExecutionState = {
-            "plan": plan,
-            "messages": self._messages,
-            "response_text": "",
-            "tool_iterations": 0,
-            "interrupted": False,
-            "error": None,
-            "completed": False,
-            "current_node_type": "general_chat",
-            "current_level_idx": level_idx,
-            "chain_depth": 0,
-            "talkative_adjustments": adj,
-        }
+        state = build_execution_state(plan, self._messages, self._monitor, self._inhibition)
 
         try:
             result = await self._graph.ainvoke(state)
@@ -166,6 +117,10 @@ class FlowExecutor:
             self._messages.append(SystemMessage(content=f"[Execution Error: {e}]"))
         finally:
             self._interrupt_token = None
+
+    def shutdown(self, timeout: float = 5.0) -> None:
+        self.flush_memory()
+        super().shutdown(timeout=timeout)
 
     def flush_memory(self) -> None:
         self._consolidator.flush_memory()

@@ -5,9 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 from langchain_core.messages import AIMessage, HumanMessage
 import pytest
 
-from iris.agency.execution.orchestrator import ExecutionOrchestrator
-from iris.agency.execution.state import ExecutionState
-from iris.agency.planning.models import Plan
+from iris.agency import ExecutionOrchestrator, ExecutionState, Plan
 
 
 @pytest.fixture

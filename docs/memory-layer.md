@@ -80,7 +80,7 @@ class ShortTermMemoryManager:
     """現在処理中の会話内容（ターン・話題・参照エンティティ）を保持。
     長期記憶への転送（consolidation）を担う。
     脳科学対応: 前頭前野 (PFC) のワーキングメモリ。"""
-    def add_turn(self, role: str, content: str) -> None
+    def add_turn(self, role: str, content: str, user_identity: str = "") -> None
     def search(self, query: str, max_results: int = 5) -> list[dict]
     def search_entities(self, entity_name: str) -> list[dict]
     def render_context(self, max_chars: int = 600, query: str | None = None) -> str
@@ -96,8 +96,9 @@ class ShortTermMemoryManager:
 ```
 
 **add_turn のタイミング**:
-- `FlowExecutor._on_plan()` Plan決定後、LLM呼出直前に `add_turn("user", content)`
-- LLM応答受信直後に `add_turn("assistant", response_text)`
+- `FlowExecutor._on_plan()` Plan決定後、LLM呼出直前に `add_turn("user", content, user_identity)`
+- LLM応答受信直後に `add_turn("assistant", response_text, user_identity)`
+- `user_identity` は `Plan.user_identity` から伝搬される。グループチャット時は発話者の識別子、それ以外は空文字
 - Planning段階では short_term に最新ターンは存在しない（Planの `content` フィールド経由でアクセスする）
 
 **render_context(query=None)**:
@@ -229,7 +230,7 @@ sequenceDiagram
     alt ユーザー入力
         EB-->>MGR: InputReceived(msg)
         MGR->>SEN: store_raw(content)
-        MGR->>MGR: pending_dict[session_id] = content
+        MGR->>MGR: pending_dict[session_id].append((content, user_identity))
         MGR->>EB: TimerTick → InputReady(content)
         MGR->>EB: publish InputReady
 

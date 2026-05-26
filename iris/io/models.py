@@ -61,6 +61,7 @@ class Message(BaseModel):
     session_id: str = ""
     source_role: str = ""
     target_role: str = "*"
+    user_identity: str = ""
     direction: Direction
     msg_type: str
     content: str

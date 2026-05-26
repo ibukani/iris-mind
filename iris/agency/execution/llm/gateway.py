@@ -43,6 +43,7 @@ class LLMGateway:
         self._capability_checker = capability_checker
         self._debug_capture = debug_capture
         self._session_roles_summary: str = ""
+        self._current_user_identity: str = ""
         self._last_system_prompt: str = ""
         self._last_call_model_role: str = "medium"
 
@@ -67,6 +68,9 @@ class LLMGateway:
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
 
+    def set_current_user_identity(self, identity: str) -> None:
+        self._current_user_identity = identity
+
     def build_system_messages(
         self,
         context_hint: str,
@@ -81,6 +85,7 @@ class LLMGateway:
             context_hint=context_hint,
             response_style=response_style,
             session_roles_summary=self._session_roles_summary,
+            current_user_identity=self._current_user_identity,
             situation=situation,
             recent_turns=recent_turns,
             include_profile=include_profile,

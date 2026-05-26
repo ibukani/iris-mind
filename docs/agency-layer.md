@@ -73,11 +73,11 @@ sequenceDiagram
     IB-->>EX: PlanDecided
 
     EX->>EX: ExecutionOrchestrator.ainvoke(plan)
-    EX->>STM: short_term.add_turn("user", content)  # Plan決定後に追加
+    EX->>STM: short_term.add_turn("user", content, plan.user_identity)  # Plan決定後に追加
     EX->>EX: LLMGateway.chat(plan, messages)
     EX->>EB: OutputRequest(stream)
     EX->>EB: OutputRequest(response)
-    EX->>STM: short_term.add_turn("assistant", response)
+    EX->>STM: short_term.add_turn("assistant", response, plan.user_identity)
 ```
 
 ## PlanningManager
@@ -164,6 +164,7 @@ plan は dict で表現される。`task_level`（文字列）が動作の基本
 | `silent` | bool | サイレント（内部思考/調査）モード |
 | `reason` | PlanReason | 発動理由 |
 | `context_hint` | str | LLMへの文脈ヒント |
+| `user_identity` | str | 発話者識別子（グループチャット時） |
 | `overrides` | dict | レベルプロファイルの上書き値 |
 
 **感情による動的調整**: `EmotionTemperatureModulator.apply_execution_params()` が

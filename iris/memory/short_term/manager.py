@@ -16,6 +16,7 @@ class TurnData(TypedDict):
     timestamp: str
     consolidated: bool
     importance: int
+    user_identity: str
 
 
 class SearchResult(TurnData, total=False):
@@ -83,7 +84,7 @@ class ShortTermMemoryProtocol(Protocol):
     モック化やテスト用の代替実装を容易にするため。
     """
 
-    def add_turn(self, role: str, content: str) -> None: ...
+    def add_turn(self, role: str, content: str, user_identity: str = "") -> None: ...
     def search(self, query: str, max_results: int = 5) -> list[SearchResult]: ...
     def search_entities(self, entity_name: str) -> list[TurnData]: ...
     def render_context(self, max_chars: int = _MAX_CONTEXT_CHARS, query: str | None = None) -> str: ...
@@ -120,12 +121,13 @@ class ShortTermMemoryManager:
         self._importance_scorer = importance_scorer or DefaultImportanceScorer()
         self._entity_extractor = entity_extractor or RegexEntityExtractor()
 
-    def add_turn(self, role: str, content: str) -> None:
+    def add_turn(self, role: str, content: str, user_identity: str = "") -> None:
         """会話の1ターンを追加し、エンティティの抽出と話題の更新を行う。
 
         Args:
             role: 発話者のロール（"user" または "assistant"）
             content: 発話内容
+            user_identity: 発話者の識別子（グループチャット用）
         """
         if not content:
             return
@@ -136,6 +138,7 @@ class ShortTermMemoryManager:
             "timestamp": datetime.now(UTC).isoformat(),
             "consolidated": False,
             "importance": self._importance_scorer.score(truncated),
+            "user_identity": user_identity,
         }
         self._turns.append(entry)
         if len(self._turns) > self._max_turns:
@@ -203,7 +206,8 @@ class ShortTermMemoryManager:
             shown_indices = {r.get("index", -1) for r in relevant}
             for r in relevant:
                 role = r.get("role", "system")
-                label = "User" if role == "user" else "Iris"
+                uid = r.get("user_identity", "")
+                label = uid or ("User" if role == "user" else "Iris")
                 prefix = "(思考) " if role == "thought" else ""
                 parts.append(f"- {label}: {prefix}「{r['content'][:100]}」(関連度 {r.get('relevance', 0):.2f})")
             for t in reversed(self._turns[-4:]):
@@ -212,7 +216,8 @@ class ShortTermMemoryManager:
                     continue
                 shown_indices.add(idx)
                 role = t.get("role", "system")
-                label = "User" if role == "user" else "Iris"
+                uid = t.get("user_identity", "")
+                label = uid or ("User" if role == "user" else "Iris")
                 prefix = "(思考) " if role == "thought" else ""
                 parts.append(f"- {label}: {prefix}「{t['content'][:100]}」")
 

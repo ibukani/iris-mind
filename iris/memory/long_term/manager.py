@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 
-from iris.memory.long_term.stores import EpisodicStoreProtocol, SemanticStoreProtocol
+from iris.memory.long_term.protocols import EpisodicStoreProtocol, SemanticStoreProtocol
 from iris.memory.long_term.vector_store import VectorStore
 
 

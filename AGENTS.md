@@ -33,7 +33,10 @@ iris/                             ← アプリケーションコア
 │   ├── manager.py                ← PluginManager（全Plugin指揮 + DI + 状態集約）
 │   ├── process.py                ← KernelProcess（起動・停止, TimerTick発行）
 │   ├── supervisor.py             ← Supervisor（シグナル管理）
-│   ├── plugin/                   ← プラグインシステムの型・機構
+│   ├── stats.py                  ← パフォーマンス統計
+│   ├── config.py                 ← KernelConfig
+│   ├── capture_formatter.py      ← CaptureEntry（デバッグ出力整形）
+│   └── plugin/                   ← プラグインシステムの型・機構
 │   │   ├── manifest.py           ← PluginManifest, PluginCategory, PluginPhase, PluginState
 │   │   ├── protocol.py           ← PluginProtocol（プラグイン契約）
 │   │   ├── lifecycle.py          ← PluginLifecycle（build order + init/start/stop）
@@ -60,22 +63,39 @@ iris/                             ← アプリケーションコア
 │   ├── emotional_memory.py       ← 扁桃体-海馬相互作用（感情タグ付け）
 │   └── big_five.py               ← BigFiveProfile + 性格進化（大脳辺縁系が性格を管理）
 ├── memory/                       ← 記憶系: 感覚野+海馬+皮質（3層構造）
-│   ├── manager.py                ← MemoryManager（ディスパッチャ+イベント処理）
+│   ├── manager.py                ← MemoryManager（オーケストレータ）
+│   ├── protocol.py               ← MemoryManagerProtocol
+│   ├── handler.py                ← イベントハンドラ（MessageEvent/TimerTick）
+│   ├── dispatcher.py             ← store/retrieve/search ディスパッチ
 │   ├── sensory/                  ← SensoryMemoryManager（断片+生入力 2系統）
-│   ├── short_term/               ← ShortTermMemoryManager（ワーキングメモリ）
-│   ├── long_term/                ← LongTermMemoryManager + stores + VectorStore
+│   ├── short_term/
+│   │   ├── manager.py            ← ShortTermMemoryManager（ワーキングメモリ）
+│   │   ├── models.py             ← TurnData, SearchResult
+│   │   ├── scorer.py             ← 重要度スコアリング
+│   │   ├── extractor.py          ← エンティティ抽出
+│   │   └── renderer.py           ← コンテキストレンダリング
+│   ├── long_term/
+│   │   ├── manager.py            ← LongTermMemoryManager
+│   │   ├── stores.py             ← EpisodicStore, SemanticStore, AgentsMdStore
+│   │   ├── protocols.py          ← Store プロトコル定義
+│   │   ├── base.py               ← _JsonlStore 基底
+│   │   └── vector_store.py       ← VectorStore（ChromaDB+BM25）
 │   ├── hippocampal/              ← Reflexion + HippocampalManager
 │   ├── persona_data.py           ← 話し方・自己状態の動的管理
 │   └── persona_profile.py        ← PersonaProfile（ペルソナ情報の統合IF）
 ├── agency/                       ← 高度認知: PFC+基底核+運動野
+│   ├── builder.py                ← コンポーネント組み立て工場
 │   ├── task_level.py             ← TaskLevel定義（chat/light/normal/deep/research）
 │   ├── manager.py                ← AgencyManager（compact_context中継）
 │   ├── bus.py                    ← 内部 EventBus（planning→execution）
 │   ├── planning/                 ← 前頭前野: 意思決定 + PFCスコアリング
 │   │   ├── manager.py            ← PlanningManager
-│   │   └── scoring.py            ← ProactiveScoring
+│   │   ├── scoring.py            ← ProactiveScoring
+│   │   ├── context_hint_builder.py ← コンテキストヒント生成
+│   │   └── utils.py              ← ユーティリティ（時間ラベル等）
 │   └── execution/                ← 基底核+運動野: 行動実行
 │       ├── orchestrator.py       ← ExecutionOrchestrator（LangGraphグラフ）
+│       ├── router.py             ← LLM応答後のノード遷移ルーティング
 │       ├── executor.py           ← FlowExecutor（Plan購読→グラフ起動）
 │       ├── models.py             ← ExecutionState / DynamicState
 │       ├── engine.py             ← ToolEngine（ツール実行）

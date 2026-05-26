@@ -178,3 +178,60 @@ git commit -m "feat: <plugin_name> プラグインを追加"
 - `manager.register_manifest(MANIFEST)` を `init()` の最初に呼ぶこと
 - `PluginState` は PluginManager が管理する。プラグイン側で触らない
 - `start()` / `stop()` は非ブロッキング。バックグラウンドは Plugin 内部でスレッド管理
+
+## Plugin 標準実装契約
+
+全 Plugin は以下の共通インターフェースを実装すること:
+
+| メソッド | 必須 | 説明 |
+|---|---|---|
+| `init(manager)` | Yes | DI wiring + component creation + hook registration |
+| `start(manager)` | No | バックグラウンドスレッド開始 |
+| `stop(manager)` | No | リソースクリーンアップ |
+| `get_state()` | No | デバッグスナップショット用の状態辞書を返す |
+| `health()` | No | 健全性チェック。`(bool, str)` を返す |
+
+## Plugin 内部ファイル分割規則
+
+### 標準ディレクトリ構成
+
+```
+iris/<plugin_name>/
+├── __init__.py      # MANIFEST + Plugin クラス + plugin インスタンス
+├── builder.py       # 複数コンポーネントの組み立て（init() >100行の場合）
+├── protocol.py      # Protocol クラス（DIキー/モック用）
+├── handler.py       # EventBus イベントハンドラ（3つ以上の場合）
+├── manager.py       # コアとなる管理クラス
+├── models.py        # データ型（TypedDict / dataclass）
+├── hooks.py         # HookPoint 登録
+└── utils.py         # ユーティリティ関数（static method群）
+```
+
+### 分割トリガー
+
+| 条件 | 抽出先 |
+|---|---|
+| ファイル >200行 かつ 責務が2以上 | 責務ごとにファイル分割 |
+| Protocol クラスが3以上 | `protocols.py` に集約 |
+| EventBus subscribe が3以上 | `handler.py` に抽出 |
+| static method が2以上 | `utils.py` に抽出 |
+| コンポーネント生成が複雑（>10行） | `builder.py` に抽出 |
+| `__init__.py` の init() 本体 >50行 | `builder.py` に分割 |
+
+### 命名規則
+
+| ファイル | 含めるもの | クラス名パターン |
+|---|---|---|
+| `manager.py` | 中心となるオーケストレータ | `XxxManager` |
+| `handler.py` | EventBus イベントハンドラ | `_XxxEventHandler` (private) |
+| `dispatcher.py` | store/retrieve/search のルーティング | `dispatch_xxx()` |
+| `builder.py` | コンポーネントの生成と配線 | `build_xxx()` |
+| `router.py` | 条件分岐ルーティング | `route_xxx()` |
+| `scorer.py` | スコアリング/評価 | `XxxScorer` |
+| `extractor.py` | エンティティ抽出/解析 | `XxxExtractor` |
+| `renderer.py` | フォーマット/レンダリング | `render_xxx()` |
+| `base.py` | 基底クラス | `_XxxBase` (private) |
+| `protocols.py` | Protocol クラス群 | `XxxProtocol` |
+| `utils.py` | ユーティリティ関数 | `xxx_yyy()` |
+| `param_builder.py` | パラメータ構築 | `build_xxx_yyy()` |
+| `formatter.py` | 出力整形 | `XxxFormatter`

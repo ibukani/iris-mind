@@ -20,14 +20,9 @@ from pydantic import SecretStr
 from iris.kernel.config import ModelConfig, ModelEntry
 
 from .interrupt_token import InterruptToken
+from .param_builder import _PROVIDER_DEFAULTS, build_ollama_options, build_openai_kwargs
 from .priority_lock import PriorityLock
 from .repetition import RepetitionDetector
-
-_PROVIDER_DEFAULTS: dict[str, str] = {
-    "ollama": "http://localhost:11434",
-    "openrouter": "https://openrouter.ai/api/v1",
-    "google": "https://generativelanguage.googleapis.com/v1beta/openai",
-}
 
 
 class LLMBridge:
@@ -104,39 +99,6 @@ class LLMBridge:
         )
 
     @staticmethod
-    def _build_ollama_options(
-        temperature: float,
-        max_tokens: int,
-        entry: ModelEntry | None,
-        kwargs: dict[str, Any],
-    ) -> dict[str, Any]:
-        options: dict[str, Any] = {
-            "temperature": temperature,
-            "num_predict": max_tokens,
-        }
-        if entry and entry.repeat_penalty is not None:
-            options["repeat_penalty"] = entry.repeat_penalty
-        for k in ("presence_penalty", "frequency_penalty", "repeat_penalty"):
-            if k in kwargs:
-                options[k] = kwargs.pop(k)
-        return options
-
-    @staticmethod
-    def _build_openai_kwargs(
-        temperature: float,
-        max_tokens: int,
-        kwargs: dict[str, Any],
-    ) -> dict[str, Any]:
-        call_kwargs: dict[str, Any] = {
-            "temperature": temperature,
-            "max_tokens": max_tokens,
-        }
-        for k in ("presence_penalty", "frequency_penalty"):
-            if k in kwargs:
-                call_kwargs[k] = kwargs.pop(k)
-        return call_kwargs
-
-    @staticmethod
     def _extract_content(resp_message: AIMessage) -> str:
         content = resp_message.content
         if isinstance(content, list):
@@ -205,7 +167,7 @@ class LLMBridge:
         reasoning: bool | None = None,
     ) -> dict[str, Any]:
         if isinstance(provider, ChatOllama):
-            call_options = self._build_ollama_options(temperature, max_tokens, entry, kwargs)
+            call_options = build_ollama_options(temperature, max_tokens, entry, kwargs)
             instance_options = dict(getattr(provider, "options", None) or {})
             merged = {**instance_options, **call_options}
             if "num_ctx" not in merged:
@@ -214,7 +176,7 @@ class LLMBridge:
             if reasoning is not None:
                 call_kwargs["reasoning"] = reasoning
         else:
-            call_kwargs = self._build_openai_kwargs(temperature, max_tokens, kwargs)
+            call_kwargs = build_openai_kwargs(temperature, max_tokens, kwargs)
         call_kwargs.update(kwargs)
         return call_kwargs
 

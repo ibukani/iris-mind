@@ -2,92 +2,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
-import threading
-from typing import Protocol
 
 from loguru import logger
-import orjson
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
+from iris.memory.long_term.base import _JsonlStore
 from iris.memory.long_term.vector_store import VectorStore
-
-
-class AgentsMdStoreProtocol(Protocol):
-    def load(self) -> str: ...
-    def update(self, new_content: str) -> None: ...
-
-
-class EpisodicStoreProtocol(Protocol):
-    @property
-    def max_entries(self) -> int: ...
-    def add(self, summary: str, metadata: dict | None = None) -> None: ...
-    def get_recent(self, n: int = 5) -> list[dict]: ...
-    def clear(self) -> None: ...
-    def load_all(self) -> list[dict]: ...
-
-
-class SemanticStoreProtocol(Protocol):
-    def add(self, entry: dict) -> None: ...
-    def search(self, query: str, max_results: int = 3) -> list[dict]: ...
-    def clear(self) -> None: ...
-    def load_all(self) -> list[dict]: ...
-
-
-class _JsonlStore:
-    """JSONLファイルの読み書きを提供する基底クラス。
-
-    なぜこの設計にしたか:
-    EpisodicStoreとSemanticStoreで重複していたJSONL入出力を統合し、
-    ファイル操作の一貫性を保ちながら保守箇所を一箇所に閉じるため。
-    """
-
-    def __init__(self, path: str) -> None:
-        self.path = Path(path)
-        self._lock = threading.Lock()
-        self._load_cache: list[dict] | None = None
-
-    def load_all(self) -> list[dict]:
-        if self._load_cache is not None:
-            return self._load_cache
-        if not self.path.exists():
-            self._load_cache = []
-            return []
-        entries: list[dict] = []
-        for line in self.path.read_text(encoding="utf-8").strip().split("\n"):
-            if not line.strip():
-                continue
-            try:
-                entries.append(orjson.loads(line.encode("utf-8")))
-            except orjson.JSONDecodeError:
-                logger.warning("{}: skipping corrupt entry: {:.80}", type(self).__name__, line)
-        self._load_cache = entries
-        return entries
-
-    def _write_file(self, entries: list[dict]) -> None:
-        tmp = self.path.with_suffix(".tmp")
-        tmp.write_text(
-            "\n".join(orjson.dumps(e).decode("utf-8") for e in entries),
-            encoding="utf-8",
-        )
-        self._replace_atomic(tmp)
-        self._load_cache = None
-
-    @retry(
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=0.05, min=0.05, max=0.5),
-        retry=retry_if_exception_type(PermissionError),
-        reraise=True,
-    )
-    def _replace_atomic(self, src: Path) -> None:
-        src.replace(self.path)
-
-    def _add_entry(self, entry: dict, max_entries: int) -> None:
-        with self._lock:
-            entries = self.load_all()
-            entries.append(entry)
-            if len(entries) > max_entries:
-                entries = entries[-max_entries:]
-            self._write_file(entries)
 
 
 class AgentsMdStore:

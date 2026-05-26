@@ -1,26 +1,17 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-import time
 from typing import Any
 
 from loguru import logger
 
+from iris.agency.planning.utils import build_time_label
 from iris.memory.manager import MemoryManager
 
 
 class ContextHintBuilder:
     def __init__(self, memory: MemoryManager | None = None) -> None:
         self._memory = memory
-
-    @staticmethod
-    def build_time_label() -> str:
-        hour = time.localtime().tm_hour
-        if hour < 12:
-            return "午前"
-        if hour < 17:
-            return "午後"
-        return "夕方以降"
 
     def build_proactive_context_hint(
         self,
@@ -41,7 +32,7 @@ class ContextHintBuilder:
     def _build_general_hint(self, scores: dict[str, float], context: dict[str, Any]) -> str:
         parts: list[str] = []
         trigger = max(scores, key=lambda k: scores[k])
-        parts.append(f"時間帯: {ContextHintBuilder.build_time_label()}")
+        parts.append(f"時間帯: {build_time_label()}")
         parts.append(f"トリガー: {trigger}")
 
         wc = self._build_working_context()
@@ -80,7 +71,7 @@ class ContextHintBuilder:
         try:
             wm = self._memory.short_term.render_context(query=query)
             if wm:
-                return wm
+                return str(wm)
             recent = self._memory.get_recent(3)
             topics = [
                 f"{e['summary'][:60]}（{self._format_age(e.get('timestamp', ''))}）" for e in recent if e.get("summary")

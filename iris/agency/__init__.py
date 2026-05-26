@@ -23,7 +23,6 @@ from iris.agency.planning import (
     ScoreContext,
 )
 from iris.agency.task_level import TASK_LEVELS, TaskLevel
-from iris.event.event_bus import EventBus
 from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
 
 if TYPE_CHECKING:
@@ -44,75 +43,17 @@ class AgencyPlugin:
     MANIFEST = MANIFEST
 
     def init(self, manager: PluginManager) -> None:
-        from iris.io.session.manager import SessionManager
-        from iris.kernel.debug_capture import DebugCapture
-        from iris.llm.bridge import LLMBridge
-        from iris.llm.capability import CapabilityChecker
-        from iris.memory.manager import MemoryManager
-        from iris.tools.registry import ToolRegistry
-
         manager.register_manifest(MANIFEST)
-        event_bus = manager.resolve(EventBus)
-        config = manager.config
-        llm = manager.resolve(LLMBridge)
-        memory = manager.resolve(MemoryManager)
-        tool_registry = manager.resolve(ToolRegistry)
-        session_mgr = manager.resolve(SessionManager)
-        debug_capture = manager.resolve_optional(DebugCapture)
 
-        internal_bus = InternalBus()
+        from iris.agency.builder import build_agency
 
-        from iris.llm.prompt import Personality
+        components = build_agency(manager)
 
-        personality = Personality(name=config.personality.name, prompt_file=config.personality.prompt_file)
-        capability_checker = manager.resolve_optional(CapabilityChecker)
-        if capability_checker is None:
-            capability_checker = CapabilityChecker(config=config.model)
-
-        from iris.memory.long_term.stores import AgentsMdStore
-
-        agents_md_store = AgentsMdStore(path=config.memory.agents_md_path, max_bytes=config.memory.agents_md_max_bytes)
-
-        pipeline = LLMGateway(
-            llm=llm,
-            model_config=config.model,
-            personality=personality,
-            agents_md_store=agents_md_store,
-            memory=memory,
-            capability_checker=capability_checker,
-            debug_capture=debug_capture,
-            prompts_dir=config.personality.node_prompts_dir,
-        )
-
-        tool_exec = ToolEngine(registry=tool_registry)
-
-        execution = FlowExecutor(
-            internal_bus=internal_bus,
-            event_bus=event_bus,
-            llm_pipeline=pipeline,
-            tool_executor=tool_exec,
-            session_roles_getter=session_mgr.get_sessions_summary,
-            memory=memory,
-            capability_checker=CapabilityChecker(config=config.model),
-        )
-
-        scoring = ProactiveScoring(config=config.proactive, memory=memory)
-        planning = PlanningManager(
-            internal_bus=internal_bus,
-            event_bus=event_bus,
-            scoring=scoring,
-            config=config,
-            memory=memory,
-            llm=llm,
-        )
-
-        agency = AgencyManager(planning=planning, execution=execution)
-
-        manager.provide(AgencyManager, agency)
-        manager.provide(PlanningManager, planning)
-        manager.provide(FlowExecutor, execution)
-        manager.provide(LLMGateway, pipeline)
-        manager.provide(ToolEngine, tool_exec)
+        manager.provide(AgencyManager, components["agency"])
+        manager.provide(PlanningManager, components["planning"])
+        manager.provide(FlowExecutor, components["execution"])
+        manager.provide(LLMGateway, components["pipeline"])
+        manager.provide(ToolEngine, components["tool_exec"])
 
         from .hooks import register_hooks
 

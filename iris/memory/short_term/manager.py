@@ -2,78 +2,14 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import re
-from typing import Protocol, TypedDict
+from typing import Protocol
 
 from loguru import logger
 
-_MAX_TURN_LENGTH = 500
-_MAX_CONTEXT_CHARS = 600
-
-
-class TurnData(TypedDict):
-    role: str
-    content: str
-    timestamp: str
-    consolidated: bool
-    importance: int
-    user_identity: str
-
-
-class SearchResult(TurnData, total=False):
-    relevance: float
-    index: int
-
-
-class ImportanceScorer(Protocol):
-    """発話内容から重要度を算出するインターフェース。
-
-    なぜこの設計にしたか:
-    将来的にLLMを用いた重要度判定や、異なるヒューリスティックルールを容易に差し替え可能にするため。
-    """
-
-    def score(self, content: str) -> int: ...
-
-
-class DefaultImportanceScorer:
-    """ヒューリスティックに基づくデフォルトの重要度判定器。"""
-
-    def score(self, content: str) -> int:
-        score = 0
-        lower = content.lower()
-        if any(w in lower for w in ["important", "大事", "覚えて", "remember", "注意", "critical", "urgent"]):
-            score += 3
-        if any(w in lower for w in ["please", "お願い", "help", "assist", "question", "質問"]):
-            score += 1
-        if re.search(r"[A-Z]{3,}", content):
-            score += 1
-        if content.count("!") >= 2:
-            score += 1
-        return min(score, 5)
-
-
-class EntityExtractor(Protocol):
-    """テキストから特定の参照エンティティを抽出するインターフェース。
-
-    なぜこの設計にしたか:
-    正規表現による抽出だけでなく、NERモデルや外部NLPライブラリを用いた抽出エンジンへの差し替えをサポートするため。
-    """
-
-    def extract(self, content: str) -> list[str]: ...
-
-
-class RegexEntityExtractor:
-    """正規表現に基づくデフォルトのエンティティ抽出器。"""
-
-    def extract(self, content: str) -> list[str]:
-        entities: list[str] = []
-        entities.extend(re.findall(r"https?://[^\s]+", content))
-        entities.extend(re.findall(r"(?:/[^\s/]+)+(?:/?)", content))
-        entities.extend(re.findall(r"#\w+", content))
-        entities.extend(re.findall(r"@\w+", content))
-        entities.extend(re.findall(r"「([^」]+)」", content))
-        entities.extend(re.findall(r'"([^"]{3,})"', content))
-        entities.extend(re.findall(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)*\b", content))
-        return list({e for e in entities if len(e) > 2})
+from iris.memory.short_term.extractor import EntityExtractor, RegexEntityExtractor
+from iris.memory.short_term.models import MAX_CONTEXT_CHARS, MAX_TURN_LENGTH, SearchResult, TurnData
+from iris.memory.short_term.renderer import render_short_term_context
+from iris.memory.short_term.scorer import DefaultImportanceScorer, ImportanceScorer
 
 
 class ShortTermMemoryProtocol(Protocol):
@@ -87,7 +23,7 @@ class ShortTermMemoryProtocol(Protocol):
     def add_turn(self, role: str, content: str, user_identity: str = "") -> None: ...
     def search(self, query: str, max_results: int = 5) -> list[SearchResult]: ...
     def search_entities(self, entity_name: str) -> list[TurnData]: ...
-    def render_context(self, max_chars: int = _MAX_CONTEXT_CHARS, query: str | None = None) -> str: ...
+    def render_context(self, max_chars: int = MAX_CONTEXT_CHARS, query: str | None = None) -> str: ...
     def get_recent_turns(self, n: int = 4) -> list[TurnData]: ...
     def get_unconsolidated_turns(self) -> list[TurnData]: ...
     def mark_consolidated(self, up_to_index: int | None = None) -> None: ...
@@ -131,7 +67,7 @@ class ShortTermMemoryManager:
         """
         if not content:
             return
-        truncated = content[:_MAX_TURN_LENGTH]
+        truncated = content[:MAX_TURN_LENGTH]
         entry: TurnData = {
             "role": role,
             "content": truncated,
@@ -194,44 +130,14 @@ class ShortTermMemoryManager:
         results: list[TurnData] = [turn for turn in self._turns if entity_lower in turn.get("content", "").lower()]
         return results[-5:]
 
-    def render_context(self, max_chars: int = _MAX_CONTEXT_CHARS, query: str | None = None) -> str:
-        """短期記憶の内容をプロンプト注入用のテキストフォーマットに整形する。"""
-        if not self._turns:
-            return ""
-        parts: list[str] = []
-
-        if query:
-            parts.append("### 直近の会話（関連）")
-            relevant = self.search(query, max_results=3)
-            shown_indices = {r.get("index", -1) for r in relevant}
-            for r in relevant:
-                role = r.get("role", "system")
-                uid = r.get("user_identity", "")
-                label = uid or ("User" if role == "user" else "Iris")
-                prefix = "(思考) " if role == "thought" else ""
-                parts.append(f"- {label}: {prefix}「{r['content'][:100]}」(関連度 {r.get('relevance', 0):.2f})")
-            for t in reversed(self._turns[-4:]):
-                idx = self._turns.index(t)
-                if idx in shown_indices:
-                    continue
-                shown_indices.add(idx)
-                role = t.get("role", "system")
-                uid = t.get("user_identity", "")
-                label = uid or ("User" if role == "user" else "Iris")
-                prefix = "(思考) " if role == "thought" else ""
-                parts.append(f"- {label}: {prefix}「{t['content'][:100]}」")
-
-        if self._active_references:
-            refs = sorted(self._active_references, key=len, reverse=True)[:5]
-            parts.append("### 参照エンティティ")
-            parts.append(", ".join(refs))
-
-        if not parts:
-            return ""
-        text = "\n".join(parts)
-        if len(text) > max_chars:
-            text = text[: max_chars - 3] + "..."
-        return text
+    def render_context(self, max_chars: int = MAX_CONTEXT_CHARS, query: str | None = None) -> str:
+        return render_short_term_context(
+            turns=self._turns,
+            active_references=self._active_references,
+            search_fn=self.search,
+            max_chars=max_chars,
+            query=query,
+        )
 
     def get_recent_turns(self, n: int = 4) -> list[TurnData]:
         """直近のNターンを取得する。"""

@@ -6,6 +6,7 @@ from langchain_core.messages import AIMessage, HumanMessage
 import pytest
 
 from iris.agency import ExecutionOrchestrator, ExecutionState, Plan
+from iris.agency.execution.router import route_after_llm
 
 
 @pytest.fixture
@@ -48,20 +49,15 @@ def _base_state(plan: dict, messages: list | None = None) -> ExecutionState:
     return {
         "plan": plan,
         "messages": messages or [],
-        "response_text": "",
+        "chain_depth": 0,
         "tool_iterations": 0,
-        "interrupted": False,
-        "error": None,
-        "completed": False,
         "current_node_type": "general_chat",
         "current_level_idx": 0,
-        "chain_depth": 0,
     }
 
 
 @pytest.mark.anyio
 async def test_chat_path_propagates_response_text(mock_llm: AsyncMock) -> None:
-    """chat() path with response text propagates through graph."""
     mock_llm.chat.return_value = AIMessage(content="mock assistant response")
     orch = _make_orchestrator(mock_llm)
 
@@ -69,16 +65,27 @@ async def test_chat_path_propagates_response_text(mock_llm: AsyncMock) -> None:
 
     result = await orch.ainvoke(state)
 
-    assert result.get("response_text") == "mock assistant response", (
-        f"response_text should be 'mock assistant response', got {result.get('response_text')!r}"
-    )
-    assert result.get("completed") is True, "completed should be True"
+    assert result.get("response_text") == "mock assistant response"
+    assert result.get("completed") is True
     mock_llm.chat.assert_awaited_once()
 
 
 @pytest.mark.anyio
-async def test_normal_path_propagates_response_text(mock_llm: AsyncMock) -> None:
-    """normal task_level path propagates response correctly."""
+async def test_empty_chat_response(mock_llm: AsyncMock) -> None:
+    mock_llm.chat.return_value = AIMessage(content="")
+    orch = _make_orchestrator(mock_llm)
+
+    state = _base_state(_chat_plan(), [HumanMessage(content="hello")])
+
+    result = await orch.ainvoke(state)
+
+    assert result.get("response_text") == ""
+    assert result.get("completed") is True
+    mock_llm.chat.assert_awaited_once()
+
+
+@pytest.mark.anyio
+async def test_chat_response(mock_llm: AsyncMock) -> None:
     mock_llm.chat.return_value = AIMessage(content="mock assistant response")
     orch = _make_orchestrator(mock_llm)
 
@@ -92,22 +99,7 @@ async def test_normal_path_propagates_response_text(mock_llm: AsyncMock) -> None
 
 
 @pytest.mark.anyio
-async def test_empty_chat_response(mock_llm: AsyncMock) -> None:
-    """Empty LLM response should still set completed=True."""
-    mock_llm.chat.return_value = AIMessage(content="")
-    orch = _make_orchestrator(mock_llm)
-
-    state = _base_state(_chat_plan(), [HumanMessage(content="hello")])
-
-    result = await orch.ainvoke(state)
-
-    assert result.get("response_text") == ""
-    assert result.get("completed") is True
-
-
-@pytest.mark.anyio
 async def test_messages_accumulate_across_nodes(mock_llm: AsyncMock) -> None:
-    """Messages list must grow as nodes append assistant responses."""
     mock_llm.chat.return_value = AIMessage(content="mock assistant response")
     orch = _make_orchestrator(mock_llm)
 
@@ -123,22 +115,19 @@ async def test_messages_accumulate_across_nodes(mock_llm: AsyncMock) -> None:
 
 @pytest.mark.anyio
 async def test_router_routes_to_finalize_without_tool_calls(mock_llm: AsyncMock) -> None:
-    """Without tool calls, router should go directly to finalize."""
     mock_llm.chat.return_value = AIMessage(content="mock assistant response")
     orch = _make_orchestrator(mock_llm)
 
     state = _base_state(_chat_plan(), [HumanMessage(content="hello")])
 
     result = await orch.ainvoke(state)
-
     assert result.get("completed") is True
     assert result.get("response_text") == "mock assistant response"
-    assert orch._route_after_llm(state) == "finalize"
+    assert route_after_llm(state) == "finalize"
 
 
 @pytest.mark.anyio
 async def test_error_during_chat(mock_llm: AsyncMock) -> None:
-    """Exception during chat: should set error and still reach finalize."""
     mock_llm.chat.side_effect = RuntimeError("LLM failure")
     orch = _make_orchestrator(mock_llm)
 
@@ -152,7 +141,6 @@ async def test_error_during_chat(mock_llm: AsyncMock) -> None:
 
 @pytest.mark.anyio
 async def test_interrupted_state(mock_llm: AsyncMock) -> None:
-    """Interrupted state should skip LLM call and go to finalize."""
     orch = _make_orchestrator(mock_llm)
 
     state = _base_state(_chat_plan(), [HumanMessage(content="hello")])
@@ -172,12 +160,10 @@ def _routing_msg(name: str) -> AIMessage:
 
 
 def test_route_after_llm_routes_to_general_task(mock_llm: AsyncMock) -> None:
-    """general_chat routing tool switches node_type to general_task."""
-    orch = _make_orchestrator(mock_llm)
     state = _base_state(_chat_plan(), [HumanMessage(content="hello")])
     state["messages"].append(_routing_msg("general_task"))
 
-    route = orch._route_after_llm(state)
+    route = route_after_llm(state)
 
     assert route == "general_task"
     assert state["current_node_type"] == "general_task"
@@ -185,33 +171,27 @@ def test_route_after_llm_routes_to_general_task(mock_llm: AsyncMock) -> None:
 
 
 def test_route_after_llm_deep_task_upgrades_level(mock_llm: AsyncMock) -> None:
-    """deep_task routing tool upgrades current_level_idx by 1."""
-    orch = _make_orchestrator(mock_llm)
     state = _base_state(_chat_plan(), [HumanMessage(content="hello")])
     state["current_node_type"] = "general_task"
     state["current_level_idx"] = 0
     state["messages"].append(_routing_msg("deep_task"))
 
-    route = orch._route_after_llm(state)
+    route = route_after_llm(state)
 
     assert route == "general_task"
     assert state["current_level_idx"] == 1
 
 
 def test_route_after_llm_finish_routes_to_finalize(mock_llm: AsyncMock) -> None:
-    """finish routing tool sends execution to finalize."""
-    orch = _make_orchestrator(mock_llm)
     state = _base_state(_chat_plan(), [HumanMessage(content="hello")])
     state["messages"].append(_routing_msg("finish"))
 
-    route = orch._route_after_llm(state)
+    route = route_after_llm(state)
 
     assert route == "finalize"
 
 
 def test_route_after_llm_regular_tool_routes_to_execute(mock_llm: AsyncMock) -> None:
-    """Non-routing tool_calls should go to execute_tools."""
-    orch = _make_orchestrator(mock_llm)
     state = _base_state(_chat_plan(), [HumanMessage(content="hello")])
     state["messages"].append(
         AIMessage(
@@ -220,30 +200,26 @@ def test_route_after_llm_regular_tool_routes_to_execute(mock_llm: AsyncMock) -> 
         ),
     )
 
-    route = orch._route_after_llm(state)
+    route = route_after_llm(state)
 
     assert route == "execute_tools"
 
 
 def test_route_after_llm_no_tool_calls_routes_to_finalize(mock_llm: AsyncMock) -> None:
-    """No tool_calls means direct to finalize."""
-    orch = _make_orchestrator(mock_llm)
     state = _base_state(_chat_plan(), [HumanMessage(content="hello")])
     state["messages"].append(AIMessage(content="ok"))
 
-    route = orch._route_after_llm(state)
+    route = route_after_llm(state)
 
     assert route == "finalize"
 
 
 def test_route_after_llm_general_chat_increments_chain_depth(mock_llm: AsyncMock) -> None:
-    """general_chat routing tool increments chain_depth."""
-    orch = _make_orchestrator(mock_llm)
     state = _base_state(_chat_plan(), [HumanMessage(content="hello")])
     state["chain_depth"] = 3
     state["messages"].append(_routing_msg("general_chat"))
 
-    route = orch._route_after_llm(state)
+    route = route_after_llm(state)
 
     assert route == "general_chat"
     assert state["chain_depth"] == 4
@@ -251,7 +227,6 @@ def test_route_after_llm_general_chat_increments_chain_depth(mock_llm: AsyncMock
 
 @pytest.mark.anyio
 async def test_full_graph_with_general_task_routing(mock_llm: AsyncMock) -> None:
-    """general_chat→general_task→response flows correctly end-to-end."""
     mock_llm.chat.side_effect = [
         _routing_msg("general_task"),
         AIMessage(content="task mode response"),

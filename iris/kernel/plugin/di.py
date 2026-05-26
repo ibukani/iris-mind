@@ -1,25 +1,26 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 
 class ServiceContainer:
     def __init__(self) -> None:
-        self._services: dict[str, Any] = {}
+        self._services: dict[type[Any], Any] = {}
         self._frozen = False
 
-    def provide(self, name: str, instance: Any) -> None:
+    def provide[T](self, key: type[T], instance: T) -> None:
         if self._frozen:
-            raise RuntimeError(f"ServiceContainer is frozen, cannot provide '{name}'")
-        self._services[name] = instance
+            raise RuntimeError(f"ServiceContainer is frozen, cannot provide '{key.__name__}'")
+        self._services[key] = instance
 
-    def resolve(self, name: str) -> Any:
-        if name not in self._services:
-            raise KeyError(f"Service '{name}' not found. Available: {list(self._services.keys())}")
-        return self._services[name]
+    def resolve[T](self, key: type[T]) -> T:
+        if key not in self._services:
+            names = [k.__name__ for k in self._services]
+            raise KeyError(f"Service '{key.__name__}' not found. Available: {names}")
+        return cast(T, self._services[key])
 
-    def resolve_optional(self, name: str) -> Any:
-        return self._services.get(name)
+    def resolve_optional[T](self, key: type[T]) -> T | None:
+        return cast(T | None, self._services.get(key))
 
     def freeze(self) -> None:
         self._frozen = True

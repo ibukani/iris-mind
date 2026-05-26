@@ -34,8 +34,8 @@ class ToolsPlugin:
 
         tool_exec = ToolEngine(registry=registry)
 
-        manager.provide("ToolRegistry", registry)
-        manager.provide("ToolEngine", tool_exec)
+        manager.provide(ToolRegistry, registry)
+        manager.provide(ToolEngine, tool_exec)
 
     def start(self, manager: PluginManager) -> None:
         pass

@@ -69,10 +69,12 @@ class LlmPlugin:
 
         capability_checker = CapabilityChecker(config=config.model)
 
-        manager.provide("LLMBridge", llm)
-        manager.provide("Tokenizers", tokenizers)
-        manager.provide("DebugCapture", debug_capture)
-        manager.provide("CapabilityChecker", capability_checker)
+        manager.provide(LLMBridge, llm)
+        manager.provide(CapabilityChecker, capability_checker)
+
+        from iris.kernel.debug_capture import DebugCapture
+
+        manager.provide(DebugCapture, debug_capture)
 
         for sub_module in discover_sub_plugins("iris/llm/providers"):
             register_fn = getattr(sub_module, "register", None)

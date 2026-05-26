@@ -57,10 +57,10 @@ class PluginManager:
     # ── Plugin lifecycle ──
 
     def discover_and_build_all(self) -> None:
-        self._di.provide("EventBus", self._event_bus)
-        self._di.provide("HookRegistry", self._hook_registry)
-        self._di.provide("Config", self._config)
-        self._di.provide("PluginManager", self)
+        self._di.provide(EventBus, self._event_bus)
+        self._di.provide(HookRegistry, self._hook_registry)
+        self._di.provide(Config, self._config)
+        self._di.provide(PluginManager, self)
 
         manifests = discover_plugin_manifests(self._config.plugins.paths)
         self._lifecycle.load(manifests, self._config.plugins.disabled)
@@ -79,14 +79,14 @@ class PluginManager:
 
     # ── DI ──
 
-    def provide(self, name: str, instance: Any) -> None:
-        self._di.provide(name, instance)
+    def provide[T](self, key: type[T], instance: T) -> None:
+        self._di.provide(key, instance)
 
-    def resolve(self, name: str) -> Any:
-        return self._di.resolve(name)
+    def resolve[T](self, key: type[T]) -> T:
+        return self._di.resolve(key)
 
-    def resolve_optional(self, name: str) -> Any:
-        return self._di.resolve_optional(name)
+    def resolve_optional[T](self, key: type[T]) -> T | None:
+        return self._di.resolve_optional(key)
 
     # ── State ──
 
@@ -144,21 +144,31 @@ class PluginManager:
         self._create_command_handler()
 
     def _create_diagnostics(self) -> None:
+        from iris.agency.manager import AgencyManager
+        from iris.io.manager import IOManager
         from iris.kernel.diagnostics import SystemDiagnostics
+        from iris.memory.manager import MemoryManager
 
         self._diagnostics = SystemDiagnostics(
             event_bus=self._event_bus,
             tracer=self._tracer,
             kernel=self,
-            io=self._di.resolve_optional("IOManager"),
-            memory=self._di.resolve_optional("MemoryManager"),
-            agency=self._di.resolve_optional("AgencyManager"),
+            io=self._di.resolve_optional(IOManager),
+            memory=self._di.resolve_optional(MemoryManager),
+            agency=self._di.resolve_optional(AgencyManager),
         )
 
     def _create_command_handler(self) -> None:
+        from iris.agency.manager import AgencyManager
+        from iris.io.manager import IOManager
+        from iris.io.session.manager import SessionManager
         from iris.kernel.commands.handler import CommandHandler
+        from iris.kernel.debug_capture import DebugCapture
+        from iris.llm.bridge import LLMBridge
+        from iris.memory.manager import MemoryManager
+        from iris.tools.registry import ToolRegistry
 
-        agency = self._di.resolve_optional("AgencyManager")
+        agency = self._di.resolve_optional(AgencyManager)
 
         def _on_shutdown() -> None:
             self._state.request_shutdown()
@@ -174,14 +184,14 @@ class PluginManager:
             config=self._config,
             on_shutdown=_on_shutdown,
             on_compact=on_compact,
-            memory=self._di.resolve_optional("MemoryManager"),
-            session_mgr=self._di.resolve_optional("SessionManager"),
-            llm=self._di.resolve_optional("LLMBridge"),
-            registry=self._di.resolve_optional("ToolRegistry"),
-            debug_capture=self._di.resolve_optional("DebugCapture"),
+            memory=self._di.resolve_optional(MemoryManager),
+            session_mgr=self._di.resolve_optional(SessionManager),
+            llm=self._di.resolve_optional(LLMBridge),
+            registry=self._di.resolve_optional(ToolRegistry),
+            debug_capture=self._di.resolve_optional(DebugCapture),
             diagnostics=self._diagnostics,
         )
 
-        io_mgr = self._di.resolve_optional("IOManager")
+        io_mgr = self._di.resolve_optional(IOManager)
         if io_mgr is not None:
             io_mgr.set_command_handler(self._cmd_handler.handle)

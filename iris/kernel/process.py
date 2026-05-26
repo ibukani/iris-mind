@@ -40,9 +40,11 @@ class KernelProcess:
         self._manager = PluginManager(self._config, debug=self._debug)
         self._manager.discover_and_build_all()
 
+        from iris.io.manager import IOManager
+
         host = self._config.session.host
         port = self._config.session.port
-        io_mgr = self._manager.resolve("IOManager")
+        io_mgr = self._manager.resolve(IOManager)
         io_mgr.start(host=host, port=port)
 
         self._manager.start_all()
@@ -58,7 +60,9 @@ class KernelProcess:
             return
 
         manager.request_shutdown()
-        agency = manager.resolve_optional("AgencyManager")
+        from iris.agency.manager import AgencyManager
+
+        agency = manager.resolve_optional(AgencyManager)
         if agency is not None and hasattr(agency, "shutdown"):
             agency.shutdown()
         manager.stop_all()

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from iris.event.event_bus import EventBus
 from iris.io.models import (
     AuthMessage,
     CommandInput,
@@ -38,7 +39,7 @@ class IoPlugin:
 
     def init(self, manager: PluginManager) -> None:
         manager.register_manifest(MANIFEST)
-        event_bus = manager.resolve("EventBus")
+        event_bus = manager.resolve(EventBus)
 
         session_mgr = SessionManager(
             config=SessionConfig(**manager.config.session.model_dump()),
@@ -54,9 +55,9 @@ class IoPlugin:
             grpc_listener=grpc_listener,
         )
 
-        manager.provide("IOManager", io_mgr)
-        manager.provide("SessionManager", session_mgr)
-        manager.provide("GrpcListener", grpc_listener)
+        manager.provide(IOManager, io_mgr)
+        manager.provide(SessionManager, session_mgr)
+        manager.provide(GrpcListener, grpc_listener)
 
         from .hooks import register_hooks
 
@@ -66,7 +67,9 @@ class IoPlugin:
         pass
 
     def stop(self, manager: PluginManager) -> None:
-        io_mgr = manager.resolve("IOManager")
+        from iris.io.manager import IOManager
+
+        io_mgr = manager.resolve(IOManager)
         io_mgr.stop()
 
 

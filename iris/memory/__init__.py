@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from iris.event.event_bus import EventBus
 from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
 from iris.memory.long_term.manager import LongTermMemoryManager
 from iris.memory.long_term.stores import (
@@ -36,7 +37,7 @@ class MemoryPlugin:
 
     def init(self, manager: PluginManager) -> None:
         manager.register_manifest(MANIFEST)
-        event_bus = manager.resolve("EventBus")
+        event_bus = manager.resolve(EventBus)
         config = manager.config
         mem_cfg = config.memory
 
@@ -75,11 +76,11 @@ class MemoryPlugin:
         )
         sensory.set_readiness_evaluator(readiness)
 
-        manager.provide("MemoryManager", mem)
-        manager.provide("SensoryMemoryManager", sensory)
-        manager.provide("ShortTermMemoryManager", short_term)
-        manager.provide("LongTermMemoryManager", long_term)
-        manager.provide("VectorStore", vector_store)
+        manager.provide(MemoryManager, mem)
+        manager.provide(SensoryMemoryManager, sensory)
+        manager.provide(ShortTermMemoryManager, short_term)
+        manager.provide(LongTermMemoryManager, long_term)
+        manager.provide(VectorStore, vector_store)
 
         from .hooks import register_hooks
 

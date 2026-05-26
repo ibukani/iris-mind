@@ -23,6 +23,7 @@ from iris.agency.planning import (
     ScoreContext,
 )
 from iris.agency.task_level import TASK_LEVELS, TaskLevel
+from iris.event.event_bus import EventBus
 from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
 
 if TYPE_CHECKING:
@@ -43,24 +44,29 @@ class AgencyPlugin:
     MANIFEST = MANIFEST
 
     def init(self, manager: PluginManager) -> None:
+        from iris.io.session.manager import SessionManager
+        from iris.kernel.debug_capture import DebugCapture
+        from iris.llm.bridge import LLMBridge
+        from iris.llm.capability import CapabilityChecker
+        from iris.memory.manager import MemoryManager
+        from iris.tools.registry import ToolRegistry
+
         manager.register_manifest(MANIFEST)
-        event_bus = manager.resolve("EventBus")
+        event_bus = manager.resolve(EventBus)
         config = manager.config
-        llm = manager.resolve("LLMBridge")
-        memory = manager.resolve("MemoryManager")
-        tool_registry = manager.resolve("ToolRegistry")
-        session_mgr = manager.resolve("SessionManager")
-        debug_capture = manager.resolve_optional("DebugCapture")
+        llm = manager.resolve(LLMBridge)
+        memory = manager.resolve(MemoryManager)
+        tool_registry = manager.resolve(ToolRegistry)
+        session_mgr = manager.resolve(SessionManager)
+        debug_capture = manager.resolve_optional(DebugCapture)
 
         internal_bus = InternalBus()
 
         from iris.llm.prompt import Personality
 
         personality = Personality(name=config.personality.name, prompt_file=config.personality.prompt_file)
-        capability_checker = manager.resolve_optional("CapabilityChecker")
+        capability_checker = manager.resolve_optional(CapabilityChecker)
         if capability_checker is None:
-            from iris.llm.capability import CapabilityChecker
-
             capability_checker = CapabilityChecker(config=config.model)
 
         from iris.memory.long_term.stores import AgentsMdStore
@@ -102,11 +108,11 @@ class AgencyPlugin:
 
         agency = AgencyManager(planning=planning, execution=execution)
 
-        manager.provide("AgencyManager", agency)
-        manager.provide("PlanningManager", planning)
-        manager.provide("FlowExecutor", execution)
-        manager.provide("LLMGateway", pipeline)
-        manager.provide("ToolEngine", tool_exec)
+        manager.provide(AgencyManager, agency)
+        manager.provide(PlanningManager, planning)
+        manager.provide(FlowExecutor, execution)
+        manager.provide(LLMGateway, pipeline)
+        manager.provide(ToolEngine, tool_exec)
 
         from .hooks import register_hooks
 
@@ -116,7 +122,9 @@ class AgencyPlugin:
         pass
 
     def stop(self, manager: PluginManager) -> None:
-        agency = manager.resolve_optional("AgencyManager")
+        from iris.agency.manager import AgencyManager
+
+        agency = manager.resolve_optional(AgencyManager)
         if agency is not None and hasattr(agency, "shutdown"):
             agency.shutdown()
 

@@ -5,10 +5,11 @@ from contextlib import suppress
 import threading
 from typing import TYPE_CHECKING, Any, Protocol
 
+from iris.event.event_types import ClientSessionEvent, MessageEvent, TimerTick
+
 if TYPE_CHECKING:
     from iris.event.event_bus import EventBus
     from iris.kernel.config import ProactiveConfig
-    from iris.limbic.models import EmotionState
 
 from loguru import logger
 
@@ -43,7 +44,7 @@ class MemoryManagerProtocol(Protocol):
     def search_semantic(self, query: str, max_results: int = 3) -> list[dict[str, Any]]: ...
     def search_emotional(
         self,
-        current_emotion: EmotionState | None = None,
+        current_emotion: Any | None = None,
         max_results: int = 5,
     ) -> list[dict[str, Any]]: ...
 
@@ -135,9 +136,7 @@ class MemoryManager:
             return
         self.sensory.store_raw(event.content)
         with self._pending_lock:
-            self._pending_input.setdefault(event.session_id, []).append(
-                (event.content, event.user_identity)
-            )
+            self._pending_input.setdefault(event.session_id, []).append((event.content, event.user_identity))
         logger.debug(
             "MemoryManager: input pending session={} content={:.80} identity={}",
             event.session_id,
@@ -330,7 +329,7 @@ class MemoryManager:
 
     def search_emotional(
         self,
-        current_emotion: EmotionState | None = None,
+        current_emotion: Any | None = None,
         max_results: int = 5,
     ) -> list[dict[str, Any]]:
         return self.long_term.search_emotional(

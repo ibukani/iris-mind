@@ -6,10 +6,8 @@ from iris.agency.planning.models import Plan, PlanReason
 from iris.agency.planning.task_content import is_task_content
 
 if TYPE_CHECKING:
-    from iris.agency.inhibition import GateVerdict
     from iris.agency.planning.context_hint_builder import ContextHintBuilder
     from iris.kernel.config import ProactiveConfig
-    from iris.limbic.models import EmotionState
 
 from loguru import logger
 
@@ -19,26 +17,13 @@ class ResponsePlanStrategy:
         self._cfg = config
         self._context_builder = context_builder
 
-    def build_response(self, content: str, gate: GateVerdict, limbic_mood: EmotionState | None = None) -> Plan:
-        abbreviated = gate.suppressed or gate.score < self._cfg.abbreviated_threshold
+    def build_response(self, content: str) -> Plan:
         context_hint = self._context_builder.build_user_context_hint(content)
-
         is_task = is_task_content(content)
 
-        if abbreviated:
-            level = "chat"
-        elif not is_task:
-            level = "light"
-        else:
-            level = "normal"
+        level = "light" if not is_task else "normal"
 
-        logger.debug(
-            "Plan built: level={} abbreviated={} suppressed={} gate_score={:.3f}",
-            level,
-            abbreviated,
-            gate.suppressed,
-            gate.score,
-        )
+        logger.debug("Plan built: level={}", level)
 
         overrides: dict[str, Any] = {}
 

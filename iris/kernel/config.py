@@ -1,9 +1,3 @@
-"""
-Iris v0.3 設定
-
-Pydantic モデルで config.yaml をバリデーションする。
-"""
-
 from __future__ import annotations
 
 import os
@@ -29,15 +23,12 @@ def _default_models() -> list[ModelEntry]:
 
 def _default_trigger_weights() -> dict[str, float]:
     return {
-        "time": 0.25,
-        "memory": 0.45,
-        "context": 0.15,
-        "mood": 0.15,
+        "memory": 0.55,
+        "context": 0.30,
     }
 
 
 def _resolve_env_refs(raw: object) -> object:
-    """設定値中の ${VAR_NAME} を環境変数で置換する（文字列のみ対象）。"""
     if isinstance(raw, str):
 
         def _replace(m: re.Match[str]) -> str:
@@ -163,8 +154,6 @@ class ModelConfig(BaseModel):
 
 
 class ProactiveConfig(BaseModel):
-    """自律的会話（自発発話）機能の設定。"""
-
     check_interval_sec: float = 5.0
     min_interval_sec: float = 30.0
     active_min_interval_sec: float = 2.0
@@ -172,7 +161,6 @@ class ProactiveConfig(BaseModel):
     trigger_weights: dict[str, float] = Field(default_factory=_default_trigger_weights)
     speak_threshold: float = 0.60
     abbreviated_threshold: float = 0.25
-    idle_reflection_timeout_sec: float = 180.0
 
 
 class PersonalityConfig(BaseModel):
@@ -189,9 +177,6 @@ class MemoryConfig(BaseModel):
     semantic_max_entries: int = 100
     agents_md_path: str = ".iris/config/iris_profile.md"
     agents_md_max_bytes: int = 2048
-    persona_data_path: str = ".iris/data/persona_data.json"
-    persona_data_max_entries: int = 100
-    psychometric_state_path: str = ".iris/data/psychometric_state.json"
 
 
 class ResponseReadinessConfig(BaseModel):
@@ -224,8 +209,6 @@ class LoggingConfig(BaseModel):
 class DebugConfig(BaseModel):
     enabled: bool = False
     trace_max_entries: int = 500
-    emotion_history_enabled: bool = True
-    personality_history_enabled: bool = True
     capture_enabled: bool = False
     capture_auto_dump: bool = False
     capture_max_entries: int = 10

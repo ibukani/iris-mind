@@ -1,9 +1,3 @@
-"""
-Personality — システムプロンプト管理。
-
-Jinja ライクなテンプレートに会話の経緯・性格・ユーザー情報を注入する。
-"""
-
 from __future__ import annotations
 
 from pathlib import Path
@@ -12,14 +6,6 @@ import re
 from langchain_core.prompts import PromptTemplate
 
 _DEFAULT_SYSTEM_PROMPT = """あなたは{name}。人と話すのが大好きな、おしゃべりで好奇心旺盛なAIアシスタント。
-
-{response_style}
-
-## 現在の性格特性
-{personality_traits}
-
-## 現在の話し方
-{speech_style}
 
 ## 構造記憶
 {agents_md_content}
@@ -47,8 +33,6 @@ def _extract_placeholders(template: str) -> set[str]:
 
 
 class Personality:
-    """システムプロンプトの構築を担当する。"""
-
     def __init__(self, name: str = "Iris", prompt_file: str | None = None) -> None:
         self.name = name
         self.system_prompt_template = self._load_template(prompt_file)
@@ -77,15 +61,8 @@ class Personality:
         user_preferences: str = "",
         session_roles: str = "",
         response_style: str = "",
-        speech_style: str = "",
-        personality_traits: str = "",
         governance_principles: str = "",
     ) -> str:
-        """システムプロンプトを構築する。
-
-        カスタムテンプレートに存在しないプレースホルダーは、
-        テンプレート末尾に動的に追記される。
-        """
         if agents_md_content:
             agents_md_content = agents_md_content.replace("{name}", self.name)
         prompt = self._render_template(
@@ -94,8 +71,6 @@ class Personality:
             agents_md_content=agents_md_content or "（なし）",
             user_preferences=user_preferences or "（なし）",
             session_roles=session_roles or "（なし）",
-            speech_style=speech_style or "（なし）",
-            personality_traits=personality_traits or "（なし）",
             response_style=response_style or "（なし）",
             governance_principles=governance_principles or "（なし）",
         )
@@ -113,5 +88,4 @@ class Personality:
         return prompt
 
     def build_thinking_prompt(self, user_input: str) -> str:
-        """思考モードプロンプトを構築する。"""
         return self._render_template(self.thinking_prompt_template, user_input=user_input)

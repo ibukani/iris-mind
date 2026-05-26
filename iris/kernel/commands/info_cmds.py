@@ -5,8 +5,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from iris.io.session.manager import SessionManager
     from iris.kernel.config import Config
-    from iris.limbic.manager import LimbicManager
-    from iris.limbic.prefrontal.personality import BigFiveProfile
     from iris.llm.bridge import LLMBridge
     from iris.tools.registry import ToolRegistry
 
@@ -15,21 +13,14 @@ class InfoCommands:
     def __init__(
         self,
         config: Config | None = None,
-        limbic: LimbicManager | None = None,
         session_mgr: SessionManager | None = None,
         llm: LLMBridge | None = None,
         registry: ToolRegistry | None = None,
-        big_five: BigFiveProfile | None = None,
     ) -> None:
         self._config = config
-        self._limbic = limbic
         self._session_mgr = session_mgr
         self._llm = llm
         self._registry = registry
-        self._big_five = big_five
-
-    def set_limbic(self, limbic: LimbicManager) -> None:
-        self._limbic = limbic
 
     def set_session_mgr(self, session_mgr: SessionManager) -> None:
         self._session_mgr = session_mgr
@@ -39,25 +30,6 @@ class InfoCommands:
 
     def set_registry(self, registry: ToolRegistry) -> None:
         self._registry = registry
-
-    def set_big_five(self, big_five: BigFiveProfile) -> None:
-        self._big_five = big_five
-
-    def emotion(self) -> str:
-        if not self._limbic:
-            return "Limbic system not available"
-        report = self._limbic.get_report()
-        e = report.get("emotion", {})
-        mood = report.get("mood_text", "")
-        tags = report.get("recent_tags", [])
-        lines = [
-            f"Emotion: valence={e.get('valence', 0):.2f} arousal={e.get('arousal', 0):.2f} dominance={e.get('dominance', 0):.2f}",
-            f"Mood: {mood or 'neutral'}",
-        ]
-        if tags:
-            lines.append(f"Recent emotional tags ({len(tags)}):")
-            lines.extend(f"  - {str(t)[:80]}" for t in tags[:3])
-        return "\n".join(lines)
 
     def sessions(self) -> str:
         if not self._session_mgr:
@@ -112,8 +84,3 @@ class InfoCommands:
             ok = self._llm.is_available()
             lines.append(f"Status: {'available' if ok else 'unreachable'}")
         return "\n".join(lines)
-
-    def personality(self) -> str:
-        if not self._big_five:
-            return "Big Five profile not available"
-        return self._big_five.format_summary()

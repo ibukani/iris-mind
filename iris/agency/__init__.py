@@ -9,10 +9,8 @@ from iris.agency.execution import (
     FlowExecutor,
     LLMGateway,
     NodeType,
-    OutputTracker,
     ToolEngine,
 )
-from iris.agency.inhibition import GateVerdict, InhibitionController
 from iris.agency.manager import AgencyManager
 from iris.agency.planning import (
     Plan,
@@ -32,12 +30,9 @@ __all__ = [
     "ExecutionOrchestrator",
     "ExecutionState",
     "FlowExecutor",
-    "GateVerdict",
-    "InhibitionController",
     "InternalBus",
     "LLMGateway",
     "NodeType",
-    "OutputTracker",
     "Plan",
     "PlanDecided",
     "PlanReason",

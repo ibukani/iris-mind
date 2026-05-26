@@ -1,54 +1,30 @@
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
 from iris.agency.planning.models import Plan, PlanReason
 
 if TYPE_CHECKING:
-    from iris.agency.inhibition import GateVerdict
     from iris.agency.planning.question_generator import QuestionGenerator
-    from iris.limbic.models import EmotionState
-    from iris.memory.persona_profile import PersonaProfile
 
 
 class ProactivePlanStrategy:
     def __init__(
         self,
-        persona_profile: PersonaProfile | None = None,
         question_gen: QuestionGenerator | None = None,
     ) -> None:
-        self._persona_profile = persona_profile
         self._question_gen = question_gen
 
     def build_proactive(
         self,
         context: dict[str, Any],
-        gate: GateVerdict,
-        limbic_mood: EmotionState | None = None,
     ) -> Plan:
         context_hint: str = context.get("context_hint", "")
         overrides: dict[str, Any] = {}
 
         if context.get("is_silent_proactive", False):
             topic = context.get("topic", "general")
-            if self._persona_profile:
-                interests = self._persona_profile.persona_data.get_interests()
-                if interests:
-                    import random
-
-                    topics = [item["topic"] for item in interests]
-                    weights = [item["weight"] for item in interests]
-                    if sum(weights) <= 0:
-                        weights = [1.0] * len(weights)
-                    selected_topic = random.choices(topics, weights=weights, k=1)[0]
-                    question = asyncio.run(self._question_gen.generate(selected_topic)) if self._question_gen else topic
-                    overrides["proactive_reason"] = question
-                    overrides["interest_topic"] = selected_topic
-                else:
-                    overrides["proactive_reason"] = topic
-            else:
-                overrides["proactive_reason"] = topic
+            overrides["proactive_reason"] = topic
 
             plan = Plan(
                 content="",

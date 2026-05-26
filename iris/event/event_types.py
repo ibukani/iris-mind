@@ -108,12 +108,6 @@ class ClientSessionEvent(Event):
 
 
 @dataclass
-class MonitorFeedback(Event):
-    flags: list[str] | None = None
-    content: str = ""
-
-
-@dataclass
 class DebugSnapshotEvent(Event):
     category: str = ""
     data: dict | None = None
@@ -123,13 +117,6 @@ class DebugSnapshotEvent(Event):
 @dataclass
 class InterruptEvent(Event):
     session_id: str = ""
-
-
-@dataclass
-class ProactiveResultEvent(Event):
-    topic: str = ""
-    success: bool = True
-    content: str = ""
 
 
 def new_trace_id() -> str:
@@ -146,8 +133,6 @@ __all__ = [
     "InterruptEvent",
     "MemoryUpdateEvent",
     "MessageEvent",
-    "MonitorFeedback",
-    "ProactiveResultEvent",
     "TimerTick",
     "new_trace_id",
 ]

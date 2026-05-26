@@ -6,8 +6,6 @@ from typing import TYPE_CHECKING, Any, Protocol
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from iris.limbic.models import EmotionState
-
 
 from iris.memory.long_term.stores import EpisodicStoreProtocol, SemanticStoreProtocol
 from iris.memory.long_term.vector_store import VectorStore
@@ -54,7 +52,7 @@ class LongTermMemoryProtocol(Protocol):
     def search_vector(self, query: str, max_results: int = 3) -> list[dict[str, Any]]: ...
     def search_emotional(
         self,
-        current_emotion: EmotionState | None = None,
+        current_emotion: Any | None = None,
         max_results: int = 5,
     ) -> list[dict[str, Any]]: ...
 
@@ -139,7 +137,7 @@ class LongTermMemoryManager:
 
     def search_emotional(
         self,
-        current_emotion: EmotionState | None = None,
+        current_emotion: Any | None = None,
         max_results: int = 5,
     ) -> list[dict[str, Any]]:
         if not self._episodic:
@@ -178,7 +176,7 @@ class LongTermMemoryManager:
 
 
 def _pad_distance(
-    a: EmotionState,
+    a: Any,
     b: Mapping[str, Any],
 ) -> float:
     a_val = a.valence

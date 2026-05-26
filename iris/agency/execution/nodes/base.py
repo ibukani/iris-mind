@@ -134,13 +134,6 @@ class BaseLLMNode(ABC):
         plan: Plan,
     ) -> dict[str, Any]:
         params = self._build_chat_params(state, level, plan)
-        # Talkative adjustments override
-        adj = state.get("talkative_adjustments")
-        if adj:
-            if adj.max_tokens is not None:
-                params["max_tokens"] = adj.max_tokens
-            if adj.show_thinking is not None:
-                params["show_thinking"] = adj.show_thinking
         # Planning overrides
         if "priority" in plan.overrides:
             params["priority"] = plan.overrides["priority"]

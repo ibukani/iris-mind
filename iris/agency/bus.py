@@ -5,10 +5,12 @@ from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 import threading
+from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from iris.agency.planning.models import Plan
+if TYPE_CHECKING:
+    from iris.agency.planning.models import Plan
 
 
 @dataclass

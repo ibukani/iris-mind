@@ -2,14 +2,11 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import time
-from typing import TYPE_CHECKING, Any
-
-from iris.memory.manager import MemoryManager
-
-if TYPE_CHECKING:
-    from iris.agency.inhibition import InhibitionController
+from typing import Any
 
 from loguru import logger
+
+from iris.memory.manager import MemoryManager
 
 
 class ContextHintBuilder:
@@ -25,50 +22,10 @@ class ContextHintBuilder:
             return "午後"
         return "夕方以降"
 
-    @staticmethod
-    def build_ignore_context(ignore_count: int) -> str | None:
-        if ignore_count < 1:
-            return None
-        return f"呼びかけに応答なし: {ignore_count}回"
-
-    @staticmethod
-    def build_timing_context(last_proactive_time: float, last_user_activity: float) -> list[str]:
-        parts: list[str] = []
-        if last_proactive_time > 0:
-            elapsed = time.time() - last_proactive_time
-            parts.append(f"直前出力: {int(elapsed)}秒前")
-        if last_user_activity > 0:
-            elapsed = time.time() - last_user_activity
-            if elapsed < 60:
-                parts.append("最終ユーザー入力: たった今")
-            else:
-                parts.append(f"最終ユーザー入力: {int(elapsed // 60)}分前")
-        else:
-            parts.append("最終ユーザー入力: --")
-        return parts
-
-    @staticmethod
-    def build_frequency_context(outputs_since_input: int, frequency_exceeded: bool) -> list[str]:
-        parts: list[str] = []
-        if outputs_since_input >= 2:
-            parts.append(f"出力: {outputs_since_input}回連続")
-        if frequency_exceeded:
-            parts.append("出力頻度高")
-        return parts
-
-    @staticmethod
-    def build_mood_context(negative_mood_score: float) -> str | None:
-        if negative_mood_score > 0.3:
-            return "気分: 不機嫌"
-        if negative_mood_score > 0.1:
-            return "気分: やや不機嫌"
-        return None
-
     def build_proactive_context_hint(
         self,
         context: dict[str, Any],
         scores: dict[str, float],
-        inhibition: InhibitionController | None = None,
     ) -> str:
         if "system_event" in context:
             event_name = context.get("system_event")
@@ -79,34 +36,11 @@ class ContextHintBuilder:
                     return f"システムイベント: ロール {role} が {offline_duration} の切断期間を経て再接続しました。"
                 return f"システムイベント: ロール {role} が接続しました。"
             return ""
-        return self._build_general_hint(scores, inhibition)
+        return self._build_general_hint(scores, context)
 
-    def _build_general_hint(
-        self,
-        scores: dict[str, float],
-        inhibition: InhibitionController | None = None,
-    ) -> str:
-        ignore_count = inhibition.consecutive_ignores if inhibition else 0
-        last_activity = inhibition.last_user_activity if inhibition else 0.0
-        last_proactive = inhibition.last_proactive_time if inhibition else 0.0
-        mood_score = inhibition.negative_mood_score if inhibition else 0.0
-        outputs = inhibition.outputs_since_input if inhibition else 0
-        freq_exceeded = inhibition.frequency_exceeded if inhibition else False
-
+    def _build_general_hint(self, scores: dict[str, float], context: dict[str, Any]) -> str:
         parts: list[str] = []
         trigger = max(scores, key=lambda k: scores[k])
-
-        ignore_ctx = ContextHintBuilder.build_ignore_context(ignore_count)
-        if ignore_ctx:
-            parts.append(ignore_ctx)
-
-        parts.extend(ContextHintBuilder.build_timing_context(last_proactive, last_activity))
-        parts.extend(ContextHintBuilder.build_frequency_context(outputs, freq_exceeded))
-
-        mood_ctx = ContextHintBuilder.build_mood_context(mood_score)
-        if mood_ctx:
-            parts.append(mood_ctx)
-
         parts.append(f"時間帯: {ContextHintBuilder.build_time_label()}")
         parts.append(f"トリガー: {trigger}")
 

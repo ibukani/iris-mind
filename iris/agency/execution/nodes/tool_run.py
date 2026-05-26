@@ -29,8 +29,6 @@ class ToolRunNode:
             return None
 
         results = self._tool_executor.run_tool_calls(state["messages"])
-        if self._consolidator:
-            self._consolidator.record_activity()
 
         logger.debug("Tool execution results: {} tools", len(results))
 

@@ -160,17 +160,18 @@ def test_proactive_config_defaults() -> None:
     assert config.check_interval_sec == 5.0
     assert config.min_interval_sec == 30.0
     assert config.speak_threshold == 0.6
-    assert config.trigger_weights["time"] == 0.25
+    assert config.trigger_weights["memory"] == 0.55
+    assert config.trigger_weights["context"] == 0.30
 
 
 def test_config_mutable_defaults_are_independent() -> None:
     first = Config()
     second = Config()
 
-    first.proactive.trigger_weights["time"] = 0.99
+    first.proactive.trigger_weights["memory"] = 0.99
     first.logging.loggers["iris"] = "DEBUG"
 
-    assert second.proactive.trigger_weights["time"] == 0.25
+    assert second.proactive.trigger_weights["memory"] == 0.55
     assert second.logging.loggers == {}
 
 

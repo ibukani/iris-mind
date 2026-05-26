@@ -2,24 +2,21 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from loguru import logger
 
-from iris.agency.execution.llm.modulator import EmotionTemperatureModulator
 from iris.agency.execution.llm.prompt_builder import SystemPromptBuilder
 from iris.agency.planning.models import Plan
 from iris.kernel.config import ModelConfig
 from iris.kernel.debug_capture import CaptureEntry, DebugCapture
-from iris.limbic.manager import LimbicManager
 from iris.llm.bridge import LLMBridge
 from iris.llm.capability import CapabilityChecker
 from iris.llm.interrupt_token import InterruptToken
 from iris.llm.prompt import Personality
 from iris.memory.long_term.stores import AgentsMdStore
 from iris.memory.manager import MemoryManager
-from iris.memory.persona_profile import PersonaProfile
 
 
 class LLMGateway:
@@ -29,9 +26,8 @@ class LLMGateway:
         model_config: ModelConfig,
         personality: Personality,
         agents_md_store: AgentsMdStore | None = None,
-        persona_profile: PersonaProfile | None = None,
+        persona_profile: Any | None = None,
         memory: MemoryManager | None = None,
-        limbic: LimbicManager | None = None,
         capability_checker: CapabilityChecker | None = None,
         debug_capture: DebugCapture | None = None,
         prompts_dir: str | None = None,
@@ -39,7 +35,6 @@ class LLMGateway:
         self._llm = llm
         self._model_config = model_config
         self._personality = personality
-        self._limbic = limbic
         self._capability_checker = capability_checker
         self._debug_capture = debug_capture
         self._session_roles_summary: str = ""
@@ -52,7 +47,6 @@ class LLMGateway:
             agents_md_store=agents_md_store,
             persona_profile=persona_profile,
             memory=memory,
-            limbic=limbic,
             prompts_dir=prompts_dir,
         )
 
@@ -143,25 +137,13 @@ class LLMGateway:
         priority: int = 0,
         show_thinking: bool = False,
     ) -> AIMessage:
-        response_style = self._limbic.generate_response_style() if self._limbic else ""
         if system_msgs is None:
             system_msgs = self.build_system_messages(
                 context_hint=context_hint,
-                response_style=response_style,
             )
         if show_thinking and messages and isinstance(messages[-1], HumanMessage):
             last_msg = messages[-1]
             last_msg.content = self._personality.build_thinking_prompt(str(last_msg.content))
-
-        # Resolve temperature: node override → model config default → emotion modulation
-        if temperature is None:
-            temperature = self._model_config.get_effective_temperature(model_role)
-        # Resolve max_tokens: emotion modulation (reduce-only)
-        if self._limbic:
-            emotion = self._limbic.current_emotion()
-            temperature = EmotionTemperatureModulator.compute_temperature(emotion, temperature)
-            if max_tokens is not None:
-                max_tokens = EmotionTemperatureModulator.modulate_max_tokens(max_tokens, emotion)
 
         return await self._call_llm(
             system_msgs,
@@ -190,11 +172,9 @@ class LLMGateway:
         content = plan.content
 
         is_proactive = reason in ("proactive_curiosity", "proactive_escalation", "timer")
-        response_style = self._limbic.generate_response_style() if self._limbic and is_proactive else ""
 
         system_msgs = self.build_system_messages(
             context_hint=context_hint,
-            response_style=response_style,
             situation="proactive" if is_proactive else "",
         )
 
@@ -203,11 +183,6 @@ class LLMGateway:
             msgs.extend(messages)
         msgs.append(HumanMessage(content=content or "..."))
 
-        temperature = (
-            EmotionTemperatureModulator.compute_temperature(self._limbic.current_emotion())
-            if self._limbic
-            else EmotionTemperatureModulator.DEFAULT_TEMPERATURE
-        )
         max_tok = max_tokens or 80
 
         try:
@@ -216,7 +191,7 @@ class LLMGateway:
                 msgs,
                 model_role,
                 max_tok,
-                temperature=temperature,
+                temperature=self._model_config.get_effective_temperature(model_role),
                 interrupt_token=interrupt_token,
                 priority=priority,
             )

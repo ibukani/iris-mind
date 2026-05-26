@@ -157,77 +157,6 @@ class FakeMemoryManager:
         return [{"summary": e} for e in entries]
 
 
-# ── Fake Persona ──────────────────────────────────────────────
-
-
-class FakePersonaData:
-    def __init__(self) -> None:
-        self._entries: list[dict] = []
-        self._interests: list[dict] = []
-
-    def add_entry(self, category: str, text: str, source: str = "reflection") -> None:
-        self._entries.append({"category": category, "text": text, "source": source})
-
-    def get_top(self, category: str, n: int = 5) -> list[dict]:
-        return [e for e in self._entries if e["category"] == category][:n]
-
-    def get_all(self, category: str) -> list[dict]:
-        return [e for e in self._entries if e["category"] == category]
-
-    def clear(self) -> None:
-        self._entries.clear()
-        self._interests.clear()
-
-    def add_interest(self, topic: str, weight_delta: float) -> None:
-        for item in self._interests:
-            if item["topic"].lower() == topic.strip().lower():
-                item["weight"] = max(0.0, min(1.0, item["weight"] + weight_delta))
-                return
-        self._interests.append({"topic": topic.strip(), "weight": max(0.0, min(1.0, weight_delta))})
-
-    def decay_interests(self, decay_rate: float = 0.05) -> None:
-        remaining = []
-        for item in self._interests:
-            new_weight = item["weight"] - decay_rate
-            if new_weight > 0.1:
-                item["weight"] = round(new_weight, 3)
-                remaining.append(item)
-        self._interests = remaining
-
-    def get_interests(self) -> list[dict]:
-        return self._interests
-
-
-class FakePersonaProfile:
-    def __init__(self, persona_data: FakePersonaData | None = None) -> None:
-        self._data = persona_data or FakePersonaData()
-        self.persona_data = self._data
-        self._speech_style = ""
-        self._traits = ""
-
-    def get_speech_style(self) -> str:
-        return self._speech_style
-
-    def get_traits(self) -> str:
-        return self._traits
-
-    def update_from_reflection(self, reflection: dict[str, str]) -> None:
-        if reflection.get("speech_style"):
-            self._speech_style = reflection["speech_style"]
-        if reflection.get("expressed_traits"):
-            self._traits = reflection["expressed_traits"]
-
-    def set_speech_style(self, text: str) -> None:
-        self._speech_style = text
-
-    def set_traits(self, text: str) -> None:
-        self._traits = text
-
-    def reset(self) -> None:
-        self._speech_style = ""
-        self._traits = ""
-
-
 # ── Fake AgentsMdStore ────────────────────────────────────────
 
 
@@ -369,81 +298,6 @@ class FakeToolExecutionEngine:
         return bool(results) and all(r[2] for r in results)
 
 
-# ── Fake Reflexion ────────────────────────────────────────────
-
-
-class FakeReflexion:
-    def __init__(self, reflect_result: dict[str, str] | None = None) -> None:
-        self._reflect_result = reflect_result or {
-            "summary": "Test summary",
-            "lesson": "Test lesson",
-            "preference": "Test preference",
-            "improvement": "Test improvement",
-            "speech_style": "friendly",
-            "expressed_traits": "helpful",
-            "user_reaction": "positive",
-        }
-        self.reflect_calls: list[list[dict]] = []
-        self.quick_reflect_calls: list[list[dict]] = []
-
-    async def reflect(self, conversation_history: list[dict]) -> dict[str, str]:
-        self.reflect_calls.append(conversation_history)
-        return dict(self._reflect_result)
-
-    async def quick_reflect(self, conversation_slice: list[dict]) -> dict[str, str]:
-        self.quick_reflect_calls.append(conversation_slice)
-        result = {
-            "speech_style": self._reflect_result.get("speech_style", ""),
-            "expressed_traits": self._reflect_result.get("expressed_traits", ""),
-            "user_reaction": self._reflect_result.get("user_reaction", ""),
-        }
-        return {k: v for k, v in result.items() if v}
-
-    def should_add_capability(self, reflection: dict[str, str]) -> bool:
-        return bool(reflection.get("missing_capability"))
-
-    async def evaluate_proactive_result(self, topic: str, content: str) -> dict[str, Any]:
-        return {
-            "satisfaction": 0.8,
-            "summary": "Mock summary of investigation",
-            "next_interests": ["宇宙の起源", "ブラックホール"],
-        }
-
-
-# ── Fake Personality ──────────────────────────────────────────
-
-
-class FakePersonality:
-    def __init__(self, name: str = "Iris") -> None:
-        self.name = name
-        self._system_prompt = ""
-        self._thinking_prompt = ""
-
-    def build_system_prompt(
-        self,
-        agents_md_content: str = "",
-        speech_style: str = "",
-        personality_traits: str = "",
-        user_preferences: str = "",
-        governance_principles: str = "",
-        session_roles: str = "",
-    ) -> str:
-        parts = [
-            f"## Iris Profile\n{agents_md_content}" if agents_md_content else "",
-            f"## Personality\n{personality_traits}" if personality_traits else "",
-            f"## Speech Style\n{speech_style}" if speech_style else "",
-            f"## User Preferences\n{user_preferences}" if user_preferences else "",
-            f"## Governance\n{governance_principles}" if governance_principles else "",
-            f"## Sessions\n{session_roles}" if session_roles else "",
-        ]
-        self._system_prompt = "\n\n".join(p for p in parts if p) or "Default system prompt"
-        return self._system_prompt
-
-    def build_thinking_prompt(self, user_input: str) -> str:
-        self._thinking_prompt = f"Think about: {user_input}"
-        return self._thinking_prompt
-
-
 # ── Fixtures ──────────────────────────────────────────────────
 
 
@@ -478,16 +332,6 @@ def fake_memory() -> FakeMemoryManager:
 
 
 @pytest.fixture
-def fake_persona_data() -> FakePersonaData:
-    return FakePersonaData()
-
-
-@pytest.fixture
-def fake_persona_profile() -> FakePersonaProfile:
-    return FakePersonaProfile()
-
-
-@pytest.fixture
 def fake_agents_md() -> FakeAgentsMdStore:
     return FakeAgentsMdStore()
 
@@ -500,16 +344,6 @@ def fake_context_mgr() -> FakeContextManager:
 @pytest.fixture
 def fake_tool_exec() -> FakeToolExecutionEngine:
     return FakeToolExecutionEngine()
-
-
-@pytest.fixture
-def fake_reflexion() -> FakeReflexion:
-    return FakeReflexion()
-
-
-@pytest.fixture
-def fake_personality() -> FakePersonality:
-    return FakePersonality()
 
 
 @pytest.fixture

@@ -8,7 +8,7 @@ from loguru import logger
 from iris.event.event_types import TimerTick
 
 from .config import Config
-from .factory import KernelContext, KernelFactory
+from .manager import PluginManager
 
 
 class KernelProcessProtocol(Protocol):
@@ -23,54 +23,57 @@ class KernelProcess:
     def __init__(self, config: Config, debug: bool = False) -> None:
         self._config = config
         self._debug = debug
-        self._ctx: KernelContext | None = None
+        self._manager: PluginManager | None = None
         self._timer_thread: threading.Thread | None = None
 
     @property
     def shutdown_requested(self) -> bool:
-        return self._ctx is not None and self._ctx.shutdown_requested
+        return self._manager is not None and self._manager.shutdown_requested
 
     @property
     def cmd_handler(self) -> object | None:
-        return self._ctx.cmd_handler if self._ctx else None
+        return self._manager.cmd_handler if self._manager else None
 
     def start(self) -> None:
         logger.info("KernelProcess: starting")
 
-        self._ctx = KernelFactory.build(self._config, debug=self._debug)
+        self._manager = PluginManager(self._config, debug=self._debug)
+        self._manager.discover_and_build_all()
 
         host = self._config.session.host
         port = self._config.session.port
-        self._ctx.io.start(host=host, port=port)
+        io_mgr = self._manager.resolve("IOManager")
+        io_mgr.start(host=host, port=port)
 
+        self._manager.start_all()
         self._start_timer()
         logger.info("KernelProcess: started")
 
     def shutdown(self) -> None:
         logger.info("KernelProcess: shutting down")
 
-        ctx = self._ctx
-        if ctx is None:
+        manager = self._manager
+        if manager is None:
             logger.info("KernelProcess: shutdown complete (was not started)")
             return
 
-        ctx.shutdown_requested = True
-        if ctx.agency is not None:
-            ctx.agency.shutdown()
-        ctx.io.stop()
-
+        manager.request_shutdown()
+        agency = manager.resolve_optional("AgencyManager")
+        if agency is not None and hasattr(agency, "shutdown"):
+            agency.shutdown()
+        manager.stop_all()
         logger.info("KernelProcess: shutdown complete")
 
     def _start_timer(self) -> None:
-        ctx = self._ctx
-        if ctx is None:
+        manager = self._manager
+        if manager is None:
             return
         interval = self._config.proactive.check_interval_sec
         tick_count: list[int] = [0]
 
         def _loop() -> None:
-            while not ctx.shutdown_requested:
-                ctx.event_bus.publish(
+            while not manager.shutdown_requested:
+                manager.event_bus.publish(
                     TimerTick(
                         timestamp=None,
                         source="kernel",

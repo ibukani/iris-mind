@@ -3,7 +3,7 @@ Architecture tests — enforce dependency direction constraints.
 
 Rules (from AGENTS.md v2):
   - All layers communicate via EventBus (iris/event/)
-  - KernelFactory (kernel/core/factory.py) is the only DI container that wires all layers
+  - PluginManager (iris/kernel/manager.py) is the DI container that wires all layers
   - iris/kernel/ must NOT import from debug_tools/
   - iris/memory/ must NOT import from iris/io/ or iris/agency/
   - iris/io/ must NOT import from iris/agency/ or iris/memory/
@@ -19,7 +19,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 _IRIS_LAYERS = {"kernel", "event", "io", "memory", "agency", "llm", "capabilities", "tools", "commands", "personality"}
-_FACTORY_PATH = "iris/kernel/factory.py"
+_MANAGER_PATH = "iris/kernel/manager.py"
 
 
 def _get_python_files(package_dir: str) -> list[Path]:
@@ -66,8 +66,6 @@ def test_kernel_does_not_directly_import_debug_tools() -> None:
 def test_memory_does_not_import_io_or_agency() -> None:
     forbidden = {"iris.io", "iris.agency"}
     for filepath in _get_python_files("iris/memory"):
-        if filepath.match(_FACTORY_PATH):
-            continue
         imports = _get_imports(filepath)
         for imp in imports:
             for prefix in forbidden:
@@ -85,15 +83,15 @@ def test_io_does_not_import_agency_or_memory() -> None:
                     raise AssertionError(f"{filepath} imports '{imp}' (io must not depend on agency or memory)")
 
 
-def test_factory_is_only_layer_crossing_hub() -> None:
-    """KernelFactory imports from all layers — acceptable as DI container."""
-    factory_files = [p for p in _get_python_files("iris") if p.match(_FACTORY_PATH)]
-    assert len(factory_files) >= 1, "KernelFactory not found"
-    for filepath in factory_files:
+def test_plugin_manager_is_layer_crossing_hub() -> None:
+    """PluginManager (manager.py) imports from all layers — acceptable as DI container."""
+    manager_files = [p for p in _get_python_files("iris") if p.match(_MANAGER_PATH)]
+    assert len(manager_files) >= 1, "PluginManager not found"
+    for filepath in manager_files:
         imports = _get_imports(filepath)
         infra = {"iris.io", "iris.memory", "iris.agency", "iris.event", "iris.llm", "iris.kernel.commands"}
         found = [i for i in imports if any(i.startswith(p) for p in infra)]
-        assert len(found) >= 3, f"Factory should import from at least 3 layers, got: {found}"
+        assert len(found) >= 3, f"PluginManager should import from at least 3 layers, got: {found}"
 
 
 def test_debug_tools_imports_kernel() -> None:

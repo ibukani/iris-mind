@@ -1,81 +1,187 @@
 from __future__ import annotations
 
+from typing import Any
+
 from loguru import logger
 
+from iris.event.event_bus import EventBus
+from iris.event.tracer import EventTracer
 
-class KernelManager:
-    """カーネル状態集約。全層の動作状態を一元管理し、graceful shutdown を制御する。
+from .config import Config
+from .plugin import (
+    HookRegistry,
+    KernelState,
+    PluginLifecycle,
+    PluginManifest,
+    ServiceContainer,
+    discover_plugin_manifests,
+)
 
-    脳科学のアナロジー：
-        - 脳幹の視床下部に相当し、全層の状態を監視し、
-        - シャットダウン信号を伝播させる。
-    """
 
-    def __init__(self) -> None:
-        self._layer_states: dict[str, str] = {}
-        self._shutdown_requested = False
+class PluginManager:
+    def __init__(self, config: Config, debug: bool = False) -> None:
+        self._config = config
+        self._debug = debug
+        self._tracer = EventTracer(max_entries=config.debug.trace_max_entries)
+        self._tracer.set_enabled(config.debug.enabled)
+        self._event_bus = EventBus(tracer=self._tracer)
+        self._hook_registry = HookRegistry()
+        self._di = ServiceContainer()
+        self._state = KernelState()
+        self._lifecycle = PluginLifecycle()
+        self._cmd_handler: Any = None
+        self._diagnostics: Any = None
+
+    # ── Infrastructure accessors ──
+
+    @property
+    def config(self) -> Config:
+        return self._config
+
+    @property
+    def debug(self) -> bool:
+        return self._debug
+
+    @property
+    def event_bus(self) -> EventBus:
+        return self._event_bus
+
+    @property
+    def hook_registry(self) -> HookRegistry:
+        return self._hook_registry
+
+    @property
+    def tracer(self) -> EventTracer:
+        return self._tracer
+
+    # ── Plugin lifecycle ──
+
+    def discover_and_build_all(self) -> None:
+        self._di.provide("EventBus", self._event_bus)
+        self._di.provide("HookRegistry", self._hook_registry)
+        self._di.provide("Config", self._config)
+        self._di.provide("PluginManager", self)
+
+        manifests = discover_plugin_manifests(self._config.plugins.paths)
+        self._lifecycle.load(manifests, self._config.plugins.disabled)
+        self._lifecycle.init_all(self)
+        self._hook_registry.freeze()
+        self._di.freeze()
+        self._init_builtin()
+
+    def start_all(self) -> None:
+        self._lifecycle.start_all(self)
+        logger.info("PluginManager: all plugins started")
+
+    def stop_all(self) -> None:
+        logger.info("PluginManager: stopping")
+        self._lifecycle.stop_all(self)
+
+    # ── DI ──
+
+    def provide(self, name: str, instance: Any) -> None:
+        self._di.provide(name, instance)
+
+    def resolve(self, name: str) -> Any:
+        return self._di.resolve(name)
+
+    def resolve_optional(self, name: str) -> Any:
+        return self._di.resolve_optional(name)
+
+    # ── State ──
 
     @property
     def global_state(self) -> str:
-        """全層の状態から推定される システム全体の状態を返す。
-
-        優先度: EXECUTING > DECIDING > SENSING > IDLE
-
-        Returns:
-            システムの現在の状態。
-        """
-        if not self._layer_states:
-            return "IDLE"
-        if any(s == "EXECUTING" for s in self._layer_states.values()):
-            return "EXECUTING"
-        if any(s == "DECIDING" for s in self._layer_states.values()):
-            return "DECIDING"
-        if any(s == "SENSING" for s in self._layer_states.values()):
-            return "SENSING"
-        return "IDLE"
+        return self._state.global_state
 
     @property
     def layer_states(self) -> dict[str, str]:
-        """全層の現在の状態を返す（読み取り専用コピー）。
-
-        Returns:
-            層名 -> 状態 の辞書。
-        """
-        return dict(self._layer_states)
+        return self._state.layer_states
 
     def set_layer_state(self, layer: str, state: str) -> None:
-        """指定の層の状態を更新する。
+        self._state.set_layer_state(layer, state)
 
-        Args:
-            layer: 層の識別子（例: "kernel", "io", "memory"）。
-            state: 設定する状態（"IDLE", "SENSING", "DECIDING", "EXECUTING"）。
-        """
-        old = self._layer_states.get(layer)
-        self._layer_states[layer] = state
-        if old != state:
-            logger.info("KernelManager: {} state {} -> {} (global={})", layer, old or "NONE", state, self.global_state)
+    def get_state(self) -> dict[str, Any]:
+        base = self._state.get_state()
+        base["plugin_count"] = len(self._lifecycle.plugins)
+        base["plugin_states"] = {name: p.state.value for name, p in self._lifecycle.plugins.items()}
+        return base
 
-    def get_state(self) -> dict:
-        return {
-            "global_state": self.global_state,
-            "layer_states": dict(self._layer_states),
-            "shutdown_requested": self._shutdown_requested,
-        }
+    # ── Shutdown ──
 
     @property
     def shutdown_requested(self) -> bool:
-        """シャットダウン要求の状態を返す。
-
-        Returns:
-            True ならシャットダウンが要求されている。
-        """
-        return self._shutdown_requested
+        return self._state.shutdown_requested
 
     def request_shutdown(self) -> None:
-        """シャットダウンを要求する。
+        self._state.request_shutdown()
 
-        KernelProcess など、監視側が定期的に確認し、
-        graceful shutdown を実施する。
-        """
-        self._shutdown_requested = True
-        logger.info("KernelManager: shutdown requested")
+    # ── Plugin config ──
+
+    def get_plugin_config(self, plugin_name: str) -> dict[str, object]:
+        return self._config.plugins.config.get(plugin_name, {})
+
+    def register_manifest(self, manifest: PluginManifest) -> None:
+        if manifest.name not in self._lifecycle.plugins:
+            from .plugin.lifecycle import PluginInstance
+
+            self._lifecycle.plugins[manifest.name] = PluginInstance(manifest=manifest, module=None)  # type: ignore[arg-type]
+
+    # ── Built-in ──
+
+    @property
+    def cmd_handler(self) -> Any:
+        return self._cmd_handler
+
+    @property
+    def diagnostics(self) -> Any:
+        return self._diagnostics
+
+    # ── Internal ──
+
+    def _init_builtin(self) -> None:
+        self._create_diagnostics()
+        self._create_command_handler()
+
+    def _create_diagnostics(self) -> None:
+        from iris.kernel.diagnostics import SystemDiagnostics
+
+        self._diagnostics = SystemDiagnostics(
+            event_bus=self._event_bus,
+            tracer=self._tracer,
+            kernel=self,
+            io=self._di.resolve_optional("IOManager"),
+            memory=self._di.resolve_optional("MemoryManager"),
+            agency=self._di.resolve_optional("AgencyManager"),
+        )
+
+    def _create_command_handler(self) -> None:
+        from iris.kernel.commands.handler import CommandHandler
+
+        agency = self._di.resolve_optional("AgencyManager")
+
+        def _on_shutdown() -> None:
+            self._state.request_shutdown()
+
+        def _default_compact() -> str:
+            return "Compact not available"
+
+        on_compact = (
+            agency.compact_context if agency is not None and hasattr(agency, "compact_context") else _default_compact
+        )
+
+        self._cmd_handler = CommandHandler(
+            config=self._config,
+            on_shutdown=_on_shutdown,
+            on_compact=on_compact,
+            memory=self._di.resolve_optional("MemoryManager"),
+            session_mgr=self._di.resolve_optional("SessionManager"),
+            llm=self._di.resolve_optional("LLMBridge"),
+            registry=self._di.resolve_optional("ToolRegistry"),
+            debug_capture=self._di.resolve_optional("DebugCapture"),
+            diagnostics=self._diagnostics,
+        )
+
+        io_mgr = self._di.resolve_optional("IOManager")
+        if io_mgr is not None:
+            io_mgr.set_command_handler(self._cmd_handler.handle)

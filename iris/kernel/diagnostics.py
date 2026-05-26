@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from iris.event.event_bus import EventBus
     from iris.event.tracer import EventTracer
     from iris.io.manager import IOManager
-    from iris.kernel.manager import KernelManager
+    from iris.kernel.manager import PluginManager
     from iris.memory.manager import MemoryManager
 
 
@@ -45,7 +45,7 @@ class SystemDiagnostics:
         self,
         event_bus: EventBus | None = None,
         tracer: EventTracer | None = None,
-        kernel: KernelManager | None = None,
+        kernel: PluginManager | None = None,
         io: IOManager | None = None,
         memory: MemoryManager | None = None,
         agency: AgencyManager | None = None,

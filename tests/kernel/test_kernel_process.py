@@ -13,8 +13,7 @@ def _dummy_config() -> Config:
 
 
 def test_kernel_process_shutdown_before_start_does_not_crash() -> None:
-    """start() 前に shutdown() を呼んでもクラッシュしない。"""
     kp = KernelProcess.__new__(KernelProcess)
     kp._config = _dummy_config()
-    kp._ctx = None
+    kp._manager = None
     kp.shutdown()

@@ -214,6 +214,12 @@ class DebugConfig(BaseModel):
     capture_max_entries: int = 10
 
 
+class PluginConfig(BaseModel):
+    paths: list[str] = Field(default_factory=lambda: ["iris/"])
+    disabled: list[str] = Field(default_factory=list)
+    config: dict[str, dict] = Field(default_factory=dict)
+
+
 class Config(BaseModel):
     model: ModelConfig = Field(default_factory=ModelConfig)
     personality: PersonalityConfig = Field(default_factory=PersonalityConfig)
@@ -223,6 +229,7 @@ class Config(BaseModel):
     quasi_sync: QuasiSyncConfig = Field(default_factory=QuasiSyncConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     debug: DebugConfig = Field(default_factory=DebugConfig)
+    plugins: PluginConfig = Field(default_factory=PluginConfig)
 
     @classmethod
     def load(cls, path: str = "config.yaml") -> Config:

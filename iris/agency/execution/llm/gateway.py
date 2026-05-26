@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from loguru import logger

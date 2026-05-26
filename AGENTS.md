@@ -29,11 +29,19 @@ Iris = Python製の自律AIアシスタントKernel。Ollama/OpenRouter上で動
 ### ディレクトリ構成
 
 iris/                             ← アプリケーションコア
-├── kernel/                       ← 脳幹: プロセス管理 + DI + コマンド処理
-│   ├── manager.py                ← KernelManager（全体状態集約）
+├── kernel/                       ← 脳幹: プロセス管理 + Pluginシステム + コマンド処理
+│   ├── manager.py                ← PluginManager（全Plugin指揮 + DI + 状態集約）
 │   ├── process.py                ← KernelProcess（起動・停止, TimerTick発行）
 │   ├── supervisor.py             ← Supervisor（シグナル管理）
-│   ├── factory.py                ← DIコンテナ（全層構築）
+│   ├── plugin/                   ← プラグインシステムの型・機構
+│   │   ├── manifest.py           ← PluginManifest, PluginCategory, PluginPhase, PluginState
+│   │   ├── protocol.py           ← PluginProtocol（プラグイン契約）
+│   │   ├── lifecycle.py          ← PluginLifecycle（build order + init/start/stop）
+│   │   ├── di.py                 ← ServiceContainer（DIコンテナ）
+│   │   ├── state.py              ← KernelState（層状態 + shutdown管理）
+│   │   ├── hook_points.py        ← HookPoint, HookPriority, HOOK_POINTS定義
+│   │   ├── hooks.py              ← HookRegistry（フックチェイン実行）
+│   │   └── loader.py             ← プラグイン／サブプラグイン自動発見
 │   └── commands/                 ← CommandHandler（/shutdown 等）
 ├── io/                           ← 視床: 入出力中継
 │   ├── manager.py                ← IOManager
@@ -159,7 +167,10 @@ iris/                             ← アプリケーションコア
 
 ### 依存ルール
 - 全層は `event/` を介して疎結合。直接依存禁止
-- `kernel/factory.py` のみ全層のインスタンス生成を行う
+- `PluginManager`（`kernel/manager.py`）が全層の構築とDIを行う
+- プラグインは `PluginProtocol` に準拠し、`init(manager)` / `start(manager)` / `stop(manager)` を実装
+- プラグイン間の依存は `PluginManifest.dependencies` に宣言。PluginManagerがトポロジカルソートで解決
+- 新プラグイン追加は `.agents/skills/iris-plugin-create/SKILL.md` 参照
 - `debug_tools/` → `iris/` のみ。逆方向は物理禁止
 - `limbic/` → `memory/`（感情タグ）、`limbic/` → `agency/`（感情変調）のインターフェースあり
 
@@ -198,7 +209,26 @@ uv run pyright .
 ※ 設定は `pyproject.toml` に集約
 ※ テストはFake実装。LLM実通信なし。ChromaDB/ONNXは初回DL
 
-## 8. Tool追加ルール
+## 8. プラグイン追加ルール
+
+全Pluginは `PluginProtocol` に準拠し、以下の5ステップで `init()` を実装する:
+1. `manager.register_manifest(MANIFEST)` — 自己宣言
+2. `manager.resolve("Dep")` — 依存をDIから取得
+3. コンポーネント生成 + 配線
+4. `manager.provide("Service", instance)` — 他向けにDI登録
+5. `manager.hook_registry.register(...)` — Hook購読（任意）
+
+- Plugin categories: `CORE` / `LAYER` / `FEATURE` / `PROVIDER` / `TOOL`
+- Plugin phases: `INFRA(0)` → `CORE(10)` → `STORE(15)` → `LAYER(20)` → `COGNITIVE(30)` → `FEATURE(40)`
+- ライフサイクル: `UNLOADED` → `INITIALIZED` → `STARTED` → `STOPPED`
+- サブプラグイン（Provider、built-ins等）は親Pluginが `discover_sub_plugins()` で自動発見
+
+テンプレート:
+- 新規プラグイン: `.agents/skills/iris-plugin-create/SKILL.md`
+- Hook追加: `.agents/skills/iris-plugin-hook/SKILL.md`
+- プロバイダ/サブプラグイン: `.agents/skills/iris-plugin-provider/SKILL.md`
+
+## 9. Tool追加ルール
 
 1. `@tool()` デコレータで定義（型ヒント→JSON Schema自動生成）
 2. `register(registry)` で `registry.register_decorated(fn)` をエクスポート
@@ -207,7 +237,7 @@ uv run pyright .
 5. 追加後は `.iris/data/iris_profile.md` の該当セクションを更新
 6. テンプレート: `.agents/skills/capability-pattern/SKILL.md`
 
-## 9. ドキュメント更新
+## 10. ドキュメント更新
 
 機能変更時は以下を確認:
 
@@ -219,7 +249,7 @@ uv run pyright .
 
 詳細: `.agents/skills/doc-sync/SKILL.md`
 
-## 10. コンテキスト運用
+## 11. コンテキスト運用
 
 - 常時読む: `AGENTS.md` + `.agents/README.md`
 - 責務境界確認時: `.agents/project.md`
@@ -227,7 +257,7 @@ uv run pyright .
 - 設計判断時: `docs/` の該当ファイルのみ
 - Git履歴・テスト結果・過去ログは必要範囲だけ取得。`.agents/` への複製禁止
 
-## 11. Gitルール
+## 12. Gitルール
 
 - 1タスク完了ごとにコミット
 - メッセージは日本語で変更内容が一目でわかるように
@@ -235,7 +265,7 @@ uv run pyright .
   - 例: `fix: ReflexionのJSONパースエラーを修正`
 - コード変更とドキュメント更新は同一コミットに含める
 
-## 12. デバッグ基盤
+## 13. デバッグ基盤
 
 - **DebugSnapshotEvent**: `category` + `data` で状態変化を表現
 - **EventTracer**: EventBus上のリングバッファ（500件）。categoryインデックス付き
@@ -244,7 +274,7 @@ uv run pyright .
 
 詳細: `.agents/skills/iris-debug/SKILL.md`
 
-## 13. 技術スタック
+## 14. 技術スタック
 
 - Python 3.13+, ollama, httpx, pydantic, pyyaml, rich, prompt_toolkit
 - ChromaDB + ONNX

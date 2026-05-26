@@ -177,16 +177,12 @@ START → SetupNode → GeneralChatNode (fixed entry)
 
 ## Consolidator
 
-実行後の後処理（Reflexion / ContextWindow圧縮）を管理:
+実行後の後処理（ContextWindow圧縮）を管理:
 
 ```python
-Consolidator.run(plan, run_reflexion, run_compression):
-    if run_reflexion:
-        hippocampal.maybe_run(messages, msg_count_since_reflect)
-    if run_compression:
-        context_window.check_and_summarize(messages)
+Consolidator.run():
+    context_window.check_and_summarize(messages)
 ```
 
 - `flush_memory()`: 長期記憶への保存
 - `compact_context()`: 会話履歴の圧縮（ContextWindowManager）
-- `_on_timer_tick()`: idle反射チェック

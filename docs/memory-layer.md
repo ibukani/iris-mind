@@ -1,6 +1,6 @@
 # Iris Memory 層
 
-**脳科学対応**: 感覚野 + 海馬 + 皮質記憶系（3層構造）
+**脳科学対応**: 感覚野 + 皮質記憶系（3層構造）
 
 ## 責務
 
@@ -8,7 +8,6 @@
 - ワーキングメモリ（ターン・話題・エンティティの保持） — 短期記憶
 - エピソード記憶の保存と検索（JSONL）
 - 意味記憶の保存と検索（ChromaDB + BM25 ハイブリッド）
-- **海馬による記憶整理**: ShortTermMemory consolidation + Reflexion（自己反省）を実行し長期記憶へ統合
 - 全層からのクエリ受付
 
 ## Manager 定義
@@ -27,7 +26,6 @@ class MemoryManager:
     def store(self, stream: str, data: Any) -> None
     def retrieve(self, stream: str, **filters) -> list[dict]
     def search(self, query: str, stream: str | None = None, **kwargs) -> list[dict]
-    def search_emotional(self, current_emotion, max_results: int = 5) -> list[dict]
     def clear(self, stream: str | None = None) -> None
 
     # === 後方互換 API ===
@@ -113,7 +111,7 @@ class ShortTermMemoryManager:
 ```python
 class LongTermMemoryManager:
     """エピソード記憶 (EpisodicStore) + 意味記憶 (SemanticStore) を統合管理。
-    脳科学対応: 海馬体 + 大脳皮質連合野。"""
+    脳科学対応: 大脳皮質連合野。"""
     def store_episodic(self, data: Any, kind: str = "") -> None
     def get_episodic_recent(self, n: int = 5) -> list[dict]
     def clear_episodic(self) -> None
@@ -121,7 +119,6 @@ class LongTermMemoryManager:
     def search_semantic(self, query: str, max_results: int = 3) -> list[dict]
     def clear_semantic(self) -> None
     def search_vector(self, query: str, max_results: int = 3) -> list[dict]
-    def search_emotional(self, current_emotion, max_results: int = 5) -> list[dict]
 ```
 
 ### long_term/stores.py — EpisodicStore + SemanticStore + AgentsMdStore
@@ -146,14 +143,6 @@ class AgentsMdStore:
     def load(self) -> str
     def update(self, new_content: str) -> None
 
-class PersonaData:
-    """ペルソナの現在状態データ（話し方、性格特性、興味）をJSONで管理。
-    interestsは重み付きで管理され、自然減衰(decay_interests)および内省や調査納得度による加重更新に対応。"""
-    def add_entry(self, category: str, text: str, source: str = "reflection") -> None
-    def add_interest(self, topic: str, weight_delta: float) -> None
-    def decay_interests(self, decay_rate: float = 0.05) -> None
-    def get_interests(self) -> list[dict]
-
 ```
 
 ### goal_store.py — 長期目標管理
@@ -165,7 +154,7 @@ class LongTermGoal(BaseModel):
 
 class GoalStore:
     """LongTermGoal をインメモリ管理。永続化は MemoryManager 経由で定期的にダンプ/ロード。
-    目標は時間経過や Reflexion で weight が減衰し、閾値未満で忘却される。"""
+    目標は時間経過で weight が減衰し、閾値未満で忘却される。"""
     def add_goal(self, description: str, weight: float = 1.0) -> str
     def remove_goal(self, goal_id: str) -> bool
     def get_goals(self) -> list[LongTermGoal]
@@ -191,31 +180,6 @@ class VectorStore:
 ```
 
 SemanticStore が内部で VectorStore を利用する。
-
-### hippocampal/ — 海馬による記憶整理
-
-```python
-class HippocampalManager:
-    """Reflexion のスケジューリングと結果の永続化。
-    FlowExecutor 発話後カウンタに応じて quick_reflect を実行。
-    ShortTermMemory の consolidation も担当。
-    自律調査結果の自己納得度評価 (process_proactive_result) も行う。"""
-    def maybe_run(self, messages: list[dict], counter: int) -> int
-    def run_session(self, messages: list[dict]) -> None
-    def process_proactive_result(self, topic: str, success: bool, content: str) -> None
-
-
-class Reflexion:
-    """完了した会話を分析し、話し方・性格・教訓・好みを抽出 → 意味記憶へ格納。"""
-    def reflect(self, conversation_history: list[dict]) -> dict
-    def quick_reflect(self, conversation_slice: list[dict]) -> dict
-```
-
-**consolidation フロー:**
-1. ShortTermMemory が `max_turns` に達したら `should_consolidate() == True`
-2. `_maybe_consolidate_short_term()` が未consolidateターンのuser発言を結合し EpisodicStore に保存
-3. 現在の話題を SemanticStore に保存
-4. `mark_consolidated()` で全ターンをconsolidated状態に
 
 ## データフロー
 
@@ -243,7 +207,6 @@ sequenceDiagram
 
     Note over STM,LTM: 応答後
     MGR->>STM: (FlowExecutor) short_term.add_turn("assistant", response)
-    MGR->>LTM: Hippocampal consolidation（必要時）
 ```
 
 ## EventBus 購読
@@ -254,5 +217,4 @@ sequenceDiagram
 | `TimerTick` | `_on_timer_tick` | pending pop → InputReady または proactive InputReady |
 
 MemoryManager は **Completed イベントを購読しない**。
-Reflexion は FlowExecutor が応答後に直接 HippocampalManager.maybe_run() を呼ぶ。
 ContextWindow 圧縮は LLMContextWindowManager（iris/llm/context_window.py）が担当する。

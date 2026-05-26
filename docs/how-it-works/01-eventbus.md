@@ -108,16 +108,15 @@ classDiagram
 
 | イベント | 発行元 | 購読先 | 条件・周期 | 用途 |
 |----------|--------|--------|-----------|------|
-| TimerTick | KernelProcess | Memory, Limbic | 5秒ごと、tick_count インクリメント | 鼓動・decayトリガー |
-| MessageEvent(request) | IO層 | Memory, Limbic, Agency | direction="request" | 入力の一次受信 |
+| TimerTick | KernelProcess | Memory | 5秒ごと、tick_count インクリメント | 鼓動トリガー |
+| MessageEvent(request) | IO層 | Memory, Agency | direction="request" | 入力の一次受信 |
 | InputReady | Memory層 | Agency/Planning | pending pop or timer | 確定入力の通知 |
 | PlanDecided | Agency/Planning | Agency/Execution | InternalBus経由 | 計画通知 |
 | MessageEvent(stream) | Agency/Execution | IO層 | direction="stream" | トークン逐次出力 |
 | MessageEvent(response) | Agency/Execution | IO層 | direction="response" | 応答確定 |
 | ClientSessionEvent | IO層 | 全層 | action="connected"/"disconnected" | Client接続状態 |
 | InterruptEvent | 任意 | FlowExecutor | InputReady到着時 | LLM生成中断 |
-| ProactiveResultEvent | Agency/Execution | Limbic, Memory | 自発調査完了後 | 調査結果 |
-| MonitorFeedback | Agency/Execution | Limbic | talkative/flags検出時 | 出力頻度監視 |
+| ProactiveResultEvent | Agency/Execution | Memory | 自発調査完了後 | 調査結果 |
 | DebugSnapshotEvent | 任意 | EventTracer | Debug有効時 | 状態変化記録 |
 
 ## MessageEvent の方向（direction）と状態遷移

@@ -22,22 +22,13 @@ flowchart TD
         IO_Auth["auth/<br/>Authenticator"]
     end
 
-    subgraph Limbic["limbic/ 大脳辺縁系"]
-        L_Manager["LimbicManager<br/>感情状態管理"]
-        L_Amygdala["扁桃体<br/>感情評価"]
-        L_ACC["前帯状皮質<br/>感情制御"]
-        L_EM["感情記憶<br/>感情タグ付け"]
-        L_BF["BigFive<br/>性格特性"]
-    end
-
-    subgraph Memory["memory/ 感覚野+海馬+皮質"]
+    subgraph Memory["memory/ 感覚野+皮質"]
         M_Manager["MemoryManager<br/>記憶オーケストレーション"]
         M_Sensory["sensory/<br/>入力バッファリング"]
         M_Episodic["episodic/<br/>エピソード記憶"]
         M_Semantic["semantic/<br/>意味記憶"]
-        M_Hippocampal["hippocampal/<br/>Reflexion"]
         M_Vector["vector/<br/>埋め込み検索"]
-        M_Personality["personality/<br/>話し方・自己状態"]
+        M_Goal["goal_store/<br/>長期目標"]
     end
 
     subgraph Agency["agency/ 前頭前野+基底核+運動野"]
@@ -47,10 +38,6 @@ flowchart TD
             P_Manager["PlanningManager<br/>意思決定"]
             P_Judge["ProactiveJudge<br/>判断フロー"]
             P_Scoring["ProactiveScoring<br/>PFCスコアリング"]
-        end
-
-        subgraph Inhibition["inhibition/ 基底核"]
-            INH["InhibitionController<br/>抑制制御"]
         end
 
         subgraph Execution["execution/ 運動野"]
@@ -71,18 +58,12 @@ flowchart TD
 
     EB ---|全層を結合| Kernel
     EB --- IO
-    EB --- Limbic
     EB --- Memory
     EB --- Agency
     EB --- Infra
 
     A_Bus --- Planning
-    A_Bus --- Inhibition
     A_Bus --- Execution
-
-    Limbic -.->|感情タグ| Memory
-    Limbic -.->|ムード変調| Agency
-    Memory -.->|性格×感情| Limbic
 ```
 
 ## 2. 層間イベントフロー（基本ループ）
@@ -107,14 +88,13 @@ sequenceDiagram
     AG->>EB: MessageEvent(...)
     EB->>IO: MessageEvent
     IO->>TCP: Message (direction:response)
-    AG->>AG: 実行後: reflexion / compression
 
     KRN->>EB: TimerTick (5秒間隔)
     EB->>MEM: TimerTick (subscribe)
     MEM->>MEM: rate-limit check
     MEM->>EB: InputReady(from_timer=True)
     EB->>AG: InputReady
-    AG->>AG: scoring + threshold + gate → PlanDecided
+    AG->>AG: scoring + threshold → PlanDecided
 ```
 
 ## 3. ディレクトリ構成
@@ -155,22 +135,7 @@ iris/
 │   ├── bus.py                 EventBus
 │   └── event_types.py         イベント型定義
 │
-├── limbic/                    # 大脳辺縁系: 感情処理 + 性格特性
-│   ├── __init__.py
-│   ├── manager.py             LimbicManager（感情状態管理, EventBus連携）
-│   ├── models.py              EmotionState, EmotionDelta, DriveState
-│   ├── mood.py                MoodEngine（気分記述・応答スタイル生成）
-│   ├── state.py               PsychometricState（永続化可能な心理状態）
-│   ├── amygdala/
-│   │   └── evaluator.py       Amygdala（キーワード+ONNX埋め込み評価）
-│   ├── cingulate/
-│   │   └── regulator.py       AnteriorCingulateCortex（感情制御・葛藤調整）
-│   ├── hippocampus/
-│   │   └── binder.py          EmotionalMemory（感情タグ付け・検索）
-│   └── prefrontal/
-│       └── personality.py     BigFiveProvider（性格特性+PEM進化）
-│
-├── memory/                    # 記憶系: 感覚野 + 海馬 + 皮質（3層構造）
+├── memory/                    # 記憶系: 感覚野 + 皮質（3層構造）
 │   ├── __init__.py
 │   ├── manager.py             MemoryManager（EventBus連携, TimerTick rate-limit, ディスパッチャ）
 │   ├── sensory/               # 感覚記憶: 生入力の一時保持
@@ -185,25 +150,17 @@ iris/
 │   │   ├── manager.py         LongTermMemoryManager（統合IF）
 │   │   ├── stores.py          EpisodicStore + SemanticStore
 │   │   └── vector_store.py    VectorStore（ChromaDB + BM25 ハイブリッド）
-│   ├── hippocampal/           # 海馬: 記憶整理
-│   │   ├── __init__.py
-│   │   ├── manager.py         HippocampalManager（Reflexionスケジューリング）
-│   │   ├── reflexion.py       Reflexion（自己反省, 特性抽出）
-│   │   ├── goal_store.py      GoalStore（長期目標管理）
-│   ├── persona_data.py        PersonaData（話し方・自己状態の動的管理）
-│   ├── persona_profile.py     PersonaProfile（ペルソナ情報の統合IF）
+│   ├── goal_store.py          GoalStore（長期目標管理）
 │
-├── agency/                    # 高度認知: PFC + 基底核 + 運動野
+├── agency/                    # 高度認知: PFC + 運動野
 │   ├── __init__.py
 │   ├── task_level.py           TaskLevel定義 + resolve_level()
-│   ├── manager.py             AgencyManager（compact_contextの中継のみ）
-│   ├── bus.py                 Internal EventBus（planning→inhibition→execution）
+│   ├── manager.py             AgencyManager
+│   ├── bus.py                 Internal EventBus（planning→execution）
 │   ├── planning/              # 前頭前野: 意思決定
 │   │   ├── __init__.py
 │   │   ├── manager.py         PlanningManager（意思決定, InputReady購読）
 │   │   ├── context_hint_builder.py  ContextHintBuilder（文脈ヒント構築）
-│   │   ├── emotion_temperature.py   EmotionTemperatureModulator（PAD→temperature）
-│   │   ├── question_generator.py    QuestionGenerator（LLM質問生成）
 │   │   ├── task_content.py          is_task_content（タスク判定）
 │   │   ├── decisions/         # プロアクティブ判断サブパッケージ
 │   │   │   ├── __init__.py    ProactiveJudge, ProactiveScoring を公開
@@ -213,9 +170,6 @@ iris/
 │   │       ├── __init__.py
 │   │       ├── response.py    ResponsePlanStrategy（応答計画）
 │   │       └── proactive.py   ProactivePlanStrategy（自発発話計画）
-│   ├── inhibition/            # 基底核: 抑制制御
-│   │   ├── __init__.py        InhibitionController, GateVerdict を公開
-│   │   └── controller.py      InhibitionController（Gate評価, トピックcooldown）
 │   └── execution/             # 運動野: 行動実行
 │       ├── __init__.py
 │       ├── orchestrator.py         ExecutionOrchestrator（LangGraph グラフ）
@@ -233,14 +187,9 @@ iris/
 │       │   ├── general_task.py     GeneralTaskNode（高レベルタスク実行）
 │       │   ├── setup.py            SetupNode（初期化）
 │       │   ├── tool_run.py         ToolRunNode（ツール実行）
-│       │   ├── finalize.py         FinalizeNode（完了処理）
-│       │   └── post_process.py     PostProcessNode（後処理）
-│       └── regulation/             # 出力調整
-│           ├── __init__.py
-│           ├── consolidator.py     Consolidator（Reflexion + 圧縮）
-│           ├── feedback.py         FeedbackCoordinator
-│           ├── output_tracker.py   OutputTracker
-│           └── talk_control.py     talkative抑制制御
+│       │   └── finalize.py         FinalizeNode（完了処理）
+│       └── regulation/             # 後処理
+│           └── consolidator.py     Consolidator（Context圧縮）
 │
 ├── llm/                       # LLM 基盤
 │   ├── __init__.py
@@ -326,11 +275,6 @@ class ClientSessionEvent(Event):
     offline_duration: str    # 切断されていた期間（例: "3時間20分間"）
 
 @dataclass
-class MonitorFeedback(Event):
-    flags: list[str] | None
-    content: str
-
-@dataclass
 class DebugSnapshotEvent(Event):
     category: str
     data: dict | None
@@ -369,7 +313,6 @@ flowchart LR
 | `SENSING` | Memory | 入力をバッファリング中 |
 | `DECIDING` | Agency/Planning | 意思決定中 |
 | `EXECUTING` | Agency/Execution | LLM/Tool 実行中 |
-| `CONSOLIDATING` | Memory/Hippocampal | 記憶整理中 |
 | `INTERRUPTED` | Agency | 中断中 |
 | `SLEEPING` | Kernel | 省電力モード |
 
@@ -379,9 +322,6 @@ flowchart LR
 flowchart LR
     Kernel --> Event
     Kernel --> IO
-    Limbic --> Event
-    Limbic --> Memory
-    Limbic --> Agency
     Agency --> Event
     Agency --> Memory
     Agency --> LLM
@@ -392,7 +332,6 @@ flowchart LR
 
     subgraph All["全層"]
         IO
-        Limbic
         Memory
         Agency
         Kernel
@@ -403,8 +342,3 @@ flowchart LR
 - ただし Factory（DI コンテナ）は全層のインスタンスを生成するため、kernel/factory.py に集約
 - Agency の planning → execution は内部 EventBus を介する
 - IO 層は gRPC への依存を持つが、`io/transport/` に閉じる
-- Limbic 層は以下のインターフェースで他層と統合する:
-  - `build_mood_description()` → LLMGateway がシステムプロンプトに注入
-  - `apply_limbic_modulation(emotion)` → InhibitionController が感情による抑制変調に利用 (inhibition.py)
-  - `tag_recent_memory()` → EmotionalMemory が EpisodicStore に感情タグを付与
-  - `current_emotion()` → ProactiveScoring が自発発話スコアリングの mood 因子として利用

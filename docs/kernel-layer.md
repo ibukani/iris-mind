@@ -149,7 +149,7 @@ def _timer_loop(self) -> None:
         time.sleep(self._config.check_interval_sec)
 ```
 
-**購読層**: Memory（海馬の定期整理）, Agency（将来の自発発話トリガー）
+**購読層**: Memory, Agency（将来の自発発話トリガー）
 
 ## KernelFactory
 

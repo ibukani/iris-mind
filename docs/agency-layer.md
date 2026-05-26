@@ -2,14 +2,13 @@
 
 > **注記**: 脳科学・神経科学の用語との対応付けは設計指針であり、厳密な解剖学的正確性を保証するものではありません。
 
-**脳科学対応**: 前頭前野（PFC）+ 大脳基底核（BG）+ 運動野
+**脳科学対応**: 前頭前野（PFC）+ 運動野
 
 ## 責務
 
 - **PlanningManager** がグローバル EventBus から `InputReady` を直接購読（AgencyManager は中継しない）
 - 意思決定（planning）: PFC が入力に対して何を行うか決定する
-- PFC スコアリング（ProactiveScoring）: 自発発話の価値を時間・記憶・文脈・感情・緊急性・システムイベントで評価
-- 基底核抑制（InhibitionController）: 行動の抑制を mood / confirmation / cooldown / **generating（生成中）** / **limbic 変調** で制御
+- PFC スコアリング（ProactiveScoring）: 自発発話の価値を時間・記憶・文脈・緊急性・システムイベントで評価
 - 行動実行（execution）: 決定された計画を LLM・Tool を用いて実行する
 
 ## Internal Bus
@@ -47,25 +46,16 @@ sequenceDiagram
 
     alt ユーザー入力
         EB-->>PL: InputReady(content, from_timer=False)
-        PL->>PL: inhibition.apply_limbic_modulation()
-        PL->>PL: _inhibition.evaluate(now)
-        PL->>PL: notify_user_activity()
-        PL->>PL: _build_plan(content, context, gate, limbic_mood)
+        PL->>PL: _build_plan(content, context)
     else 自発発話トリガー（タイマー）
         EB-->>PL: InputReady(content="", from_timer=True)
-        PL->>PL: inhibition.apply_limbic_modulation()
-        PL->>PL: _inhibition.evaluate(now)
-        PL->>PL: suppressed? → abort
         PL->>PL: ProactiveScoring.compute(content=event.content, ...)
         PL->>PL: threshold? → abort
         PL->>PL: record_proactive_attempt()
-        PL->>PL: 内省調査(silent)の判定 (drive_score > 0.3 かつ context < 0.2)
-        Note over PL: silentの場合、interestsから重み付きサンプリングし、LLMで疑問生成
-        PL->>PL: _build_plan(content="", context, gate, limbic_mood)
+        PL->>PL: _build_plan(content="", context)
     else 自発発話トリガー（エスカレーション）
         EB-->>PL: InputReady(content="", context={escalation: True})
-        Note over PL: 納得度の高かった前回の調査要約をもとに、ユーザーへの話しかけ文脈を生成
-        PL->>PL: _build_plan(content="", context, gate, limbic_mood)
+        PL->>PL: _build_plan(content="", context)
     end
 
 
@@ -86,18 +76,15 @@ sequenceDiagram
 class PlanningManager:
     """前頭前野（PFC）: 意思決定。
     グローバル EventBus の InputReady を直接購読し、「何をするか」を決定する。
-    ProactiveScoring と InhibitionController を統合して plan を生成する。
+    ProactiveScoring を統合して plan を生成する。
     """
 
     # subscribe: InputReady (global EventBus を直接購読)
 
     def _on_input_ready(self, event: InputReady) -> None
-        # 1. inhibition.apply_limbic_modulation(emotion) → 感情変調
-        # 2. gate = inhibition.evaluate(now)
-        # 3. context.escalation → エスカレーション用の話しかけプラン (silent=False) → PlanDecided
-        # 4. from_timer → scoring + threshold → abort or plan (silent判定時は興味サンプリング + 疑問生成)
-        # 5. !from_timer → notify_user_activity()
-        # 6. _build_plan(content, context, gate, limbic_mood) → PlanDecided
+        # 1. !from_timer → _build_plan(content, context) → PlanDecided
+        # 2. from_timer → scoring + threshold → abort or plan → PlanDecided
+        # 3. context.escalation → エスカレーション用の話しかけプラン → PlanDecided
 
 ```
 
@@ -111,7 +98,6 @@ class ProactiveScoring:
     - time: 前回の行動からの経過時間
     - memory: 長期記憶との関連性（最近の話題 + 意味検索）
     - context: 直近会話の文脈的一貫性（+ short_termターン数で補正）
-    - mood: 感情状態（limbic_mood dict: valence/arousal/dominance → PAD加重スコア）
     - urgency: 入力内容の緊急性（疑問・緊急語・長文・!!）
     - system_event: クライアント接続等のシステムイベント発生時に優先度を大きく上方補正
 
@@ -120,21 +106,11 @@ class ProactiveScoring:
     def compute(
         self,
         now: float,
-        last_proactive_time: float,
-        last_user_activity: float,
-        negative_mood_score: float,
-        limbic_mood: EmotionState | None = None,
-        limbic_drive: DriveState | None = None,
         content: str = "",
         context: dict[str, Any] | None = None,
-        ignore_count: int = 0,
     ) -> tuple[float, dict[str, float]]:
-        # limbic_mood あり → PAD 3次元の重み付きスコアリング
-        # limbic_mood なし → 従来の negative_mood_score ベース
-        # limbic_drive  → Drive蓄積による欲求スコア
         # content が空以外 → content_urgency で上方補正
         # context に "system_event" = "connected" がある場合 → 閾値を超えるようブースト
-        # ignore_count → 無視回数によるペナルティ
 ```
 
 ### Plan 定義と TaskLevel
@@ -167,15 +143,11 @@ plan は dict で表現される。`task_level`（文字列）が動作の基本
 | `user_identity` | str | 発話者識別子（グループチャット時） |
 | `overrides` | dict | レベルプロファイルの上書き値 |
 
-**感情による動的調整**: `EmotionTemperatureModulator.apply_execution_params()` が
-`overrides.max_tokens` をPAD感情に応じて制限する。
-例: valence < -0.3 → max_tokens ≤ 256、arousal > 0.6 → max_tokens ≤ 256。
-
 ## FlowExecutor
 
 ```python
 class FlowExecutor:
-    """大脳基底核 + 運動野: 行動実行。
+    """行動実行。
     PlanDecided を受け取り、ExecutionOrchestrator (LangGraph) に委譲する。
     """
 
@@ -188,17 +160,7 @@ class FlowExecutor:
     #   SetupNode: メッセージ設定, ストリーミングコールバック, THINKING publish
     #   GeneralChatNode / GeneralTaskNode: LLMGateway.chat() 呼出 + on_token ストリーム
     #   ToolRunNode: ToolEngine.run_tool_calls() 実行
-    #   FinalizeNode: memory保存, monitor記録, フィードバック, DONE publish
-    #   PostProcessNode: reflexion / context compression
-```
-
-### InhibitionController 補足: トピックベースクールダウン
-
-```python
-def record_topic(self, topic: str, duration_sec: float = 3600.0) -> None
-    # 話題単位のクールダウン設定。1時間（デフォルト）は同一話題で自発発話しない。
-def is_topic_suppressed(self, topic: str, now: float) -> bool
-    # 指定話題がクールダウン中か判定。`_state.topic_cooldowns` で管理。
+    #   FinalizeNode: memory保存, DONE publish
 ```
 
 ### 実行ルート
@@ -228,15 +190,14 @@ FlowExecutor は圧縮実行時に `get_effective_context_window(role)` でper-m
 # START → prepare_context → general_chat (fixed entry)
 #   ├─ルーティングツール→ general_chat / general_task (switch)
 #   ├─実ツールtool_calls→ ToolRunNode → 元ノード復帰
-#   └─no tools → finalize → post_process (optional) → END
+#   └─no tools → finalize → END
 
 # 各ノード:
 #   SetupNode:         メッセージ設定, ストリーミングコールバック
 #   GeneralChatNode:   LLMGateway.chat()（chat/light レベル, 短いsystem prompt）
 #   GeneralTaskNode:   LLMGateway.chat()（normal/deep/research レベル, デフォルトprompt）
 #   ToolRunNode:       ToolEngine.run_tool_calls() 実行, 結果truncate
-#   FinalizeNode:      memory保存, monitor記録, フィードバック, DONE publish
-#   PostProcessNode:   reflexion / context compression
+#   FinalizeNode:      memory保存, DONE publish
 ```
 
 ```mermaid
@@ -263,11 +224,4 @@ sequenceDiagram
     end
 
     EX->>EB: MessageEvent(state=done)
-
-    alt run_reflexion=True
-        EX->>EX: consolidator.run()
-    end
-    alt run_compression=True
-        EX->>EX: consolidator.compact()
-    end
 ```

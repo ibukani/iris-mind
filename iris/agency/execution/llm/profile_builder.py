@@ -39,6 +39,7 @@ class ProfileBuilder:
         self,
         response_style: str = "",
         session_roles_summary: str = "",
+        current_user_identity: str = "",
     ) -> SystemMessage:
         """Profile SystemMessage を構築する。"""
         agents_md = self._load_agents_md()
@@ -72,6 +73,9 @@ class ProfileBuilder:
 
         if current_state:
             parts.append(current_state)
+
+        if current_user_identity:
+            parts.append(f"## 現在の会話相手\n{current_user_identity}")
 
         return SystemMessage(content="\n\n".join(parts))
 

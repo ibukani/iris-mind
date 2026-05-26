@@ -66,7 +66,7 @@ class SetupNode:
 
         if content and self._memory:
             role = "thought" if silent else "user"
-            self._memory.short_term.add_turn(role, content)
+            self._memory.short_term.add_turn(role, content, plan.user_identity)
 
         if show_thinking and self._event_bus:
             self._event_bus.publish(
@@ -82,6 +82,8 @@ class SetupNode:
 
         if self._session_roles_getter:
             self._pipeline.set_session_roles_summary(self._session_roles_getter())
+        if plan.user_identity:
+            self._pipeline.set_current_user_identity(plan.user_identity)
 
     def _set_on_token_callback(self) -> None:
         event_bus = self._event_bus

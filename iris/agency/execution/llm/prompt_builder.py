@@ -49,6 +49,7 @@ class SystemPromptBuilder:
         context_hint: str = "",
         response_style: str = "",
         session_roles_summary: str = "",
+        current_user_identity: str = "",
         situation: str = "",
         recent_turns: str = "",
         include_profile: bool = True,
@@ -60,6 +61,7 @@ class SystemPromptBuilder:
                 self._profile_builder.build(
                     response_style=response_style,
                     session_roles_summary=session_roles_summary,
+                    current_user_identity=current_user_identity,
                 )
             )
 

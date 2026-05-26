@@ -64,6 +64,7 @@ class IOManager:
             source_role="mind",
             target_role=target_role,
             session_id=event.session_id,
+            user_identity=event.user_identity,
             direction=Direction(direction),
         )
         logger.debug(
@@ -103,6 +104,7 @@ class IOManager:
                 session_id=msg.session_id,
                 source_role=msg.source_role,
                 target_role=msg.target_role,
+                user_identity=msg.user_identity,
                 direction=msg.direction.value,
                 msg_type=msg.msg_type,
                 content=msg.content,

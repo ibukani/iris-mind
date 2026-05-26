@@ -101,7 +101,7 @@ class MemoryManager:
 
         self._event_bus: EventBus | None = event_bus
         self._proactive_config: ProactiveConfig | None = proactive_config
-        self._pending_input: dict[str, str] = {}
+        self._pending_input: dict[str, list[tuple[str, str]]] = {}
         self._pending_lock: threading.Lock = threading.Lock()
 
         self._store_handlers: dict[str, Callable[[Any], None]] = {
@@ -135,11 +135,14 @@ class MemoryManager:
             return
         self.sensory.store_raw(event.content)
         with self._pending_lock:
-            self._pending_input[event.session_id] = event.content
+            self._pending_input.setdefault(event.session_id, []).append(
+                (event.content, event.user_identity)
+            )
         logger.debug(
-            "MemoryManager: input pending session={} content={:.80}",
+            "MemoryManager: input pending session={} content={:.80} identity={}",
             event.session_id,
             event.content,
+            event.user_identity,
         )
 
     def _on_timer_tick(self, event: TimerTick) -> None:
@@ -160,7 +163,7 @@ class MemoryManager:
             )
         )
 
-    def _flush_pending_input(self) -> dict[str, str]:
+    def _flush_pending_input(self) -> dict[str, list[tuple[str, str]]]:
         bus = self._event_bus
         if bus is None:
             return {}
@@ -169,23 +172,25 @@ class MemoryManager:
             self._pending_input.clear()
         if not pending:
             return {}
-        for session_id, content in pending.items():
-            bus.publish(
-                InputReady(
-                    timestamp=None,
-                    source="memory",
-                    session_id=session_id,
-                    content=content,
-                    context={},
+        for session_id, entries in pending.items():
+            for content, user_identity in entries:
+                bus.publish(
+                    InputReady(
+                        timestamp=None,
+                        source="memory",
+                        session_id=session_id,
+                        content=content,
+                        user_identity=user_identity,
+                        context={},
+                    )
                 )
-            )
-            bus.publish(
-                InterruptEvent(
-                    timestamp=None,
-                    source="memory",
-                    session_id=session_id,
+                bus.publish(
+                    InterruptEvent(
+                        timestamp=None,
+                        source="memory",
+                        session_id=session_id,
+                    )
                 )
-            )
         return pending
 
     def _on_client_session_event(self, event: ClientSessionEvent) -> None:
@@ -206,6 +211,7 @@ class MemoryManager:
                 source="memory",
                 session_id=event.session_id,
                 content="",
+                user_identity=event.identity,
                 context={
                     "system_event": event.action,
                     "offline_duration": event.offline_duration,

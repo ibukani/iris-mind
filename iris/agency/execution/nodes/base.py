@@ -106,7 +106,9 @@ class BaseLLMNode(ABC):
         for t in turns:
             content = t.get("content", "")
             if content:
-                ctx_lines.append(f"{t['role']}: {content}")
+                uid = t.get("user_identity", "")
+                label = uid or t["role"]
+                ctx_lines.append(f"{label}: {content}")
         if not ctx_lines:
             return ""
         return "## 直近の会話\n" + "\n".join(ctx_lines)
@@ -182,7 +184,7 @@ class BaseLLMNode(ABC):
 
             if response_text and self._memory:
                 role = "thought" if plan.silent else "assistant"
-                self._memory.short_term.add_turn(role, response_text)
+                self._memory.short_term.add_turn(role, response_text, plan.user_identity)
 
             return {"response_text": response_text}
         except Exception:

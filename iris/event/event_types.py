@@ -82,6 +82,7 @@ class MessageEvent(Event):
     session_id: str = ""
     source_role: str = ""
     target_role: str = ""
+    user_identity: str = ""
     direction: str = ""
     msg_type: str = ""
     content: str = ""
@@ -93,6 +94,7 @@ class MessageEvent(Event):
 class InputReady(Event):
     session_id: str = ""
     content: str = ""
+    user_identity: str = ""
     context: dict | None = None
 
 

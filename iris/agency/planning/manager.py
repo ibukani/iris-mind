@@ -81,7 +81,7 @@ class PlanningManager:
         if proactive_context is None:
             return
         plan = self._proactive_strategy.build_proactive(proactive_context, gate, limbic_mood)
-        self._publish(plan, event.session_id, from_timer=True)
+        self._publish(plan, event.session_id, event.user_identity or context.get("identity", ""), from_timer=True)
 
     def _on_user_input(self, event: InputReady) -> None:
         limbic_mood = self._resolve_limbic_mood()
@@ -89,7 +89,7 @@ class PlanningManager:
         self._inhibition.notify_user_activity()
 
         plan = self._response_strategy.build_response(event.content, gate, limbic_mood)
-        self._publish(plan, event.session_id, from_timer=False)
+        self._publish(plan, event.session_id, event.user_identity, from_timer=False)
 
     def _resolve_limbic_mood(self) -> EmotionState | None:
         if not self._limbic:
@@ -98,8 +98,9 @@ class PlanningManager:
         self._inhibition.apply_limbic_modulation(emotion)
         return emotion
 
-    def _publish(self, plan: Plan, session_id: str, from_timer: bool) -> None:
+    def _publish(self, plan: Plan, session_id: str, user_identity: str, from_timer: bool) -> None:
         plan.session_id = session_id
+        plan.user_identity = user_identity
         if plan.silent:
             plan.overrides["allow_side_effects"] = False
             plan.overrides["max_tool_iterations"] = 3

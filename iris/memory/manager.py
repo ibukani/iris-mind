@@ -211,6 +211,7 @@ class MemoryManager:
                 source="memory",
                 session_id=event.session_id,
                 content="",
+                user_identity=event.identity,
                 context={
                     "system_event": event.action,
                     "offline_duration": event.offline_duration,

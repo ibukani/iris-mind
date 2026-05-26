@@ -195,6 +195,7 @@ iris/
 │
 ├── agency/                    # 高度認知: PFC + 基底核 + 運動野
 │   ├── __init__.py
+│   ├── task_level.py           TaskLevel定義 + resolve_level()
 │   ├── manager.py             AgencyManager（compact_contextの中継のみ）
 │   ├── bus.py                 Internal EventBus（planning→inhibition→execution）
 │   ├── planning/              # 前頭前野: 意思決定
@@ -227,11 +228,13 @@ iris/
 │       │   └── prompt_builder.py   SystemPromptBuilder
 │       ├── nodes/                  # LangGraph ノード
 │       │   ├── __init__.py
-│       │   ├── setup.py            SetupNode
-│       │   ├── llm_call.py         LLMCallNode
-│       │   ├── tool_run.py         ToolRunNode
-│       │   ├── finalize.py         FinalizeNode
-│       │   └── post_process.py     PostProcessNode
+│       │   ├── base.py             BaseLLMNode（抽象基底クラス）
+│       │   ├── general_chat.py     GeneralChatNode（低レベル簡易応答）
+│       │   ├── general_task.py     GeneralTaskNode（高レベルタスク実行）
+│       │   ├── setup.py            SetupNode（初期化）
+│       │   ├── tool_run.py         ToolRunNode（ツール実行）
+│       │   ├── finalize.py         FinalizeNode（完了処理）
+│       │   └── post_process.py     PostProcessNode（後処理）
 │       └── regulation/             # 出力調整
 │           ├── __init__.py
 │           ├── consolidator.py     Consolidator（Reflexion + 圧縮）

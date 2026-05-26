@@ -2,12 +2,25 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import re
-from typing import Any, Protocol
+from typing import Protocol, TypedDict
 
 from loguru import logger
 
 _MAX_TURN_LENGTH = 500
 _MAX_CONTEXT_CHARS = 600
+
+
+class TurnData(TypedDict):
+    role: str
+    content: str
+    timestamp: str
+    consolidated: bool
+    importance: int
+
+
+class SearchResult(TurnData, total=False):
+    relevance: float
+    index: int
 
 
 class ImportanceScorer(Protocol):
@@ -71,11 +84,11 @@ class ShortTermMemoryProtocol(Protocol):
     """
 
     def add_turn(self, role: str, content: str) -> None: ...
-    def search(self, query: str, max_results: int = 5) -> list[dict[str, Any]]: ...
-    def search_entities(self, entity_name: str) -> list[dict[str, Any]]: ...
+    def search(self, query: str, max_results: int = 5) -> list[SearchResult]: ...
+    def search_entities(self, entity_name: str) -> list[TurnData]: ...
     def render_context(self, max_chars: int = _MAX_CONTEXT_CHARS, query: str | None = None) -> str: ...
-    def get_recent_turns(self, n: int = 4) -> list[dict[str, Any]]: ...
-    def get_unconsolidated_turns(self) -> list[dict[str, Any]]: ...
+    def get_recent_turns(self, n: int = 4) -> list[TurnData]: ...
+    def get_unconsolidated_turns(self) -> list[TurnData]: ...
     def mark_consolidated(self, up_to_index: int | None = None) -> None: ...
     def clear(self) -> None: ...
     def should_consolidate(self) -> bool: ...
@@ -93,13 +106,13 @@ class ShortTermMemoryManager:
 
     def __init__(
         self,
-        max_turns: int = 10,
+        max_turns: int = 30,
         max_topics: int = 5,
         *,
         importance_scorer: ImportanceScorer | None = None,
         entity_extractor: EntityExtractor | None = None,
     ) -> None:
-        self._turns: list[dict[str, Any]] = []
+        self._turns: list[TurnData] = []
         self._current_topics: list[str] = []
         self._active_references: set[str] = set()
         self._max_turns = max_turns
@@ -117,7 +130,7 @@ class ShortTermMemoryManager:
         if not content:
             return
         truncated = content[:_MAX_TURN_LENGTH]
-        entry: dict[str, Any] = {
+        entry: TurnData = {
             "role": role,
             "content": truncated,
             "timestamp": datetime.now(UTC).isoformat(),
@@ -142,7 +155,7 @@ class ShortTermMemoryManager:
         if len(self._current_topics) > self._max_topics:
             self._current_topics = self._current_topics[-self._max_topics :]
 
-    def _compute_relevance(self, query: str, turn: dict[str, Any]) -> float:
+    def _compute_relevance(self, query: str, turn: TurnData) -> float:
         """クエリと会話ターンの関連度スコアを算出する。"""
         if not query or not turn.get("content"):
             return 0.0
@@ -153,12 +166,12 @@ class ShortTermMemoryManager:
         overlap = len(q_words & t_words)
         return overlap / len(q_words)
 
-    def search(self, query: str, max_results: int = 5) -> list[dict[str, Any]]:
+    def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
         """クエリに関連する会話ターンを検索する。"""
         if not query:
             return []
 
-        scored: list[tuple[float, int, dict[str, Any]]] = []
+        scored: list[tuple[float, int, SearchResult]] = []
         for i, turn in enumerate(self._turns):
             relevance = self._compute_relevance(query, turn)
             content = turn.get("content", "")
@@ -166,24 +179,16 @@ class ShortTermMemoryManager:
                 continue
 
             actual_relevance = relevance if relevance > 0 else 0.01
-            turn_copy = dict(turn)
-            turn_copy["relevance"] = actual_relevance
-            turn_copy["index"] = i
-
+            turn_copy: SearchResult = {**turn, "relevance": actual_relevance, "index": i}
             scored.append((actual_relevance, turn.get("importance", 0), turn_copy))
 
         scored.sort(key=lambda x: (-x[0], -x[1]))
         return [s[2] for s in scored[:max_results]]
 
-    def search_entities(self, entity_name: str) -> list[dict[str, Any]]:
+    def search_entities(self, entity_name: str) -> list[TurnData]:
         """エンティティ名が含まれる会話ターンを検索する。"""
         entity_lower = entity_name.lower().strip()
-        results: list[dict[str, Any]] = []
-        for i, turn in enumerate(self._turns):
-            if entity_lower in turn.get("content", "").lower():
-                turn_copy = dict(turn)
-                turn_copy["index"] = i
-                results.append(turn_copy)
+        results: list[TurnData] = [turn for turn in self._turns if entity_lower in turn.get("content", "").lower()]
         return results[-5:]
 
     def render_context(self, max_chars: int = _MAX_CONTEXT_CHARS, query: str | None = None) -> str:
@@ -223,11 +228,11 @@ class ShortTermMemoryManager:
             text = text[: max_chars - 3] + "..."
         return text
 
-    def get_recent_turns(self, n: int = 4) -> list[dict[str, Any]]:
+    def get_recent_turns(self, n: int = 4) -> list[TurnData]:
         """直近のNターンを取得する。"""
         return self._turns[-n:]
 
-    def get_unconsolidated_turns(self) -> list[dict[str, Any]]:
+    def get_unconsolidated_turns(self) -> list[TurnData]:
         """まだ圧縮（長期記憶化）されていないターンの一覧を取得する。"""
         return [t for t in self._turns if not t.get("consolidated")]
 

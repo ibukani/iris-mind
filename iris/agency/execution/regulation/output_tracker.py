@@ -113,7 +113,7 @@ class OutputTracker:
                     "type": "output_tracker",
                     "alert_count": self._alert_count,
                     "output_5min": self.output_count_5min,
-                }
+                },
             )
         return issues
 

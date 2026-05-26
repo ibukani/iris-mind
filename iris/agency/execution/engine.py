@@ -10,6 +10,9 @@ class ToolEngine:
     def __init__(self, registry: ToolRegistry) -> None:
         self.registry = registry
 
+    def list_tools_by_name(self, names: list[str], allow_side_effects: bool = True) -> list[dict]:
+        return self.registry.list_tools_by_name(names, allow_side_effects)
+
     def run_tool_calls(self, ctx: list[BaseMessage]) -> list[tuple[str, str, bool]]:
         last = ctx[-1]
         if not isinstance(last, AIMessage) or not getattr(last, "tool_calls", None):
@@ -29,7 +32,7 @@ class ToolEngine:
                         name=func_name,
                         content=result,
                         tool_call_id=tool_call_id,
-                    )
+                    ),
                 )
             results.append((func_name, result, is_side))
             logger.info("ToolExec: {} done (result len={})", func_name, len(result))

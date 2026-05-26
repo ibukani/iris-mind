@@ -5,12 +5,15 @@ from typing import TYPE_CHECKING, Any
 
 from langgraph.graph import END, StateGraph
 
+from iris.agency.execution.node_types import NODE_TYPES
 from iris.agency.execution.nodes.finalize import FinalizeNode
-from iris.agency.execution.nodes.llm_call import LLMCallNode
+from iris.agency.execution.nodes.general_chat import GeneralChatNode
+from iris.agency.execution.nodes.general_task import GeneralTaskNode
 from iris.agency.execution.nodes.post_process import PostProcessNode
 from iris.agency.execution.nodes.setup import SetupNode
 from iris.agency.execution.nodes.tool_run import ToolRunNode
 from iris.agency.execution.state import DynamicState, ExecutionState
+from iris.agency.task_level import TASK_LEVELS
 from iris.llm.interrupt_token import InterruptToken
 
 if TYPE_CHECKING:
@@ -28,33 +31,18 @@ from loguru import logger
 
 
 def _with_state_trace(name: str, node_fn: Any) -> Any:
-    """Wrap a graph node to log state diffs and return values at DEBUG level.
-
-    LangGraph 1.x passes a shallow copy of state to each node.
-    Scalar (str/int/bool) in-place assignments are NOT propagated unless
-    the node returns them as a dict. This wrapper logs both in-place changes
-    (visible in the shallow copy) and the return dict so propagation gaps
-    are immediately visible during development.
-
-    Entry/exit logging is enabled only when loguru is configured for TRACE
-    level; return-value logging activates at DEBUG level.
-    """
-
     async def wrapped(state: ExecutionState) -> dict[str, Any] | None:
-        # skip verbose entries unless TRACE
-        keys = [k for k in state if k != "messages"]
-        before = {k: repr(state[k]) for k in keys}  # type: ignore[literal-required]
-
-        result = await node_fn(state)
-
-        after = {k: repr(state[k]) for k in keys}  # type: ignore[literal-required]
+        raw: dict[str, Any] = state  # type: ignore[assignment]
+        keys = [k for k in raw if k != "messages"]
+        before = {k: repr(raw[k]) for k in keys}
+        result: dict[str, Any] | None = await node_fn(state)
+        after = {k: repr(raw[k]) for k in keys}
         changed = {k: {"before": before[k], "after": after[k]} for k in keys if before[k] != after[k]}
         if changed:
             logger.debug("NODE[{}] state diff: {}", name, changed)
-
         if result is not None:
             logger.debug("NODE[{}] return: {}", name, {k: repr(v) for k, v in result.items()})
-        return result  # type: ignore[no-any-return]
+        return result
 
     return wrapped
 
@@ -83,11 +71,21 @@ class ExecutionOrchestrator:
             session_roles_getter=session_roles_getter,
             dynamic=self._dynamic,
         )
-        self._generate = LLMCallNode(
+        self._general_chat = GeneralChatNode(
             pipeline=pipeline,
             tool_executor=tool_executor,
             capability_checker=capability_checker,
             dynamic=self._dynamic,
+            event_bus=event_bus,
+            memory=memory,
+        )
+        self._general_task = GeneralTaskNode(
+            pipeline=pipeline,
+            tool_executor=tool_executor,
+            capability_checker=capability_checker,
+            dynamic=self._dynamic,
+            event_bus=event_bus,
+            memory=memory,
         )
         self._execute_tools_node = ToolRunNode(
             tool_executor=tool_executor,
@@ -122,26 +120,36 @@ class ExecutionOrchestrator:
         builder = StateGraph(ExecutionState)
 
         builder.add_node("prepare_context", _with_state_trace("prepare_context", self._prepare))
-        builder.add_node("llm_generate", _with_state_trace("llm_generate", self._generate))
+        builder.add_node("general_chat", _with_state_trace("general_chat", self._general_chat))
+        builder.add_node("general_task", _with_state_trace("general_task", self._general_task))
         builder.add_node("execute_tools", _with_state_trace("execute_tools", self._execute_tools_node))
         builder.add_node("finalize", _with_state_trace("finalize", self._finalize))
         builder.add_node("post_process", _with_state_trace("post_process", self._post_process))
 
         builder.set_entry_point("prepare_context")
-        builder.add_edge("prepare_context", "llm_generate")
-        builder.add_conditional_edges(
-            "llm_generate",
-            self._router_after_generate,
-            {"execute_tools": "execute_tools", "finalize": "finalize"},
-        )
+        builder.add_edge("prepare_context", "general_chat")
+
+        for llm_node in ("general_chat", "general_task"):
+            builder.add_conditional_edges(
+                llm_node,
+                self._route_after_llm,
+                {
+                    "general_chat": "general_chat",
+                    "general_task": "general_task",
+                    "execute_tools": "execute_tools",
+                    "finalize": "finalize",
+                },
+            )
+
         builder.add_conditional_edges(
             "execute_tools",
-            self._router_after_tools,
-            {"llm_generate": "llm_generate", "finalize": "finalize"},
+            self._route_after_tools,
+            {"general_chat": "general_chat", "general_task": "general_task", "finalize": "finalize"},
         )
+
         builder.add_conditional_edges(
             "finalize",
-            self._router_after_finalize,
+            self._route_after_finalize,
             {"post_process": "post_process", "__end__": END},
         )
         builder.add_edge("post_process", END)
@@ -149,28 +157,74 @@ class ExecutionOrchestrator:
         return builder.compile()
 
     @staticmethod
-    def _router_after_generate(state: ExecutionState) -> str:
+    def _route_after_llm(state: ExecutionState) -> str:
         if state.get("interrupted") or state.get("error"):
             return "finalize"
+
         messages = state.get("messages", [])
-        if messages and getattr(messages[-1], "tool_calls", None):
+        if not messages:
+            return "finalize"
+
+        last = messages[-1]
+        tcs = getattr(last, "tool_calls", None) or []
+
+        for tc in tcs:
+            name = tc["name"]
+
+            if name == "general_chat":
+                state["chain_depth"] += 1
+                state["current_node_type"] = "general_chat"
+                logger.debug("ROUTE: general_chat (chain depth={})", state["chain_depth"])
+                return "general_chat"
+
+            if name == "general_task":
+                state["chain_depth"] = 0
+                state["current_node_type"] = "general_task"
+                nt = NODE_TYPES["general_task"]
+                state["current_level_idx"] = nt.available_levels.index(nt.entry_level)
+                logger.debug("ROUTE: general_task")
+                return "general_task"
+
+            if name == "deep_task":
+                state["chain_depth"] = 0
+                nt = NODE_TYPES.get(state["current_node_type"]) or NODE_TYPES["general_task"]
+                next_idx = state["current_level_idx"] + 1
+                if next_idx < len(nt.available_levels):
+                    state["current_level_idx"] = next_idx
+                    logger.debug(
+                        "ROUTE: deep_task level={}",
+                        nt.available_levels[state["current_level_idx"]],
+                    )
+                return state["current_node_type"]
+
+            if name == "finish":
+                logger.debug("ROUTE: finish")
+                return "finalize"
+
+        if tcs:
             return "execute_tools"
+
         return "finalize"
 
     @staticmethod
-    def _router_after_tools(state: ExecutionState) -> str:
-        plan = state["plan"]
-        max_iters = plan.get("max_tool_iterations", 3)
+    def _route_after_tools(state: ExecutionState) -> str:
+        max_iters = TASK_LEVELS[state["plan"].task_level].max_tool_iterations
         if state.get("tool_iterations", 0) >= max_iters:
             logger.debug("Tool iteration limit reached ({})", max_iters)
             return "finalize"
-        return "llm_generate"
+        return state["current_node_type"]
 
     @staticmethod
-    def _router_after_finalize(state: ExecutionState) -> str:
-        plan = state["plan"]
-        run_reflexion = plan.get("run_reflexion", False)
-        run_compression = plan.get("run_compression", False)
+    def _route_after_finalize(state: ExecutionState) -> str:
+        level = TASK_LEVELS[state["plan"].task_level]
+        run_reflexion = level.run_reflexion
+        run_compression = level.run_compression
+        adj = state.get("talkative_adjustments")
+        if adj:
+            if adj.run_reflexion is not None:
+                run_reflexion = adj.run_reflexion
+            if adj.run_compression is not None:
+                run_compression = adj.run_compression
         if run_reflexion or run_compression:
             return "post_process"
         return "__end__"

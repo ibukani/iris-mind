@@ -4,16 +4,18 @@ from dataclasses import dataclass
 
 from loguru import logger
 
-from iris.agency.bus import InternalBus
-from iris.agency.execution.engine import ToolEngine
-from iris.agency.execution.executor import FlowExecutor
-from iris.agency.execution.llm.gateway import LLMGateway
-from iris.agency.execution.regulation.consolidator import Consolidator
-from iris.agency.execution.regulation.output_tracker import OutputTracker
-from iris.agency.inhibition import InhibitionController
-from iris.agency.manager import AgencyManager
-from iris.agency.planning.decisions import ProactiveScoring
-from iris.agency.planning.manager import PlanningManager
+from iris.agency import (
+    AgencyManager,
+    Consolidator,
+    FlowExecutor,
+    InhibitionController,
+    InternalBus,
+    LLMGateway,
+    OutputTracker,
+    PlanningManager,
+    ProactiveScoring,
+    ToolEngine,
+)
 from iris.event.event_bus import EventBus
 from iris.event.tracer import EventTracer
 from iris.io.manager import IOManager
@@ -343,7 +345,7 @@ class KernelFactory:
         cmd_handler = CommandHandler(
             config=config,
             on_shutdown=_on_shutdown,
-            on_compact=ctx.agency.execution.compact_context if ctx.agency else _noop_compact,
+            on_compact=ctx.agency.compact_context if ctx.agency else _noop_compact,
             memory=memory_mgr,
             limbic=limbic,
             session_mgr=session_mgr,
@@ -430,7 +432,7 @@ class KernelFactory:
         if limbic is not None:
             limbic.set_persona_profile(persona_profile)
 
-        reflexion = Reflexion(llm=llm, compact_model=config.model.get_model("default"))
+        reflexion = Reflexion(llm=llm, compact_model=config.model.get_model("medium"))
         hippocampal = HippocampalManager(
             reflexion=reflexion,
             memory=memory,
@@ -450,6 +452,7 @@ class KernelFactory:
             limbic=limbic,
             capability_checker=capability_checker,
             debug_capture=debug_capture,
+            prompts_dir=config.personality.node_prompts_dir,
         )
         return pipeline, hippocampal, persona_profile
 
@@ -470,9 +473,9 @@ class KernelFactory:
         monitor = OutputTracker(internal_bus=internal_bus)
         context_window_mgr = LLMContextWindowManager(
             llm=llm,
-            compact_model=config.model.get_model("default"),
+            compact_model=config.model.get_model("medium"),
             tokenizers=tokenizers,
-            default_model_name=config.model.get_model("default"),
+            default_model_name=config.model.get_model("medium"),
         )
         # consolidator needs a messages_getter referencing execution;
         # late binding resolves execution after FlowExecutor is constructed

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from iris.agency.planning.emotion_temperature import EmotionTemperatureModulator
 from iris.agency.planning.models import Plan, PlanReason
 from iris.agency.planning.task_content import is_task_content
 
@@ -27,11 +26,11 @@ class ResponsePlanStrategy:
         is_task = is_task_content(content)
 
         if abbreviated:
-            level = 1
+            level = "chat"
         elif not is_task:
-            level = 2
+            level = "light"
         else:
-            level = 3
+            level = "normal"
 
         logger.debug(
             "Plan built: level={} abbreviated={} suppressed={} gate_score={:.3f}",
@@ -42,9 +41,6 @@ class ResponsePlanStrategy:
         )
 
         overrides: dict[str, Any] = {}
-
-        if limbic_mood:
-            EmotionTemperatureModulator.apply_execution_params(overrides, limbic_mood)
 
         return Plan(
             content=content,

@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 from langchain_core.messages import ChatMessage, HumanMessage
 
 from iris.agency.execution.state import DynamicState, ExecutionState
+from iris.agency.planning.models import Plan
+from iris.agency.task_level import TASK_LEVELS
 from iris.event.event_types import MessageEvent
 from iris.io.models import StreamState
 
@@ -34,22 +36,25 @@ class SetupNode:
         self._dynamic = dynamic or DynamicState()
 
     async def __call__(self, state: ExecutionState) -> None:
-        plan = state["plan"]
-        content = plan.get("content", "")
-        abbreviated = plan.get("abbreviated", False)
-        show_thinking = plan.get("show_thinking", not abbreviated)
-        streaming = plan.get("streaming", not abbreviated)
-        silent = plan.get("silent", False)
+        plan: Plan = state["plan"]
+        content = plan.content
+        silent = plan.silent
+        show_thinking = TASK_LEVELS[plan.task_level].show_thinking
+        if silent:
+            show_thinking = False
+        adj = state.get("talkative_adjustments")
+        if adj and adj.show_thinking is not None:
+            show_thinking = adj.show_thinking
 
         if silent and not content:
-                base_instruction = "システムからの内部指示: 現在の目標や欲求に基づき、Web検索や記憶検索を用いて知識を深めるための自律的な調査を行ってください。"
-                if "proactive_reason" in plan:
-                    base_instruction += f" (理由: {plan['proactive_reason']})"
-                content = base_instruction
-                plan["content"] = content
+            base_instruction = "システムからの内部指示: 現在の目標や欲求に基づき、Web検索や記憶検索を用いて知識を深めるための自律的な調査を行ってください。"
+            proactive_reason = plan.overrides.get("proactive_reason", "")
+            if proactive_reason:
+                base_instruction += f" (理由: {proactive_reason})"
+            content = base_instruction
+            plan.content = content
 
-        if streaming:
-            self._set_on_token_callback()
+        self._set_on_token_callback()
 
         if content:
             if silent:
@@ -72,10 +77,10 @@ class SetupNode:
                     content="",
                     state=StreamState.THINKING.value,
                     direction="stream",
-                )
+                ),
             )
 
-        if self._session_roles_getter and not abbreviated:
+        if self._session_roles_getter:
             self._pipeline.set_session_roles_summary(self._session_roles_getter())
 
     def _set_on_token_callback(self) -> None:
@@ -92,7 +97,7 @@ class SetupNode:
                     content=delta,
                     state=StreamState.SPEAKING.value,
                     direction="stream",
-                )
+                ),
             )
 
         self._dynamic.on_token = _on_token

@@ -18,7 +18,7 @@ TASK_KEYWORDS: frozenset[str] = frozenset(
         "なぜ",
         "どうやって",
         "設計",
-    }
+    },
 )
 
 

@@ -178,6 +178,7 @@ class ProactiveConfig(BaseModel):
 class PersonalityConfig(BaseModel):
     name: str = "Iris"
     prompt_file: str = ".iris/config/system_prompt.md"
+    node_prompts_dir: str = ".iris/config/node_prompts"
 
 
 class MemoryConfig(BaseModel):
@@ -197,7 +198,7 @@ class ResponseReadinessConfig(BaseModel):
     tier1_min_fragments: int = 2
     tier1_question_detect: bool = True
     confidence_threshold: float = 0.6
-    llm_model_role: str = "fast"
+    llm_model_role: str = "low"
 
 
 class QuasiSyncConfig(BaseModel):

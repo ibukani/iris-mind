@@ -1,3 +1,3 @@
-from iris.memory.short_term.manager import ShortTermMemoryManager
+from iris.memory.short_term.manager import SearchResult, ShortTermMemoryManager, TurnData
 
-__all__ = ["ShortTermMemoryManager"]
+__all__ = ["SearchResult", "ShortTermMemoryManager", "TurnData"]

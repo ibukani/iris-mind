@@ -7,8 +7,9 @@ from typing import Any
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from loguru import logger
 
+from iris.agency.execution.llm.modulator import EmotionTemperatureModulator
 from iris.agency.execution.llm.prompt_builder import SystemPromptBuilder
-from iris.agency.planning.emotion_temperature import EmotionTemperatureModulator
+from iris.agency.planning.models import Plan
 from iris.kernel.config import ModelConfig
 from iris.kernel.debug_capture import CaptureEntry, DebugCapture
 from iris.limbic.manager import LimbicManager
@@ -33,6 +34,7 @@ class LLMGateway:
         limbic: LimbicManager | None = None,
         capability_checker: CapabilityChecker | None = None,
         debug_capture: DebugCapture | None = None,
+        prompts_dir: str | None = None,
     ) -> None:
         self._llm = llm
         self._model_config = model_config
@@ -42,7 +44,7 @@ class LLMGateway:
         self._debug_capture = debug_capture
         self._session_roles_summary: str = ""
         self._last_system_prompt: str = ""
-        self._last_call_model_role: str = "default"
+        self._last_call_model_role: str = "medium"
 
         self._prompt_builder = SystemPromptBuilder(
             personality=personality,
@@ -50,6 +52,7 @@ class LLMGateway:
             persona_profile=persona_profile,
             memory=memory,
             limbic=limbic,
+            prompts_dir=prompts_dir,
         )
 
     @staticmethod
@@ -64,17 +67,23 @@ class LLMGateway:
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
 
-    def _build_system_messages(
+    def build_system_messages(
         self,
         context_hint: str,
         response_style: str = "",
         situation: str = "",
+        node_type: str = "general_task",
+        recent_turns: str = "",
+        include_profile: bool = True,
     ) -> list[BaseMessage]:
         return self._prompt_builder.build(
+            node_type=node_type,
             context_hint=context_hint,
             response_style=response_style,
             session_roles_summary=self._session_roles_summary,
             situation=situation,
+            recent_turns=recent_turns,
+            include_profile=include_profile,
         )
 
     async def _call_llm(
@@ -91,7 +100,7 @@ class LLMGateway:
         enable_thinking: bool = False,
     ) -> AIMessage:
         msgs: list[BaseMessage] = [*system_msgs, *messages]
-        self._last_system_prompt = str(system_msgs[0].content) if system_msgs else ""
+        self._last_system_prompt = "\n\n".join(str(m.content) for m in system_msgs) if system_msgs else ""
         self._last_call_model_role = model_role
 
         resp = await self._llm.chat(
@@ -103,7 +112,7 @@ class LLMGateway:
             on_token=on_token,
             interrupt_token=interrupt_token,
             priority=priority,
-            reasoning=enable_thinking if enable_thinking else None,
+            reasoning=enable_thinking or None,
         )
 
         self._capture_debug(
@@ -118,29 +127,43 @@ class LLMGateway:
     async def chat(
         self,
         messages: list[BaseMessage],
+        system_msgs: list[BaseMessage] | None = None,
         tools: list[dict[str, Any]] | None = None,
         on_token: Callable[[str], None] | None = None,
         interrupt_token: InterruptToken | None = None,
         context_hint: str = "",
-        model_role: str = "default",
+        model_role: str = "medium",
+        temperature: float | None = None,
         max_tokens: int | None = None,
         priority: int = 0,
         show_thinking: bool = False,
     ) -> AIMessage:
         response_style = self._limbic.generate_response_style() if self._limbic else ""
-        system_msgs = self._build_system_messages(
-            context_hint=context_hint,
-            response_style=response_style,
-        )
+        if system_msgs is None:
+            system_msgs = self.build_system_messages(
+                context_hint=context_hint,
+                response_style=response_style,
+            )
         if show_thinking and messages and isinstance(messages[-1], HumanMessage):
             last_msg = messages[-1]
             last_msg.content = self._personality.build_thinking_prompt(str(last_msg.content))
+
+        # Resolve temperature: node override → model config default → emotion modulation
+        if temperature is None:
+            temperature = self._model_config.get_effective_temperature(model_role)
+        # Resolve max_tokens: emotion modulation (reduce-only)
+        if self._limbic:
+            emotion = self._limbic.current_emotion()
+            temperature = EmotionTemperatureModulator.compute_temperature(emotion, temperature)
+            if max_tokens is not None:
+                max_tokens = EmotionTemperatureModulator.modulate_max_tokens(max_tokens, emotion)
 
         return await self._call_llm(
             system_msgs,
             messages,
             model_role,
             max_tokens,
+            temperature=temperature,
             tools=tools,
             on_token=on_token,
             interrupt_token=interrupt_token,
@@ -151,20 +174,20 @@ class LLMGateway:
     async def chat_short(
         self,
         messages: list[BaseMessage],
-        plan: dict[str, Any],
+        plan: Plan,
         model_role: str = "default",
         max_tokens: int | None = None,
         priority: int = 0,
         interrupt_token: InterruptToken | None = None,
     ) -> str:
-        context_hint = plan.get("context_hint", "")
-        reason = plan.get("reason", "")
-        content = plan.get("content", "")
+        context_hint = plan.context_hint
+        reason = plan.reason.value
+        content = plan.content
 
         is_proactive = reason in ("proactive_curiosity", "proactive_escalation", "timer")
         response_style = self._limbic.generate_response_style() if self._limbic and is_proactive else ""
 
-        system_msgs = self._build_system_messages(
+        system_msgs = self.build_system_messages(
             context_hint=context_hint,
             response_style=response_style,
             situation="proactive" if is_proactive else "",
@@ -173,7 +196,7 @@ class LLMGateway:
         msgs: list[BaseMessage] = []
         if messages and content:
             msgs.extend(messages)
-        msgs.append(HumanMessage(content=content if content else "..."))
+        msgs.append(HumanMessage(content=content or "..."))
 
         temperature = (
             EmotionTemperatureModulator.compute_temperature(self._limbic.current_emotion())
@@ -237,5 +260,5 @@ class LLMGateway:
                 token_counts=tc,
                 tool_iterations=tool_iterations or [],
                 full_prompt=self._build_full_prompt(messages),
-            )
+            ),
         )

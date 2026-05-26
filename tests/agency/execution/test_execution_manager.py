@@ -3,9 +3,7 @@ from __future__ import annotations
 import time
 from unittest.mock import MagicMock
 
-from iris.agency.bus import InternalBus
-from iris.agency.execution.executor import FlowExecutor
-from iris.agency.execution.regulation.consolidator import Consolidator
+from iris.agency import Consolidator, FlowExecutor, InternalBus
 from iris.event.event_bus import EventBus
 from iris.event.event_types import TimerTick
 from iris.kernel.config import Config, ProactiveConfig

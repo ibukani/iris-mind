@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from iris.agency.execution.regulation.output_tracker import OutputTracker
+    from iris.agency.planning.models import Plan
 
 
 TALKATIVE_ABBREVIATED_THRESHOLD = 1
@@ -12,25 +14,33 @@ TALKATIVE_SKIP_POSTPROCESS_THRESHOLD = 3
 TALKATIVE_DISABLE_STREAM_THRESHOLD = 5
 
 
-def apply_talkative_overrides(plan: dict[str, Any], degree: int) -> None:
+@dataclass
+class TalkativeAdjustments:
+    task_level: str | None = None
+    max_tokens: int | None = None
+    show_thinking: bool | None = None
+    run_reflexion: bool | None = None
+    run_compression: bool | None = None
+
+
+def get_talkative_adjustments(degree: int) -> TalkativeAdjustments:
+    adj = TalkativeAdjustments()
     if degree <= 0:
-        return
+        return adj
     if degree >= TALKATIVE_ABBREVIATED_THRESHOLD:
-        plan["abbreviated"] = True
+        adj.task_level = "chat"
     if degree >= TALKATIVE_TOKEN_LIMIT_THRESHOLD:
-        current = plan.get("max_tokens", 0)
-        if current > 0:
-            plan["max_tokens"] = min(current, 256)
+        adj.max_tokens = 256
     if degree >= TALKATIVE_SKIP_POSTPROCESS_THRESHOLD:
-        plan["run_reflexion"] = False
-        plan["run_compression"] = False
+        adj.run_reflexion = False
+        adj.run_compression = False
     if degree >= TALKATIVE_DISABLE_STREAM_THRESHOLD:
-        plan["streaming"] = False
-        plan["show_thinking"] = False
+        adj.show_thinking = False
+    return adj
 
 
-def should_skip_proactive(plan: dict[str, Any], degree: int, monitor: OutputTracker | None) -> bool:
-    content: str = plan.get("content", "")
+def should_skip_proactive(plan: Plan, degree: int, monitor: OutputTracker | None) -> bool:
+    content: str = plan.content
     if content:
         return False
     if not monitor:

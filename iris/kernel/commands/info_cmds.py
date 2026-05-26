@@ -90,7 +90,7 @@ class InfoCommands:
         cfg = self._config
         if not cfg:
             return "Config not available"
-        lines = [f"Default model: {cfg.model.get_model('default')}"]
+        lines = [f"Default model: {cfg.model.get_model('medium')}"]
         for m in cfg.model.models:
             conn = cfg.model.providers.get(m.provider)
             base_url = conn.base_url if conn else ""

@@ -3,9 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 import time
 
-from iris.agency.execution.llm.gateway import LLMGateway
-from iris.agency.inhibition import InhibitionController
-from iris.agency.planning.decisions import ProactiveScoring
+from iris.agency import InhibitionController, LLMGateway, ProactiveScoring
 from iris.event.event_bus import EventBus
 from iris.event.event_types import ClientSessionEvent
 from iris.io.models import AuthMessage
@@ -98,7 +96,7 @@ def test_inhibition_controller_cooldown_and_planning_scoring():
     # 接続イベント付きの評価
     context = {"system_event": "connected", "role": "user", "offline_duration": "3時間"}
 
-    from iris.agency.planning.decisions.scoring import ScoreContext
+    from iris.agency import ScoreContext
 
     total, _ = scoring.compute(
         ScoreContext(

@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from iris.agency.manager import AgencyManager
+    from iris.agency import AgencyManager
     from iris.event.event_bus import EventBus
     from iris.event.tracer import EventTracer
     from iris.io.manager import IOManager

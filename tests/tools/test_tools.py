@@ -152,12 +152,12 @@ def test_registry_list_tools() -> None:
 def test_registry_list_tools_for_role() -> None:
     r = ToolRegistry()
     r.register(_make_tool_def(name="all", fn=lambda: "", allowed_roles=None))
-    r.register(_make_tool_def(name="smart_only", fn=lambda: "", allowed_roles={"smart"}))
-    all_tools = r.list_tools_for_role("base")
+    r.register(_make_tool_def(name="medium_only", fn=lambda: "", allowed_roles={"medium"}))
+    all_tools = r.list_tools_for_role("high")
     assert len(all_tools) == 1
     assert all_tools[0]["function"]["name"] == "all"
-    smart_tools = r.list_tools_for_role("smart")
-    assert len(smart_tools) == 2
+    medium_tools = r.list_tools_for_role("medium")
+    assert len(medium_tools) == 2
 
 
 def test_registry_execute() -> None:

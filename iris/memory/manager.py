@@ -258,7 +258,7 @@ class MemoryManager:
             return [result] if result else []
         n = filters.get("n", 5) if isinstance(filters.get("n"), int) else 5
         if stream == "short_term":
-            return self.short_term.get_recent_turns(n)
+            return self.short_term.get_recent_turns(n)  # type: ignore[return-value]
         if stream == "episodic":
             return self.long_term.get_episodic_recent(n)
         return []
@@ -266,7 +266,7 @@ class MemoryManager:
     def search(self, query: str, stream: str | None = None, **kwargs: Any) -> list[dict]:
         max_results = kwargs.get("max_results", 3) if isinstance(kwargs.get("max_results"), int) else 3
         if stream == "short_term":
-            return self.short_term.search(query, max_results=max_results)
+            return self.short_term.search(query, max_results=max_results)  # type: ignore[return-value]
         if stream == "semantic" or stream is None:
             return self.long_term.search_semantic(query, max_results=max_results)
         return []

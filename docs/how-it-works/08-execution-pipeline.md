@@ -15,26 +15,22 @@ sequenceDiagram
     FE->>ORCH: ainvoke(state)
 
     ORCH->>ORCH: SetupNode
-    ORCH->>LG: LLMCallNode.chat(messages, tools)
+    ORCH->>LG: GeneralChatNode.chat(messages, tools + routing tools)
 
-    alt tools_allowed
-        loop 最大3回
-            LG->>LLM: chat()
-            LLM-->>LG: tool_calls or content
-            alt tool_callsあり
-                LG->>TE: ToolRunNode.run_tool_calls()
-                TE-->>LG: 結果追加
-            else tool_callsなし
-                LG-->>ORCH: response_text
-            end
+    loop ツールループ
+        LG->>LLM: chat()
+        LLM-->>LG: tool_calls or content
+        alt ルーティングツール
+            LG-->>ORCH: general_chat / general_task / deep_task / finish
+        else 実tool_calls
+            LG->>TE: ToolRunNode.run_tool_calls()
+            TE-->>LG: 結果追加
+        else content (no tools)
+            LG-->>ORCH: response_text
         end
-    else no tools
-        LG->>LLM: chat_short (tool-less)
-        LLM-->>LG: response text
     end
 
-    ORCH->>ORCH: FinalizeNode
-    ORCH->>EB: MessageEvent (response)
+    ORCH->>ORCH: FinalizeNode → DONE
     ORCH->>CON: PostProcessNode
     CON->>CON: reflexion (必要時)
     CON->>CON: compression (必要時)
@@ -50,10 +46,10 @@ OutputTracker が検出した talkative_degree に応じて計画属性を上書
 
 | degree | オーバーライド |
 |--------|---------------|
-| >= 1 | abbreviated=True |
+| >= 1 | task_level = "chat"（最短応答） |
 | >= 2 | max_tokens = min(current, 256) |
 | >= 3 | run_reflexion=False, run_compression=False |
-| >= 5 | streaming=False, show_thinking=False |
+| >= 5 | show_thinking=False |
 
 ### 自発発話抑制 (talkative)
 
@@ -66,12 +62,13 @@ if content が空 かつ (talkative >= 2 or (frequency_exceeded and talkative >=
 
 `silent=True` の plan はユーザーに出力を見せない自律処理:
 
-- streaming=False, show_thinking=False
+- show_thinking=False（思考過程非表示）
 - allow_side_effects=False（環境変更不可）
 - max_tool_iterations=3（上限）
 - priority=1（低優先度）
 - content が空の場合、自律調査用ベース指示を自動構築
 - user ではなく thought ロールでメッセージ記録
+- on_token によるストリーミングは通常通り発生
 - 完了後 `ProactiveResultEvent` を publish
 
 ### 実行フロー
@@ -82,21 +79,26 @@ FlowExecutor._on_plan(PlanDecided)
 ├── should_skip_proactive()?       ← talkative 抑制
 ├── ExecutionOrchestrator.ainvoke(state)
 │   ├── SetupNode
-│   │   ├── silent/streaming設定
 │   │   ├── messages.append(plan.content)
 │   │   ├── short_term.add_turn()
+│   │   ├── on_token コールバック設定
 │   │   └── show_thinking → MessageEvent(THINKING)
-│   ├── LLMCallNode
-│   │   ├── chat_short() (ツール無効時)
-│   │   └── chat() + ツールループ (ツール有効時)
-│   ├── ToolRunNode (ループ内)
+│   ├── GeneralChatNode (fixed entry, chat/light レベル)
+│   │   └── LLMGateway.chat() + ルーティングツール
+│   ├── GeneralTaskNode (normal/deep/research レベル)
+│   │   └── LLMGateway.chat() + ルーティングツール
+│   ├── ルーティングツール制御
+│   │   ├── general_chat → chain_depth+1, 同一ノード
+│   │   ├── general_task → GeneralTaskNode へ切替
+│   │   ├── deep_task → level_idx+1
+│   │   └── finish → FinalizeNode
+│   ├── ToolRunNode (実tool_calls時)
 │   │   └── ToolEngine.run_tool_calls()
 │   ├── FinalizeNode
-│   │   ├── 応答を messages に追加
 │   │   ├── short_term.add_turn()
-│   │   ├── ストリーミング → MessageEvent(stream)
-│   │   ├── MessageEvent(response)
-│   │   └── OutputTracker / FeedbackCoordinator 記録
+│   │   ├── on_token によるストリーミング（SetupNode設定）
+│   │   ├── OutputTracker / FeedbackCoordinator 記録
+│   │   └── MessageEvent(DONE)
 │   └── PostProcessNode (silent 以外)
 │       ├── reflexion (run_reflexion=True)
 │       └── compression (run_compression=True)
@@ -130,20 +132,20 @@ response = await llm.chat(messages, max_tokens=80 or plan.max_tokens, temperatur
 - 高速・低コスト。streaming 無効
 - エラー時は空文字または "…" を返す
 
-#### ツールあり生成 (通常応答と silent 内省)
+#### ツールあり生成（通常応答と silent 内省）
 
 LangGraph 状態マシンを使用:
 
 ```
-START → SetupNode → LLMCallNode
-  ├─(tool_calls)→ ToolRunNode → LLMCallNode (循環)
-  └─(no tools) → FinalizeNode → PostProcessNode (optional) → END
+START → SetupNode → GeneralChatNode (fixed entry)
+  ├─ routing tools → GeneralChatNode / GeneralTaskNode / deep_task / finish
+  ├─ real tool_calls → ToolRunNode → 元ノード復帰（循環）
+  └─ no tools → FinalizeNode → PostProcessNode (optional) → END
 ```
 
-- 最大3回のツールイテレーションで打ち切り（`max_tool_iterations=3`）
-- 各イテレーションで tool_calls があれば ToolEngine.run_tool_calls() で実行
-- 結果を履歴に追加して次の LLMCallNode へ
-- LangGraph StateGraph で状態マシンとして実装
+- ルーティングツール（general_chat/general_task/deep_task/finish）でノード遷移を制御
+- 各タスクレベルは `TaskLevel` で定義（chat/light/normal/deep/research）
+- ツール上限は `max_tool_iterations`（chat: 0回, normal: 3回, deep: 5回, research: 10回）
 - side_effect=True のツールは結果を会話に戻さない
 
 ### LLM 呼出パラメータ
@@ -154,7 +156,7 @@ START → SetupNode → LLMCallNode
 | temperature | `ModelConfig.get_effective_temperature(role)` + 感情変調 |
 | max_tokens | plan.max_tokens or `get_effective_max_tokens(role)` |
 | tools | ToolRegistry.list_tools() |
-| on_token | streaming 時のみ設定 |
+| on_token | SetupNode 設定（常時有効） |
 
 ## OutputTracker
 

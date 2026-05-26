@@ -60,6 +60,7 @@ iris/                             ← アプリケーションコア
 │   ├── persona_data.py           ← 話し方・自己状態の動的管理
 │   └── persona_profile.py        ← PersonaProfile（ペルソナ情報の統合IF）
 ├── agency/                       ← 高度認知: PFC+基底核+運動野
+│   ├── task_level.py             ← TaskLevel定義（chat/light/normal/deep/research）
 │   ├── manager.py                ← AgencyManager（compact_context中継）
 │   ├── bus.py                    ← 内部 EventBus（planning→execution）
 │   ├── planning/                 ← 前頭前野: 意思決定 + PFCスコアリング
@@ -74,8 +75,10 @@ iris/                             ← アプリケーションコア
 │       │   ├── gateway.py        ← LLMGateway（LLM呼出）
 │       │   └── prompt_builder.py ← SystemPromptBuilder
 │       ├── nodes/                ← LangGraphノード
+│       │   ├── base.py           ← BaseLLMNode（抽象基底）
+│       │   ├── general_chat.py   ← GeneralChatNode（低レベル簡易応答）
+│       │   ├── general_task.py   ← GeneralTaskNode（高レベルタスク実行）
 │       │   ├── setup.py          ← SetupNode
-│       │   ├── llm_call.py       ← LLMCallNode
 │       │   ├── tool_run.py       ← ToolRunNode
 │       │   ├── finalize.py       ← FinalizeNode
 │       │   └── post_process.py   ← PostProcessNode
@@ -161,6 +164,7 @@ iris/                             ← アプリケーションコア
 - `limbic/` → `memory/`（感情タグ）、`limbic/` → `agency/`（感情変調）のインターフェースあり
 
 詳細は `docs/architecture.md` と `docs/adr/` を参照。
+構成図やシーケンス図の作成・レンダリングは `.agents/skills/iris-visualize/SKILL.md` を参照。
 
 ## 6. 記憶体系
 

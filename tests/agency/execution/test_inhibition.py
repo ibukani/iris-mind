@@ -5,7 +5,7 @@ import time
 
 import pytest
 
-from iris.agency.inhibition import InhibitionController
+from iris.agency import InhibitionController
 
 
 @pytest.fixture

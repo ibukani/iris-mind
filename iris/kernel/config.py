@@ -153,13 +153,20 @@ class ModelConfig(BaseModel):
         return 4096
 
 
+class InhibitionConfig(BaseModel):
+    post_execution_cooldown_sec: float = 5.0
+    max_concurrent_executions: int = 1
+    inhibit_proactive_during_execution: bool = True
+    inhibit_proactive_during_cooldown: bool = True
+
+
 class ProactiveConfig(BaseModel):
     check_interval_sec: float = 5.0
     min_interval_sec: float = 30.0
     active_min_interval_sec: float = 2.0
     max_interval_sec: float = 300.0
     trigger_weights: dict[str, float] = Field(default_factory=_default_trigger_weights)
-    speak_threshold: float = 0.60
+    speak_threshold: float = 0.30
     abbreviated_threshold: float = 0.25
 
 
@@ -228,6 +235,7 @@ class Config(BaseModel):
     model: ModelConfig = Field(default_factory=ModelConfig)
     personality: PersonalityConfig = Field(default_factory=PersonalityConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
+    inhibition: InhibitionConfig = Field(default_factory=InhibitionConfig)
     proactive: ProactiveConfig = Field(default_factory=ProactiveConfig)
     timer: TimerConfig = Field(default_factory=TimerConfig)
     session: SessionConfig = Field(default_factory=SessionConfig)

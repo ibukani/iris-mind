@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Protocol
 
 from loguru import logger
 
+from iris.agency.inhibition import InhibitionManager
 from iris.agency.internal_bus import PlanDecided
 from iris.agency.planning.models import Plan
 from iris.event.event_types import InterruptEvent
@@ -24,8 +25,10 @@ class _FlowExecutionHandler:
         event_bus: EventBus,
         internal_bus: InternalBus,
         controller: _FlowControlProtocol,
+        inhibition: InhibitionManager | None = None,
     ) -> None:
         self._controller = controller
+        self._inhibition = inhibition
         event_bus.subscribe("InterruptEvent", self._on_interrupt)
         internal_bus.subscribe("PlanDecided", self._on_plan)
 
@@ -35,6 +38,15 @@ class _FlowExecutionHandler:
 
     def _on_plan(self, event: PlanDecided) -> None:
         plan = event.plan
+        if self._inhibition:
+            decision = self._inhibition.evaluate(plan)
+            if not decision.allow:
+                logger.info(
+                    "FlowExecutionHandler: plan rejected by inhibition reason={} session={}",
+                    decision.reason,
+                    plan.session_id,
+                )
+                return
         logger.info(
             "FlowExecutionHandler: queueing plan session={}",
             plan.session_id,

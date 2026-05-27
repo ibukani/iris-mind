@@ -10,6 +10,7 @@ from iris.agency.execution.engine import ToolEngine
 from iris.agency.execution.llm.gateway import LLMGateway
 from iris.agency.execution.orchestrator import ExecutionOrchestrator
 from iris.agency.execution.worker import AsyncWorker
+from iris.agency.inhibition import InhibitionManager
 from iris.agency.planning.models import Plan
 from iris.event.event_bus import EventBus
 from iris.llm.capability import CapabilityChecker
@@ -30,12 +31,14 @@ class FlowExecutor(AsyncWorker):
         session_roles_getter: Callable[[], str] | None = None,
         memory: MemoryManager | None = None,
         capability_checker: CapabilityChecker | None = None,
+        inhibition: InhibitionManager | None = None,
         messages: list[BaseMessage] | None = None,
     ) -> None:
         super().__init__(name="executor-worker")
 
         self._event_bus = event_bus
         self._memory = memory
+        self._inhibition = inhibition
         self._messages: list[BaseMessage] = messages if messages is not None else []
         self._interrupt_token: InterruptToken | None = None
 
@@ -59,6 +62,12 @@ class FlowExecutor(AsyncWorker):
             self._interrupt_token.cancel()
 
     async def process(self, plan: Plan) -> None:  # type: ignore[override]
+        if self._inhibition:
+            decision = self._inhibition.acquire_execution()
+            if not decision.allow:
+                logger.warning("FlowExecutor: execution denied by gate reason={}", decision.reason)
+                return
+
         self._interrupt_token = InterruptToken()
         self._graph.set_callbacks(
             interrupt_token=self._interrupt_token,
@@ -74,6 +83,8 @@ class FlowExecutor(AsyncWorker):
             self._messages.append(SystemMessage(content=f"[Execution Error: {e}]"))
         finally:
             self._interrupt_token = None
+            if self._inhibition:
+                self._inhibition.release_execution()
 
     def shutdown(self, timeout: float = 5.0) -> None:
         if self._memory:

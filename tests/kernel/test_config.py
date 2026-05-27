@@ -159,7 +159,7 @@ def test_proactive_config_defaults() -> None:
     config = ProactiveConfig()
     assert config.check_interval_sec == 5.0
     assert config.min_interval_sec == 30.0
-    assert config.speak_threshold == 0.6
+    assert config.speak_threshold == 0.3
     assert config.trigger_weights["memory"] == 0.55
     assert config.trigger_weights["context"] == 0.30
 

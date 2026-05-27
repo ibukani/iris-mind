@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from dataclasses import fields as _fields
 from datetime import datetime
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any, ClassVar
 import uuid as _uuid
 
@@ -119,6 +120,19 @@ class InterruptEvent(Event):
     session_id: str = ""
 
 
+class InhibitionAction(StrEnum):
+    SUPPRESS = "suppress"
+    UNSUPPRESS = "unsuppress"
+    HYPERDIRECT = "hyperdirect"
+
+
+@dataclass
+class InhibitionEvent(Event):
+    action: InhibitionAction = InhibitionAction.SUPPRESS
+    reason: str = ""
+    duration: float = 0.0
+
+
 def new_trace_id() -> str:
     return _uuid.uuid4().hex[:12]
 
@@ -129,6 +143,8 @@ __all__ = [
     "ClientSessionEvent",
     "DebugSnapshotEvent",
     "Event",
+    "InhibitionAction",
+    "InhibitionEvent",
     "InputReady",
     "InterruptEvent",
     "MemoryUpdateEvent",

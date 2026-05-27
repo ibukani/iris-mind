@@ -12,6 +12,7 @@ from iris.agency.execution import (
     NodeType,
     ToolEngine,
 )
+from iris.agency.inhibition import InhibitionManager
 from iris.agency.internal_bus import InternalBus, PlanDecided
 from iris.agency.manager import AgencyManager
 from iris.agency.planning import (
@@ -34,7 +35,7 @@ MANIFEST = PluginManifest(
     category=PluginCategory.LAYER,
     phase=PluginPhase.COGNITIVE,
     dependencies={"EventBus", "LLMBridge", "MemoryManager", "ToolRegistry"},
-    provides=["AgencyManager", "PlanningManager", "FlowExecutor"],
+    provides=["AgencyManager", "InhibitionManager", "PlanningManager", "FlowExecutor"],
     description="高度認知層（PFC+基底核+運動野）",
 )
 
@@ -69,6 +70,7 @@ class AgencyPlugin:
             event_bus=event_bus,
             internal_bus=components["internal_bus"],
             controller=components["execution"],
+            inhibition=components["inhibition"],
         )
 
         _PlanningEventHandler(
@@ -77,6 +79,14 @@ class AgencyPlugin:
             proactive_judge=components["proactive_judge"],
             proactive_strategy=components["proactive_strategy"],
             response_strategy=components["response_strategy"],
+            inhibition=components["inhibition"],
+        )
+
+        from iris.agency.inhibition.handler import _InhibitionEventHandler
+
+        _InhibitionEventHandler(
+            event_bus=event_bus,
+            inhibition=components["inhibition"],
         )
 
     def start(self, manager: PluginManager) -> None:
@@ -100,6 +110,7 @@ __all__ = [
     "ExecutionOrchestrator",
     "ExecutionState",
     "FlowExecutor",
+    "InhibitionManager",
     "InternalBus",
     "LLMGateway",
     "NodeType",

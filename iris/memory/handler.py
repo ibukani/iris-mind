@@ -5,7 +5,7 @@ from typing import Any
 
 from loguru import logger
 
-from iris.event.event_types import InputReady, InterruptEvent
+from iris.event.event_types import InhibitionAction, InhibitionEvent, InputReady, InterruptEvent
 
 
 class _MemoryEventHandler:
@@ -16,7 +16,6 @@ class _MemoryEventHandler:
         self.proactive_config = proactive_config
         self._pending_input: dict[str, list[tuple[str, str]]] = {}
         self._pending_lock = threading.Lock()
-        self._voice_active: set[str] = set()
 
         event_bus.subscribe("MessageEvent", self._on_message_event)
         event_bus.subscribe("TimerTick", self._on_timer_tick)
@@ -25,9 +24,23 @@ class _MemoryEventHandler:
     def _on_message_event(self, event: Any) -> None:
         if event.msg_type == "voice_indicator":
             if event.content == "true":
-                self._voice_active.add(event.session_id)
+                self.event_bus.publish(
+                    InhibitionEvent(
+                        timestamp=None,
+                        source="memory",
+                        action=InhibitionAction.SUPPRESS,
+                        reason="voice_recording",
+                    )
+                )
             else:
-                self._voice_active.discard(event.session_id)
+                self.event_bus.publish(
+                    InhibitionEvent(
+                        timestamp=None,
+                        source="memory",
+                        action=InhibitionAction.UNSUPPRESS,
+                        reason="voice_recording",
+                    )
+                )
             return
         if not event.content:
             return
@@ -48,8 +61,6 @@ class _MemoryEventHandler:
             return
         pending = self.flush_pending()
         if pending:
-            return
-        if self._voice_active:
             return
         if self.proactive_config is None:
             return
@@ -95,7 +106,14 @@ class _MemoryEventHandler:
 
     def _on_client_session_event(self, event: Any) -> None:
         if event.action == "disconnected":
-            self._voice_active.discard(event.session_id)
+            self.event_bus.publish(
+                InhibitionEvent(
+                    timestamp=None,
+                    source="memory",
+                    action=InhibitionAction.UNSUPPRESS,
+                    reason="voice_recording",
+                )
+            )
         if event.action != "connected":
             return
         if self.event_bus is None:

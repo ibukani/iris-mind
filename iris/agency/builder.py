@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, TypedDict
 
 if TYPE_CHECKING:
     from iris.agency.execution import FlowExecutor, LLMGateway, ToolEngine
+    from iris.agency.inhibition import InhibitionManager
     from iris.agency.internal_bus import InternalBus
     from iris.agency.manager import AgencyManager
     from iris.agency.planning import (
@@ -27,6 +28,7 @@ class AgencyComponents(TypedDict):
     proactive_judge: ProactiveJudge
     proactive_strategy: ProactivePlanStrategy
     response_strategy: ResponsePlanStrategy
+    inhibition: InhibitionManager
 
 
 def build_agency(manager: PluginManager) -> AgencyComponents:
@@ -36,6 +38,7 @@ def build_agency(manager: PluginManager) -> AgencyComponents:
         LLMGateway,
         ToolEngine,
     )
+    from iris.agency.inhibition import InhibitionManager
     from iris.agency.internal_bus import InternalBus
     from iris.agency.manager import AgencyManager
     from iris.agency.planning import (
@@ -59,6 +62,8 @@ def build_agency(manager: PluginManager) -> AgencyComponents:
 
     event_bus = manager.resolve(EventBus)
     config = manager.config
+
+    inhibition = InhibitionManager(config=config.inhibition)
     llm = manager.resolve(LLMBridge)
     memory = manager.resolve(MemoryManager)
     tool_registry = manager.resolve(ToolRegistry)
@@ -94,6 +99,7 @@ def build_agency(manager: PluginManager) -> AgencyComponents:
         session_roles_getter=session_mgr.get_sessions_summary,
         memory=memory,
         capability_checker=CapabilityChecker(config=config.model),
+        inhibition=inhibition,
     )
 
     scoring = ProactiveScorer(config=config.proactive, memory=memory)
@@ -119,7 +125,9 @@ def build_agency(manager: PluginManager) -> AgencyComponents:
         response_strategy=response_strategy,
     )
 
-    agency = AgencyManager(planning=planning, execution=execution)
+    agency = AgencyManager(planning=planning, execution=execution, inhibition=inhibition)
+
+    manager.provide(InhibitionManager, inhibition)
 
     return {
         "agency": agency,
@@ -131,4 +139,5 @@ def build_agency(manager: PluginManager) -> AgencyComponents:
         "proactive_judge": proactive_judge,
         "proactive_strategy": proactive_strategy,
         "response_strategy": response_strategy,
+        "inhibition": inhibition,
     }

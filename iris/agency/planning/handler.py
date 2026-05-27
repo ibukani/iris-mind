@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from iris.agency.inhibition import InhibitionManager
 from iris.agency.internal_bus import InternalBus, PlanDecided
 from iris.agency.planning.decisions import ProactiveJudge
 from iris.agency.planning.models import Plan
@@ -22,11 +23,13 @@ class _PlanningEventHandler:
         proactive_judge: ProactiveJudge,
         proactive_strategy: ProactivePlanStrategy,
         response_strategy: ResponsePlanStrategy,
+        inhibition: InhibitionManager | None = None,
     ) -> None:
         self._bus = internal_bus
         self._proactive_judge = proactive_judge
         self._proactive_strategy = proactive_strategy
         self._response_strategy = response_strategy
+        self._inhibition = inhibition
 
         event_bus.subscribe("InputReady", self._on_input_ready)
 
@@ -42,6 +45,9 @@ class _PlanningEventHandler:
         return bool(context.get("from_timer") or "system_event" in context or context.get("escalation"))
 
     def _on_proactive_event(self, event: InputReady, context: dict) -> None:
+        if self._inhibition and self._inhibition.should_suppress_proactive():
+            logger.debug("Proactive suppressed by inhibition")
+            return
         proactive_context = self._proactive_judge.decide(event, context)
         if proactive_context is None:
             return

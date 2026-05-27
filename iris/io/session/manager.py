@@ -219,6 +219,10 @@ class SessionManager:
                 timestamp=now,
             )
 
+    def has_active_sessions(self) -> bool:
+        with self._lock:
+            return any(s.state == SessionState.ACTIVE for s in self._sessions.values())
+
     def get_active_sessions(self) -> list[SessionInfo]:
         with self._lock:
             return [s for s in self._sessions.values() if s.state == SessionState.ACTIVE]

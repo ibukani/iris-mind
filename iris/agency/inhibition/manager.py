@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from iris.agency.inhibition.gate import _Gate
@@ -19,10 +20,15 @@ class InhibitionManager:
     抑制要因は全て理由キー付きで一元管理。
     """
 
-    def __init__(self, config: InhibitionConfig) -> None:
+    def __init__(
+        self,
+        config: InhibitionConfig,
+        session_getter: Callable[[], bool] | None = None,
+    ) -> None:
         self._cfg = config
         self._gate = _Gate(config)
         self._striatum = _Striatum(self._gate, config)
+        self._session_getter = session_getter
 
     # ---- Plan evaluation (Striatum) ----
 
@@ -34,6 +40,7 @@ class InhibitionManager:
             (self._cfg.inhibit_proactive_during_execution and self._gate.is_executing)
             or (self._cfg.inhibit_proactive_during_cooldown and self._gate.is_on_cooldown)
             or self._striatum.has_active_suppression
+            or (self._session_getter is not None and not self._session_getter())
         )
 
     # ---- Execution gate (Gate) ----

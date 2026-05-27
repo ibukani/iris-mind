@@ -62,12 +62,15 @@ def build_agency(manager: PluginManager) -> AgencyComponents:
 
     event_bus = manager.resolve(EventBus)
     config = manager.config
+    session_mgr = manager.resolve(SessionManager)
 
-    inhibition = InhibitionManager(config=config.inhibition)
+    inhibition = InhibitionManager(
+        config=config.inhibition,
+        session_getter=session_mgr.has_active_sessions,
+    )
     llm = manager.resolve(LLMBridge)
     memory = manager.resolve(MemoryManager)
     tool_registry = manager.resolve(ToolRegistry)
-    session_mgr = manager.resolve(SessionManager)
     debug_capture = manager.resolve_optional(DebugCapture)
 
     internal_bus = InternalBus()

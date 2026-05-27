@@ -65,7 +65,7 @@ iris/<plugin_name>/
 |---|---|---|---|
 | `models.py` | データ型定義 | `XxxData`, `XxxState` | `TurnData`, `SearchResult`, `ExecutionState` |
 | `protocol.py` | 単一 Protocol | `XxxProtocol` | `MemoryManagerProtocol` |
-| `protocols.py` | 複数 Protocol | `XxxStoreProtocol` | `EpisodicStoreProtocol`, `SemanticStoreProtocol` |
+| `protocols.py` | 複数 Protocol | `XxxProtocol` | `EpisodicStoreProtocol`, `SemanticStoreProtocol` |
 | `base.py` | 抽象基底 | `_XxxBase` (private) | `_JsonlStore` |
 
 ### 責務: 単一処理
@@ -162,7 +162,10 @@ iris/tools/builtins/          # 組み込みツール
 
 ```python
 # iris/<plugin>/builder.py
-def build_components(manager: PluginManager) -> dict:
+from __future__ import annotations
+from typing import Any
+
+def build_components(manager: PluginManager) -> dict[str, Any]:
     dependency = manager.resolve("SomeService")
     component = XxxManager(dependency)
     manager.provide("XxxManager", component)
@@ -173,8 +176,11 @@ def build_components(manager: PluginManager) -> dict:
 
 ```python
 # iris/<plugin>/handler.py
+from __future__ import annotations
+from typing import Any
+
 class _XxxEventHandler:
-    def __init__(self, event_bus, dependency):
+    def __init__(self, event_bus: Any, dependency: Any) -> None:
         event_bus.subscribe("SomeEvent", self._on_event)
 
     def _on_event(self, event: SomeEvent) -> None:
@@ -185,6 +191,9 @@ class _XxxEventHandler:
 
 ```python
 # iris/<plugin>/scorer.py
+from __future__ import annotations
+from typing import Protocol
+
 class XxxScorer(Protocol):
     def score(self, data: InputType) -> int: ...
 
@@ -197,14 +206,18 @@ class DefaultXxxScorer:
 
 ```python
 # iris/<plugin>/dispatcher.py
-def build_dispatch_handlers(...) -> dict[str, Callable]:
+from __future__ import annotations
+from collections.abc import Callable
+from typing import Any
+
+def build_dispatch_handlers(...) -> dict[str, Callable[..., Any]]:
     return {
         "store": _store_impl,
         "search": _search_impl,
     }
 
-def _store_impl(data) -> None: ...
-def _search_impl(query) -> list: ...
+def _store_impl(data: Any) -> None: ...
+def _search_impl(query: Any) -> list[Any]: ...
 ```
 
 ## 既存Pluginの構造例
@@ -212,7 +225,7 @@ def _search_impl(query) -> list: ...
 | Plugin | mainファイル | サブファイル |
 |---|---|---|
 | `memory/` | `manager.py` | `handler.py`, `dispatcher.py`, `protocol.py` + `short_term/{manager,models,scorer,extractor,renderer}.py` + `long_term/{manager,stores,protocols,base,vector_store,goal_store}.py` + `sensory/manager.py` + `hippocampal/` |
-| `agency/` | `manager.py` | `builder.py`, `bus.py`, `task_level.py` + `planning/{manager,scoring,context_hint_builder,utils}.py` + `execution/{orchestrator,router,executor,models,engine}.py` + `execution/llm/{gateway,prompt_builder}.py` + `execution/nodes/{base,general_chat,general_task,setup,tool_run,finalize,post_process}.py` + `regulation/{consolidator,feedback,output_tracker,talk_control}.py` |
+| `agency/` | `manager.py` | `builder.py`, `bus.py`, `task_level.py` + `planning/{manager,scorer,context_hint_builder,utils}.py` + `execution/{orchestrator,router,executor,models,engine}.py` + `execution/llm/{gateway,prompt_builder}.py` + `execution/nodes/{base,general_chat,general_task,setup,tool_run,finalize,post_process}.py` + `regulation/{consolidator,feedback,output_tracker,talk_control}.py` |
 | `limbic/` | `manager.py` | `models.py`, `amygdala.py`, `acc.py`, `emotional_memory.py`, `big_five.py` |
 | `llm/` | - | `llm_bridge.py`, `provider.py`, `ollama_provider.py`, `openrouter_provider.py`, `capability_checker.py`, `tokenizer_manager.py`, `context_window.py`, `prompt_builder.py`, `interrupt_token.py` |
 

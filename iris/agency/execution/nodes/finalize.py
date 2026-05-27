@@ -25,6 +25,10 @@ class FinalizeNode:
         response_text = state.get("response_text", "")
         session_id = plan.session_id
 
+        if state.get("interrupted") or plan.silent:
+            state["completed"] = True
+            return {"completed": True}
+
         if not response_text:
             self._publish_done(session_id)
             state["completed"] = True

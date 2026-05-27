@@ -165,6 +165,10 @@ class BaseLLMNode(ABC):
                 **self._resolve_chat_params(state, level, plan),
             )
 
+            if self._dynamic.interrupt_token and self._dynamic.interrupt_token.is_cancelled:
+                state["interrupted"] = True
+                return {"response_text": "", "interrupted": True}
+
             state["messages"].append(resp)
 
             raw = resp.content

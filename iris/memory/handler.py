@@ -86,6 +86,13 @@ class _MemoryEventHandler:
         for session_id, entries in pending.items():
             for content, user_identity in entries:
                 bus.publish(
+                    InterruptEvent(
+                        timestamp=None,
+                        source="memory",
+                        session_id=session_id,
+                    )
+                )
+                bus.publish(
                     InputReady(
                         timestamp=None,
                         source="memory",
@@ -93,13 +100,6 @@ class _MemoryEventHandler:
                         content=content,
                         user_identity=user_identity,
                         context={},
-                    )
-                )
-                bus.publish(
-                    InterruptEvent(
-                        timestamp=None,
-                        source="memory",
-                        session_id=session_id,
                     )
                 )
         return pending

@@ -2,19 +2,42 @@
 
 > **注記**: 脳科学・神経科学の用語との対応付けは設計指針であり、厳密な解剖学的正確性を保証するものではありません。
 
-**脳科学対応**: 脳幹 + 視床下部
+**脳科学対応**: 脳幹（Brainstem）
 
 ## 責務
 
 - プロセスライフサイクル管理（起動・停止）
 - シグナルハンドリング（SIGINT, SIGTERM）
-- **全体状態の集約**: 各層の Manager から通知される状態を一元管理
+- **プラグインシステム管理**: PluginManager による全層の構築・依存注入・ライフサイクル管理
 - **外部コマンド処理**: `/shutdown` など、脳に直接作用する外部刺激の処理
 - **TimerTick 生成**: 定期鼓動を Global EventBus に publish（全層の時間ベース処理トリガー）
-- **DI コンテナ**: 全層のインスタンス生成（KernelFactory）
+- **状態診断**: SystemDiagnostics による各層の状態集約
 
 ## 構成
 
+```
+iris/kernel/
+├── __init__.py
+├── manager.py         PluginManager（DI + 全Plugin指揮 + 状態集約）
+├── process.py         KernelProcess（起動・停止, TimerTick発行）
+├── supervisor.py      Supervisor（シグナル管理）
+├── config.py          KernelConfig
+├── capture_formatter.py   デバッグ出力整形
+├── debug_capture.py       DebugCapture（キャプチャ管理）
+├── diagnostics.py         SystemDiagnostics（状態診断）
+├── logging.py             Logging設定
+├── plugin/                # プラグインシステム
+│   ├── manifest.py
+│   ├── protocol.py
+│   ├── lifecycle.py
+│   ├── service_container.py
+│   ├── kernel_state.py
+│   ├── hook_points.py
+│   ├── hooks.py
+│   └── loader.py
+└── commands/
+    ├── __init__.py
+    └── handler.py     CommandHandler
 ```
 iris/kernel/
 ├── __init__.py
@@ -59,20 +82,17 @@ class KernelProcess:
     """プロセスの起動と停止を管理する。"""
 
     def __init__(self, config: Config)
-        # KernelFactory で全層を構築
+        # PluginManager で全層を構築
 
     def start(self) -> None
-        # 1. Factory.build(config) → KernelContext
-        # 2. KernelManager を起動
-        # 3. IOManager を起動（TCPリスナー開始）
-        # 4. 全層の Manager を EventBus に接続
-        # 5. TimerTick スレッド開始
+        # 1. PluginManager.discover_and_build_all() で全Pluginを構築
+        # 2. PluginManager.start_all() で全Pluginを起動
+        # 3. TimerTick スレッド開始
 
     def shutdown(self) -> None
         # 1. TimerTick 停止
-        # 2. IOManager 停止（TCPリスナー停止）
-        # 3. 各層にシャットダウン通知
-        # 4. リソース解放
+        # 2. PluginManager.stop_all() で全Pluginを停止
+        # 3. リソース解放
 
     @property
     def shutdown_requested(self) -> bool
@@ -151,43 +171,24 @@ def _timer_loop(self) -> None:
 
 **購読層**: Memory, Agency（将来の自発発話トリガー）
 
-## KernelFactory
+## PluginManager
 
 ```python
-class KernelFactory:
-    """全層のインスタンス生成と依存注入。
-    DI コンテナとして機能し、各層の Manager を EventBus に接続する。
+class PluginManager:
+    """全Pluginの指揮・DI・状態集約。
+    discover_and_build_all() で全Pluginを発見・構築し、
+    start_all() / stop_all() でライフサイクルを管理する。
     """
 
-    @staticmethod
-    def build(config: Config, debug: bool = False) -> KernelContext
-        # 1. EventBus + EventTracer + SessionManager + GrpcListener 生成
-        # 2. IOManager 生成（transport/session/auth 注入）
-        # 3. Stores（episodic, semantic）生成
-        # 4. MemoryManager 生成
-        # 5. PsychometricState + BigFiveProfile 読込
-        # 6. LimbicManager 生成（Amygdala / ACC / EmotionalMemory 注入）
-        # 7. LLMBridge + TokenizerManager 生成
-        # 8. ToolRegistry + ToolEngine 生成
-        # 9. PlanningManager + FlowExecutor（ExecutionOrchestrator）生成
-        # 10. AgencyManager 生成（global↔internal 接続）
-        # 11. KernelManager + CommandHandler + SystemDiagnostics 生成
-        # 12. EventBus subscribe 設定
-        # 13. KernelContext として返す
+    def discover_and_build_all(self) -> None
+        # 1. 全Pluginを自動発見（discover_sub_plugins）
+        # 2. 依存関係をトポロジカルソート
+        # 3. 各Pluginの init(manager) をphase順に実行
+        # 4. 各Pluginの provides をServiceContainerに登録
 
-@dataclass
-class KernelContext:
-    event_bus: EventBus
-    kernel: KernelManager
-    io: IOManager
-    limbic: LimbicManager | None
-    memory: MemoryManager | None
-    agency: AgencyManager | None
-    cmd_handler: CommandHandler
-    grpc_listener: GrpcListener
-    session_mgr: SessionManager
-    diagnostics: SystemDiagnostics | None = None
-    shutdown_requested: bool = False
+    def start_all(self) -> None
+        # 全Pluginの start(manager) をphase順に実行
+
+    def stop_all(self) -> None
+        # 全Pluginの stop(manager) を逆順に実行
 ```
-
-

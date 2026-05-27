@@ -8,11 +8,11 @@ Iris は脳科学・神経科学の構造を参考にした層分割アーキテ
 
 ```mermaid
 flowchart TD
-    subgraph Kernel["kernel/ 脳幹+視床下部"]
-        K_Manager["KernelManager<br/>プロセス管理・状態集約"]
-        K_Command["CommandHandler<br/>外部コマンド"]
+    subgraph Kernel["kernel/ 脳幹"]
+        K_Plugin["PluginManager<br/>プラグイン管理・DI・状態集約"]
+        K_Process["KernelProcess<br/>起動・停止・TimerTick"]
         K_Supervisor["Supervisor<br/>シグナル管理"]
-        K_Factory["Factory<br/>DIコンテナ"]
+        K_Command["CommandHandler<br/>外部コマンド"]
     end
 
     subgraph IO["io/ 視床"]
@@ -25,10 +25,8 @@ flowchart TD
     subgraph Memory["memory/ 感覚野+皮質"]
         M_Manager["MemoryManager<br/>記憶オーケストレーション"]
         M_Sensory["sensory/<br/>入力バッファリング"]
-        M_Episodic["episodic/<br/>エピソード記憶"]
-        M_Semantic["semantic/<br/>意味記憶"]
-        M_Vector["vector/<br/>埋め込み検索"]
-        M_Goal["goal_store/<br/>長期目標"]
+        M_STM["short_term/<br/>ワーキングメモリ"]
+        M_LTM["long_term/<br/>エピソード+意味記憶"]
     end
 
     subgraph Agency["agency/ 前頭前野+基底核+運動野"]
@@ -37,19 +35,19 @@ flowchart TD
         subgraph Planning["planning/ 前頭前野"]
             P_Manager["PlanningManager<br/>意思決定"]
             P_Judge["ProactiveJudge<br/>判断フロー"]
-            P_Scoring["ProactiveScoring<br/>PFCスコアリング"]
+            P_Scoring["ProactiveScorer<br/>PFCスコアリング"]
         end
 
         subgraph Execution["execution/ 運動野"]
-            E_Exec["FlowExecutor<br/>行動実行"]
+            E_Orch["ExecutionOrchestrator<br/>LangGraph状態マシン"]
             E_LLM["LLMGateway<br/>LLM呼出"]
+            E_Engine["ToolEngine<br/>ツール実行"]
         end
     end
 
-    subgraph Infra["LLM / Tools / ContextWindow"]
-        I_LLM["llm/"]
-        I_CW["LLMContextWindowManager<br/>会話履歴圧縮"]
-        I_TOOLS["tools/"]
+    subgraph Infra["LLM / Tools"]
+        I_LLM["llm/<br/>LLMBridge + Tokenizer"]
+        I_TOOLS["tools/<br/>ToolRegistry"]
     end
 
     subgraph Event["event/ 神経路"]
@@ -103,12 +101,25 @@ sequenceDiagram
 iris/
 ├── __init__.py
 │
-├── kernel/                    # 脳幹: プロセス管理 + DI + コマンド
+├── kernel/                    # 脳幹: プロセス管理 + Pluginシステム + コマンド
 │   ├── __init__.py
-│   ├── manager.py             KernelManager（lifecycle, health, state）
+│   ├── manager.py             PluginManager（全Plugin指揮 + DI + 状態集約）
 │   ├── process.py             KernelProcess（起動・停止, TimerTick発行）
-│   ├── supervisor.py          Supervisor（シグナル・コンソール）
-│   ├── factory.py             DIコンテナ（全層の構築）
+│   ├── supervisor.py          Supervisor（シグナル管理）
+│   ├── config.py              KernelConfig
+│   ├── capture_formatter.py   DebugCapture出力整形
+│   ├── debug_capture.py       DebugCapture（キャプチャ管理）
+│   ├── diagnostics.py         SystemDiagnostics（状態診断）
+│   ├── logging.py             Logging設定
+│   ├── plugin/                # プラグインシステム
+│   │   ├── manifest.py
+│   │   ├── protocol.py
+│   │   ├── lifecycle.py
+│   │   ├── service_container.py
+│   │   ├── kernel_state.py
+│   │   ├── hook_points.py
+│   │   ├── hooks.py
+│   │   └── loader.py
 │   └── commands/
 │       ├── __init__.py
 │       └── handler.py         CommandHandler（/shutdown, /status ...）
@@ -116,13 +127,14 @@ iris/
 ├── io/                        # 視床: 入出力中継
 │   ├── __init__.py
 │   ├── manager.py             IOManager
-│   ├── models.py              InputMessage, OutputMessage ...
+│   ├── models.py              Message, CommandInput, CommandOutput ...
+│   ├── hooks.py               Hook登録
 │   ├── transport/
 │   │   ├── __init__.py
-│   │   ├── iris_service.proto     gRPC Proto定義 (proto/iris/io/)
+│   │   ├── iris_service.proto     gRPC Proto定義
 │   │   ├── grpc_service_pb2.py    自動生成Protobuf
 │   │   ├── grpc_service_pb2_grpc.py 自動生成gRPCスタブ
-│   │   └── grpc_server.py        GrpcListener / GrpcServer
+│   │   └── grpc_server.py        GrpcListener
 │   ├── session/
 │   │   ├── __init__.py
 │   │   └── manager.py         SessionManager
@@ -132,86 +144,122 @@ iris/
 │
 ├── event/                     # 神経路: グローバルEventBus
 │   ├── __init__.py
-│   ├── bus.py                 EventBus
-│   └── event_types.py         イベント型定義
+│   ├── event_bus.py           EventBus
+│   ├── event_types.py         イベント型定義
+│   └── tracer.py              EventTracer
+│
+├── limbic/                    # 大脳辺縁系
+│   ├── amygdala/              扁桃体（感情評価・価値判断）
+│   ├── cingulate/             前帯状皮質（ACC: 感情制御・葛藤調整）
+│   ├── hippocampus/           扁桃体-海馬相互作用（感情タグ付け）
+│   └── prefrontal/            前頭前野（性格・感情統合）
 │
 ├── memory/                    # 記憶系: 感覚野 + 皮質（3層構造）
 │   ├── __init__.py
-│   ├── manager.py             MemoryManager（EventBus連携, TimerTick rate-limit, ディスパッチャ）
+│   ├── manager.py             MemoryManager（EventBus連携, ディスパッチャ）
+│   ├── protocol.py            MemoryManagerProtocol
+│   ├── handler.py             イベントハンドラ
+│   ├── dispatcher.py          store/retrieve/search ディスパッチ
+│   ├── builder.py             コンポーネント組立
+│   ├── hooks.py               Plugin Hook登録
 │   ├── sensory/               # 感覚記憶: 生入力の一時保持
 │   │   ├── __init__.py
 │   │   ├── manager.py         SensoryMemoryManager（断片入力 + raw入力 2系統）
 │   │   └── readiness.py       ReadinessEvaluator
 │   ├── short_term/            # 短期記憶（ワーキングメモリ）
 │   │   ├── __init__.py
-│   │   └── manager.py         ShortTermMemoryManager（ターン管理, 検索, エンティティ抽出）
-│   ├── long_term/             # 長期記憶: エピソード記憶 + 意味記憶
+│   │   ├── manager.py         ShortTermMemoryManager
+│   │   ├── models.py          TurnData, SearchResult
+│   │   ├── scorer.py          重要度スコアリング
+│   │   ├── extractor.py       エンティティ抽出
+│   │   └── renderer.py        コンテキストレンダリング
+│   ├── long_term/             # 長期記憶
 │   │   ├── __init__.py
-│   │   ├── manager.py         LongTermMemoryManager（統合IF）
-│   │   ├── stores.py          EpisodicStore + SemanticStore
+│   │   ├── manager.py         LongTermMemoryManager
+│   │   ├── stores.py          EpisodicStore + SemanticStore + AgentsMdStore
+│   │   ├── protocols.py       Store プロトコル定義
+│   │   ├── base.py            _JsonlStore 基底
+│   │   ├── goal_store.py      GoalStore（長期目標管理）
 │   │   └── vector_store.py    VectorStore（ChromaDB + BM25 ハイブリッド）
-│   ├── goal_store.py          GoalStore（長期目標管理）
+│   └── hippocampal/           Reflexion + HippocampalManager
 │
-├── agency/                    # 高度認知: PFC + 運動野
+├── agency/                    # 高度認知: PFC + 基底核 + 運動野
 │   ├── __init__.py
 │   ├── task_level.py           TaskLevel定義 + resolve_level()
 │   ├── manager.py             AgencyManager
 │   ├── bus.py                 Internal EventBus（planning→execution）
+│   ├── builder.py             コンポーネント組み立て
+│   ├── hooks.py               Plugin Hook登録
+│   ├── inhibition/            抑制制御
 │   ├── planning/              # 前頭前野: 意思決定
 │   │   ├── __init__.py
-│   │   ├── manager.py         PlanningManager（意思決定, InputReady購読）
-│   │   ├── context_hint_builder.py  ContextHintBuilder（文脈ヒント構築）
-│   │   ├── task_content.py          is_task_content（タスク判定）
-│   │   ├── decisions/         # プロアクティブ判断サブパッケージ
-│   │   │   ├── __init__.py    ProactiveJudge, ProactiveScoring を公開
-│   │   │   ├── judge.py       ProactiveJudge（判断フロー）
-│   │   │   └── scoring.py     ProactiveScoring（PFCスコアリング）
+│   │   ├── manager.py         PlanningManager
+│   │   ├── models.py          Plan, PlanReason
+│   │   ├── context_hint_builder.py  ContextHintBuilder
+│   │   ├── question_generator.py    質問生成
+│   │   ├── task_content.py          is_task_content
+│   │   ├── utils.py                 Utilities
+│   │   ├── decisions/         # プロアクティブ判断
+│   │   │   ├── __init__.py
+│   │   │   ├── judge.py       ProactiveJudge
+│   │   │   └── scorer.py      ProactiveScorer
 │   │   └── strategies/        # 計画構築ストラテジ
 │   │       ├── __init__.py
-│   │       ├── response.py    ResponsePlanStrategy（応答計画）
-│   │       └── proactive.py   ProactivePlanStrategy（自発発話計画）
-│   └── execution/             # 運動野: 行動実行
+│   │       ├── response.py    ResponsePlanStrategy
+│   │       └── proactive.py   ProactivePlanStrategy
+│   └── execution/             # 基底核+運動野: 行動実行
 │       ├── __init__.py
-│       ├── orchestrator.py         ExecutionOrchestrator（LangGraph グラフ）
-│       ├── executor.py             FlowExecutor（入口, Plan購読）
-│       ├── state.py                ExecutionState + DynamicState
-│       ├── engine.py               ToolEngine（ツール実行）
+│       ├── orchestrator.py         ExecutionOrchestrator（LangGraph）
+│       ├── router.py               LLM応答後ルーティング
+│       ├── executor.py             FlowExecutor（Plan購読→グラフ起動）
+│       ├── models.py               ExecutionState + DynamicState
+│       ├── engine.py               ToolEngine
+│       ├── builder.py              ノード・グラフ組立
+│       ├── node_types.py           ノード種別定義
+│       ├── worker.py               バックグラウンドワーカー
+│       ├── generation/             (将来)
 │       ├── llm/
 │       │   ├── __init__.py
-│       │   ├── gateway.py          LLMGateway（LLM呼出）
-│       │   └── prompt_builder.py   SystemPromptBuilder
+│       │   ├── gateway.py          LLMGateway
+│       │   ├── prompt_builder.py   SystemPromptBuilder
+│       │   ├── node_prompt_factory.py  ノード別プロンプト
+│       │   └── profile_builder.py      プロファイル構築
 │       ├── nodes/                  # LangGraph ノード
 │       │   ├── __init__.py
-│       │   ├── base.py             BaseLLMNode（抽象基底クラス）
-│       │   ├── general_chat.py     GeneralChatNode（低レベル簡易応答）
-│       │   ├── general_task.py     GeneralTaskNode（高レベルタスク実行）
-│       │   ├── setup.py            SetupNode（初期化）
-│       │   ├── tool_run.py         ToolRunNode（ツール実行）
-│       │   └── finalize.py         FinalizeNode（完了処理）
-│       └── regulation/             # 後処理
-│           └── consolidator.py     Consolidator（Context圧縮）
+│       │   ├── base.py             BaseLLMNode
+│       │   ├── general_chat.py     GeneralChatNode
+│       │   ├── general_task.py     GeneralTaskNode
+│       │   ├── setup.py            SetupNode
+│       │   ├── tool_run.py         ToolRunNode
+│       │   └── finalize.py         FinalizeNode
+│       └── regulation/
+│           └── consolidator.py     Context圧縮
 │
 ├── llm/                       # LLM 基盤
 │   ├── __init__.py
-│   ├── llm_bridge.py          LLMBridge（マルチプロバイダルーター）
-│   ├── provider.py            LLMProvider / ProviderFactory Protocol
-│   ├── ollama_provider.py     Ollamaプロバイダ
-│   ├── openai_compatible_provider.py  OpenAI互換REST API共通基底（OpenRouter/Googleが継承）
-│   ├── openrouter_provider.py OpenRouterプロバイダ
-│   ├── google_provider.py     Googleプロバイダ
-│   ├── priority_lock.py       PriorityLock（優先度付き非同期排他ロック）
-│   ├── capability_checker.py
-│   ├── tokenizer_manager.py   TokenizerManager（tokenizersラッパー）
-│   ├── context_window.py      LLMContextWindowManager（会話履歴圧縮）
-│   ├── prompt_builder.py      Personality（システムプロンプト構築）
-│   └── interrupt_token.py     InterruptToken（LLM生成の中断制御）
+│   ├── bridge.py              LLMBridge（マルチプロバイダルーター）
+│   ├── capability.py          CapabilityChecker
+│   ├── context.py             LLMContextWindowManager
+│   ├── hooks.py               Plugin Hook登録
+│   ├── interrupt_token.py     InterruptToken
+│   ├── param_builder.py       パラメータ構築
+│   ├── priority_lock.py       PriorityLock
+│   ├── prompt.py              Personality（システムプロンプト構築）
+│   ├── repetition.py          繰り返し検出
+│   ├── tokenizer.py           TokenizerManager
+│   └── providers/
+│       └── ollama_env.py      Ollama環境チェック
 │
-└── tools/                     # @tool, ToolRegistry, ビルトイン
+├── tools/                     # @tool, ToolRegistry
+│   ├── __init__.py
+│   ├── decorator.py           @tool デコレータ
+│   ├── models.py              ToolDef, ToolCall
+│   ├── registry.py            ToolRegistry
+│   └── builtins/              組み込みツール
+│
+└── admin/                     # CLI管理
     ├── __init__.py
-    ├── decorator.py
-    ├── models.py
-    ├── registry.py
-    └── builtins/              # (空) ツール実装
+    └── __main__.py            CLIエントリポイント
 ```
 
 ## 4. グローバル EventBus 定義
@@ -251,58 +299,59 @@ class AgentAnomalyEvent(Event):
 
 @dataclass
 class MessageEvent(Event):
-    session_id: str
-    source_role: str
-    target_role: str
-    direction: str           # "request" | "response" | "stream" | "event"
-    msg_type: str            # "chat" | "system" | "stream" | "response" | ...
-    content: str
-    state: str | None
-    correlation_id: str | None
+    session_id: str = ""
+    source_role: str = ""
+    target_role: str = ""
+    user_identity: str = ""
+    direction: str = ""      # "request" | "response" | "stream" | "event"
+    msg_type: str = ""       # "chat" | "system" | "stream" | "response" | ...
+    content: str = ""
+    state: str | None = None
+    correlation_id: str | None = None
 
 @dataclass
 class InputReady(Event):
-    session_id: str
-    content: str
-    context: dict | None
+    session_id: str = ""
+    content: str = ""
+    user_identity: str = ""
+    context: dict | None = None
 
 @dataclass
 class ClientSessionEvent(Event):
-    session_id: str
-    action: str              # "connected" | "disconnected"
-    role: str
-    identity: str
-    offline_duration: str    # 切断されていた期間（例: "3時間20分間"）
+    session_id: str = ""
+    action: str = ""         # "connected" | "disconnected"
+    role: str = ""
+    identity: str = ""
+    offline_duration: str = ""
 
 @dataclass
 class DebugSnapshotEvent(Event):
-    category: str
-    data: dict | None
-    trigger: str
+    category: str = ""
+    data: dict | None = None
+    trigger: str = ""
 
 @dataclass
-class ProactiveResultEvent(Event):
-    topic: str
-    success: bool = True
-    content: str
+class InterruptEvent(Event):
+    session_id: str = ""
 ```
 
 ## 5. 状態管理（統合）
 
-`KernelManager` が全体状態を集約する。各層の Manager は自己状態を `StateChange` イベントで Kernel に通知する。
+`KernelState`（`iris/kernel/plugin/kernel_state.py`）が全体状態を集約する。
+各層の Manager は自己状態を `DebugSnapshotEvent` で通知する。SystemDiagnostics が `get_state()` 命名規約で自動発見する。
 
 ```mermaid
 flowchart LR
     subgraph L["状態管理"]
-        KS["KernelManager<br/>(全体状態)"]
+        KS["KernelState<br/>(全体状態)"]
         MS["MemoryManager<br/>(記憶状態)"]
         AS["AgencyManager<br/>(実行状態)"]
         IS["IOManager<br/>(接続状態)"]
     end
 
-    MS -->|StateChange| KS
-    AS -->|StateChange| KS
-    IS -->|StateChange| KS
+    MS -->|DebugSnapshotEvent| KS
+    AS -->|DebugSnapshotEvent| KS
+    IS -->|DebugSnapshotEvent| KS
 ```
 
 状態の種類と責任層:
@@ -339,6 +388,6 @@ flowchart LR
 ```
 
 - 各層は直接の依存を持たず、EventBus を介して通信する
-- ただし Factory（DI コンテナ）は全層のインスタンスを生成するため、kernel/factory.py に集約
+- PluginManager が全層の構築と DI を行う（`kernel/manager.py`）
 - Agency の planning → execution は内部 EventBus を介する
 - IO 層は gRPC への依存を持つが、`io/transport/` に閉じる

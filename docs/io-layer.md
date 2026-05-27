@@ -19,6 +19,7 @@ iris/io/
 ├── __init__.py
 ├── manager.py         IOManager
 ├── models.py          Message, CommandInput, CommandOutput, Permission, Direction
+├── hooks.py           Plugin Hook登録
 ├── transport/
 │   ├── __init__.py
 │   ├── iris_service.proto    ← gRPC サービス・メッセージ定義 (proto/iris/io/)

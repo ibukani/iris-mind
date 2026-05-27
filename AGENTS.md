@@ -33,10 +33,12 @@ iris/                             ← アプリケーションコア
 │   ├── manager.py                ← PluginManager（全Plugin指揮 + DI + 状態集約）
 │   ├── process.py                ← KernelProcess（起動・停止, TimerTick発行）
 │   ├── supervisor.py             ← Supervisor（シグナル管理）
-│   ├── stats.py                  ← パフォーマンス統計
 │   ├── config.py                 ← KernelConfig
 │   ├── capture_formatter.py      ← CaptureEntry（デバッグ出力整形）
-│   └── plugin/                   ← プラグインシステムの型・機構
+│   ├── debug_capture.py          ← DebugCapture（キャプチャ管理）
+│   ├── diagnostics.py            ← SystemDiagnostics（状態診断）
+│   ├── logging.py                ← Logging設定
+│   ├── plugin/                   ← プラグインシステムの型・機構
 │   │   ├── manifest.py           ← PluginManifest, PluginCategory, PluginPhase, PluginState
 │   │   ├── protocol.py           ← PluginProtocol（プラグイン契約）
 │   │   ├── lifecycle.py          ← PluginLifecycle（build order + init/start/stop）
@@ -49,25 +51,29 @@ iris/                             ← アプリケーションコア
 ├── io/                           ← 視床: 入出力中継
 │   ├── manager.py                ← IOManager
 │   ├── models.py                 ← Message, CommandInput, CommandOutput, Permission, Direction
+│   ├── hooks.py                  ← Hook登録
 │   ├── transport/                ← GrpcListener
 │   ├── session/                  ← SessionManager
 │   └── auth/                     ← Authenticator
 ├── event/                        ← 神経路: Global EventBus
-│   ├── bus.py                    ← EventBus（kernel から分離）
-│   └── event_types.py            ← イベント型定義
-├── limbic/                       ← 大脳辺縁系: 感情処理 + 性格特性
-│   ├── manager.py                ← LimbicManager（感情状態管理, EventBus連携）
-│   ├── models.py                 ← EmotionState（PAD 3次元モデル）
-│   ├── amygdala.py               ← 扁桃体（感情評価・価値判断）
-│   ├── acc.py                    ← 前帯状皮質（感情制御・葛藤調整）
-│   ├── emotional_memory.py       ← 扁桃体-海馬相互作用（感情タグ付け）
-│   └── big_five.py               ← BigFiveProfile + 性格進化（大脳辺縁系が性格を管理）
+│   ├── event_bus.py              ← EventBus（kernel から分離）
+│   ├── event_types.py            ← イベント型定義
+│   └── tracer.py                 ← EventTracer（デバッグトレース）
+├── limbic/                       ← 大脳辺縁系
+│   ├── amygdala/                 ← 扁桃体（感情評価・価値判断）
+│   ├── cingulate/                ← 前帯状皮質（ACC: 感情制御・葛藤調整）
+│   ├── hippocampus/              ← 扁桃体-海馬相互作用（感情タグ付け）
+│   └── prefrontal/               ← 前頭前野（性格・感情統合）
 ├── memory/                       ← 記憶系: 感覚野+海馬+皮質（3層構造）
 │   ├── manager.py                ← MemoryManager（オーケストレータ）
 │   ├── protocol.py               ← MemoryManagerProtocol
 │   ├── handler.py                ← イベントハンドラ（MessageEvent/TimerTick）
 │   ├── dispatcher.py             ← store/retrieve/search ディスパッチ
-│   ├── sensory/                  ← SensoryMemoryManager（断片+生入力 2系統）
+│   ├── builder.py                ← コンポーネント組立
+│   ├── hooks.py                  ← Plugin Hook登録
+│   ├── sensory/                  ← 感覚記憶
+│   │   ├── manager.py            ← SensoryMemoryManager（断片+生入力 2系統）
+│   │   └── readiness.py          ← ReadinessEvaluator
 │   ├── short_term/
 │   │   ├── manager.py            ← ShortTermMemoryManager（ワーキングメモリ）
 │   │   ├── models.py             ← TurnData, SearchResult
@@ -81,52 +87,71 @@ iris/                             ← アプリケーションコア
 │   │   ├── protocols.py          ← Store プロトコル定義
 │   │   ├── base.py               ← _JsonlStore 基底
 │   │   └── vector_store.py       ← VectorStore（ChromaDB+BM25）
-│   ├── hippocampal/              ← Reflexion + HippocampalManager
-│   ├── persona_data.py           ← 話し方・自己状態の動的管理
-│   └── persona_profile.py        ← PersonaProfile（ペルソナ情報の統合IF）
+│   └── hippocampal/              ← Reflexion + HippocampalManager
 ├── agency/                       ← 高度認知: PFC+基底核+運動野
 │   ├── builder.py                ← コンポーネント組み立て工場
 │   ├── task_level.py             ← TaskLevel定義（chat/light/normal/deep/research）
 │   ├── manager.py                ← AgencyManager（compact_context中継）
 │   ├── bus.py                    ← 内部 EventBus（planning→execution）
+│   ├── hooks.py                  ← Plugin Hook登録
+│   ├── inhibition/               ← 抑制制御
 │   ├── planning/                 ← 前頭前野: 意思決定 + PFCスコアリング
 │   │   ├── manager.py            ← PlanningManager
-│   │   ├── scorer.py             ← ProactiveScorer
+│   │   ├── models.py             ← Plan, PlanReason
 │   │   ├── context_hint_builder.py ← コンテキストヒント生成
-│   │   └── utils.py              ← ユーティリティ（時間ラベル等）
+│   │   ├── question_generator.py ← 質問生成
+│   │   ├── task_content.py       ← タスク判定
+│   │   ├── utils.py              ← ユーティリティ（時間ラベル等）
+│   │   ├── decisions/
+│   │   │   ├── judge.py          ← ProactiveJudge
+│   │   │   └── scorer.py         ← ProactiveScorer
+│   │   └── strategies/
+│   │       ├── response.py       ← ResponsePlanStrategy
+│   │       └── proactive.py      ← ProactivePlanStrategy
 │   └── execution/                ← 基底核+運動野: 行動実行
 │       ├── orchestrator.py       ← ExecutionOrchestrator（LangGraphグラフ）
 │       ├── router.py             ← LLM応答後のノード遷移ルーティング
 │       ├── executor.py           ← FlowExecutor（Plan購読→グラフ起動）
 │       ├── models.py             ← ExecutionState / DynamicState
 │       ├── engine.py             ← ToolEngine（ツール実行）
+│       ├── builder.py            ← ノード・グラフ組立
+│       ├── node_types.py         ← ノード種別定義
+│       ├── worker.py             ← バックグラウンドワーカー
 │       ├── llm/
 │       │   ├── gateway.py        ← LLMGateway（LLM呼出）
-│       │   └── prompt_builder.py ← SystemPromptBuilder
+│       │   ├── prompt_builder.py ← SystemPromptBuilder
+│       │   ├── node_prompt_factory.py ← ノード別プロンプト生成
+│       │   └── profile_builder.py ← プロファイル構築
 │       ├── nodes/                ← LangGraphノード
 │       │   ├── base.py           ← BaseLLMNode（抽象基底）
-│       │   ├── general_chat.py   ← GeneralChatNode（低レベル簡易応答）
-│       │   ├── general_task.py   ← GeneralTaskNode（高レベルタスク実行）
+│       │   ├── general_chat.py   ← GeneralChatNode
+│       │   ├── general_task.py   ← GeneralTaskNode
 │       │   ├── setup.py          ← SetupNode
 │       │   ├── tool_run.py       ← ToolRunNode
-│       │   ├── finalize.py       ← FinalizeNode
-│       │   └── post_process.py   ← PostProcessNode
-│       └── regulation/           ← 出力調整
-│           ├── consolidator.py   ← Consolidator
-│           ├── feedback.py       ← FeedbackCoordinator
-│           ├── output_tracker.py ← OutputTracker
-│           └── talk_control.py   ← talkative抑制
-├── llm/                          ← LLM基盤 + ContextWindow管理
-│   ├── llm_bridge.py             ← LLMBridge（マルチプロバイダルーター）
-│   ├── provider.py               ← LLMProvider / ProviderFactory Protocol
-│   ├── ollama_provider.py        ← Ollamaプロバイダ
-│   ├── openrouter_provider.py    ← OpenRouterプロバイダ
-│   ├── capability_checker.py
-│   ├── tokenizer_manager.py      ← TokenizerManager（tokenizersラッパー）
-│   ├── context_window.py         ← LLMContextWindowManager（会話履歴圧縮）
-│   ├── prompt_builder.py         ← システムプロンプト構築（テンプレートエンジン）
-│   └── interrupt_token.py        ← InterruptToken（LLM生成の中断制御）
-└── tools/                        ← @tool, ToolRegistry
+│       │   └── finalize.py       ← FinalizeNode
+│       └── regulation/
+│           └── consolidator.py   ← Context圧縮
+├── llm/                          ← LLM基盤
+│   ├── bridge.py                 ← LLMBridge（マルチプロバイダルーター）
+│   ├── capability.py             ← CapabilityChecker（機能判定）
+│   ├── context.py                ← LLMContextWindowManager（会話履歴圧縮）
+│   ├── hooks.py                  ← Plugin Hook登録
+│   ├── interrupt_token.py        ← InterruptToken（LLM生成の中断制御）
+│   ├── param_builder.py          ← パラメータ構築
+│   ├── priority_lock.py          ← PriorityLock（優先度付き排他ロック）
+│   ├── prompt.py                 ← Personality（システムプロンプト構築）
+│   ├── repetition.py             ← 繰り返し検出
+│   ├── tokenizer.py              ← TokenizerManager（tokenizersラッパー）
+│   └── providers/
+│       └── ollama_env.py         ← Ollama環境チェック
+├── tools/                        ← @tool, ToolRegistry
+│   ├── decorator.py              ← @tool デコレータ
+│   ├── models.py                 ← ToolDef, ToolCall
+│   ├── registry.py               ← ToolRegistry
+│   └── builtins/                 ← 組み込みツール
+└── admin/                        ← CLI管理
+    ├── __init__.py
+    └── __main__.py               ← CLIエントリポイント
 
 ## 3. 標準開発ワークフロー
 
@@ -195,7 +220,7 @@ iris/                             ← アプリケーションコア
 - `debug_tools/` → `iris/` のみ。逆方向は物理禁止
 - `limbic/` → `memory/`（感情タグ）、`limbic/` → `agency/`（感情変調）のインターフェースあり
 
-詳細は `docs/architecture.md` と `docs/adr/` を参照。
+詳細は `docs/architecture.md` を参照。
 構成図やシーケンス図の作成・レンダリングは `.agents/skills/iris-visualize/SKILL.md` を参照。
 
 ## 6. 記憶体系
@@ -264,7 +289,6 @@ uv run pyright .
 機能変更時は以下を確認:
 
 - 設計文書 (`docs/*.md`)
-- ADR (`docs/adr/*.md`)
 - 自己プロフィール (`.iris/data/iris_profile.md`)
 - `AGENTS.md`, `.agents/README.md`, `.agents/project.md`
 - Skills (`.agents/skills/*/SKILL.md`)
@@ -294,7 +318,7 @@ uv run pyright .
 - **SystemDiagnostics**: `get_state()` 命名規約による自動発見
 - 新状態追加 → `get_state()` + `DebugSnapshotEvent publish` のみ
 
-詳細: `.agents/skills/iris-debug/SKILL.md`
+詳細: `.agents/skills/doc-sync/SKILL.md`
 
 ## 14. 技術スタック
 

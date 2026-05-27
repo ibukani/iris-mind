@@ -50,6 +50,8 @@ class MemoryManager:
 
 ### sensory/ — 感覚記憶
 
+`sensory/manager.py` + `sensory/readiness.py`（ReadinessEvaluator）
+
 ```python
 class SensoryMemoryManager:
     """生の入力を処理前に一時保持する。
@@ -192,17 +194,20 @@ sequenceDiagram
     participant LTM as long_term
 
     alt ユーザー入力
-        EB-->>MGR: InputReceived(msg)
+        EB-->>MGR: MessageEvent(content, direction=request, user_identity)
         MGR->>SEN: store_raw(content)
         MGR->>MGR: pending_dict[session_id].append((content, user_identity))
-        MGR->>EB: TimerTick → InputReady(content)
-        MGR->>EB: publish InputReady
+        MGR->>EB: TimerTick → flush → InputReady(content, user_identity)
+        MGR->>EB: InterruptEvent(session_id)
 
         Note over EB,STM: PlanningManager が Plan 決定後に FlowExecutor が add_turn
         EB-->>MGR: (FlowExecutor) short_term.add_turn("user", content)
     else 自発発話トリガー
         EB-->>MGR: TimerTick（pending なし）
-        MGR->>EB: publish InputReady(from_timer=True)
+        MGR->>EB: publish InputReady(content="", context={from_timer: True})
+    else クライアント再接続
+        EB-->>MGR: ClientSessionEvent(action=connected)
+        MGR->>EB: InputReady(content="", context={system_event, offline_duration})
     end
 
     Note over STM,LTM: 応答後
@@ -213,8 +218,16 @@ sequenceDiagram
 
 | イベント | ハンドラ | 処理 |
 |----------|----------|------|
-| `InputReceived` | `_on_input_received` | sensory.store_raw + pending保存 |
-| `TimerTick` | `_on_timer_tick` | pending pop → InputReady または proactive InputReady |
+| `MessageEvent` | `_on_message_event` | sensory.store_raw + pending保存（direction=request / event, msg_type=chat / system） |
+| `TimerTick` | `_on_timer_tick` | pending pop → InputReady + InterruptEvent または proactive InputReady |
+| `ClientSessionEvent` | `_on_client_session_event` | 再接続時に escalation InputReady を発行 |
 
 MemoryManager は **Completed イベントを購読しない**。
-ContextWindow 圧縮は LLMContextWindowManager（iris/llm/context_window.py）が担当する。
+ContextWindow 圧縮は LLMContextWindowManager（iris/llm/context.py の `LLMContextWindowManager`）が担当する。
+
+### publish するイベント
+
+| イベント | タイミング | フィールド |
+|----------|-----------|-----------|
+| `InputReady` | 入力確定時 / TimerTick / 再接続時 | content, session_id, user_identity, context |
+| `InterruptEvent` | 入力確定時 | session_id |

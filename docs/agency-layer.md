@@ -90,7 +90,7 @@ class PlanningManager:
 
 ### ProactiveScoring（PFC スコアリング）
 
-`agency/planning/scoring.py` — PFC が自発発話の価値を評価する。
+`agency/planning/decisions/scorer.py` — PFC が自発発話の価値を評価する。
 
 ```python
 class ProactiveScoring:
@@ -115,7 +115,7 @@ class ProactiveScoring:
 
 ### Plan 定義と TaskLevel
 
-plan は dict で表現される。`task_level`（文字列）が動作の基本設定を決定し、`overrides` で一部上書き可能。
+plan は `Plan` クラス（`iris/agency/planning/models.py`）で表現される。`task_level`（文字列）が動作の基本設定を決定し、`overrides` で一部上書き可能。
 
 **TaskLevel**（`iris/agency/task_level.py`）:
 
@@ -179,6 +179,12 @@ class FlowExecutor:
 
 `model_role` → `ModelConfig.get_model(role)` → config.yaml のモデル名。
 FlowExecutor は圧縮実行時に `get_effective_context_window(role)` でper-modelの閾値を使用する。
+
+`agency/execution/llm/` 配下:
+- `gateway.py` — LLMGateway（LLM呼出）
+- `prompt_builder.py` — SystemPromptBuilder
+- `node_prompt_factory.py` — ノード別プロンプト生成
+- `profile_builder.py` — プロファイル構築
 
 ### ExecutionOrchestrator（LangGraph 状態マシン）
 

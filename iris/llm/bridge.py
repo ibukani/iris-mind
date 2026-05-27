@@ -175,6 +175,8 @@ class LLMBridge:
             call_kwargs: dict[str, Any] = {"options": merged}
             if reasoning is not None:
                 call_kwargs["reasoning"] = reasoning
+            if not reasoning:
+                call_kwargs["think"] = False
         else:
             call_kwargs = build_openai_kwargs(temperature, max_tokens, kwargs)
         call_kwargs.update(kwargs)

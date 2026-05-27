@@ -12,6 +12,7 @@ enum Permission {
   PERMISSION_RECEIVE_LOG = 5;
   PERMISSION_INTERRUPT = 6;
   PERMISSION_EXECUTE_ACTION = 7;
+  PERMISSION_SEND_VOICE_INDICATOR = 8;
 }
 
 // A message exchanged between roles in the Iris system.

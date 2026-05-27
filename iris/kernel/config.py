@@ -214,6 +214,10 @@ class DebugConfig(BaseModel):
     capture_max_entries: int = 10
 
 
+class TimerConfig(BaseModel):
+    interval_sec: float = 5.0
+
+
 class PluginConfig(BaseModel):
     paths: list[str] = Field(default_factory=lambda: ["iris/"])
     disabled: list[str] = Field(default_factory=list)
@@ -225,6 +229,7 @@ class Config(BaseModel):
     personality: PersonalityConfig = Field(default_factory=PersonalityConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     proactive: ProactiveConfig = Field(default_factory=ProactiveConfig)
+    timer: TimerConfig = Field(default_factory=TimerConfig)
     session: SessionConfig = Field(default_factory=SessionConfig)
     quasi_sync: QuasiSyncConfig = Field(default_factory=QuasiSyncConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)

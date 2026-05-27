@@ -79,6 +79,10 @@ debug:
     capture_auto_dump: true # キャプチャを自動で logs/debug/ にファイル保存
     capture_max_entries: 10 # メモリ内保持数
 
+# 鼓動タイマー — 自発発話のチェック間隔
+timer:
+    interval_sec: 5.0
+
 # ログ出力 — レベル・保存先・ローテーション
 logging:
     backup_count: 14

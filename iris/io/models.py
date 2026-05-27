@@ -19,6 +19,7 @@ class Permission(Enum):
     PERMISSION_RECEIVE_LOG = "receive_log"
     PERMISSION_INTERRUPT = "interrupt"
     PERMISSION_EXECUTE_ACTION = "execute_action"
+    PERMISSION_SEND_VOICE_INDICATOR = "send_voice_indicator"
 
 
 class Direction(Enum):

@@ -23,6 +23,7 @@ _INPUT_PERMISSION_MAP: dict[str, Permission] = {
     "interrupt": Permission.PERMISSION_INTERRUPT,
     "execute_result": Permission.PERMISSION_EXECUTE_ACTION,
     "command": Permission.PERMISSION_SEND_COMMAND,
+    "voice_indicator": Permission.PERMISSION_SEND_VOICE_INDICATOR,
 }
 
 

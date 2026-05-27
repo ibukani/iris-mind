@@ -204,7 +204,11 @@ sequenceDiagram
         EB-->>MGR: (FlowExecutor) short_term.add_turn("user", content)
     else 自発発話トリガー
         EB-->>MGR: TimerTick（pending なし）
+        Note over MGR: _voice_active が空でなければ Proactive 抑制
         MGR->>EB: publish InputReady(content="", context={from_timer: True})
+    else 音声録音中
+        EB-->>MGR: MessageEvent(msg_type=voice_indicator, content="true"/"false")
+        MGR->>MGR: _voice_active 更新（sensory/pending非保存）
     else クライアント再接続
         EB-->>MGR: ClientSessionEvent(action=connected)
         MGR->>EB: InputReady(content="", context={system_event, offline_duration})
@@ -218,7 +222,7 @@ sequenceDiagram
 
 | イベント | ハンドラ | 処理 |
 |----------|----------|------|
-| `MessageEvent` | `_on_message_event` | sensory.store_raw + pending保存（direction=request / event, msg_type=chat / system） |
+| `MessageEvent` | `_on_message_event` | sensory.store_raw + pending保存（direction=request / event, msg_type=chat / system）。msg_type=voice_indicator は制御信号として別処理（sensory/pending非保存、_voice_active 更新） |
 | `TimerTick` | `_on_timer_tick` | pending pop → InputReady + InterruptEvent または proactive InputReady |
 | `ClientSessionEvent` | `_on_client_session_event` | 再接続時に escalation InputReady を発行 |
 

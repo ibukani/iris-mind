@@ -99,6 +99,7 @@ message BidirectionalStreamResponse {
 | 通信方向 | 種別 | 説明 |
 |---------|------|------|
 | Client → Server | `BidirectionalStreamRequest.message` | テキスト入力、制御、アクション結果 |
+| Client → Server | `BidirectionalStreamRequest.message` (msg_type=voice_indicator) | 音声録音状態の制御信号（sensory/pending_input非保存、EventBus経由でProactive抑制） |
 | Client → Server | `BidirectionalStreamRequest.command` | システムコマンド（`CommandInput` fast-path） |
 | Server → Client | `BidirectionalStreamResponse.message` | 応答、アクション要求、確認（`direction:stream`/`direction:response` で配送） |
 | Server → Client | `BidirectionalStreamResponse.command` | コマンド応答（`CommandOutput` fast-path） |
@@ -120,6 +121,7 @@ message BidirectionalStreamResponse {
 | `receive_log` | ログ・デバッグ情報を受信可能 |
 | `interrupt` | 生成中断を要求可能 |
 | `execute_action` | アクション実行要求を受信可能 |
+| `send_voice_indicator` | 音声録音状態を送信可能 |
 
 ### 4.2 Direction (`Message.direction`)
 
@@ -142,6 +144,7 @@ message BidirectionalStreamResponse {
 | `proactive` | Server→Client | 自発発話（stream を経ず1メッセージで完了） |
 | `ack` | Server→Client | 受信確認（`metadata.ack_required` 時） |
 | `error` | Server→Client | エラー通知 |
+| `voice_indicator` | Client→Server | 音声録音状態通知（制御信号）。`content` が `"true"` で録音開始、`"false"` で録音終了。`direction:event` で送信 |
 
 ---
 
@@ -220,7 +223,7 @@ def run():
     metadata = [
         ("access_token", "your_access_token"),
         ("role", "cli"),
-        ("permissions", "send_chat,receive_chat,send_command,receive_command"),
+        ("permissions", "send_chat,receive_chat,send_command,receive_command,send_voice_indicator"),
     ]
 
     with grpc.insecure_channel("localhost:9876") as channel:
@@ -271,7 +274,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let token: MetadataValue<_> = "your_access_token".parse()?;
     let role: MetadataValue<_> = "cli".parse()?;
     let permissions: MetadataValue<_> =
-        "send_chat,receive_chat,send_command,receive_command".parse()?;
+        "send_chat,receive_chat,send_command,receive_command,send_voice_indicator".parse()?;
 
     let mut client = IrisServiceClient::with_interceptor(channel, move |mut req: Request<()>| {
         req.metadata_mut().insert("access_token", token.clone());

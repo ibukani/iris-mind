@@ -161,6 +161,7 @@ class SessionManager:
 | execute | EXECUTE_ACTION |
 | execute_result | SEND_CHAT |
 | interrupt | INTERRUPT |
+| voice_indicator | SEND_VOICE_INDICATOR |
 
 ## auth/
 
@@ -176,6 +177,7 @@ class Authenticator:
 | 方向 | 通信相手 | Event／型 | 説明 |
 |------|----------|-----------|------|
 | Inbound | gRPC → IO | `MessageEvent` via EventBus | Message 入力（`direction=request`, `target_role=mind`） |
+| Inbound | gRPC → IO | `MessageEvent(msg_type=voice_indicator)` via EventBus | 録音状態制御信号（direction=event, msg_type=voice_indicator） |
 | Inbound | gRPC → IO | `CommandInput` → CommandHandler | コマンド入力、EventBus を経由せず直接処理 |
 | Outbound | IO ← EventBus | `MessageEvent(session_id, msg_type, content)` | 出力要求（mind→client） |
 | Outbound | IO → gRPC | `CommandOutput` | コマンド応答、EventBus を経由せず直接送出 |

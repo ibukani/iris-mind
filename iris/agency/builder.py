@@ -100,6 +100,7 @@ def build_agency(manager: PluginManager) -> AgencyComponents:
         memory=memory,
         capability_checker=CapabilityChecker(config=config.model),
         inhibition=inhibition,
+        tts_mora_per_sec=config.inhibition.tts_mora_per_sec,
     )
 
     scoring = ProactiveScorer(config=config.proactive, memory=memory)

@@ -158,6 +158,7 @@ class InhibitionConfig(BaseModel):
     max_concurrent_executions: int = 1
     inhibit_proactive_during_execution: bool = True
     inhibit_proactive_during_cooldown: bool = True
+    tts_mora_per_sec: float = 6.5
 
 
 class ProactiveConfig(BaseModel):

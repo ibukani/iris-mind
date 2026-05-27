@@ -33,12 +33,14 @@ class FlowExecutor(AsyncWorker):
         capability_checker: CapabilityChecker | None = None,
         inhibition: InhibitionManager | None = None,
         messages: list[BaseMessage] | None = None,
+        tts_mora_per_sec: float = 6.5,
     ) -> None:
         super().__init__(name="executor-worker")
 
         self._event_bus = event_bus
         self._memory = memory
         self._inhibition = inhibition
+        self._tts_mora_per_sec = tts_mora_per_sec
         self._messages: list[BaseMessage] = messages if messages is not None else []
         self._interrupt_token: InterruptToken | None = None
 
@@ -76,6 +78,7 @@ class FlowExecutor(AsyncWorker):
         state = build_execution_state(plan, self._messages)
 
         try:
+            before = len(self._messages)
             result = await self._graph.ainvoke(state)
             self._messages[:] = result.get("messages", [])
         except Exception as e:
@@ -85,6 +88,12 @@ class FlowExecutor(AsyncWorker):
             self._interrupt_token = None
             if self._inhibition:
                 self._inhibition.release_execution()
+                new_ai_content = "".join(
+                    m.content for m in self._messages[before:]
+                    if getattr(m, "type", None) == "ai" and isinstance(m.content, str)
+                )
+                if new_ai_content:
+                    self._inhibition.suppress("speaking", len(new_ai_content) / self._tts_mora_per_sec)
 
     def shutdown(self, timeout: float = 5.0) -> None:
         if self._memory:

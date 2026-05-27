@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+import time
 
 from loguru import logger
 
@@ -13,6 +14,7 @@ class TimerService:
         self._event_bus = event_bus
         self._interval = interval
         self._shutdown = threading.Event()
+        self._reset = threading.Event()
         self._tick_count = 0
         self._thread: threading.Thread | None = None
 
@@ -28,6 +30,7 @@ class TimerService:
         if self._thread is not None:
             return
         self._shutdown.clear()
+        self._reset.clear()
         self._thread = threading.Thread(target=self._loop, daemon=True, name="heartbeat")
         self._thread.start()
         logger.info("TimerService: started (interval={:.1f}s)", self._interval)
@@ -39,6 +42,26 @@ class TimerService:
             self._thread = None
         logger.info("TimerService: stopped")
 
+    def tick(self) -> None:
+        """Publish a TimerTick immediately, outside the regular cycle."""
+        self._event_bus.publish(
+            TimerTick(
+                timestamp=None,
+                source="heartbeat:manual",
+                tick_count=-1,
+            )
+        )
+
+    def reset(self) -> None:
+        """Skip remaining wait; next regular tick fires after one full interval."""
+        self._reset.set()
+
+    def schedule_tick(self, delay: float) -> None:
+        """Schedule a one-shot TimerTick after *delay* seconds."""
+        timer = threading.Timer(delay, self.tick)
+        timer.daemon = True
+        timer.start()
+
     def _loop(self) -> None:
         while not self._shutdown.is_set():
             self._event_bus.publish(
@@ -49,4 +72,15 @@ class TimerService:
                 )
             )
             self._tick_count += 1
-            self._shutdown.wait(self._interval)
+            self._wait_for_interval()
+
+    def _wait_for_interval(self) -> None:
+        deadline = time.monotonic() + self._interval
+        while not self._shutdown.is_set():
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            chunk = min(remaining, 0.05)
+            if self._reset.wait(timeout=chunk):
+                self._reset.clear()
+                return

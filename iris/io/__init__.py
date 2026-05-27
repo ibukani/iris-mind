@@ -48,10 +48,14 @@ class IoPlugin:
         )
         grpc_listener = GrpcListener(session_manager=session_mgr)
 
+        from iris.io.gateway import _IOGateway
+
+        gateway = _IOGateway(event_bus=event_bus, session_manager=session_mgr)
+
         from iris.io.manager import IOManager
 
         io_mgr = IOManager(
-            event_bus=event_bus,
+            gateway=gateway,
             session_manager=session_mgr,
             grpc_listener=grpc_listener,
         )
@@ -59,6 +63,10 @@ class IoPlugin:
         manager.provide(IOManager, io_mgr)
         manager.provide(SessionManager, session_mgr)
         manager.provide(GrpcListener, grpc_listener)
+
+        from iris.io.handler import _IOEventHandler
+
+        _IOEventHandler(event_bus=event_bus, session_manager=session_mgr)
 
         from .hooks import register_hooks
 

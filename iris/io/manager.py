@@ -1,37 +1,33 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
-from loguru import logger
-
-from iris.event.event_bus import EventBus
-from iris.event.event_types import MessageEvent
-from iris.io.models import CommandInput, CommandOutput, Direction, Message
-from iris.io.session.manager import SessionManager
 from iris.io.transport.grpc_listener import GrpcListener
+
+if TYPE_CHECKING:
+    from iris.io.gateway import _IOGateway
+    from iris.io.session.manager import SessionManager
 
 
 class IOManager:
     def __init__(
         self,
-        event_bus: EventBus,
+        gateway: _IOGateway,
         session_manager: SessionManager,
         grpc_listener: GrpcListener,
-        command_handler: Callable[[str, str], str] | None = None,
     ) -> None:
-        self._event_bus = event_bus
+        self._gateway = gateway
         self._session_mgr = session_manager
         self._grpc_listener = grpc_listener
-        self._cmd_handler = command_handler
         self._host: str = ""
         self._port: int = 0
 
-        self._event_bus.subscribe("MessageEvent", self._on_message_event)
-        self._grpc_listener.set_on_message(self._on_grpc_message)
-        self._grpc_listener.set_on_command(self._on_grpc_command)
+        self._grpc_listener.set_on_message(gateway.on_grpc_message)
+        self._grpc_listener.set_on_command(gateway.on_grpc_command)
 
     def set_command_handler(self, handler: Callable[[str, str], str]) -> None:
-        self._cmd_handler = handler
+        self._gateway.set_command_handler(handler)
 
     def start(self, host: str, port: int) -> None:
         self._host = host
@@ -47,91 +43,3 @@ class IOManager:
             "listening": f"{self._host}:{self._port}" if self._host else "not started",
             "sessions": len(sessions.splitlines()) if sessions else 0,
         }
-
-    def _on_message_event(self, event: MessageEvent) -> None:
-        direction = event.direction or "response"
-        if direction not in ("response", "stream"):
-            return
-
-        session_info = self._session_mgr.get_session_info(event.session_id)
-        target_role = session_info.role if session_info else event.source_role or "*"
-
-        msg = Message(
-            msg_type=event.msg_type,
-            content=event.content,
-            state=event.state,
-            correlation_id=event.correlation_id,
-            source_role="mind",
-            target_role=target_role,
-            session_id=event.session_id,
-            user_identity=event.user_identity,
-            direction=Direction(direction),
-        )
-        logger.debug(
-            "IOManager: message event session={} type={} state={} target_role={} content_len={}",
-            event.session_id,
-            event.msg_type,
-            event.state,
-            target_role,
-            len(event.content) if event.content else 0,
-        )
-        self._session_mgr.route_message(msg)
-
-    def _on_grpc_message(self, msg: Message) -> None:
-        if msg.direction != Direction.REQUEST:
-            logger.warning("IOManager: unexpected direction from client: {}", msg.direction)
-            return
-
-        if msg.target_role != "mind":
-            self._session_mgr.route_message(msg)
-            return
-
-        truncated = msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
-        logger.debug(
-            "IOManager: message session={} dir={} type={} source={} target={} content={:.200}",
-            msg.session_id,
-            msg.direction.value,
-            msg.msg_type,
-            msg.source_role,
-            msg.target_role,
-            truncated,
-        )
-
-        self._event_bus.publish(
-            MessageEvent(
-                timestamp=None,
-                source="io",
-                session_id=msg.session_id,
-                source_role=msg.source_role,
-                target_role=msg.target_role,
-                user_identity=msg.user_identity,
-                direction=msg.direction.value,
-                msg_type=msg.msg_type,
-                content=msg.content,
-            )
-        )
-
-    def _on_grpc_command(self, msg: CommandInput) -> None:
-        content = msg.content
-        if not content.startswith("/"):
-            result = "Commands start with /"
-            logger.debug("IOManager: command missing slash session={}", msg.session_id)
-            self._session_mgr.route_command_output(
-                msg.session_id,
-                CommandOutput(content=result, session_id=msg.session_id, correlation_id=msg.id),
-            )
-            return
-
-        parts = content[1:].strip().split(maxsplit=1)
-        name = parts[0].lower() if parts else ""
-        args = parts[1] if len(parts) > 1 else ""
-
-        logger.debug("IOManager: command session={} cmd=/{} args={:.100}", msg.session_id, name, args)
-
-        result = self._cmd_handler(name, args) if self._cmd_handler else f"No command handler: /{name}"
-
-        logger.debug("IOManager: command result session={} result={:.100}", msg.session_id, result)
-        self._session_mgr.route_command_output(
-            msg.session_id,
-            CommandOutput(content=result, session_id=msg.session_id, correlation_id=msg.id),
-        )

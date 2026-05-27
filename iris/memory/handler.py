@@ -28,7 +28,7 @@ class _MemoryEventHandler:
             return
         self.sensory.store_raw(event.content)
         with self._pending_lock:
-            self._pending_input.setdefault(event.session_id, []).append((event.content, event.user_identity))
+            self._pending_input[event.session_id] = [(event.content, event.user_identity)]
         logger.debug(
             "MemoryManager: input pending session={} content={:.80} identity={}",
             event.session_id,

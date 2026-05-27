@@ -93,25 +93,7 @@ class BaseLLMNode(ABC):
         return self._pipeline.build_system_messages(
             context_hint=plan.context_hint,
             node_type=self.node_type_name,
-            recent_turns=self._get_recent_turns(),
         )
-
-    def _get_recent_turns(self) -> str:
-        if not self._memory:
-            return ""
-        turns = self._memory.short_term.get_recent_turns(3)
-        if not turns:
-            return ""
-        ctx_lines: list[str] = []
-        for t in turns:
-            content = t.get("content", "")
-            if content:
-                uid = t.get("user_identity", "")
-                label = uid or t["role"]
-                ctx_lines.append(f"{label}: {content}")
-        if not ctx_lines:
-            return ""
-        return "## 直近の会話\n" + "\n".join(ctx_lines)
 
     def _build_chat_params(
         self,

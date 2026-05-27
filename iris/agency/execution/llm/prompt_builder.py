@@ -40,7 +40,6 @@ class SystemPromptBuilder:
         session_roles_summary: str = "",
         current_user_identity: str = "",
         situation: str = "",
-        recent_turns: str = "",
         include_profile: bool = True,
     ) -> list[BaseMessage]:
         msgs: list[BaseMessage] = []
@@ -59,7 +58,6 @@ class SystemPromptBuilder:
                 node_type=node_type,
                 context_hint=context_hint,
                 situation=situation,
-                recent_turns=recent_turns,
             )
         )
 

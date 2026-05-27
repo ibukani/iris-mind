@@ -61,7 +61,6 @@ class LLMGateway:
         response_style: str = "",
         situation: str = "",
         node_type: str = "general_task",
-        recent_turns: str = "",
         include_profile: bool = True,
     ) -> list[BaseMessage]:
         return self._prompt_builder.build(
@@ -71,7 +70,6 @@ class LLMGateway:
             session_roles_summary=self._session_roles_summary,
             current_user_identity=self._current_user_identity,
             situation=situation,
-            recent_turns=recent_turns,
             include_profile=include_profile,
         )
 

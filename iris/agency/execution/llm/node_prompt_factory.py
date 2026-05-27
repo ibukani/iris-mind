@@ -39,7 +39,6 @@ class NodePromptFactory:
         node_type: str = "general_task",
         context_hint: str = "",
         situation: str = "",
-        recent_turns: str = "",
     ) -> SystemMessage:
         base = self._load_base(node_type)
 
@@ -50,8 +49,6 @@ class NodePromptFactory:
             parts.append(f"## 会話コンテキスト\n{context_hint}")
         if situation in _SITUATION_INSTRUCTIONS:
             parts.append(_SITUATION_INSTRUCTIONS[situation])
-        if recent_turns:
-            parts.append(recent_turns)
         parts.append(_RESPONSE_RULES)
 
         return SystemMessage(content="\n\n".join(parts))

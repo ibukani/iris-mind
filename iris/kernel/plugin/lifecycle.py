@@ -104,9 +104,7 @@ class PluginLifecycle:
         for attr_name in dir(module):
             attr = getattr(module, attr_name)
             if isinstance(attr, type) and issubclass(attr, PluginProtocol) and hasattr(attr, "MANIFEST"):
-                instance = attr()
-                if isinstance(instance, PluginProtocol):
-                    return instance
+                return attr()
 
         if isinstance(module, PluginProtocol):
             return module

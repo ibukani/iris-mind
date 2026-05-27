@@ -5,7 +5,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from iris.io.models import AuthMessage, Direction, Message, Permission
-from iris.io.session.manager import SessionConfig, SessionManager
+from iris.io.session.config import SessionConfig
+from iris.io.session.manager import SessionManager
 
 
 def _get_session_id(manager: SessionManager) -> str:

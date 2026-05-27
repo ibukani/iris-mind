@@ -9,7 +9,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-import httpx
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_ollama import ChatOllama
@@ -19,6 +18,7 @@ from pydantic import SecretStr
 
 from iris.kernel.config import ModelConfig, ModelEntry
 
+from .health import check_bridge_available, unload_model
 from .interrupt_token import InterruptToken
 from .param_builder import _PROVIDER_DEFAULTS, build_ollama_options, build_openai_kwargs
 from .priority_lock import PriorityLock
@@ -229,46 +229,10 @@ class LLMBridge:
         return self._repetition_detector.trim(text)
 
     def is_available(self) -> bool:
-        for provider in self._providers.values():  # noqa: SIM110
-            if self._check_provider_available(provider):
-                return True
-        return False
-
-    def _check_provider_available(self, provider: BaseChatModel) -> bool:
-        if isinstance(provider, ChatOllama):
-            url = getattr(provider, "base_url", None)
-            if not url:
-                return False
-            try:
-                return bool(httpx.get(url, timeout=1.0).status_code == 200)
-            except Exception:
-                logger.warning("Ollama provider at {} is unavailable", url)
-                return False
-        if isinstance(provider, ChatOpenAI):
-            return bool(provider.openai_api_key)
-        return False
+        return check_bridge_available(self._providers)
 
     def unload_model(self, model_name: str | None = None) -> None:
-        if not model_name:
-            return
-        key = self._model_map.get(model_name)
-        if not key:
-            return
-        provider = self._providers[key]
-        if isinstance(provider, ChatOllama):
-            self._unload_ollama_model(model_name, provider)
-
-    def _unload_ollama_model(self, model_name: str, provider: ChatOllama) -> None:
-        from ollama import Client
-
-        try:
-            Client(host=getattr(provider, "base_url", None)).chat(
-                model=model_name,
-                messages=[{"role": "user", "content": ""}],
-                keep_alive=0,
-            )
-        except Exception as e:
-            logger.warning("Failed to unload ollama model {}: {}", model_name, e)
+        unload_model(model_name, self._model_map, self._providers)
 
     def _resolve_provider(self, model_name: str) -> BaseChatModel:
         """モデル名から対応するプロバイダインスタンスを解決する。"""

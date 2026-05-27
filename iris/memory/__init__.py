@@ -49,6 +49,15 @@ class MemoryPlugin:
         manager.provide(LongTermMemoryManager, components["long_term"])
         manager.provide(VectorStore, components["vector_store"])
 
+        from iris.event.event_bus import EventBus
+        from iris.memory.handler import _MemoryEventHandler
+
+        _MemoryEventHandler(
+            event_bus=manager.resolve(EventBus),
+            sensory=components["sensory"],
+            proactive_config=manager.config.proactive,
+        )
+
         from .hooks import register_hooks
 
         register_hooks(manager)

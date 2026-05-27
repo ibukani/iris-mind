@@ -11,6 +11,10 @@ from iris.agency import (
     PlanningManager,
     ProactiveScorer,
 )
+from iris.agency.planning.context_hint_builder import ContextHintBuilder
+from iris.agency.planning.decisions import ProactiveJudge
+from iris.agency.planning.question_generator import QuestionGenerator
+from iris.agency.planning.strategies import ProactivePlanStrategy, ResponsePlanStrategy
 from iris.event.event_bus import EventBus
 from iris.event.event_types import InputReady
 from iris.kernel.config import Config, ProactiveConfig
@@ -28,13 +32,35 @@ def test_planning_manager_silent_proactive_interest_sampling() -> None:
     llm = MagicMock()
     llm.chat = MagicMock(return_value=AIMessage(content="ビッグバン以前には何が存在したのか？"))
 
+    context_builder = ContextHintBuilder(memory=None)
+    question_gen = QuestionGenerator(llm=llm)
+
+    judge = ProactiveJudge(
+        scoring=scoring,
+        config=config.proactive,
+        context_builder=context_builder,
+    )
+    proactive_strategy = ProactivePlanStrategy(question_gen=question_gen)
+    response_strategy = ResponsePlanStrategy(
+        config=config.proactive,
+        context_builder=context_builder,
+    )
+
     PlanningManager(
         internal_bus=internal_bus,
+        proactive_judge=judge,
+        proactive_strategy=proactive_strategy,
+        response_strategy=response_strategy,
+    )
+
+    from iris.agency.planning.handler import _PlanningEventHandler
+
+    _PlanningEventHandler(
         event_bus=event_bus,
-        scoring=scoring,
-        config=config,
-        memory=None,
-        llm=llm,
+        internal_bus=internal_bus,
+        proactive_judge=judge,
+        proactive_strategy=proactive_strategy,
+        response_strategy=response_strategy,
     )
 
     event = InputReady(
@@ -61,13 +87,34 @@ def test_planning_manager_escalation_event() -> None:
     config = Config()
     config.proactive = ProactiveConfig()
 
+    context_builder = ContextHintBuilder(memory=None)
+
+    judge = ProactiveJudge(
+        scoring=scoring,
+        config=config.proactive,
+        context_builder=context_builder,
+    )
+    proactive_strategy = ProactivePlanStrategy(question_gen=None)
+    response_strategy = ResponsePlanStrategy(
+        config=config.proactive,
+        context_builder=context_builder,
+    )
+
     PlanningManager(
         internal_bus=internal_bus,
+        proactive_judge=judge,
+        proactive_strategy=proactive_strategy,
+        response_strategy=response_strategy,
+    )
+
+    from iris.agency.planning.handler import _PlanningEventHandler
+
+    _PlanningEventHandler(
         event_bus=event_bus,
-        scoring=scoring,
-        config=config,
-        memory=None,
-        llm=None,
+        internal_bus=internal_bus,
+        proactive_judge=judge,
+        proactive_strategy=proactive_strategy,
+        response_strategy=response_strategy,
     )
 
     event = InputReady(

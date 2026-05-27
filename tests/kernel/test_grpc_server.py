@@ -3,9 +3,10 @@ import time
 import grpc
 import pytest
 
-from iris.io.session.manager import SessionConfig, SessionManager
+from iris.io.session.config import SessionConfig
+from iris.io.session.manager import SessionManager
 from iris.io.transport import grpc_service_pb2, grpc_service_pb2_grpc
-from iris.io.transport.grpc_server import GrpcListener
+from iris.io.transport.grpc_listener import GrpcListener
 
 
 def test_grpc_server_lifecycle():

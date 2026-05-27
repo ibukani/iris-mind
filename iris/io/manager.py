@@ -8,7 +8,7 @@ from iris.event.event_bus import EventBus
 from iris.event.event_types import MessageEvent
 from iris.io.models import CommandInput, CommandOutput, Direction, Message
 from iris.io.session.manager import SessionManager
-from iris.io.transport.grpc_server import GrpcListener
+from iris.io.transport.grpc_listener import GrpcListener
 
 
 class IOManager:

@@ -1,11 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from iris.event.event_bus import EventBus
-    from iris.kernel.config import ProactiveConfig
+from typing import Any
 
 from loguru import logger
 
@@ -15,7 +11,6 @@ from iris.memory.dispatcher import (
     dispatch_retrieve,
     dispatch_search,
 )
-from iris.memory.handler import _MemoryEventHandler
 from iris.memory.long_term.goal_store import GoalStore
 
 
@@ -36,11 +31,9 @@ class MemoryManager:
     def __init__(
         self,
         *,
-        event_bus: EventBus | None = None,
         sensory: Any | None = None,
         short_term: Any | None = None,
         long_term: Any | None = None,
-        proactive_config: ProactiveConfig | None = None,
     ) -> None:
         from iris.memory.long_term.manager import LongTermMemoryManager
         from iris.memory.sensory.manager import SensoryMemoryManager
@@ -51,18 +44,11 @@ class MemoryManager:
         self.long_term: Any = long_term or LongTermMemoryManager()
         self.goals: GoalStore = GoalStore()
 
-        self._proactive_config: ProactiveConfig | None = proactive_config
         self._store_handlers: dict[str, Callable[[Any], None]] = build_store_handlers(
             self.sensory,
             self.short_term,
             self.long_term,
         )
-
-        self._handler: _MemoryEventHandler | None
-        if event_bus is not None:
-            self._handler = _MemoryEventHandler(event_bus, self.sensory, proactive_config)
-        else:
-            self._handler = None
 
     def get_state(self) -> dict:
         from iris.memory.protocol import safe_count

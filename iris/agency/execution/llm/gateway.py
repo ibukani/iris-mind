@@ -1,16 +1,15 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-import datetime
 from typing import Any
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from loguru import logger
 
 from iris.agency.execution.llm.prompt_builder import SystemPromptBuilder
 from iris.agency.planning.models import Plan
 from iris.kernel.config import ModelConfig
-from iris.kernel.debug_capture import CaptureEntry, DebugCapture
+from iris.kernel.debug_capture import DebugCapture
 from iris.llm.bridge import LLMBridge
 from iris.llm.capability import CapabilityChecker
 from iris.llm.interrupt_token import InterruptToken
@@ -49,15 +48,6 @@ class LLMGateway:
             memory=memory,
             prompts_dir=prompts_dir,
         )
-
-    @staticmethod
-    def _build_full_prompt(msgs: list[BaseMessage]) -> str:
-        lines: list[str] = []
-        for m in msgs:
-            role = getattr(m, "type", "unknown")
-            content = str(m.content) if m.content else ""
-            lines.append(f"[{role}]\n{content}")
-        return "\n\n".join(lines)
 
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
@@ -214,31 +204,15 @@ class LLMGateway:
         response: str,
         tool_iterations: list[dict] | None = None,
     ) -> None:
-        dc = self._debug_capture
-        if not (dc and dc.enabled):
-            return
+        from .capture import capture_debug as _capture
 
-        model_name = self._model_config.get_model(model_role)
-        history_msgs = [m for m in messages if not isinstance(m, SystemMessage)]
-        tc = {
-            "system": dc.count_tokens(system_prompt),
-            "history": dc.count_tokens(" ".join(str(m.content) for m in history_msgs)),
-            "tools": dc.count_tokens(str(tools)) if tools else 0,
-            "response": dc.count_tokens(response),
-        }
-        tc["total"] = sum(tc.values())
-
-        dc.capture(
-            CaptureEntry(
-                id=0,
-                timestamp=datetime.datetime.now(),
-                model_name=model_name,
-                system_prompt=system_prompt,
-                messages=[{"role": m.type, "content": m.content} for m in history_msgs],
-                tools=tools,
-                response=response,
-                token_counts=tc,
-                tool_iterations=tool_iterations or [],
-                full_prompt=self._build_full_prompt(messages),
-            ),
+        _capture(
+            debug_capture=self._debug_capture,
+            model_config=self._model_config,
+            model_role=model_role,
+            system_prompt=system_prompt,
+            messages=messages,
+            response=response,
+            tools=tools,
+            tool_iterations=tool_iterations,
         )

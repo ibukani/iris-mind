@@ -6,6 +6,7 @@ import pytest
 
 from iris.event import Event, EventBus
 from iris.event.event_types import InputReady, MessageEvent, TimerTick
+from iris.memory.handler import _MemoryEventHandler
 from iris.memory.manager import MemoryManager
 
 
@@ -22,6 +23,12 @@ def _message_event(session_id: str = "", content: str = "") -> MessageEvent:
     )
 
 
+def _memory_with_handler(event_bus: EventBus, proactive_config: Any = None) -> MemoryManager:
+    mgr = MemoryManager()
+    _MemoryEventHandler(event_bus, mgr.sensory, proactive_config)
+    return mgr
+
+
 @pytest.fixture
 def event_bus() -> EventBus:
     return EventBus()
@@ -29,10 +36,7 @@ def event_bus() -> EventBus:
 
 @pytest.fixture
 def memory(event_bus: EventBus) -> MemoryManager:
-    return MemoryManager(
-        event_bus=event_bus,
-        proactive_config={"enabled": True},
-    )
+    return _memory_with_handler(event_bus, {"enabled": True})
 
 
 def _collect_input_ready(events: list[InputReady]) -> Any:
@@ -50,7 +54,7 @@ class TestMemoryManagerInputPending:
             received.append(event)
 
         event_bus.subscribe("MessageEvent", handler)
-        MemoryManager(event_bus=event_bus)
+        _memory_with_handler(event_bus)
         event_bus.publish(
             _message_event(session_id="s1", content="hello"),
         )
@@ -58,7 +62,7 @@ class TestMemoryManagerInputPending:
         assert received[0].content == "hello"
 
     def test_empty_content_ignored(self, event_bus: EventBus) -> None:
-        MemoryManager(event_bus=event_bus)
+        _memory_with_handler(event_bus)
         ready_events: list[InputReady] = []
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
 
@@ -71,7 +75,7 @@ class TestMemoryManagerInputPending:
         assert len(ready_events) == 0
 
     def test_message_event_stores_pending(self, event_bus: EventBus) -> None:
-        MemoryManager(event_bus=event_bus)
+        _memory_with_handler(event_bus)
 
         event_bus.publish(
             _message_event(session_id="s1", content="hello"),
@@ -121,7 +125,7 @@ class TestMemoryManagerInputPending:
 
     def test_pending_emptied_after_timer(self, event_bus: EventBus) -> None:
         ready_events: list[InputReady] = []
-        MemoryManager(event_bus=event_bus, proactive_config={"enabled": True})
+        _memory_with_handler(event_bus, {"enabled": True})
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
 
         event_bus.publish(
@@ -140,7 +144,7 @@ class TestMemoryManagerInputPending:
 
     def test_multiple_inputs_processed_in_one_tick(self, event_bus: EventBus) -> None:
         ready_events: list[InputReady] = []
-        MemoryManager(event_bus=event_bus)
+        _memory_with_handler(event_bus)
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
 
         event_bus.publish(
@@ -165,7 +169,7 @@ class TestMemoryManagerInputPending:
 
     def test_later_input_overwrites_earlier_same_session(self, event_bus: EventBus) -> None:
         ready_events: list[InputReady] = []
-        MemoryManager(event_bus=event_bus)
+        _memory_with_handler(event_bus)
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
 
         event_bus.publish(
@@ -183,7 +187,7 @@ class TestMemoryManagerInputPending:
 
     def test_proactive_not_triggered_without_config(self, event_bus: EventBus) -> None:
         ready_events: list[InputReady] = []
-        MemoryManager(event_bus=event_bus)
+        _memory_with_handler(event_bus)
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
 
         event_bus.publish(
@@ -193,7 +197,7 @@ class TestMemoryManagerInputPending:
 
     def test_user_input_takes_priority_over_proactive(self, event_bus: EventBus) -> None:
         ready_events: list[InputReady] = []
-        MemoryManager(event_bus=event_bus)
+        _memory_with_handler(event_bus)
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
 
         event_bus.publish(
@@ -209,7 +213,7 @@ class TestMemoryManagerInputPending:
 
     def test_timer_removes_published_content(self, event_bus: EventBus) -> None:
         ready_events: list[InputReady] = []
-        MemoryManager(event_bus=event_bus)
+        _memory_with_handler(event_bus)
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
 
         event_bus.publish(

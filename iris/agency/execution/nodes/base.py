@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import BaseMessage
 
 from iris.agency.execution.models import DynamicState, ExecutionState
-from iris.agency.execution.node_types import NODE_TYPES, ROUTING_TOOLS
+from iris.agency.execution.node_type import NODE_TYPES, ROUTING_TOOLS
 from iris.agency.planning.models import Plan
 from iris.agency.task_level import TASK_LEVELS, TaskLevel
 

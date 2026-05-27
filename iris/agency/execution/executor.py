@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING
 
 from langchain_core.messages import BaseMessage, SystemMessage
 
-from iris.agency.bus import InternalBus, PlanDecided
 from iris.agency.execution.builder import build_execution_state
 from iris.agency.execution.engine import ToolEngine
 from iris.agency.execution.llm.gateway import LLMGateway
@@ -13,7 +12,6 @@ from iris.agency.execution.orchestrator import ExecutionOrchestrator
 from iris.agency.execution.worker import AsyncWorker
 from iris.agency.planning.models import Plan
 from iris.event.event_bus import EventBus
-from iris.event.event_types import InterruptEvent
 from iris.llm.capability import CapabilityChecker
 from iris.llm.interrupt_token import InterruptToken
 
@@ -26,7 +24,6 @@ from loguru import logger
 class FlowExecutor(AsyncWorker):
     def __init__(
         self,
-        internal_bus: InternalBus,
         event_bus: EventBus,
         llm_pipeline: LLMGateway,
         tool_executor: ToolEngine | None = None,
@@ -37,7 +34,6 @@ class FlowExecutor(AsyncWorker):
     ) -> None:
         super().__init__(name="executor-worker")
 
-        self._bus = internal_bus
         self._event_bus = event_bus
         self._memory = memory
         self._messages: list[BaseMessage] = messages if messages is not None else []
@@ -52,27 +48,15 @@ class FlowExecutor(AsyncWorker):
             capability_checker=capability_checker,
         )
 
-        self._bus.subscribe("PlanDecided", self._on_plan)
-        self._event_bus.subscribe("InterruptEvent", self._on_interrupt)
-
     def get_state(self) -> dict:
         return {
             "msg_count": len(self._messages),
         }
 
-    def _on_interrupt(self, event: InterruptEvent) -> None:
+    def cancel_execution(self) -> None:
         if self._interrupt_token and not self._interrupt_token.is_cancelled:
-            logger.info("FlowExecutor: cancelling current execution due to interrupt")
+            logger.info("FlowExecutor: cancelling current execution")
             self._interrupt_token.cancel()
-
-    def _on_plan(self, event: PlanDecided) -> None:
-        plan = event.plan
-
-        logger.info(
-            "FlowExecutor: queueing plan session={}",
-            plan.session_id,
-        )
-        self.enqueue(plan)
 
     async def process(self, plan: Plan) -> None:  # type: ignore[override]
         self._interrupt_token = InterruptToken()

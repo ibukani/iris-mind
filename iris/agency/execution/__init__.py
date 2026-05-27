@@ -10,7 +10,7 @@ from iris.agency.execution.llm import (
     SystemPromptBuilder,
 )
 from iris.agency.execution.models import DynamicState, ExecutionState
-from iris.agency.execution.node_types import NODE_TYPES, NodeType
+from iris.agency.execution.node_type import NODE_TYPES, NodeType
 from iris.agency.execution.orchestrator import ExecutionOrchestrator
 from iris.agency.execution.regulation import Consolidator
 from iris.agency.execution.worker import AsyncWorker

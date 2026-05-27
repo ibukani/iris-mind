@@ -16,8 +16,9 @@ from iris.io.models import (
     SessionInfo,
     SessionState,
 )
-from iris.io.session.manager import SessionConfig, SessionManager
-from iris.io.transport.grpc_server import GrpcListener
+from iris.io.session.config import SessionConfig
+from iris.io.session.manager import SessionManager
+from iris.io.transport.grpc_listener import GrpcListener
 from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
 
 if TYPE_CHECKING:

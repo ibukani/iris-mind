@@ -2,15 +2,30 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 if TYPE_CHECKING:
     from iris.kernel.manager import PluginManager
+    from iris.memory.long_term.manager import LongTermMemoryManager
+    from iris.memory.long_term.stores import EpisodicStore, SemanticStore
+    from iris.memory.long_term.vector_store import VectorStore
+    from iris.memory.manager import MemoryManager
+    from iris.memory.sensory.manager import SensoryMemoryManager
+    from iris.memory.short_term.manager import ShortTermMemoryManager
 
 
-def build_memory(manager: PluginManager) -> dict:
+class MemoryComponents(TypedDict):
+    memory: MemoryManager
+    sensory: SensoryMemoryManager
+    short_term: ShortTermMemoryManager
+    long_term: LongTermMemoryManager
+    vector_store: VectorStore
+    episodic: EpisodicStore
+    semantic: SemanticStore
+
+
+def build_memory(manager: PluginManager) -> MemoryComponents:
     """Memoryレイヤーの全コンポーネントを生成する。"""
-    from iris.event.event_bus import EventBus
     from iris.memory.long_term.manager import LongTermMemoryManager
     from iris.memory.long_term.stores import EpisodicStore, SemanticStore
     from iris.memory.long_term.vector_store import VectorStore
@@ -19,7 +34,6 @@ def build_memory(manager: PluginManager) -> dict:
     from iris.memory.sensory.readiness import ReadinessEvaluator
     from iris.memory.short_term.manager import ShortTermMemoryManager
 
-    event_bus = manager.resolve(EventBus)
     config = manager.config
     mem_cfg = config.memory
 
@@ -40,11 +54,9 @@ def build_memory(manager: PluginManager) -> dict:
     sensory = SensoryMemoryManager()
 
     mem = MemoryManager(
-        event_bus=event_bus,
         sensory=sensory,
         short_term=short_term,
         long_term=long_term,
-        proactive_config=config.proactive,
     )
 
     readiness = ReadinessEvaluator(

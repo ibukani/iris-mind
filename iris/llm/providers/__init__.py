@@ -10,7 +10,7 @@ from typing import Protocol
 
 from iris.kernel.config import ModelConfig, ModelEntry
 
-from . import ollama_env
+from . import ollama_environment as ollama_env
 
 
 class ProviderFactory(Protocol):

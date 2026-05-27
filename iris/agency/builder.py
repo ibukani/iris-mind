@@ -2,22 +2,51 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict
 
 if TYPE_CHECKING:
+    from iris.agency.execution import FlowExecutor, LLMGateway, ToolEngine
+    from iris.agency.internal_bus import InternalBus
+    from iris.agency.manager import AgencyManager
+    from iris.agency.planning import (
+        PlanningManager,
+        ProactivePlanStrategy,
+        ResponsePlanStrategy,
+    )
+    from iris.agency.planning.decisions import ProactiveJudge
     from iris.kernel.manager import PluginManager
 
 
-def build_agency(manager: PluginManager) -> dict:
+class AgencyComponents(TypedDict):
+    agency: AgencyManager
+    planning: PlanningManager
+    execution: FlowExecutor
+    pipeline: LLMGateway
+    tool_exec: ToolEngine
+    internal_bus: InternalBus
+    proactive_judge: ProactiveJudge
+    proactive_strategy: ProactivePlanStrategy
+    response_strategy: ResponsePlanStrategy
+
+
+def build_agency(manager: PluginManager) -> AgencyComponents:
     """Agencyレイヤーの全コンポーネントを生成し、DIに登録する。"""
-    from iris.agency.bus import InternalBus
     from iris.agency.execution import (
         FlowExecutor,
         LLMGateway,
         ToolEngine,
     )
+    from iris.agency.internal_bus import InternalBus
     from iris.agency.manager import AgencyManager
-    from iris.agency.planning import PlanningManager, ProactiveScorer
+    from iris.agency.planning import (
+        ContextHintBuilder,
+        PlanningManager,
+        ProactivePlanStrategy,
+        ProactiveScorer,
+        QuestionGenerator,
+        ResponsePlanStrategy,
+    )
+    from iris.agency.planning.decisions import ProactiveJudge
     from iris.event.event_bus import EventBus
     from iris.io.session.manager import SessionManager
     from iris.kernel.debug_capture import DebugCapture
@@ -59,7 +88,6 @@ def build_agency(manager: PluginManager) -> dict:
     tool_exec = ToolEngine(registry=tool_registry)
 
     execution = FlowExecutor(
-        internal_bus=internal_bus,
         event_bus=event_bus,
         llm_pipeline=pipeline,
         tool_executor=tool_exec,
@@ -69,13 +97,26 @@ def build_agency(manager: PluginManager) -> dict:
     )
 
     scoring = ProactiveScorer(config=config.proactive, memory=memory)
+
+    context_builder = ContextHintBuilder(memory=memory)
+    question_gen = QuestionGenerator(llm=llm) if llm else None
+
+    proactive_judge = ProactiveJudge(
+        scoring=scoring,
+        config=config.proactive,
+        context_builder=context_builder,
+    )
+    proactive_strategy = ProactivePlanStrategy(question_gen=question_gen)
+    response_strategy = ResponsePlanStrategy(
+        config=config.proactive,
+        context_builder=context_builder,
+    )
+
     planning = PlanningManager(
         internal_bus=internal_bus,
-        event_bus=event_bus,
-        scoring=scoring,
-        config=config,
-        memory=memory,
-        llm=llm,
+        proactive_judge=proactive_judge,
+        proactive_strategy=proactive_strategy,
+        response_strategy=response_strategy,
     )
 
     agency = AgencyManager(planning=planning, execution=execution)
@@ -86,4 +127,8 @@ def build_agency(manager: PluginManager) -> dict:
         "execution": execution,
         "pipeline": pipeline,
         "tool_exec": tool_exec,
+        "internal_bus": internal_bus,
+        "proactive_judge": proactive_judge,
+        "proactive_strategy": proactive_strategy,
+        "response_strategy": response_strategy,
     }

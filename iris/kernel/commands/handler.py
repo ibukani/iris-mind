@@ -3,9 +3,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from iris.kernel.commands.debug_cmds import DebugCommands
-from iris.kernel.commands.info_cmds import InfoCommands
-from iris.kernel.commands.memory_cmds import MemoryCommands
+from iris.kernel.commands.debug_commands import DebugCommands
+from iris.kernel.commands.info_commands import InfoCommands
+from iris.kernel.commands.memory_commands import MemoryCommands
 from iris.kernel.config import Config
 
 if TYPE_CHECKING:

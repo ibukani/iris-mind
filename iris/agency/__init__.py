@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from iris.agency.bus import InternalBus, PlanDecided
 from iris.agency.execution import (
     NODE_TYPES,
     Consolidator,
@@ -13,6 +12,7 @@ from iris.agency.execution import (
     NodeType,
     ToolEngine,
 )
+from iris.agency.internal_bus import InternalBus, PlanDecided
 from iris.agency.manager import AgencyManager
 from iris.agency.planning import (
     Plan,
@@ -45,9 +45,9 @@ class AgencyPlugin:
     def init(self, manager: PluginManager) -> None:
         manager.register_manifest(MANIFEST)
 
-        from iris.agency.builder import build_agency
+        from iris.agency.builder import AgencyComponents, build_agency
 
-        components = build_agency(manager)
+        components: AgencyComponents = build_agency(manager)
 
         manager.provide(AgencyManager, components["agency"])
         manager.provide(PlanningManager, components["planning"])
@@ -58,6 +58,26 @@ class AgencyPlugin:
         from .hooks import register_hooks
 
         register_hooks(manager)
+
+        from iris.agency.execution.handler import _FlowExecutionHandler
+        from iris.agency.planning.handler import _PlanningEventHandler
+        from iris.event.event_bus import EventBus
+
+        event_bus = manager.resolve(EventBus)
+
+        _FlowExecutionHandler(
+            event_bus=event_bus,
+            internal_bus=components["internal_bus"],
+            controller=components["execution"],
+        )
+
+        _PlanningEventHandler(
+            event_bus=event_bus,
+            internal_bus=components["internal_bus"],
+            proactive_judge=components["proactive_judge"],
+            proactive_strategy=components["proactive_strategy"],
+            response_strategy=components["response_strategy"],
+        )
 
     def start(self, manager: PluginManager) -> None:
         pass

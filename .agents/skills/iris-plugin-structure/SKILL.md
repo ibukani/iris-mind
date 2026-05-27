@@ -22,6 +22,7 @@ metadata:
 - **依存性逆転の原則 (DIP)**: 他プラグインとの連携は具象クラスではなく `Protocol` を介して行う
 - **依存性注入 (DI) の徹底**: `PluginManager` をロジッククラス内に保持して動的に解決する（サービスロケーターパターン）のを禁止し、すべてコンストラクタで明示的に注入する
 - **純粋ロジックとI/Oの分離**: スコアラーやエクストラクター等は純粋なデータ処理に徹し、ファイルI/OやEventBusパブリッシュなどの副作用を持たせない
+- **EventBus subscribe は handler で行う**: manager が直接 subscribe してはいけない。購読処理は必ず `handler.py` に分離し、`__init__.py` で wiring する
 
 ## 標準ディレクトリ構成
 
@@ -96,7 +97,7 @@ iris/<plugin_name>/
 |---|---|
 | `__init__.py` の `init()` 本体 > 50行 | `builder.py` に分割 |
 | ファイル > 200行 かつ 責務が2以上 | 責務ごとにファイル分割 |
-| EventBus subscribe が3以上 かつ handlerがmanager内部状態に依存しない | `handler.py` に抽出 |
+| 1つ以上の EventBus subscribe | `handler.py` に必須分離（manager からの直接 subscribe 禁止） |
 | Protocol クラスが3以上 | `protocols.py` に集約（複数形） |
 | 基底クラスがある | `base.py` に抽出 |
 | モジュールレベル関数のみのファイルがある | 関数の責務を確認し、責務が単一なら維持も可（`utils.py`, `router.py`） |
@@ -210,10 +211,15 @@ class ParentPlugin(PluginProtocol):
 
 ### Handler（イベント購読）
 
+handler は `__init__.py` の `init()` で wiring する。manager に購読を委譲しない。
+
 ```python
 # iris/<plugin>/handler.py
 from __future__ import annotations
 from typing import Any
+
+from loguru import logger
+
 
 class _XxxEventHandler:
     def __init__(self, event_bus: Any, dependency: Any) -> None:
@@ -221,6 +227,40 @@ class _XxxEventHandler:
 
     def _on_event(self, event: SomeEvent) -> None:
         ...
+
+
+# iris/<plugin>/__init__.py の init() 内
+_MemoryEventHandler(
+    event_bus=manager.resolve(EventBus),
+    dependency=components["dependency"],
+)
+```
+
+handler が manager のメソッドを呼び戻す必要がある場合は `Protocol` を定義して疎結合にする。
+
+```python
+# iris/<plugin>/handler.py
+from __future__ import annotations
+from typing import Protocol
+
+class _XxxControlProtocol(Protocol):
+    def some_action(self) -> None: ...
+
+class _XxxEventHandler:
+    def __init__(self, event_bus: Any, controller: _XxxControlProtocol) -> None:
+        event_bus.subscribe("SomeEvent", self._on_event)
+
+    def _on_event(self, event: SomeEvent) -> None:
+        self._controller.some_action()
+```
+
+```python
+# iris/<plugin>/__init__.py の init() 内
+# XxxManager が Protocol を実装している前提
+_FlowExecutionHandler(
+    event_bus=manager.resolve(EventBus),
+    controller=components["execution"],  # XxxManager 等
+)
 ```
 
 ### Protocol + 実装
@@ -270,8 +310,9 @@ def _search_impl(query: Any) -> list[Any]: ...
 - ファイル名は必ず `snake_case.py`。略語禁止。単数形優先
 - クラス名は `PascalCase` でファイル名とのプレフィックス一致を意識
 - 内部クラスは `_` プレフィックス。外部から `import` させない
-- 分割トリガーに達する前の過剰分割は禁止。必要になるまで単一ファイルで良い
+- 分割トリガーに達する前の過剰分割は禁止。必要になるまで単一ファイルで良い。ただし EventBus subscribe は1つでも handler.py へ必須分離（本原則の唯一の例外）
 - `__init__.py` の `init()` が 50行を超えたら `builder.py` に切り出す
 - 1ファイル200行を目安に、超えたら責務分割を検討
 - `PluginManager` インスタンスをロジッククラス（`XxxManager` 等）のメンバ変数に保持させない（コンストラクタで具象依存を注入する）
 - `models.py` にはデータ保持用のピュアなクラスのみを定義し、APIやVDB用のシリアライズ/デシリアライズ等の外部表現変換は `formatter.py` や `renderer.py` 等で行う
+- EventBus subscribe は manager ではなく handler.py で行い、wiring は `__init__.py` で行う。manager コンストラクタに `event_bus` を渡して購読させてはならない

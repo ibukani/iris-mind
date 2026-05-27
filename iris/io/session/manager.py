@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-from dataclasses import dataclass
 from datetime import datetime
 import threading
 from typing import TYPE_CHECKING, Any
@@ -24,32 +23,8 @@ if TYPE_CHECKING:
 
 from loguru import logger
 
-
-@dataclass
-class SessionConfig:
-    host: str = "127.0.0.1"
-    port: int = 9876
-    access_token: str = ""
-
-
-_MSG_PERMISSION_MAP: dict[str, Permission] = {
-    "chat": Permission.PERMISSION_RECEIVE_CHAT,
-    "execute": Permission.PERMISSION_EXECUTE_ACTION,
-    "execute_result": Permission.PERMISSION_EXECUTE_ACTION,
-    "ack": Permission.PERMISSION_RECEIVE_CHAT,
-    "system": Permission.PERMISSION_RECEIVE_CHAT,
-    "error": Permission.PERMISSION_RECEIVE_CHAT,
-    "interrupt": Permission.PERMISSION_INTERRUPT,
-    "command": Permission.PERMISSION_RECEIVE_COMMAND,
-}
-
-_INPUT_PERMISSION_MAP: dict[str, Permission] = {
-    "chat": Permission.PERMISSION_SEND_CHAT,
-    "system": Permission.PERMISSION_SEND_CHAT,
-    "interrupt": Permission.PERMISSION_INTERRUPT,
-    "execute_result": Permission.PERMISSION_EXECUTE_ACTION,
-    "command": Permission.PERMISSION_SEND_COMMAND,
-}
+from .config import SessionConfig
+from .permissions import _INPUT_PERMISSION_MAP, _MSG_PERMISSION_MAP, send_bytes_to_session
 
 
 class SessionManager:
@@ -178,7 +153,7 @@ class SessionManager:
                 ]
 
         if session is not None:
-            self._send_to_session(session, msg)
+            send_bytes_to_session(session, msg)
             return
 
         permission = _MSG_PERMISSION_MAP.get(msg.msg_type)
@@ -186,7 +161,7 @@ class SessionManager:
             if permission is not None and permission not in s.permissions:
                 skipped.append(s.session_id)
                 continue
-            self._send_to_session(s, msg)
+            send_bytes_to_session(s, msg)
 
         if skipped:
             logger.debug("route_message: skipped {} session(s) due to permission: {}", len(skipped), skipped)
@@ -205,21 +180,7 @@ class SessionManager:
         if Permission.PERMISSION_RECEIVE_COMMAND not in session.permissions:
             logger.warning("Command output denied for session={} (no receive_command)", session_id)
             return
-        self._send_to_session(session, msg)
-
-    @staticmethod
-    def _send_to_session(session: SessionInfo, msg: Message | CommandOutput) -> None:
-        conn = session.conn
-        if conn is None:
-            return
-        raw = msg.model_dump_json().encode("utf-8")
-        try:
-            conn.send_bytes(raw)
-            session.last_activity = datetime.now()
-            logger.debug("Sent {} bytes to session={}", len(raw), session.session_id)
-        except (BrokenPipeError, ConnectionError, EOFError):
-            logger.warning("Connection lost for session: {}", session.session_id)
-            session.conn = None
+        send_bytes_to_session(session, msg)
 
     def update_activity(self, session_id: str | None) -> None:
         if session_id is None:

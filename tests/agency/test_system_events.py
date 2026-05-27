@@ -10,6 +10,7 @@ from iris.io.models import AuthMessage
 from iris.io.session.manager import SessionManager
 from iris.kernel.config import Config, SessionConfig
 from iris.llm.prompt import Personality
+from iris.memory.handler import _MemoryEventHandler
 from iris.memory.manager import MemoryManager
 
 
@@ -53,7 +54,8 @@ def test_session_manager_disconnect_time_and_events():
 
 def test_memory_manager_subscribes_client_session_event():
     event_bus = EventBus()
-    memory_mgr = MemoryManager(event_bus=event_bus)
+    memory_mgr = MemoryManager()
+    _MemoryEventHandler(event_bus, memory_mgr.sensory, None)
     assert memory_mgr is not None
 
     inputs_ready = []
@@ -82,7 +84,8 @@ def test_scoring_with_system_event_context():
     event_bus = EventBus()
     cfg = Config()
     cfg.proactive.speak_threshold = 0.5
-    memory_mgr = MemoryManager(event_bus=event_bus, proactive_config=cfg.proactive)
+    memory_mgr = MemoryManager()
+    _MemoryEventHandler(event_bus, memory_mgr.sensory, cfg.proactive)
     scoring = ProactiveScorer(config=cfg.proactive, memory=memory_mgr)
 
     context = {"system_event": "connected", "role": "user", "offline_duration": "3時間"}

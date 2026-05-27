@@ -7,8 +7,7 @@ from langchain_core.messages import SystemMessage
 _SITUATION_INSTRUCTIONS: dict[str, str] = {
     "proactive": (
         "## 状況: 自発的な一声\n"
-        "時間帯や会話の流れに合わせて、自然に声をかけてください。\n"
-        "誰かと会話しているのではなく、自ら会話を始める場面です。"
+        "あなたは自ら興味を持った話題について、能動的に会話を始める存在です。"
     ),
 }
 

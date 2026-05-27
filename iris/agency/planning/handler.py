@@ -55,7 +55,8 @@ class _PlanningEventHandler:
         self._publish(plan, event.session_id, event.user_identity or context.get("identity", ""), from_timer=True)
 
     def _on_user_input(self, event: InputReady) -> None:
-        plan = self._response_strategy.build_response(event.content)
+        chaos_level = (event.context or {}).get("chaos_level", 0.0)
+        plan = self._response_strategy.build_response(event.content, chaos_level=chaos_level)
         self._publish(plan, event.session_id, event.user_identity, from_timer=False)
 
     def _publish(self, plan: Plan, session_id: str, user_identity: str, from_timer: bool) -> None:

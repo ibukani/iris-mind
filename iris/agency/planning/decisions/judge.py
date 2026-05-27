@@ -44,8 +44,11 @@ class ProactiveJudge:
             logger.debug("Below speak_threshold: total={:.3f} < threshold={:.2f}", total, self._cfg.speak_threshold)
             return None
 
+        chaos_level = context.get("chaos_level", 0.0)
         context_hint = (
-            self._context_builder.build_proactive_context_hint(context, scores) if self._context_builder else ""
+            self._context_builder.build_proactive_context_hint(context, scores, chaos_level=chaos_level)
+            if self._context_builder
+            else ""
         )
         logger.debug("Proactive plan published: total={:.3f} scores={} hint={}", total, scores, context_hint)
         return {
@@ -55,6 +58,7 @@ class ProactiveJudge:
             "context_hint": context_hint,
             "topic": "general",
             "is_silent_proactive": False,
+            "chaos_level": chaos_level,
         }
 
     def _build_escalation_context(self, context: dict[str, Any]) -> dict[str, Any]:

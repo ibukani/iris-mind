@@ -41,6 +41,7 @@ class SystemPromptBuilder:
         current_user_identity: str = "",
         situation: str = "",
         include_profile: bool = True,
+        chaos_level: float = 0.0,
     ) -> list[BaseMessage]:
         msgs: list[BaseMessage] = []
 
@@ -58,6 +59,7 @@ class SystemPromptBuilder:
                 node_type=node_type,
                 context_hint=context_hint,
                 situation=situation,
+                chaos_level=chaos_level,
             )
         )
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import random
 from typing import Any
 
 from loguru import logger
@@ -17,6 +18,7 @@ class ContextHintBuilder:
         self,
         context: dict[str, Any],
         scores: dict[str, float],
+        chaos_level: float = 0.0,
     ) -> str:
         if "system_event" in context:
             event_name = context.get("system_event")
@@ -27,9 +29,9 @@ class ContextHintBuilder:
                     return f"システムイベント: ロール {role} が {offline_duration} の切断期間を経て再接続しました。"
                 return f"システムイベント: ロール {role} が接続しました。"
             return ""
-        return self._build_general_hint(scores, context)
+        return self._build_general_hint(scores, context, chaos_level=chaos_level)
 
-    def _build_general_hint(self, scores: dict[str, float], context: dict[str, Any]) -> str:
+    def _build_general_hint(self, scores: dict[str, float], context: dict[str, Any], chaos_level: float = 0.0) -> str:
         parts: list[str] = []
         trigger = max(scores, key=lambda k: scores[k])
         parts.append(f"時間帯: {build_time_label()}")
@@ -43,9 +45,14 @@ class ContextHintBuilder:
         if pref_ctx:
             parts.append(pref_ctx)
 
+        if chaos_level > 0 and random.random() < chaos_level * 0.3:
+            random_hint = self._build_random_memory_hint()
+            if random_hint:
+                parts.append(random_hint)
+
         return " / ".join(parts)
 
-    def build_user_context_hint(self, content: str) -> str:
+    def build_user_context_hint(self, content: str, chaos_level: float = 0.0) -> str:
         if not self._memory or not content:
             return ""
         parts: list[str] = []
@@ -61,9 +68,29 @@ class ContextHintBuilder:
             sem_hint = self._build_semantic_hint(content)
             if sem_hint:
                 parts.append(sem_hint)
+
+            if chaos_level > 0 and random.random() < chaos_level * 0.2:
+                random_hint = self._build_random_memory_hint()
+                if random_hint:
+                    parts.append(random_hint)
         except Exception:
             logger.debug("User context hint failed", exc_info=True)
         return " / ".join(parts)
+
+    def _build_random_memory_hint(self) -> str | None:
+        if not self._memory:
+            return None
+        try:
+            recent = self._memory.get_recent(10)
+            if not recent:
+                return None
+            entry = random.choice(recent)
+            summary = entry.get("summary", "") or entry.get("content", "")
+            if not summary:
+                return None
+            return f"ふと思い出したこと: {summary[:60]}"
+        except Exception:
+            return None
 
     def _build_working_context(self, query: str | None = None) -> str:
         if self._memory is None:

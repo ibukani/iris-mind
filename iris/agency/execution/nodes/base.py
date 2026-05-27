@@ -104,6 +104,7 @@ class BaseLLMNode(ABC):
             context_hint=plan.context_hint,
             node_type=self.node_type_name,
             situation=situation,
+            chaos_level=plan.modulation.chaos_level,
         )
 
     def _build_chat_params(
@@ -118,6 +119,7 @@ class BaseLLMNode(ABC):
             "max_tokens": level.max_tokens or None,
             "priority": level.priority,
             "show_thinking": level.show_thinking,
+            "modulation": plan.modulation,
         }
 
     def _resolve_chat_params(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from iris.agency.modulation import ModulationState
 from iris.agency.planning.models import Plan, PlanReason
 
 if TYPE_CHECKING:
@@ -21,6 +22,10 @@ class ProactivePlanStrategy:
     ) -> Plan:
         context_hint: str = context.get("context_hint", "")
         overrides: dict[str, Any] = {}
+        chaos_level = context.get("chaos_level", 0.0)
+        modulation = ModulationState(chaos_level=chaos_level)
+
+        plan_kwargs: dict[str, Any] = {"modulation": modulation}
 
         if context.get("is_silent_proactive", False):
             topic = context.get("topic", "general")
@@ -33,6 +38,7 @@ class ProactivePlanStrategy:
                 reason=PlanReason.PROACTIVE_CURIOSITY,
                 context_hint=context_hint,
                 overrides=overrides,
+                **plan_kwargs,
             )
         elif context.get("escalation"):
             topic = context.get("topic", "") or ""
@@ -53,6 +59,7 @@ class ProactivePlanStrategy:
                     reason=PlanReason.PROACTIVE_CURIOSITY,
                     context_hint=context_hint,
                     overrides=overrides,
+                    **plan_kwargs,
                 )
             else:
                 plan = Plan(
@@ -62,6 +69,7 @@ class ProactivePlanStrategy:
                     reason=PlanReason.PROACTIVE_ESCALATION,
                     context_hint=context_hint,
                     overrides=overrides,
+                    **plan_kwargs,
                 )
         else:
             plan = Plan(
@@ -71,6 +79,7 @@ class ProactivePlanStrategy:
                 reason=PlanReason.TIMER_EVENT,
                 context_hint=context_hint,
                 overrides=overrides,
+                **plan_kwargs,
             )
 
         return plan

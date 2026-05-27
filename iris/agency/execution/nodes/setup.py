@@ -43,7 +43,16 @@ class SetupNode:
         if silent:
             show_thinking = False
         if silent and not content:
-            base_instruction = "システムからの内部指示: 現在の目標や欲求に基づき、Web検索や記憶検索を用いて知識を深めるための自律的な調査を行ってください。"
+            curiosity_count = plan.modulation.curiosity_candidate_count
+            if curiosity_count <= 1:
+                base_instruction = "システムからの内部指示: 現在の目標や欲求に基づき、Web検索や記憶検索を用いて知識を深めるための自律的な調査を行ってください。"
+            else:
+                base_instruction = (
+                    "システムからの内部指示: 以下の好奇心候補からランダムに1つ選び、調査・実行してください。\n"
+                    + "\n".join(
+                        f"{i + 1}. 現在の目標や欲求に関連する気になる話題を深掘りする" for i in range(curiosity_count)
+                    )
+                )
             proactive_reason = plan.overrides.get("proactive_reason", "")
             if proactive_reason:
                 base_instruction += f" (理由: {proactive_reason})"

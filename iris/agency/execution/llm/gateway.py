@@ -7,6 +7,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from loguru import logger
 
 from iris.agency.execution.llm.prompt_builder import SystemPromptBuilder
+from iris.agency.modulation import ModulationState
 from iris.agency.planning.models import Plan
 from iris.kernel.config import ModelConfig
 from iris.kernel.debug_capture import DebugCapture
@@ -62,6 +63,7 @@ class LLMGateway:
         situation: str = "",
         node_type: str = "general_task",
         include_profile: bool = True,
+        chaos_level: float = 0.0,
     ) -> list[BaseMessage]:
         return self._prompt_builder.build(
             node_type=node_type,
@@ -71,6 +73,7 @@ class LLMGateway:
             current_user_identity=self._current_user_identity,
             situation=situation,
             include_profile=include_profile,
+            chaos_level=chaos_level,
         )
 
     async def _call_llm(
@@ -124,21 +127,26 @@ class LLMGateway:
         max_tokens: int | None = None,
         priority: int = 0,
         show_thinking: bool = False,
+        modulation: ModulationState | None = None,
     ) -> AIMessage:
+        mod = modulation or ModulationState()
         if system_msgs is None:
             system_msgs = self.build_system_messages(
                 context_hint=context_hint,
+                chaos_level=mod.chaos_level,
             )
         if show_thinking and messages and isinstance(messages[-1], HumanMessage):
             last_msg = messages[-1]
             last_msg.content = self._personality.build_thinking_prompt(str(last_msg.content))
+
+        effective_temp = temperature if temperature is not None else mod.sampling_temperature
 
         return await self._call_llm(
             system_msgs,
             messages,
             model_role,
             max_tokens,
-            temperature=temperature,
+            temperature=effective_temp,
             tools=tools,
             on_token=on_token,
             interrupt_token=interrupt_token,
@@ -158,12 +166,14 @@ class LLMGateway:
         context_hint = plan.context_hint
         reason = plan.reason.value
         content = plan.content
+        mod = plan.modulation
 
         is_proactive = reason in ("proactive_curiosity", "proactive_escalation", "timer")
 
         system_msgs = self.build_system_messages(
             context_hint=context_hint,
             situation="proactive" if is_proactive else "",
+            chaos_level=mod.chaos_level,
         )
 
         msgs: list[BaseMessage] = []
@@ -179,7 +189,7 @@ class LLMGateway:
                 msgs,
                 model_role,
                 max_tok,
-                temperature=self._model_config.get_effective_temperature(model_role),
+                temperature=mod.sampling_temperature,
                 interrupt_token=interrupt_token,
                 priority=priority,
             )

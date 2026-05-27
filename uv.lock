@@ -837,8 +837,8 @@ dev = [
 requires-dist = [
     { name = "cachetools", specifier = ">=5.5" },
     { name = "chromadb", specifier = ">=1.4" },
-    { name = "grpcio", specifier = ">=1.62.0" },
-    { name = "grpcio-tools", specifier = ">=1.62.0" },
+    { name = "grpcio", specifier = ">=1.80.0" },
+    { name = "grpcio-tools", specifier = ">=1.80.0" },
     { name = "httpx", specifier = ">=0.28" },
     { name = "hypothesis", marker = "extra == 'dev'", specifier = ">=6" },
     { name = "instructor", specifier = ">=1.0" },

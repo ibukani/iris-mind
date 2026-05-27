@@ -2,12 +2,3 @@
 
 ## 構造記憶
 {agents_md_content}
-
-## ユーザー情報
-{user_preferences}
-
-## 接続セッション
-{session_roles}
-
-## 自己規律
-{governance_principles}

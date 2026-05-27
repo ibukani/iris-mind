@@ -2,7 +2,7 @@
 name: iris-plugin-provider
 description: Iris LLMプロバイダ/ストア/VDB などのサブプラグイン追加ワークフロー
 license: MIT
-compatibility: opencode
+compatibility: *
 metadata:
   audience: developers
   workflow: iris-extension

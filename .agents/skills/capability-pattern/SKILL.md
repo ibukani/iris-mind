@@ -2,7 +2,7 @@
 name: capability-pattern
 description: Iris capability 追加の最小ワークフロー
 license: MIT
-compatibility: opencode
+compatibility: *
 metadata:
   audience: developers
   workflow: iris-extension

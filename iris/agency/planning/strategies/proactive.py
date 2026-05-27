@@ -35,17 +35,34 @@ class ProactivePlanStrategy:
                 overrides=overrides,
             )
         elif context.get("escalation"):
-            topic = context.get("topic", "")
+            topic = context.get("topic", "") or ""
             summary = context.get("summary", "")
-            content = f"システムからの内部指示: あなたは自発的に『{topic}』に関する調査を行い、次のことが分かりました：『{summary}』。この知見を元に、ユーザーに対して『ねえ、さっき〜について考えていたんだけど……』というように、あなたの言葉で自然に自発的な話しかけを行ってください。"
-            plan = Plan(
-                content=content,
-                task_level="deep",
-                silent=False,
-                reason=PlanReason.PROACTIVE_ESCALATION,
-                context_hint=context_hint,
-                overrides=overrides,
-            )
+            if topic and summary:
+                content = f"あなたは『{topic}』について調査し、次のことが分かりました：『{summary}』"
+            elif topic:
+                content = f"あなたは『{topic}』について調査しました。"
+            elif summary:
+                content = f"あなたは調査により次のことを発見しました：『{summary}』"
+            else:
+                content = ""
+            if not content:
+                plan = Plan(
+                    content="",
+                    task_level="normal",
+                    silent=True,
+                    reason=PlanReason.PROACTIVE_CURIOSITY,
+                    context_hint=context_hint,
+                    overrides=overrides,
+                )
+            else:
+                plan = Plan(
+                    content=content,
+                    task_level="deep",
+                    silent=False,
+                    reason=PlanReason.PROACTIVE_ESCALATION,
+                    context_hint=context_hint,
+                    overrides=overrides,
+                )
         else:
             plan = Plan(
                 content="",

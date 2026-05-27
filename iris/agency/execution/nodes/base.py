@@ -7,7 +7,7 @@ from langchain_core.messages import BaseMessage
 
 from iris.agency.execution.models import DynamicState, ExecutionState
 from iris.agency.execution.node_type import NODE_TYPES, ROUTING_TOOLS
-from iris.agency.planning.models import Plan
+from iris.agency.planning.models import Plan, PlanReason
 from iris.agency.task_level import TASK_LEVELS, TaskLevel
 
 if TYPE_CHECKING:
@@ -90,9 +90,20 @@ class BaseLLMNode(ABC):
         level: TaskLevel,
         plan: Plan,
     ) -> list[BaseMessage] | None:
+        situation = (
+            "proactive"
+            if plan.reason
+            in (
+                PlanReason.PROACTIVE_CURIOSITY,
+                PlanReason.PROACTIVE_ESCALATION,
+                PlanReason.TIMER_EVENT,
+            )
+            else ""
+        )
         return self._pipeline.build_system_messages(
             context_hint=plan.context_hint,
             node_type=self.node_type_name,
+            situation=situation,
         )
 
     def _build_chat_params(

@@ -133,4 +133,4 @@ def test_planning_manager_escalation_event() -> None:
     assert plan.silent is False
     assert "宇宙の起源" in plan.content
     assert "ビッグバンによる宇宙の膨張" in plan.content
-    assert "システムからの内部指示" in plan.content
+    assert "調査" in plan.content

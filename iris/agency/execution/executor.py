@@ -89,7 +89,8 @@ class FlowExecutor(AsyncWorker):
             if self._inhibition:
                 self._inhibition.release_execution()
                 new_ai_content = "".join(
-                    m.content for m in self._messages[before:]
+                    m.content
+                    for m in self._messages[before:]
                     if getattr(m, "type", None) == "ai" and isinstance(m.content, str)
                 )
                 if new_ai_content:

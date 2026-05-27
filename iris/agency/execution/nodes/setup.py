@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from langchain_core.messages import ChatMessage, HumanMessage
+from langchain_core.messages import HumanMessage
 
 from iris.agency.execution.models import DynamicState, ExecutionState
 from iris.agency.planning.models import Plan
@@ -62,10 +62,7 @@ class SetupNode:
         self._set_on_token_callback()
 
         if content:
-            if silent:
-                state["messages"].append(ChatMessage(role="thought", content=content))
-            else:
-                state["messages"].append(HumanMessage(content=content))
+            state["messages"].append(HumanMessage(content=content))
         if content and self._memory:
             role = "thought" if silent else "user"
             self._memory.short_term.add_turn(role, content, plan.user_identity)

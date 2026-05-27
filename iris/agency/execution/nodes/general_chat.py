@@ -51,4 +51,5 @@ class GeneralChatNode(BaseLLMNode):
             "max_tokens": 256,
             "priority": level.priority,
             "show_thinking": False,
+            "modulation": plan.modulation,
         }

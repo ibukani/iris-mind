@@ -71,6 +71,7 @@ class _Gate:
     def force_release(self) -> None:
         with self._lock:
             self._executing = False
+            self._cooldown_until = 0.0
 
     def get_state(self) -> dict:
         return {

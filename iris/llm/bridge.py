@@ -175,8 +175,6 @@ class LLMBridge:
             call_kwargs: dict[str, Any] = {"options": merged}
             if reasoning is not None:
                 call_kwargs["reasoning"] = reasoning
-            if not reasoning:
-                call_kwargs["think"] = False
         else:
             call_kwargs = build_openai_kwargs(temperature, max_tokens, kwargs)
         call_kwargs.update(kwargs)
@@ -197,8 +195,6 @@ class LLMBridge:
         full_message = None
         try:
             async for chunk in active_model.astream(messages, **call_kwargs):
-                if interrupt_token.is_cancelled:
-                    break
                 full_message = chunk if full_message is None else full_message + chunk
                 if chunk.content and isinstance(chunk.content, str):
                     wrapped_on_token(chunk.content)
@@ -206,6 +202,8 @@ class LLMBridge:
             logger.error("LangChain stream error: {}", e)
             raise
 
+        if interrupt_token.is_cancelled:
+            return AIMessage(content="")
         return full_message or AIMessage(content="")
 
     async def chat_with_structured_output(

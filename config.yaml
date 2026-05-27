@@ -54,7 +54,13 @@ model:
           roles: [default]
           provider: ollama
           max_tokens: 1024
+          reasoning: false
           tokenizer_repo_id: Qwen/Qwen3.5-4B
+        # - name: gemini-3.1-flash-lite
+        #   roles: [default]
+        #   provider: google
+        #   max_tokens: 4096
+        #   tokenizer_repo_id: Qwen/Qwen3.5-4B
 
 # TCP サーバー — 外部クライアント接続の listen 設定
 session:

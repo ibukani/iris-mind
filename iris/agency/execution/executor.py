@@ -11,7 +11,7 @@ from iris.agency.execution.llm.gateway import LLMGateway
 from iris.agency.execution.orchestrator import ExecutionOrchestrator
 from iris.agency.execution.worker import AsyncWorker
 from iris.agency.inhibition import InhibitionManager
-from iris.agency.planning.models import Plan
+from iris.agency.planning.models import Plan, PlanReason
 from iris.event.event_bus import EventBus
 from iris.llm.capability import CapabilityChecker
 from iris.llm.interrupt_token import InterruptToken
@@ -65,6 +65,8 @@ class FlowExecutor(AsyncWorker):
 
     async def process(self, plan: Plan) -> None:  # type: ignore[override]
         if self._inhibition:
+            if plan.reason == PlanReason.USER_INPUT:
+                self._inhibition.force_release_execution()
             decision = self._inhibition.acquire_execution()
             if not decision.allow:
                 logger.warning("FlowExecutor: execution denied by gate reason={}", decision.reason)
@@ -77,8 +79,8 @@ class FlowExecutor(AsyncWorker):
 
         state = build_execution_state(plan, self._messages)
 
+        before = len(self._messages)
         try:
-            before = len(self._messages)
             result = await self._graph.ainvoke(state)
             self._messages[:] = result.get("messages", [])
         except Exception as e:

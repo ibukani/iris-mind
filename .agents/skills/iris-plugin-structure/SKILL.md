@@ -19,6 +19,9 @@ metadata:
 - **ファイル名から責務が推測できる**こと
 - **クラス名とファイル名を対応させる**: `manager.py` → `XxxManager`、`protocols.py` → `XxxProtocol`
 - **内部実装は `_leading_underscore`** で外部からの直接使用を防ぐ
+- **依存性逆転の原則 (DIP)**: 他プラグインとの連携は具象クラスではなく `Protocol` を介して行う
+- **依存性注入 (DI) の徹底**: `PluginManager` をロジッククラス内に保持して動的に解決する（サービスロケーターパターン）のを禁止し、すべてコンストラクタで明示的に注入する
+- **純粋ロジックとI/Oの分離**: スコアラーやエクストラクター等は純粋なデータ処理に徹し、ファイルI/OやEventBusパブリッシュなどの副作用を持たせない
 
 ## 標準ディレクトリ構成
 
@@ -137,6 +140,7 @@ iris/<plugin_name>/
 - **同一プラグイン内**: 相対インポート推奨（`from .manager import XxxManager`）
 - **他プラグイン**: 絶対インポート（`from iris.memory.manager import MemoryManager`）
 - `__init__.py` は公開APIのみ再エクスポート。内部モジュールへの直接アクセスは非推奨
+- **循環参照の回避**: 型ヒントのみで参照するクラスは `if TYPE_CHECKING:` ブロック内でインポートし、ランタイムのインポートループを防ぐ
 
 ## サブプラグイン・プロバイダ構造
 
@@ -158,18 +162,50 @@ iris/tools/builtins/          # 組み込みツール
 
 ## 実装パターン集
 
-### Builder（組立関数）
+### Builder（組立関数）と `__init__.py` の連携
 
 ```python
+# iris/<plugin>/__init__.py
+from __future__ import annotations
+from iris.kernel.plugin.protocol import PluginProtocol, PluginManager
+from .builder import build_components
+
+class XxxPlugin(PluginProtocol):
+    def init(self, manager: PluginManager) -> None:
+        # 複雑なコンポーネント組み立てを builder に委譲
+        self._components = build_components(manager)
+
 # iris/<plugin>/builder.py
 from __future__ import annotations
-from typing import Any
+from typing import Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from iris.kernel.plugin.protocol import PluginManager
 
 def build_components(manager: PluginManager) -> dict[str, Any]:
     dependency = manager.resolve("SomeService")
     component = XxxManager(dependency)
     manager.provide("XxxManager", component)
     return {"manager": component}
+```
+
+### サブプラグイン自動発見と登録
+
+```python
+# iris/<plugin>/__init__.py
+from __future__ import annotations
+from iris.kernel.plugin.loader import discover_sub_plugins
+from iris.kernel.plugin.protocol import PluginProtocol, PluginManager
+
+class ParentPlugin(PluginProtocol):
+    def init(self, manager: PluginManager) -> None:
+        # サブプラグイン (プロバイダなど) を自動検知して登録
+        sub_plugins = discover_sub_plugins(
+            package_path="iris/<plugin>/providers",
+            package_name="iris.<plugin>.providers"
+        )
+        for _, register_fn in sub_plugins:
+            register_fn(self)  # 親プラグインに自身を登録させる
 ```
 
 ### Handler（イベント購読）
@@ -237,3 +273,5 @@ def _search_impl(query: Any) -> list[Any]: ...
 - 分割トリガーに達する前の過剰分割は禁止。必要になるまで単一ファイルで良い
 - `__init__.py` の `init()` が 50行を超えたら `builder.py` に切り出す
 - 1ファイル200行を目安に、超えたら責務分割を検討
+- `PluginManager` インスタンスをロジッククラス（`XxxManager` 等）のメンバ変数に保持させない（コンストラクタで具象依存を注入する）
+- `models.py` にはデータ保持用のピュアなクラスのみを定義し、APIやVDB用のシリアライズ/デシリアライズ等の外部表現変換は `formatter.py` や `renderer.py` 等で行う

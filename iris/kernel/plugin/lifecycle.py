@@ -24,9 +24,10 @@ class PluginInstance:
 
 
 class PluginLifecycle:
-    def __init__(self) -> None:
+    def __init__(self, builtin_service_types: set[type] | None = None) -> None:
         self._plugins: dict[str, PluginInstance] = {}
         self._order: list[str] = []
+        self._builtin_service_names: set[str] = {t.__name__ for t in (builtin_service_types or set())}
 
     @property
     def plugins(self) -> dict[str, PluginInstance]:
@@ -113,9 +114,15 @@ class PluginLifecycle:
 
     def _resolve_order(self) -> None:
         graph: dict[str, set[str]] = {name: set(p.manifest.dependencies) for name, p in self._plugins.items()}
+
+        known_services: set[str] = set(self._plugins)
+        for p in self._plugins.values():
+            known_services.update(p.manifest.provides)
+        known_services.update(self._builtin_service_names)
+
         for dep_set in graph.values():
             for dep in dep_set:
-                if dep not in graph:
+                if dep not in known_services:
                     raise KeyError(f"Plugin has unresolved dependency '{dep}'")
 
         phases: dict[PluginPhase, list[str]] = {}

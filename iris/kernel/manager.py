@@ -28,7 +28,7 @@ class PluginManager:
         self._hook_registry = HookRegistry()
         self._di = ServiceContainer()
         self._state = KernelState()
-        self._lifecycle = PluginLifecycle()
+        self._lifecycle = PluginLifecycle(builtin_service_types={EventBus})
         self._cmd_handler: Any = None
         self._diagnostics: Any = None
 

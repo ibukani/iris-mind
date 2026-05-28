@@ -4,11 +4,9 @@ from collections.abc import Callable
 from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
-from loguru import logger
 
 from iris.agency.execution.llm.prompt_builder import SystemPromptBuilder
 from iris.agency.modulation import ModulationState
-from iris.agency.planning.models import Plan
 from iris.kernel.config import ModelConfig
 from iris.kernel.debug_capture import DebugCapture
 from iris.llm.bridge import LLMBridge
@@ -60,7 +58,6 @@ class LLMGateway:
         self,
         context_hint: str,
         response_style: str = "",
-        situation: str = "",
         node_type: str = "general_task",
         include_profile: bool = True,
         chaos_level: float = 0.0,
@@ -71,7 +68,6 @@ class LLMGateway:
             response_style=response_style,
             session_roles_summary=self._session_roles_summary,
             current_user_identity=self._current_user_identity,
-            situation=situation,
             include_profile=include_profile,
             chaos_level=chaos_level,
         )
@@ -153,55 +149,6 @@ class LLMGateway:
             priority=priority,
             enable_thinking=show_thinking,
         )
-
-    async def chat_short(
-        self,
-        messages: list[BaseMessage],
-        plan: Plan,
-        model_role: str = "default",
-        max_tokens: int | None = None,
-        priority: int = 0,
-        interrupt_token: InterruptToken | None = None,
-    ) -> str:
-        context_hint = plan.context_hint
-        reason = plan.reason.value
-        content = plan.content
-        mod = plan.modulation
-
-        is_proactive = reason in ("proactive_curiosity", "proactive_escalation", "timer")
-
-        system_msgs = self.build_system_messages(
-            context_hint=context_hint,
-            situation="proactive" if is_proactive else "",
-            chaos_level=mod.chaos_level,
-        )
-
-        msgs: list[BaseMessage] = []
-        if messages and content:
-            msgs.extend(messages)
-        msgs.append(HumanMessage(content=content or "..."))
-
-        max_tok = max_tokens or 80
-
-        try:
-            resp = await self._call_llm(
-                system_msgs,
-                msgs,
-                model_role,
-                max_tok,
-                temperature=mod.sampling_temperature,
-                interrupt_token=interrupt_token,
-                priority=priority,
-            )
-            text = str(resp.content).strip() if isinstance(resp.content, str) else ""
-        except Exception as e:
-            logger.debug("Short generation failed: {}", e)
-            text = ""
-
-        if not text:
-            text = "" if is_proactive else "…"
-
-        return text
 
     def _capture_debug(
         self,

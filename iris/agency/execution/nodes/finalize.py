@@ -25,7 +25,7 @@ class FinalizeNode:
         response_text = state.get("response_text", "")
         session_id = plan.session_id
 
-        if state.get("interrupted") or plan.silent:
+        if state.get("interrupted"):
             state["completed"] = True
             return {"completed": True}
 

@@ -39,7 +39,6 @@ class SystemPromptBuilder:
         response_style: str = "",
         session_roles_summary: str = "",
         current_user_identity: str = "",
-        situation: str = "",
         include_profile: bool = True,
         chaos_level: float = 0.0,
     ) -> list[BaseMessage]:
@@ -58,7 +57,6 @@ class SystemPromptBuilder:
             self._node_factory.build(
                 node_type=node_type,
                 context_hint=context_hint,
-                situation=situation,
                 chaos_level=chaos_level,
             )
         )

@@ -38,34 +38,14 @@ class SetupNode:
     async def __call__(self, state: ExecutionState) -> None:
         plan: Plan = state["plan"]
         content = plan.content
-        silent = plan.silent
         show_thinking = TASK_LEVELS[plan.task_level].show_thinking
-        if silent:
-            show_thinking = False
-        if silent and not content:
-            curiosity_count = plan.modulation.curiosity_candidate_count
-            if curiosity_count <= 1:
-                base_instruction = "システムからの内部指示: 現在の目標や欲求に基づき、Web検索や記憶検索を用いて知識を深めるための自律的な調査を行ってください。"
-            else:
-                base_instruction = (
-                    "システムからの内部指示: 以下の好奇心候補からランダムに1つ選び、調査・実行してください。\n"
-                    + "\n".join(
-                        f"{i + 1}. 現在の目標や欲求に関連する気になる話題を深掘りする" for i in range(curiosity_count)
-                    )
-                )
-            proactive_reason = plan.overrides.get("proactive_reason", "")
-            if proactive_reason:
-                base_instruction += f" (理由: {proactive_reason})"
-            content = base_instruction
-            plan.content = content
 
         self._set_on_token_callback()
 
         if content:
             state["messages"].append(HumanMessage(content=content))
         if content and self._memory:
-            role = "thought" if silent else "user"
-            self._memory.short_term.add_turn(role, content, plan.user_identity)
+            self._memory.short_term.add_turn("user", content, plan.user_identity)
 
         if show_thinking and self._event_bus:
             self._event_bus.publish(

@@ -7,7 +7,7 @@ from langchain_core.messages import BaseMessage
 
 from iris.agency.execution.models import DynamicState, ExecutionState
 from iris.agency.execution.node_type import NODE_TYPES, ROUTING_TOOLS
-from iris.agency.planning.models import Plan, PlanReason
+from iris.agency.planning.models import Plan
 from iris.agency.task_level import TASK_LEVELS, TaskLevel
 
 if TYPE_CHECKING:
@@ -90,20 +90,9 @@ class BaseLLMNode(ABC):
         level: TaskLevel,
         plan: Plan,
     ) -> list[BaseMessage] | None:
-        situation = (
-            "proactive"
-            if plan.reason
-            in (
-                PlanReason.PROACTIVE_CURIOSITY,
-                PlanReason.PROACTIVE_ESCALATION,
-                PlanReason.TIMER_EVENT,
-            )
-            else ""
-        )
         return self._pipeline.build_system_messages(
             context_hint=plan.context_hint,
             node_type=self.node_type_name,
-            situation=situation,
             chaos_level=plan.modulation.chaos_level,
         )
 
@@ -175,8 +164,7 @@ class BaseLLMNode(ABC):
             response_text = raw.strip() if isinstance(raw, str) else ""
 
             if response_text and self._memory:
-                role = "thought" if plan.silent else "assistant"
-                self._memory.short_term.add_turn(role, response_text, plan.user_identity)
+                self._memory.short_term.add_turn("assistant", response_text, plan.user_identity)
 
             return {"response_text": response_text}
         except Exception:

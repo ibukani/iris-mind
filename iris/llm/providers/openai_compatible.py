@@ -100,12 +100,6 @@ class OpenAICompatibleProvider(BaseLLMProvider):
 class OpenRouterProvider(OpenAICompatibleProvider):
     """OpenRouter 専用インスタンス (OpenAICompatibleProvider のエイリアス)。"""
 
-    def __init__(self) -> None:
-        super().__init__(provider_type="openrouter")
-
 
 class GoogleProvider(OpenAICompatibleProvider):
     """Google 専用インスタンス (OpenAICompatibleProvider のエイリアス)。"""
-
-    def __init__(self) -> None:
-        super().__init__(provider_type="google")

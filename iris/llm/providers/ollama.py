@@ -54,7 +54,7 @@ class OllamaProvider(BaseLLMProvider):
             reasoning=entry.reasoning,
             client_kwargs={"timeout": 120},
             async_client_kwargs={"timeout": 120},
-            options=options,
+            options=options,  # type: ignore[call-arg]
         )
 
     def build_call_kwargs(

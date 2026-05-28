@@ -272,15 +272,14 @@ stateDiagram-v2
 
 ```mermaid
 flowchart LR
-    C["Client"] -->|gRPC| IO["IOManager"]
-    IO -->|InputReceived| EB["EventBus"]
-    EB -->|InputReceived| MEM["Memory"]
-    MEM -->|InputReady| EB
+    C["Client"] -->|gRPC| GW["Gateway"]
+    GW -->|handler callback| Handler["MemoryHandler"]
+    Handler -->|publish| EB["EventBus"]
     EB -->|InputReady| PL["PlanningManager"]
     PL -->|PlanDecided| IB["InternalBus"]
     IB --> EX["FlowExecutor"]
     EX --> LLM["LLM"]
     EX -->|OutputRequest| EB
-    EB -->|OutputRequest| IO
+    EB -->|OutputRequest| IO["IOEventHandler"]
     IO -->|gRPC| C
-```git
+```

@@ -156,6 +156,8 @@ message BidirectionalStreamResponse {
 sequenceDiagram
     participant Client
     participant Server as GrpcServer
+    participant GW as Gateway
+    participant Handler as MemoryHandler
     participant Kernel as Iris Kernel
 
     Client->>Server: BidirectionalStream (metadata: access_token, role, permissions)
@@ -164,7 +166,9 @@ sequenceDiagram
     Server-->>Client: 接続確立 (双方向ストリーム開始)
 
     Client->>Server: BidirectionalStreamRequest(Message: msg_type="chat", direction="request", content="Hello")
-    Server->>Kernel: MessageEvent
+    Server->>GW: on_grpc_message(msg)
+    GW->>Handler: handle_message(msg)
+    Handler->>Handler: publish(MessageEvent) to EventBus
     activate Kernel
     Kernel-->>Server: OutputRequest(thinking)
     Server-->>Client: BidirectionalStreamResponse(Message: msg_type="chat", direction="stream", state="thinking")
@@ -329,4 +333,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | 不正なリクエスト引数 | gRPC ステータスコード `INVALID_ARGUMENT` (3) |
 | 内部エラー | gRPC ステータスコード `INTERNAL` (13) |
 | 権限不足 | BidirectionalStreamResponse 内で `error` メッセージを送信、または `PERMISSION_DENIED` (7) |
-| 接続断 | サーバーは当該セッション情報を削除 |
+| 接続断 | サーバーは当該セッション情報を削除。同一セッションに紐づく全ユーザーの退室イベント（`user_left`）を自動発行し、自発発話の抑制を解除する |

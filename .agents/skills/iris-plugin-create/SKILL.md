@@ -19,7 +19,7 @@ Iris に新しいプラグイン（層/機能/ツール/プロバイダ）を追
 | `CORE` | 10 | 必須インフラ層 | io, llm, tools |
 | `LAYER` | 20 | 認知層 | memory |
 | `COGNITIVE` | 30 | 高度認知 | agency |
-| `FEATURE` | 40 | 機能拡張 | limbic |
+| `FEATURE` | 40 | 機能拡張 | heartbeat |
 | `PROVIDER` | - | 実装差し替え | (sub-plugin) |
 | `TOOL` | 10 | ツール拡張 | (sub-plugin) |
 

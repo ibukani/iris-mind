@@ -141,7 +141,7 @@ class SemanticStore:
     def sync(self) -> None
 
 class AgentsMdStore:
-    """構造記憶。.iris/data/iris_profile.md の読み書き（上限2KB）。"""
+    """構造記憶。.iris/config/iris_profile.md の読み書き（上限2KB）。"""
     def load(self) -> str
     def update(self, new_content: str) -> None
 

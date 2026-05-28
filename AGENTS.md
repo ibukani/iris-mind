@@ -47,30 +47,43 @@ iris/                             ← アプリケーションコア
 │   │   ├── hook_points.py        ← HookPoint, HookPriority, HOOK_POINTS定義
 │   │   ├── hooks.py              ← HookRegistry（フックチェイン実行）
 │   │   └── loader.py             ← プラグイン／サブプラグイン自動発見
-│   └── commands/                 ← CommandHandler（/shutdown 等）
+│   └── commands/                 ← CommandHandler + サブコマンド群
+│       ├── handler.py            ← CommandHandler（/shutdown, /status 等）
+│       ├── debug_commands.py     ← デバッグコマンド
+│       ├── info_commands.py      ← 情報表示コマンド
+│       ├── memory_commands.py    ← 記憶操作コマンド
+│       └── state_utils.py        ← 状態ユーティリティ
 ├── io/                           ← 視床: 入出力中継
 │   ├── manager.py                ← IOManager
 │   ├── models.py                 ← Message, CommandInput, CommandOutput, Permission, Direction
 │   ├── hooks.py                  ← Hook登録
-│   ├── transport/                ← GrpcListener
-│   ├── session/                  ← SessionManager
-│   └── auth/                     ← Authenticator
+│   ├── gateway.py                ← gRPC Gateway
+│   ├── handler.py                ← IO Handler（EventBus連携）
+│   ├── transport/                ← gRPC Transport
+│   │   ├── grpc_listener.py      ← GrpcListener
+│   │   └── grpc_server.py        ← gRPC Server
+│   ├── session/
+│   │   ├── manager.py            ← SessionManager
+│   │   ├── config.py             ← SessionConfig
+│   │   └── permissions.py        ← Permission管理
+│   └── auth/
+│       └── authenticator.py      ← Authenticator
 ├── event/                        ← 神経路: Global EventBus
 │   ├── event_bus.py              ← EventBus（kernel から分離）
 │   ├── event_types.py            ← イベント型定義
 │   └── tracer.py                 ← EventTracer（デバッグトレース）
-├── limbic/                       ← 大脳辺縁系
-│   ├── amygdala/                 ← 扁桃体（感情評価・価値判断）
-│   ├── cingulate/                ← 前帯状皮質（ACC: 感情制御・葛藤調整）
-│   ├── hippocampus/              ← 扁桃体-海馬相互作用（感情タグ付け）
-│   └── prefrontal/               ← 前頭前野（性格・感情統合）
-├── memory/                       ← 記憶系: 感覚野+海馬+皮質（3層構造）
+├── heartbeat/                    ← TimerTick heartbeat Plugin
+│   └── service.py                ← HeartbeatService
+├── memory/                       ← 記憶系: 感覚野+皮質（3層構造）
 │   ├── manager.py                ← MemoryManager（オーケストレータ）
 │   ├── protocol.py               ← MemoryManagerProtocol
 │   ├── handler.py                ← イベントハンドラ（MessageEvent/TimerTick）
 │   ├── dispatcher.py             ← store/retrieve/search ディスパッチ
 │   ├── builder.py                ← コンポーネント組立
 │   ├── hooks.py                  ← Plugin Hook登録
+│   ├── base.py                   ← _JsonlStore 基底
+│   ├── models.py                 ← ContentBlock等 共通型定義
+│   ├── user_store.py             ← user_id↔nickname 永続化
 │   ├── sensory/                  ← 感覚記憶
 │   │   ├── manager.py            ← SensoryMemoryManager（断片+生入力 2系統）
 │   │   └── readiness.py          ← ReadinessEvaluator
@@ -80,24 +93,29 @@ iris/                             ← アプリケーションコア
 │   │   ├── scorer.py             ← 重要度スコアリング
 │   │   ├── extractor.py          ← エンティティ抽出
 │   │   └── renderer.py           ← コンテキストレンダリング
-│   ├── long_term/
-│   │   ├── goal_store.py         ← GoalStore（LongTermGoal 管理）
-│   │   ├── manager.py            ← LongTermMemoryManager
-│   │   ├── stores.py             ← EpisodicStore, SemanticStore, AgentsMdStore
-│   │   ├── protocols.py          ← Store プロトコル定義
-│   │   ├── base.py               ← _JsonlStore 基底
-│   │   └── vector_store.py       ← VectorStore（ChromaDB+BM25）
-│   └── hippocampal/              ← Reflexion + HippocampalManager
+│   └── long_term/
+│       ├── goal_store.py         ← GoalStore（LongTermGoal 管理）
+│       ├── manager.py            ← LongTermMemoryManager
+│       ├── stores.py             ← EpisodicStore, SemanticStore, AgentsMdStore
+│       ├── protocols.py          ← Store プロトコル定義
+│       └── vector_store.py       ← VectorStore（ChromaDB+BM25）
 ├── agency/                       ← 高度認知: PFC+基底核+運動野
 │   ├── builder.py                ← コンポーネント組み立て工場
 │   ├── task_level.py             ← TaskLevel定義（chat/light/normal/deep/research）
 │   ├── manager.py                ← AgencyManager（compact_context中継）
-│   ├── bus.py                    ← 内部 EventBus（planning→execution）
+│   ├── internal_bus.py           ← 内部 EventBus（planning→execution）
 │   ├── hooks.py                  ← Plugin Hook登録
-│   ├── inhibition/               ← 抑制制御
+│   ├── modulation.py             ← Agency変調（感情→意思決定への影響）
+│   ├── inhibition/               ← 基底核: 抑制制御
+│   │   ├── manager.py            ← InhibitionManager
+│   │   ├── handler.py            ← 抑制ハンドラ
+│   │   ├── gate.py               ← Gate（実行権制御）
+│   │   ├── striatum.py           ← Striatum（Plan評価）
+│   │   └── models.py             ← GateDecision
 │   ├── planning/                 ← 前頭前野: 意思決定 + PFCスコアリング
 │   │   ├── manager.py            ← PlanningManager
 │   │   ├── models.py             ← Plan, PlanReason
+│   │   ├── handler.py            ← Planning Handler（EventBus連携）
 │   │   ├── context_hint_builder.py ← コンテキストヒント生成
 │   │   ├── question_generator.py ← 質問生成
 │   │   ├── task_content.py       ← タスク判定
@@ -115,13 +133,15 @@ iris/                             ← アプリケーションコア
 │       ├── models.py             ← ExecutionState / DynamicState
 │       ├── engine.py             ← ToolEngine（ツール実行）
 │       ├── builder.py            ← ノード・グラフ組立
-│       ├── node_types.py         ← ノード種別定義
+│       ├── node_type.py          ← ノード種別定義
 │       ├── worker.py             ← バックグラウンドワーカー
+│       ├── handler.py            ← 実行イベントハンドラ
 │       ├── llm/
 │       │   ├── gateway.py        ← LLMGateway（LLM呼出）
 │       │   ├── prompt_builder.py ← SystemPromptBuilder
 │       │   ├── node_prompt_factory.py ← ノード別プロンプト生成
-│       │   └── profile_builder.py ← プロファイル構築
+│       │   ├── profile_builder.py ← プロファイル構築
+│       │   └── capture.py        ← LLM入出力キャプチャ
 │       ├── nodes/                ← LangGraphノード
 │       │   ├── base.py           ← BaseLLMNode（抽象基底）
 │       │   ├── general_chat.py   ← GeneralChatNode
@@ -137,13 +157,16 @@ iris/                             ← アプリケーションコア
 │   ├── context.py                ← LLMContextWindowManager（会話履歴圧縮）
 │   ├── hooks.py                  ← Plugin Hook登録
 │   ├── interrupt_token.py        ← InterruptToken（LLM生成の中断制御）
-│   ├── param_builder.py          ← パラメータ構築
+│   ├── model_factory.py          ← ChatModelファクトリ
 │   ├── priority_lock.py          ← PriorityLock（優先度付き排他ロック）
 │   ├── prompt.py                 ← Personality（システムプロンプト構築）
 │   ├── repetition.py             ← 繰り返し検出
+│   ├── token_utils.py            ← トークン推定ユーティリティ
 │   ├── tokenizer.py              ← TokenizerManager（tokenizersラッパー）
 │   └── providers/
-│       └── ollama_env.py         ← Ollama環境チェック
+│       ├── base.py               ← Provider基底
+│       ├── ollama.py             ← Ollamaプロバイダ
+│       └── openai_compatible.py  ← OpenAI互換プロバイダ
 ├── tools/                        ← @tool, ToolRegistry
 │   ├── decorator.py              ← @tool デコレータ
 │   ├── models.py                 ← ToolDef, ToolCall
@@ -205,7 +228,7 @@ iris/                             ← アプリケーションコア
 | `kernel/` | プロセス管理、DI、Command |
 | `io/` | 入出力中継（TCP、セッション） |
 | `event/` | グローバルEventBus（全層間通信） |
-| `limbic/` | 感情評価・状態管理・制御 |
+| `heartbeat/` | TimerTick heartbeat Plugin |
 | `memory/` | 感覚→短期→長期記憶、人格 |
 | `agency/` | 意思決定（planning）と実行（execution） |
 | `llm/` | LLMプロバイダ、ContextWindow管理 |
@@ -218,7 +241,6 @@ iris/                             ← アプリケーションコア
 - プラグイン間の依存は `PluginManifest.dependencies` に宣言。PluginManagerがトポロジカルソートで解決
 - 新プラグイン追加は `.agents/skills/iris-plugin-create/SKILL.md` 参照
 - `debug_tools/` → `iris/` のみ。逆方向は物理禁止
-- `limbic/` → `memory/`（感情タグ）、`limbic/` → `agency/`（感情変調）のインターフェースあり
 
 詳細は `docs/architecture.md` を参照。
 構成図やシーケンス図の作成・レンダリングは `.agents/skills/iris-visualize/SKILL.md` を参照。
@@ -227,7 +249,7 @@ iris/                             ← アプリケーションコア
 
 | 種別 | 永続化 | 上限 | 備考 |
 |---|---|---|---|
-| 自己プロフィール | `.iris/data/iris_profile.md` | 2KB | テンプレート、`{name}`プレースホルダ可 |
+| 自己プロフィール | `.iris/config/iris_profile.md` | 2KB | テンプレート、`{name}`プレースホルダ可 |
 | エピソード記憶 | `episodes.jsonl` | 30エントリ | 古いものをマージ圧縮 |
 | 意味記憶 | `semantic.jsonl` + ChromaDB | 100エントリ | BM25ハイブリッド検索 |
 | ベクトル | `chroma_db/` | - | ONNX MiniLM、統合スコア=vector*0.6+bm25*0.4 |
@@ -281,7 +303,7 @@ uv run pyright .
 2. `register(registry)` で `registry.register_decorated(fn)` をエクスポート
 3. `allowed_roles` でモデルロール制限（デフォルト全ロール可）
 4. `side_effect=True` で作用系Tool（結果を会話に戻さない）
-5. 追加後は `.iris/data/iris_profile.md` の該当セクションを更新
+5. 追加後は `.iris/config/iris_profile.md` の該当セクションを更新
 6. テンプレート: `.agents/skills/capability-pattern/SKILL.md`
 
 ## 10. ドキュメント更新
@@ -289,7 +311,7 @@ uv run pyright .
 機能変更時は以下を確認:
 
 - 設計文書 (`docs/*.md`)
-- 自己プロフィール (`.iris/data/iris_profile.md`)
+- 自己プロフィール (`.iris/config/iris_profile.md`)
 - `AGENTS.md`, `.agents/README.md`, `.agents/project.md`
 - Skills (`.agents/skills/*/SKILL.md`)
 

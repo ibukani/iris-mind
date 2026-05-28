@@ -28,7 +28,7 @@ metadata:
 | 設定変更 | `config.md` |
 | 新機能全般 | 該当する文書がない場合は新規作成を検討 |
 
-### 2. 自己プロフィール `.iris/data/iris_profile.md`
+### 2. 自己プロフィール `.iris/config/iris_profile.md`
 
 - 人格・口調・ルール記述の変更があった場合
 

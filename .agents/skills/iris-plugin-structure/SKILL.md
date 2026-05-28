@@ -44,7 +44,6 @@ iris/<plugin_name>/
 ├── extractor.py          # エンティティ抽出
 ├── renderer.py           # フォーマット/レンダリング
 ├── formatter.py          # 出力整形
-├── param_builder.py      # パラメータ構築
 ├── config.py             # 設定読み込み
 └── tools/                # @tool 定義（TOOLカテゴリ向け）
     └── __init__.py
@@ -56,7 +55,7 @@ iris/<plugin_name>/
 
 | ファイル | 含めるもの | クラス名パターン | 実装例 |
 |---|---|---|---|
-| `manager.py` | 中心オーケストレータ | `XxxManager` | `MemoryManager`, `LimbicManager`, `AgencyManager` |
+| `manager.py` | 中心オーケストレータ | `XxxManager` | `MemoryManager`, `AgencyManager` |
 | `handler.py` | EventBus イベント購読 | `_XxxEventHandler` (private) | `_MemoryEventHandler` |
 | `dispatcher.py` | 操作の振り分け | `build_xxx_handlers()` + `_xxx_yyy()` | `build_store_handlers()` + `_store_sensory()` |
 | `router.py` | 条件分岐 | `route_xxx_yyy()` | `route_after_llm(state) -> str` |
@@ -79,7 +78,6 @@ iris/<plugin_name>/
 | `extractor.py` | 抽出/解析 | `XxxExtractor` (Protocol) + `ConcreteExtractor` | `EntityExtractor` + `RegexEntityExtractor` |
 | `renderer.py` | レンダリング | `render_xxx_context(...)` | `render_short_term_context(turns, ...) -> str` |
 | `formatter.py` | 出力整形 | `XxxFormatter` | `CaptureFormatter` |
-| `param_builder.py` | パラメータ構築 | `build_xxx_yyy()` | — |
 | `utils.py` | ユーティリティ | `xxx_yyy()` (関数) | `build_time_label() -> str` |
 | `config.py` | 設定読み込み | `XxxConfig` | — |
 
@@ -299,10 +297,9 @@ def _search_impl(query: Any) -> list[Any]: ...
 
 | Plugin | mainファイル | サブファイル |
 |---|---|---|
-| `memory/` | `manager.py` | `handler.py`, `dispatcher.py`, `protocol.py` + `short_term/{manager,models,scorer,extractor,renderer}.py` + `long_term/{manager,stores,protocols,base,vector_store,goal_store}.py` + `sensory/manager.py` + `hippocampal/` |
-| `agency/` | `manager.py` | `builder.py`, `bus.py`, `task_level.py` + `planning/{manager,scorer,context_hint_builder,utils}.py` + `execution/{orchestrator,router,executor,models,engine}.py` + `execution/llm/{gateway,prompt_builder}.py` + `execution/nodes/{base,general_chat,general_task,setup,tool_run,finalize,post_process}.py` + `regulation/{consolidator,feedback,output_tracker,talk_control}.py` |
-| `limbic/` | `manager.py` | `models.py`, `amygdala.py`, `acc.py`, `emotional_memory.py`, `big_five.py` |
-| `llm/` | - | `llm_bridge.py`, `provider.py`, `ollama_provider.py`, `openrouter_provider.py`, `capability_checker.py`, `tokenizer_manager.py`, `context_window.py`, `prompt_builder.py`, `interrupt_token.py` |
+| `memory/` | `manager.py` | `handler.py`, `dispatcher.py`, `protocol.py`, `base.py`, `models.py`, `user_store.py` + `short_term/{manager,models,scorer,extractor,renderer}.py` + `long_term/{manager,stores,protocols,vector_store,goal_store}.py` + `sensory/{manager,readiness}.py` |
+| `agency/` | `manager.py` | `builder.py`, `internal_bus.py`, `task_level.py`, `modulation.py` + `inhibition/{manager,handler,gate,striatum,models}.py` + `planning/{manager,models,handler,context_hint_builder,question_generator,task_content,utils}.py` + `execution/{orchestrator,router,executor,models,engine,builder,node_type,worker,handler}.py` + `execution/llm/{gateway,prompt_builder,node_prompt_factory,profile_builder,capture}.py` + `execution/nodes/{base,general_chat,general_task,setup,tool_run,finalize}.py` + `regulation/consolidator.py` |
+| `llm/` | `bridge.py` | `capability.py`, `context.py`, `hooks.py`, `interrupt_token.py`, `model_factory.py`, `priority_lock.py`, `prompt.py`, `repetition.py`, `token_utils.py`, `tokenizer.py` + `providers/{base,ollama,openai_compatible}.py` |
 
 ## Rules
 

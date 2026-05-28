@@ -69,9 +69,8 @@ flowchart TB
     subgraph EventLayer["event (神経路)"]
         bus["EventBus"]
     end
-    subgraph LimbicLayer["limbic (大脳辺縁系)"]
-        limbic_mgr["LimbicManager"]
-        amygdala["Amygdala"]
+    subgraph HeartbeatLayer["heartbeat (TimerTick)"]
+        hb_svc["HeartbeatService"]
     end
     subgraph MemoryLayer["memory (記憶系)"]
         mem_mgr["MemoryManager"]
@@ -90,13 +89,9 @@ flowchart TB
     %% 依存関係（EventBus経由の疎結合）
     KernelLayer -.-> bus
     IoLayer -.-> bus
-    LimbicLayer -.-> bus
+    HeartbeatLayer -.-> bus
     MemoryLayer -.-> bus
     AgencyLayer -.-> bus
-
-    %% 許容される直接インターフェース（AGENTS.mdより）
-    LimbicLayer --> MemoryLayer
-    LimbicLayer --> AgencyLayer
 ```
 
 ### B. EventBus 連携シーケンス図 (sequenceDiagram)
@@ -106,22 +101,22 @@ flowchart TB
 sequenceDiagram
     participant A as AgencyManager
     participant E as EventBus
-    participant L as LimbicManager
+    participant H as HeartbeatService
     participant M as MemoryManager
 
     A->>E: publish(AgentActionEvent)
     activate E
-    E-->>L: notify(AgentActionEvent)
+    E-->>H: notify(AgentActionEvent)
     E-->>M: notify(AgentActionEvent)
     deactivate E
 
-    activate L
-    L->>L: 感情評価 (Amygdala)
-    L->>E: publish(EmotionChangedEvent)
-    deactivate L
+    activate H
+    H->>H: TimerTick処理
+    H->>E: publish(TimerTick)
+    deactivate H
 
     activate M
-    M->>M: 感情タグ付与と記憶保存
+    M->>M: 記憶保存
     deactivate M
 ```
 

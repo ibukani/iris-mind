@@ -17,6 +17,8 @@ flowchart TD
 
     subgraph IO["io/ 視床"]
         IO_Manager["IOManager<br/>入出力中継"]
+        IO_Gateway["Gateway<br/>gRPC Gateway"]
+        IO_Handler["Handler<br/>EventBus連携"]
         IO_Trans["transport/<br/>GrpcListener"]
         IO_Session["session/<br/>SessionManager"]
         IO_Auth["auth/<br/>Authenticator"]
@@ -24,6 +26,7 @@ flowchart TD
 
     subgraph Memory["memory/ 感覚野+皮質"]
         M_Manager["MemoryManager<br/>記憶オーケストレーション"]
+        M_Base["_JsonlStore<br/>基底クラス"]
         M_Sensory["sensory/<br/>入力バッファリング"]
         M_STM["short_term/<br/>ワーキングメモリ"]
         M_LTM["long_term/<br/>エピソード+意味記憶"]
@@ -128,22 +131,31 @@ iris/
 │   │   └── loader.py
 │   └── commands/
 │       ├── __init__.py
-│       └── handler.py         CommandHandler（/shutdown, /status ...）
+│       ├── handler.py         CommandHandler（/shutdown, /status ...）
+│       ├── debug_commands.py  デバッグコマンド
+│       ├── info_commands.py   情報表示コマンド
+│       ├── memory_commands.py 記憶操作コマンド
+│       └── state_utils.py     状態ユーティリティ
 │
 ├── io/                        # 視床: 入出力中継
 │   ├── __init__.py
 │   ├── manager.py             IOManager
 │   ├── models.py              Message, CommandInput, CommandOutput ...
 │   ├── hooks.py               Hook登録
+│   ├── gateway.py             gRPC Gateway
+│   ├── handler.py             IO Handler（EventBus連携）
 │   ├── transport/
 │   │   ├── __init__.py
 │   │   ├── iris_service.proto     gRPC Proto定義
 │   │   ├── grpc_service_pb2.py    自動生成Protobuf
 │   │   ├── grpc_service_pb2_grpc.py 自動生成gRPCスタブ
-│   │   └── grpc_server.py        GrpcListener
+│   │   ├── grpc_server.py        GrpcServer
+│   │   └── grpc_listener.py      GrpcListener
 │   ├── session/
 │   │   ├── __init__.py
-│   │   └── manager.py         SessionManager
+│   │   ├── manager.py         SessionManager
+│   │   ├── config.py          SessionConfig
+│   │   └── permissions.py     Permission管理
 │   └── auth/
 │       ├── __init__.py
 │       └── authenticator.py   Authenticator
@@ -154,6 +166,10 @@ iris/
 │   ├── event_types.py         イベント型定義
 │   └── tracer.py              EventTracer
 │
+├── heartbeat/                 # TimerTick heartbeat Plugin
+│   ├── __init__.py
+│   └── service.py             HeartbeatService
+│
 ├── memory/                    # 記憶系: 感覚野 + 皮質（3層構造）
 │   ├── __init__.py
 │   ├── manager.py             MemoryManager（EventBus連携, ディスパッチャ）
@@ -162,6 +178,9 @@ iris/
 │   ├── dispatcher.py          store/retrieve/search ディスパッチ
 │   ├── builder.py             コンポーネント組立
 │   ├── hooks.py               Plugin Hook登録
+│   ├── base.py                _JsonlStore 基底
+│   ├── models.py              ContentBlock等 共通型定義
+│   ├── user_store.py          user_id↔nickname 永続化
 │   ├── sensory/               # 感覚記憶: 生入力の一時保持
 │   │   ├── __init__.py
 │   │   ├── manager.py         SensoryMemoryManager（断片入力 + raw入力 2系統）
@@ -173,14 +192,13 @@ iris/
 │   │   ├── scorer.py          重要度スコアリング
 │   │   ├── extractor.py       エンティティ抽出
 │   │   └── renderer.py        コンテキストレンダリング
-│   ├── long_term/             # 長期記憶
-│   │   ├── __init__.py
-│   │   ├── manager.py         LongTermMemoryManager
-│   │   ├── stores.py          EpisodicStore + SemanticStore + AgentsMdStore
-│   │   ├── protocols.py       Store プロトコル定義
-│   │   ├── base.py            _JsonlStore 基底
-│   │   ├── goal_store.py      GoalStore（長期目標管理）
-│   │   └── vector_store.py    VectorStore（ChromaDB + BM25 ハイブリッド）
+│   └── long_term/             # 長期記憶
+│       ├── __init__.py
+│       ├── manager.py         LongTermMemoryManager
+│       ├── stores.py          EpisodicStore + SemanticStore + AgentsMdStore
+│       ├── protocols.py       Store プロトコル定義
+│       ├── goal_store.py      GoalStore（長期目標管理）
+│       └── vector_store.py    VectorStore（ChromaDB + BM25 ハイブリッド）
 │
 ├── agency/                    # 高度認知: PFC + 基底核 + 運動野
 │   ├── __init__.py
@@ -189,7 +207,7 @@ iris/
 │   ├── internal_bus.py        Internal EventBus（planning→execution）
 │   ├── builder.py             コンポーネント組み立て
 │   ├── hooks.py               Plugin Hook登録
-│   ├── modulation.py          Agency変調
+│   ├── modulation.py          Agency変調（感情→意思決定への影響）
 │   ├── inhibition/            # 基底核: 抑制制御（Striatum+Gate）
 │   │   ├── __init__.py
 │   │   ├── manager.py         InhibitionManager
@@ -201,6 +219,7 @@ iris/
 │   │   ├── __init__.py
 │   │   ├── manager.py         PlanningManager
 │   │   ├── models.py          Plan, PlanReason
+│   │   ├── handler.py         Planning Handler（EventBus連携）
 │   │   ├── context_hint_builder.py  ContextHintBuilder
 │   │   ├── question_generator.py    質問生成
 │   │   ├── task_content.py          is_task_content
@@ -242,22 +261,24 @@ iris/
 │       └── regulation/
 │           └── consolidator.py     Context圧縮
 │
-├── llm/                       # LLM 基盤
-│   ├── __init__.py
-│   ├── bridge.py              LLMBridge（マルチプロバイダルーター）
-│   ├── capability.py          CapabilityChecker
-│   ├── context.py             LLMContextWindowManager
-│   ├── hooks.py               Plugin Hook登録
-│   ├── interrupt_token.py     InterruptToken
-│   ├── model_factory.py       ChatModelファクトリ
-│   ├── priority_lock.py       PriorityLock
-│   ├── prompt.py              Personality（システムプロンプト構築）
-│   ├── repetition.py          繰り返し検出
-│   ├── token_utils.py         トークン推定ユーティリティ
-│   ├── tokenizer.py           TokenizerManager
-│   └── providers/
-│       ├── __init__.py        ProviderFactory + 環境検証クラス
-│       └── ollama_env.py      Ollama環境チェック
+│   ├── llm/                       # LLM 基盤
+│   │   ├── __init__.py
+│   │   ├── bridge.py              LLMBridge（マルチプロバイダルーター）
+│   │   ├── capability.py          CapabilityChecker
+│   │   ├── context.py             LLMContextWindowManager
+│   │   ├── hooks.py               Plugin Hook登録
+│   │   ├── interrupt_token.py     InterruptToken
+│   │   ├── model_factory.py       ChatModelファクトリ
+│   │   ├── priority_lock.py       PriorityLock
+│   │   ├── prompt.py              Personality（システムプロンプト構築）
+│   │   ├── repetition.py          繰り返し検出
+│   │   ├── token_utils.py         トークン推定ユーティリティ
+│   │   ├── tokenizer.py           TokenizerManager
+│   │   └── providers/
+│   │       ├── __init__.py
+│   │       ├── base.py            Provider基底
+│   │       ├── ollama.py          Ollamaプロバイダ
+│   │       └── openai_compatible.py  OpenAI互換プロバイダ
 │
 ├── tools/                     # @tool, ToolRegistry
 │   ├── __init__.py

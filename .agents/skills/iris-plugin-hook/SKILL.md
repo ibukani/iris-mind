@@ -76,20 +76,20 @@ hooks.register("llm.before_chat", _my_async_hook, priority=500)
 ```python
 HOOK_POINTS: dict[str, HookPoint] = {
     ...
-    "limbic.emotion_changed": HookPoint("limbic.emotion_changed", "感情変化時"),
+    "agency.plan_decided": HookPoint("agency.plan_decided", "計画決定時"),
 }
 ```
 
 2. 呼び出し元のコードに `execute()` を埋め込む:
 
 ```python
-result = await manager.hook_registry.execute("limbic.emotion_changed", emotion_state)
+result = await manager.hook_registry.execute("agency.plan_decided", plan)
 ```
 
 3. 定義を呼び出すPlugin側の `hooks.py` にハンドラを登録:
 
 ```python
-hooks.register("limbic.emotion_changed", _on_emotion_change, priority=1000)
+hooks.register("agency.plan_decided", _on_plan_decided, priority=1000)
 ```
 
 ## Rules

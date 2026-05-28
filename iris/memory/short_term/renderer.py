@@ -2,7 +2,23 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from iris.memory.models import ContentBlock, block_tag
 from iris.memory.short_term.models import SearchResult, TurnData
+
+
+def _render_blocks(blocks: list[ContentBlock], max_chars: int = 100) -> str:
+    parts: list[str] = []
+    remaining = max_chars
+    for b in blocks or []:
+        if remaining <= 0:
+            break
+        tag = block_tag(b)
+        if len(tag) > remaining:
+            tag = tag[: remaining - 3] + "..."
+        if tag:
+            parts.append(tag)
+            remaining -= len(tag)
+    return " ".join(parts) if parts else ""
 
 
 def render_short_term_context(
@@ -25,7 +41,8 @@ def render_short_term_context(
             uid = r.get("user_identity", "")
             label = uid or ("User" if role == "user" else "Iris")
             prefix = "(思考) " if role == "thought" else ""
-            parts.append(f"- {label}: {prefix}「{r['content'][:100]}」(関連度 {r.get('relevance', 0):.2f})")
+            text = _render_blocks(r.get("blocks", []), max_chars=100)
+            parts.append(f"- {label}: {prefix}「{text}」(関連度 {r.get('relevance', 0):.2f})")
         for t in reversed(turns[-4:]):
             idx = turns.index(t)
             if idx in shown_indices:
@@ -35,7 +52,8 @@ def render_short_term_context(
             uid = t.get("user_identity", "")
             label = uid or ("User" if role == "user" else "Iris")
             prefix = "(思考) " if role == "thought" else ""
-            parts.append(f"- {label}: {prefix}「{t['content'][:100]}」")
+            text = _render_blocks(t.get("blocks", []), max_chars=100)
+            parts.append(f"- {label}: {prefix}「{text}」")
 
     if active_references:
         refs = sorted(active_references, key=len, reverse=True)[:5]

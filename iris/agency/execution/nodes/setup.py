@@ -10,6 +10,7 @@ from iris.agency.planning.models import Plan
 from iris.agency.task_level import TASK_LEVELS
 from iris.event.event_types import MessageEvent
 from iris.io.models import StreamState
+from iris.memory.models import text_block
 
 if TYPE_CHECKING:
     from iris.agency.execution.llm.gateway import LLMGateway
@@ -45,7 +46,7 @@ class SetupNode:
         if content:
             state["messages"].append(HumanMessage(content=content))
         if content and self._memory:
-            self._memory.short_term.add_turn("user", content, plan.user_identity)
+            self._memory.short_term.add_turn("user", [text_block(content)], plan.user_identity)
 
         if show_thinking and self._event_bus:
             self._event_bus.publish(

@@ -9,6 +9,7 @@ from iris.agency.execution.models import DynamicState, ExecutionState
 from iris.agency.execution.node_type import NODE_TYPES, ROUTING_TOOLS
 from iris.agency.planning.models import Plan
 from iris.agency.task_level import TASK_LEVELS, TaskLevel
+from iris.memory.models import text_block
 
 if TYPE_CHECKING:
     from iris.agency.execution.engine import ToolEngine
@@ -164,7 +165,7 @@ class BaseLLMNode(ABC):
             response_text = raw.strip() if isinstance(raw, str) else ""
 
             if response_text and self._memory:
-                self._memory.short_term.add_turn("assistant", response_text, plan.user_identity)
+                self._memory.short_term.add_turn("assistant", [text_block(response_text)], plan.user_identity)
 
             return {"response_text": response_text}
         except Exception:

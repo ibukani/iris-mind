@@ -5,6 +5,8 @@ from typing import Any
 
 from loguru import logger
 
+from iris.memory.models import text_block
+
 
 def build_store_handlers(
     sensory: Any,
@@ -28,11 +30,11 @@ def _store_sensory(sensory: Any, data: Any) -> None:
 
 def _store_short_term(short_term: Any, data: Any) -> None:
     if isinstance(data, str):
-        short_term.add_turn("system", data)
+        short_term.add_turn("system", [text_block(data)])
     elif isinstance(data, dict):
         role = data.get("role", "system")
         content = data.get("content") or data.get("summary") or str(data)
-        short_term.add_turn(role, content)
+        short_term.add_turn(role, [text_block(content)])
 
 
 def _store_episodic(long_term: Any, short_term: Any, data: Any) -> None:
@@ -40,7 +42,7 @@ def _store_episodic(long_term: Any, short_term: Any, data: Any) -> None:
     if isinstance(data, dict):
         short_term.add_turn(
             "system",
-            data.get("content") or data.get("summary") or str(data),
+            [text_block(data.get("content") or data.get("summary") or str(data))],
         )
 
 
@@ -49,7 +51,7 @@ def _store_semantic(long_term: Any, short_term: Any, data: Any) -> None:
     if isinstance(data, dict):
         content = data.get("content", "")
         if content:
-            short_term.add_turn("system", content)
+            short_term.add_turn("system", [text_block(content)])
 
 
 def dispatch_retrieve(

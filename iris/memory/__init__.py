@@ -16,6 +16,7 @@ from iris.memory.long_term.stores import (
 )
 from iris.memory.long_term.vector_store import VectorStore
 from iris.memory.manager import MemoryManager
+from iris.memory.models import ContentBlock, blocks_text, text_block
 from iris.memory.sensory.manager import SensoryMemoryManager
 from iris.memory.short_term.manager import ShortTermMemoryManager
 
@@ -74,6 +75,7 @@ plugin: PluginProtocol = MemoryPlugin()
 __all__ = [
     "AgentsMdStore",
     "AgentsMdStoreProtocol",
+    "ContentBlock",
     "EpisodicStore",
     "EpisodicStoreProtocol",
     "LongTermMemoryManager",
@@ -81,4 +83,6 @@ __all__ = [
     "SemanticStoreProtocol",
     "SensoryMemoryManager",
     "ShortTermMemoryManager",
+    "blocks_text",
+    "text_block",
 ]

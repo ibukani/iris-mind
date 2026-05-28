@@ -6,10 +6,30 @@ from typing import Protocol
 
 from loguru import logger
 
+from iris.memory.models import ContentBlock, blocks_text
 from iris.memory.short_term.extractor import EntityExtractor, RegexEntityExtractor
 from iris.memory.short_term.models import MAX_CONTEXT_CHARS, MAX_TURN_LENGTH, SearchResult, TurnData
 from iris.memory.short_term.renderer import render_short_term_context
 from iris.memory.short_term.scorer import DefaultImportanceScorer, ImportanceScorer
+
+
+def _truncate_blocks(blocks: list[ContentBlock], max_chars: int) -> list[ContentBlock]:
+    total = 0
+    result: list[ContentBlock] = []
+    for b in blocks:
+        txt = b.get("text", "")
+        available = max_chars - total
+        if available <= 0:
+            break
+        if not txt or len(txt) <= available:
+            result.append(b)
+            total += len(txt)
+        else:
+            tb: ContentBlock = {"type": b.get("type", "text")}
+            tb["text"] = txt[:available]
+            result.append(tb)
+            total += available
+    return result
 
 
 class ShortTermMemoryProtocol(Protocol):
@@ -20,7 +40,7 @@ class ShortTermMemoryProtocol(Protocol):
     モック化やテスト用の代替実装を容易にするため。
     """
 
-    def add_turn(self, role: str, content: str, user_identity: str = "") -> None: ...
+    def add_turn(self, role: str, blocks: list[ContentBlock], user_identity: str = "") -> None: ...
     def search(self, query: str, max_results: int = 5) -> list[SearchResult]: ...
     def search_entities(self, entity_name: str) -> list[TurnData]: ...
     def render_context(self, max_chars: int = MAX_CONTEXT_CHARS, query: str | None = None) -> str: ...
@@ -57,29 +77,23 @@ class ShortTermMemoryManager:
         self._importance_scorer = importance_scorer or DefaultImportanceScorer()
         self._entity_extractor = entity_extractor or RegexEntityExtractor()
 
-    def add_turn(self, role: str, content: str, user_identity: str = "") -> None:
-        """会話の1ターンを追加し、エンティティの抽出と話題の更新を行う。
-
-        Args:
-            role: 発話者のロール（"user" または "assistant"）
-            content: 発話内容
-            user_identity: 発話者の識別子（グループチャット用）
-        """
-        if not content:
+    def add_turn(self, role: str, blocks: list[ContentBlock], user_identity: str = "") -> None:
+        if not blocks:
             return
-        truncated = content[:MAX_TURN_LENGTH]
+        truncated_blocks = _truncate_blocks(blocks, MAX_TURN_LENGTH)
+        text = blocks_text(truncated_blocks)
         entry: TurnData = {
             "role": role,
-            "content": truncated,
+            "blocks": truncated_blocks,
             "timestamp": datetime.now(UTC).isoformat(),
             "consolidated": False,
-            "importance": self._importance_scorer.score(truncated),
+            "importance": self._importance_scorer.score(text),
             "user_identity": user_identity,
         }
         self._turns.append(entry)
         if len(self._turns) > self._max_turns:
             self._turns.pop(0)
-        self._extract_from_content(truncated)
+        self._extract_from_content(text)
         logger.debug("ShortTerm: added {} turn, total={}", role, len(self._turns))
 
     def _extract_from_content(self, content: str) -> None:
@@ -94,27 +108,31 @@ class ShortTermMemoryManager:
         if len(self._current_topics) > self._max_topics:
             self._current_topics = self._current_topics[-self._max_topics :]
 
+    def _turn_text(self, turn: TurnData) -> str:
+        return blocks_text(turn.get("blocks", []))
+
     def _compute_relevance(self, query: str, turn: TurnData) -> float:
-        """クエリと会話ターンの関連度スコアを算出する。"""
-        if not query or not turn.get("content"):
+        if not query:
+            return 0.0
+        text = self._turn_text(turn)
+        if not text:
             return 0.0
         q_words = set(re.findall(r"\w+", query.lower()))
-        t_words = set(re.findall(r"\w+", turn["content"].lower()))
+        t_words = set(re.findall(r"\w+", text.lower()))
         if not q_words or not t_words:
             return 0.0
         overlap = len(q_words & t_words)
         return overlap / len(q_words)
 
     def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
-        """クエリに関連する会話ターンを検索する。"""
         if not query:
             return []
 
         scored: list[tuple[float, int, SearchResult]] = []
         for i, turn in enumerate(self._turns):
             relevance = self._compute_relevance(query, turn)
-            content = turn.get("content", "")
-            if relevance == 0 and query.lower() not in content.lower():
+            text = self._turn_text(turn)
+            if relevance == 0 and query.lower() not in text.lower():
                 continue
 
             actual_relevance = relevance if relevance > 0 else 0.01
@@ -125,9 +143,8 @@ class ShortTermMemoryManager:
         return [s[2] for s in scored[:max_results]]
 
     def search_entities(self, entity_name: str) -> list[TurnData]:
-        """エンティティ名が含まれる会話ターンを検索する。"""
         entity_lower = entity_name.lower().strip()
-        results: list[TurnData] = [turn for turn in self._turns if entity_lower in turn.get("content", "").lower()]
+        results: list[TurnData] = [turn for turn in self._turns if entity_lower in self._turn_text(turn).lower()]
         return results[-5:]
 
     def render_context(self, max_chars: int = MAX_CONTEXT_CHARS, query: str | None = None) -> str:

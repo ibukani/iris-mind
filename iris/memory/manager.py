@@ -12,6 +12,7 @@ from iris.memory.dispatcher import (
     dispatch_search,
 )
 from iris.memory.long_term.goal_store import GoalStore
+from iris.memory.models import blocks_text
 
 
 class MemoryManager:
@@ -89,7 +90,7 @@ class MemoryManager:
 
         user_turns = [t for t in unconsolidated if t.get("role") == "user"]
         if user_turns:
-            combined = " | ".join(t["content"][:100] for t in user_turns[-3:])
+            combined = " | ".join(blocks_text(t.get("blocks", []))[:100] for t in user_turns[-3:])
             self.long_term.store_episodic(
                 {"content": f"[conversation] {combined}", "kind": "conversation"},
             )

@@ -65,23 +65,10 @@ total = (
 
 | 重み | デフォルト値 | config キー |
 |------|-------------|-------------|
-| w_time | 0.25 | trigger_weights.time |
-| w_memory | 0.45 | trigger_weights.memory |
+| w_time | 0.40 | trigger_weights.time |
+| w_memory | 0.35 | trigger_weights.memory |
 | w_context | 0.15 | trigger_weights.context |
-| mood_weight | 動的 (後述) | — |
-| w_drive | 0.20 | trigger_weights.drive |
-
-### mood_weight の動的計算
-
-```python
-if limbic_mood が利用可能:
-    intensity = abs(valence) * 0.5 + arousal * 0.3 + abs(dominance - 0.5) * 0.2
-    mood_weight = 0.10 + intensity * 0.25   # [0.10, 0.35]
-else:
-    mood_weight = config.trigger_weights.get("mood", 0.15)
-```
-
-感情の強度が高いほど mood が意思決定に影響を与える。
+| w_mood | 0.10 | trigger_weights.mood |
 
 ## 各因子の計算式
 
@@ -168,22 +155,7 @@ if content.count("!") >= 2: score += 0.1
 return min(score, 0.8)
 ```
 
-### 7. mood_score
-
-```python
-if limbic_mood が利用可能:
-    mood_valence = valence * 0.5 if valence > 0 else valence * 1.5
-    mood_arousal = 0.6 if arousal > 0.6 else (0.3 if arousal < 0.15 else 0.4)
-    mood_dominance = dominance * 0.4
-    return clamp(0, 1, mood_valence + mood_arousal + mood_dominance)
-else:
-    if negative_mood_score >= 0.7: return 0.0
-    return max(0.0, 1.0 - negative_mood_score)
-```
-
-負の valence は 1.5 倍で強く影響。低覚醒・低支配はスコアを下げる。
-
-### 8. drive_score
+### 7. drive_score
 
 ```python
 max(curiosity, social_need, maintenance)

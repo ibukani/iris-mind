@@ -111,32 +111,24 @@ flowchart TD
     subgraph Supervisor["Supervisor (main.py)"]
         Console["管理コンソール (stdin)  Ctrl+C"]
     end
-    subgraph Kernel["kernel/ 脳幹+視床下部"]
-        KP["KernelProcess / KernelManager<br/>起動・停止・状態"]
+    subgraph Kernel["kernel/ 脳幹"]
+        KP["KernelProcess / PluginManager<br/>起動・停止・DI"]
         CMD["CommandHandler<br/>スラッシュコマンド"]
-        DI["Factory<br/>DIコンテナ"]
     end
     subgraph IO["io/ 視床"]
         IO_M["IOManager<br/>入出力中継"]
         GRPC["GrpcListener / SessionManager"]
     end
-    subgraph Memory["memory/ 感覚野+海馬+皮質"]
+    subgraph Memory["memory/ 感覚野+皮質（3層構造）"]
         MM["MemoryManager<br/>記憶オーケストレーション"]
         SEN["sensory/ 感覚バッファ"]
         STM["short_term/ ワーキングメモリ"]
         LTM["long_term/ 長期記憶<br/>stores + VectorStore"]
-        HIP["hippocampal/ Reflexion"]
-    end
-    subgraph Limbic["limbic/ 大脳辺縁系"]
-        LM["LimbicManager<br/>感情評価・制御"]
-        AMY["Amygdala<br/>扁桃体"]
-        ACC["ACC<br/>前帯状皮質"]
-        BF["BigFive<br/>性格特性"]
     end
     subgraph Agency["agency/ 前頭前野+基底核+運動野"]
         IB["Internal Bus"]
-        PL["planning/ 意思決定<br/>ProactiveScoring"]
-        EX["execution/ 行動実行<br/>InhibitionController<br/>LLMPipeline"]
+        PL["planning/ 意思決定<br/>ProactiveScoring + ProactiveJudge"]
+        EX["execution/ 行動実行<br/>ExecutionOrchestrator(LangGraph)<br/>ToolEngine + Inhibition"]
     end
     subgraph LLM["llm/ 言語処理基盤"]
         LB["LLMBridge / Provider<br/>LLMContextWindowManager"]
@@ -152,7 +144,6 @@ flowchart TD
     CLI <-->|gRPC 127.0.0.1:9876| IO
     EB --- IO
     EB --- Memory
-    EB --- Limbic
     EB --- Agency
     EB --- Kernel
     EB --- LLM
@@ -161,12 +152,11 @@ flowchart TD
 ```
 
 - **Supervisor** — Kernel プロセスの起動・監視・管理コンソール（`main.py`）
-- **Kernel 層** — 脳幹+視床下部。プロセス管理、DIコンテナ、スラッシュコマンド。TimerTick(5秒) 発行
-- **IO 層** — 視床。gRPC入出力、セッション管理
-- **Memory 層** — 感覚野+海馬+皮質。感覚バッファ、短期/長期記憶、Reflexion
-- **Limbic 層** — 大脳辺縁系。PAD感情評価・制御（扁桃体/ACC）、BigFive性格管理
-- **Agency 層** — 前頭前野+基底核+運動野。PFC評価（ProactiveScoring）、意思決定、基底核抑制、行動実行
-- **LLM 層** — 言語処理基盤。LLM接続、ContextWindow圧縮
+- **Kernel 層** — 脳幹。プロセス管理、PluginManager（DI+ライフサイクル）、スラッシュコマンド、TimerTick(5秒) 発行
+- **IO 層** — 視床。gRPC入出力、セッション管理、認証
+- **Memory 層** — 感覚野+皮質。感覚バッファ、短期/長期記憶（エピソード+意味+ベクトルハイブリッド検索）
+- **Agency 層** — 前頭前野+基底核+運動野。PFC評価（ProactiveScoring）+意思決定、基底核抑制（Striatum+Gate）、行動実行（LangGraph状態マシン）
+- **LLM 層** — 言語処理基盤。LLM接続（マルチプロバイダ）、ContextWindow圧縮
 - **Event 層** — 神経路。全層を疎結合するグローバルEventBus
 
 ## Client Guide
@@ -195,13 +185,14 @@ flowchart LR
 
 ## Features
 
-- **LLM 会話** — Ollama / OpenRouter 経由でローカルまたはクラウド LLM と会話
-- **自律発話 (Proactive)** — PFCスコアリング（時間×記憶×文脈×感情）＋基底核抑制制御で適切なタイミングに自発発話
-- **Reflexion 自己改善** — 会話後に自己反省し、話し方・性格・教訓を記憶に統合
-- **動的ツール拡張** — 実行時にツールを追加可能
-- **記憶システム** — エピソード記憶 (JSONL)、意味記憶 (ChromaDB + BM25 ハイブリッド検索)、動的パーソナリティ
+- **LLM 会話** — Ollama / OpenRouter / Google 等のマルチプロバイダ経由で会話
+- **自律発話 (Proactive)** — PFCスコアリング（時間×記憶×文脈×ムード）＋基底核抑制制御で適切なタイミングに自発発話
+- **記憶システム** — 感覚バッファ→短期記憶→長期記憶の3層。エピソード記憶 (JSONL)、意味記憶 (ChromaDB + BM25 ハイブリッド検索)、GoalStore長期目標管理
 - **会話履歴圧縮** — LLMContextWindowManager が token window 超過時に自動要約
-- **シングル / マルチモデルモード** — 設定したモデル数に応じて自動切替
+- **動的ツール拡張** — `@tool()` デコレータで実行時ツール追加
+- **シングル / マルチモデルモード** — 設定したモデル数・ロールに応じて自動切替（low/medium/highロール別ルーティング）
+- **LangGraph 実行パイプライン** — ExecutionOrchestrator によるLLM+ツールループの状態機械制御
+- **抑制制御 (Inhibition)** — Striatum+Gate による実行権管理・クールダウン・プロアクティブ抑制
 
 ## Project Structure
 
@@ -213,31 +204,28 @@ iris-mind/
 │   │   └── system_prompt.md
 │   └── data/                    # 記憶データ (runtime generated)
 ├── docs/                        # 設計ドキュメント
-│   ├── adr/                     # Architecture Decision Records
-│   ├── how-it-works/            # 動作原理の詳細解説（11ファイル）
+│   ├── how-it-works/            # 動作原理の詳細解説（6ファイル）
 │   ├── architecture.md          # 全体アーキテクチャ
 │   ├── agency-layer.md          # Agency 層設計
 │   ├── memory-layer.md          # Memory 層設計
-│   ├── limbic-layer.md          # Limbic 層設計
 │   ├── io-layer.md              # IO 層設計
 │   ├── kernel-layer.md          # Kernel 層設計
 │   ├── config.md                # Config 設定一覧
-│   └── ipc-spec.md              # IPC プロトコル仕様
+│   ├── ipc-spec.md              # IPC プロトコル仕様
+│   └── client-guide.md          # クライアント開発ガイド
 ├── iris/                        # アプリケーションコア
 │   ├── agency/                  # 前頭前野+基底核+運動野
-│   │   ├── planning/            # PFC: 意思決定・ProactiveScoring
-│   │   └── execution/           # 基底核+運動野: 行動実行・抑制制御
+│   │   ├── planning/            # PFC: 意思決定・ProactiveScoring・Judge
+│   │   ├── execution/           # 基底核+運動野: LangGraph状態マシン・ToolEngine
+│   │   └── inhibition/          # 基底核: Striatum+Gate による実行権制御
 │   ├── event/                   # 神経路: グローバル EventBus
 │   ├── io/                      # 視床: TCP入出力・セッション・認証
 │   ├── kernel/                  # 脳幹: プロセス管理・DI・コマンド
-│   ├── limbic/                  # 大脳辺縁系: 感情・制御・性格
 │   ├── llm/                     # LLM接続・ContextWindow管理
-│   ├── memory/                  # 感覚野+海馬+皮質記憶
-│   │   ├── sensory/             # 感覚バッファ（断片+生入力 2系統）
+│   ├── memory/                  # 感覚野+皮質記憶（3層構造）
+│   │   ├── sensory/             # 感覚バッファ（断片+raw入力 2系統）
 │   │   ├── short_term/          # ワーキングメモリ
-│   │   ├── long_term/           # 長期記憶（stores + VectorStore）
-│   │   ├── hippocampal/         # 海馬: Reflexion
-│   │   └── personality/         # 人格データ
+│   │   └── long_term/           # 長期記憶（EpisodicStore + SemanticStore + VectorStore + GoalStore）
 │   └── tools/                   # @tool, ToolRegistry, ビルトイン
 ├── tests/                       # テストスイート
 ├── config.yaml                  # Iris 設定ファイル
@@ -274,12 +262,12 @@ uv run pytest tests/                  # 全テスト実行
 | [architecture.md](./docs/architecture.md) | 全体アーキテクチャ — 脳科学ベース層分割 |
 | [agency-layer.md](./docs/agency-layer.md) | Agency 層 — 意思決定と行動実行 |
 | [io-layer.md](./docs/io-layer.md) | IO 層 — gRPC入出力・セッション管理 |
-| [kernel-layer.md](./docs/kernel-layer.md) | Kernel 層 — プロセス管理・DI |
-| [limbic-layer.md](./docs/limbic-layer.md) | Limbic 層 — PAD感情・制御・性格進化 |
-| [memory-layer.md](./docs/memory-layer.md) | Memory 層 — 感覚野+海馬+皮質記憶 |
+| [kernel-layer.md](./docs/kernel-layer.md) | Kernel 層 — プロセス管理・PluginManager |
+| [memory-layer.md](./docs/memory-layer.md) | Memory 層 — 感覚野+皮質記憶（3層） |
 | [config.md](./docs/config.md) | Config 設定一覧 |
 | [ipc-spec.md](./docs/ipc-spec.md) | IPC プロトコル仕様 (gRPC) |
-| [how-it-works/](./docs/how-it-works/index.md) | 動作原理の詳細 — 計算式・条件分岐・Mermaid図を網羅 |
+| [client-guide.md](./docs/client-guide.md) | クライアント開発ガイド |
+| [how-it-works/](./docs/how-it-works/) | 動作原理の詳細 — 計算式・条件分岐・Mermaid図を網羅（6ファイル） |
 
 ## API
 
@@ -290,11 +278,12 @@ uv run pytest tests/                  # 全テスト実行
 ## Tech Stack
 
 - **言語**: Python 3.13+
-- **LLM**: Ollama / OpenRouter（Qwen3.5:9b 他）
-- **ベクトル検索**: ChromaDB + ONNX MiniLM-L6-v2
-- **IPC**: gRPC（HTTP/2）— 1ポート多重
+- **LLM**: Ollama / OpenRouter / Google AI（マルチプロバイダ）
+- **ベクトル検索**: ChromaDB + ONNX MiniLM-L6-v2 + BM25 ハイブリッド
+- **IPC**: gRPC（HTTP/2, 双方向ストリーミング）
 - **UI**: Rich（TUI）, prompt_toolkit
-- **テスト**: pytest, ruff, mypy（`uv run` 経由）
+- **LangGraph**: ExecutionOrchestrator 実行パイプライン
+- **テスト**: pytest, ruff, mypy, pyright（`uv run` 経由）
 - **パッケージ管理**: uv
 
 ## Contributing

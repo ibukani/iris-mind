@@ -31,8 +31,7 @@ sequenceDiagram
     end
 
     ORCH->>ORCH: FinalizeNode → DONE
-    ORCH->>CON: PostProcessNode
-    CON->>CON: reflexion (必要時)
+    ORCH->>CON: Consolidation
     CON->>CON: compression (必要時)
 ```
 
@@ -48,7 +47,7 @@ OutputTracker が検出した talkative_degree に応じて計画属性を上書
 |--------|---------------|
 | >= 1 | task_level = "chat"（最短応答） |
 | >= 2 | max_tokens = min(current, 256) |
-| >= 3 | run_reflexion=False, run_compression=False |
+| >= 3 | run_compression=False |
 | >= 5 | show_thinking=False |
 
 ### 自発発話抑制 (talkative)
@@ -99,9 +98,8 @@ FlowExecutor._on_plan(PlanDecided)
 │   │   ├── on_token によるストリーミング（SetupNode設定）
 │   │   ├── OutputTracker / FeedbackCoordinator 記録
 │   │   └── MessageEvent(DONE)
-│   └── PostProcessNode (silent 以外)
-│       ├── reflexion (run_reflexion=True)
-│       └── compression (run_compression=True)
+    │   └── Consolidation
+    │       └── compression (run_compression=True)
 ```
 
 ## LLMGateway
@@ -114,8 +112,8 @@ LLM 呼出とツール実行のゲートウェイ。
 
 1. Personality.build_system_prompt() — 基底プロンプト
 2. 現在日時
-3. 現在の気分 (limbic.build_mood_description())
-4. 自己状態 (persona_profile.get_current_state_section())
+3. 直近の記憶コンテキスト (MemoryManager.get_recent())
+4. 会話状態 (short_term.render_context())
 5. 会話コンテキスト (context_hint)
 6. 状況指示 (proactive 時は自発発話用指示)
 

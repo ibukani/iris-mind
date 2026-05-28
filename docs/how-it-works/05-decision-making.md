@@ -54,7 +54,6 @@ _on_input_ready(event)
     ├── escalation? → 調査結果を含む plan を即時 publish
     ├── system_event? → cooldown 30s 設定後 publish
     ├── gate.suppressed? → abort
-    ├── check_ignore() → ignore 検出時は limbic に刺激
     ├── ProactiveScoring.compute()
     ├── total < speak_threshold? → abort
     ├── silent 判定 (drive > 0.3 && context < 0.2)
@@ -65,7 +64,7 @@ _on_input_ready(event)
 
 ## ユーザー入力時の計画構築
 
-`_build_response_plan(content, gate, limbic_mood)`:
+`_build_response_plan(content, gate)`:
 
 ### abbreviated 判定
 
@@ -88,7 +87,6 @@ plan = {
     "max_tokens": 80 if abbreviated else (120 if 雑談 else 0),
     "temperature": 0.5 if abbreviated else 0.7,
     "show_thinking": not abbreviated and is_task,
-    "run_reflexion": not abbreviated and is_task,
     "run_compression": not abbreviated,
     "record_history": True,
 }
@@ -103,7 +101,7 @@ plan = {
 
 ## 自発発話時の計画構築
 
-`_build_proactive_plan(context, gate, limbic_mood)`:
+`_build_proactive_plan(context, gate)`:
 
 | 条件 | silent | tools_allowed | streaming | max_tokens |
 |------|--------|---------------|-----------|------------|
@@ -113,23 +111,8 @@ plan = {
 
 ### Silent 内省時の興味サンプリング
 
-```python
-interests = persona_data.get_interests()  # [(topic, weight), ...]
-selected = random.choices(topics, weights=weights, k=1)[0]
-question = LLMに問い合わせて "topic についての具体的な疑問文" を生成
-```
+(現在未実装)
 
-## 感情による温度変調 (EmotionTemperatureModulator)
+## (削除) 感情による温度変調
 
-`EmotionTemperatureModulator.apply(plan, limbic_mood)`:
-
-| 条件 | Temperature補正 | max_tokens制限 | その他 |
-|------|----------------|---------------|--------|
-| V < -0.3 | +0.15 | min(current, 256) | tools_allowed=False, streaming=False |
-| V > 0.5 | -0.10 | - | - |
-| A > 0.6 | -0.15 | min(current, 256) | - |
-| A < 0.15 | +0.20 | - | - |
-| D < 0.3 | +0.05 | 50 (abbreviated時) | - |
-| D > 0.6 | -0.10 | min(current, 512) | - |
-
-最終 temperature は [0.2, 1.0] にクランプ。
+Limbic層削除に伴い EmotionTemperatureModulator は実装されていません。

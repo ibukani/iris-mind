@@ -39,40 +39,36 @@ iris/kernel/
     ├── __init__.py
     └── handler.py     CommandHandler
 ```
-iris/kernel/
-├── __init__.py
-├── manager.py         KernelManager
-├── process.py         KernelProcess
-├── supervisor.py      Supervisor
-├── factory.py         KernelFactory（DI）
-└── commands/
-    ├── __init__.py
-    └── handler.py     CommandHandler
-```
 
-## KernelManager
+## PluginManager (kernel/manager.py)
 
 ```python
-class KernelManager:
-    """全体の状態管理とヘルスモニタリング。
-    各層の Manager は自己状態を StateChange イベントで通知する。
+class PluginManager:
+    """全Pluginの指揮・DI・状態集約。
+    discover_and_build_all() で全Pluginを発見・構築し、
+    start_all() / stop_all() でライフサイクルを管理する。
     """
 
-    # subscribe: StateChange (全層から)
-    #   → 全体状態を集約・保持
+    def register_manifest(self, manifest: PluginManifest) -> None
+        # プラグインの自己宣言
 
-    @property
-    def global_state(self) -> str
-        # 全層の状態を総合した全体状態を返す
+    def resolve(self, name: str) -> Any
+        # 依存するServiceをDIから取得
 
-    @property
-    def layer_states(self) -> dict[str, str]
-        # 層ごとの状態マップ
+    def provide(self, name: str, instance: Any) -> None
+        # 他向けにServiceをDI登録
 
-    def is_idle(self) -> bool
-        # 全層がアイドルか
+    def discover_and_build_all(self) -> None
+        # 1. 全Pluginを自動発見（discover_sub_plugins）
+        # 2. 依存関係をトポロジカルソート（Manifest.dependencies）
+        # 3. 各Pluginの init(manager) をphase順に実行
+        # 4. 各Pluginの provides をServiceContainerに登録
 
-    def shutdown_requested(self) -> bool
+    def start_all(self) -> None
+        # 全Pluginの start(manager) をphase順に実行
+
+    def stop_all(self) -> None
+        # 全Pluginの stop(manager) を逆順に実行
 ```
 
 ## KernelProcess
@@ -138,7 +134,7 @@ class CommandHandler:
         # /memory recent → MemoryManager.retrieve("episodic")
         # /memory search → MemoryManager.search("semantic")
         # /memory clear  → MemoryManager.clear()
-        # /emotion       → LimbicManager.get_emotion_report()
+        # /emotion       → 感情状態表示（via diagnostics）
         # /sessions      → SessionManager.get_sessions_summary()
 ```
 
@@ -146,17 +142,14 @@ class CommandHandler:
 sequenceDiagram
     participant TCP as 外部Client
     participant IO as IOManager
-    participant EB as Global EventBus
-    participant KRN as KernelManager
     participant CMD as CommandHandler
     participant PROC as KernelProcess
 
     TCP->>IO: CommandInput(content="/shutdown")
     IO->>CMD: cmd_handler.handle("shutdown", "")
-    CMD->>CMD: shutdown()
 
     CMD->>PROC: shutdown()
-    PROC->>PROC: 全層シャットダウン
+    PROC->>PROC: 全層シャットダウン（PluginManager.stop_all）
 ```
 
 ## TimerTick
@@ -171,24 +164,4 @@ def _timer_loop(self) -> None:
 
 **購読層**: Memory, Agency（将来の自発発話トリガー）
 
-## PluginManager
 
-```python
-class PluginManager:
-    """全Pluginの指揮・DI・状態集約。
-    discover_and_build_all() で全Pluginを発見・構築し、
-    start_all() / stop_all() でライフサイクルを管理する。
-    """
-
-    def discover_and_build_all(self) -> None
-        # 1. 全Pluginを自動発見（discover_sub_plugins）
-        # 2. 依存関係をトポロジカルソート
-        # 3. 各Pluginの init(manager) をphase順に実行
-        # 4. 各Pluginの provides をServiceContainerに登録
-
-    def start_all(self) -> None
-        # 全Pluginの start(manager) をphase順に実行
-
-    def stop_all(self) -> None
-        # 全Pluginの stop(manager) を逆順に実行
-```

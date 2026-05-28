@@ -1,7 +1,7 @@
 # Iris Project Brief
 
 このファイルは `AGENTS.md` を読んだ後に、Iris 固有の責務境界だけを素早く確認するための補助メモです。
-詳細な構成、コマンド、ルールは `AGENTS.md`、設計判断は `docs/architecture.md` と `docs/adr/` を一次情報にします。
+詳細な構成、コマンド、ルールは `AGENTS.md`、設計判断は `docs/architecture.md` を一次情報にします。
 
 ## Scope
 
@@ -14,19 +14,16 @@
 
 - `iris/kernel/` はドメイン層。外部サービス実装を直接持ち込まない。
 - `iris/llm/`, `iris/tools/` は kernel へ注入されるインフラ層。
-- `iris/memory/` は記憶系層。過去のインフラ層から昇格。
-- `iris/limbic/` は感情系層（大脳辺縁系）。EventBus 経由で全層と疎結合。
-- `iris/io/`, `iris/agency/`, `iris/event/` は kernel から分離された独立層。
+- `iris/io/`, `iris/agency/`, `iris/memory/`, `iris/event/` は kernel から分離された独立層。
 - 全層は EventBus (`iris/event/`) を介して疎結合。
-- `limbic/` → `memory/`（感情タグ）, `limbic/` → `agency/`（感情変調）のインターフェースを持つ。
 - `debug_tools/` は `iris/` に依存してよいが、`iris/` から `debug_tools/` へ依存しない。
-- IPC とプロセス設計の詳細は `docs/architecture.md` と `docs/adr/` を読む。
+- IPC とプロセス設計の詳細は `docs/architecture.md` を読む。
 
 ## Workflows
 
 - capability 追加: `.agents/skills/capability-pattern/SKILL.md`
 - ドキュメント更新確認: `.agents/skills/doc-sync/SKILL.md`
-- 設計変更: `docs/adr/` に残し、必要な設計文書だけ更新する。
+- 設計変更: `docs/architecture.md` に残し、必要な設計文書だけ更新する。
 
 ## Context Rules
 

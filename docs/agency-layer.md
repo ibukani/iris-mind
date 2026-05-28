@@ -13,10 +13,10 @@
 
 ## Internal Bus
 
-`iris/agency/bus.py` で planning → execution 間の専用 EventBus を提供する。
+`iris/agency/internal_bus.py` で planning → execution 間の専用 EventBus を提供する。
 
 ```python
-# iris/agency/bus.py
+# iris/agency/internal_bus.py
 
 @dataclass
 class PlanDecided:

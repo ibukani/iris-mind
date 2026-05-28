@@ -30,12 +30,17 @@ flowchart TD
     end
 
     subgraph Agency["agency/ 前頭前野+基底核+運動野"]
-        A_Bus["bus/ 内部EventBus"]
+        A_Bus["Internal EventBus<br/>planning↔execution"]
 
         subgraph Planning["planning/ 前頭前野"]
             P_Manager["PlanningManager<br/>意思決定"]
             P_Judge["ProactiveJudge<br/>判断フロー"]
             P_Scoring["ProactiveScorer<br/>PFCスコアリング"]
+        end
+
+        subgraph Inhibition["inhibition/ 基底核"]
+            I_Gate["Gate<br/>実行権制御"]
+            I_Striatum["Striatum<br/>Plan評価・抑制"]
         end
 
         subgraph Execution["execution/ 運動野"]
@@ -46,7 +51,7 @@ flowchart TD
     end
 
     subgraph Infra["LLM / Tools"]
-        I_LLM["llm/<br/>LLMBridge + Tokenizer"]
+        I_LLM["llm/<br/>LLMBridge + Tokenizer + Provider"]
         I_TOOLS["tools/<br/>ToolRegistry"]
     end
 
@@ -62,6 +67,7 @@ flowchart TD
 
     A_Bus --- Planning
     A_Bus --- Execution
+    Inhibition --- Execution
 ```
 
 ## 2. 層間イベントフロー（基本ループ）
@@ -148,12 +154,6 @@ iris/
 │   ├── event_types.py         イベント型定義
 │   └── tracer.py              EventTracer
 │
-├── limbic/                    # 大脳辺縁系
-│   ├── amygdala/              扁桃体（感情評価・価値判断）
-│   ├── cingulate/             前帯状皮質（ACC: 感情制御・葛藤調整）
-│   ├── hippocampus/           扁桃体-海馬相互作用（感情タグ付け）
-│   └── prefrontal/            前頭前野（性格・感情統合）
-│
 ├── memory/                    # 記憶系: 感覚野 + 皮質（3層構造）
 │   ├── __init__.py
 │   ├── manager.py             MemoryManager（EventBus連携, ディスパッチャ）
@@ -181,16 +181,22 @@ iris/
 │   │   ├── base.py            _JsonlStore 基底
 │   │   ├── goal_store.py      GoalStore（長期目標管理）
 │   │   └── vector_store.py    VectorStore（ChromaDB + BM25 ハイブリッド）
-│   └── hippocampal/           Reflexion + HippocampalManager
 │
 ├── agency/                    # 高度認知: PFC + 基底核 + 運動野
 │   ├── __init__.py
 │   ├── task_level.py           TaskLevel定義 + resolve_level()
 │   ├── manager.py             AgencyManager
-│   ├── bus.py                 Internal EventBus（planning→execution）
+│   ├── internal_bus.py        Internal EventBus（planning→execution）
 │   ├── builder.py             コンポーネント組み立て
 │   ├── hooks.py               Plugin Hook登録
-│   ├── inhibition/            抑制制御
+│   ├── modulation.py          Agency変調
+│   ├── inhibition/            # 基底核: 抑制制御（Striatum+Gate）
+│   │   ├── __init__.py
+│   │   ├── manager.py         InhibitionManager
+│   │   ├── handler.py         抑制ハンドラ
+│   │   ├── gate.py            Gate（実行権制御）
+│   │   ├── striatum.py        Striatum（Plan評価）
+│   │   └── models.py          GateDecision
 │   ├── planning/              # 前頭前野: 意思決定
 │   │   ├── __init__.py
 │   │   ├── manager.py         PlanningManager
@@ -215,15 +221,16 @@ iris/
 │       ├── models.py               ExecutionState + DynamicState
 │       ├── engine.py               ToolEngine
 │       ├── builder.py              ノード・グラフ組立
-│       ├── node_types.py           ノード種別定義
+│       ├── node_type.py            ノード種別定義
 │       ├── worker.py               バックグラウンドワーカー
-│       ├── generation/             (将来)
+│       ├── handler.py              実行イベントハンドラ
 │       ├── llm/
 │       │   ├── __init__.py
 │       │   ├── gateway.py          LLMGateway
 │       │   ├── prompt_builder.py   SystemPromptBuilder
 │       │   ├── node_prompt_factory.py  ノード別プロンプト
-│       │   └── profile_builder.py      プロファイル構築
+│       │   ├── profile_builder.py      プロファイル構築
+│       │   └── capture.py              LLM入出力キャプチャ
 │       ├── nodes/                  # LangGraph ノード
 │       │   ├── __init__.py
 │       │   ├── base.py             BaseLLMNode
@@ -390,6 +397,7 @@ flowchart LR
 ```
 
 - 各層は直接の依存を持たず、EventBus を介して通信する
-- PluginManager が全層の構築と DI を行う（`kernel/manager.py`）
+- PluginManager が全層の構築、DI、ライフサイクル管理を行う（`kernel/manager.py`）
 - Agency の planning → execution は内部 EventBus を介する
 - IO 層は gRPC への依存を持つが、`io/transport/` に閉じる
+- 全Pluginの依存は `PluginManifest.dependencies` に宣言、PluginManagerがトポロジカルソートで解決

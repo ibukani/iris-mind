@@ -19,13 +19,13 @@
 ## Source of truth
 
 - プロジェクトルール: `AGENTS.md`
-- アーキテクチャと設計判断: `docs/architecture.md`, `docs/adr/`
+- アーキテクチャと設計判断: `docs/architecture.md`
 - 実装の履歴: Git commit / PR / Issue
 - 一時的な作業メモ: 常設しない。必要時のみユーザーまたは作業ブランチ上で管理する。
 
 ## Rules
 
 - `.agents/` に進捗ログやブランチ状態を常設しない
-- ADR に残すべき決定は `docs/adr/` に記録する
+- 設計判断は `docs/architecture.md` に記録する（必要に応じて `docs/adr/` を新設可）
 - 運用手順の変更は対応する Skill と `AGENTS.md` を更新する
 - 要約よりも参照先を優先し、同じ事実を複数ファイルに書かない

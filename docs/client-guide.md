@@ -214,9 +214,77 @@ Client                         Iris Mind
 
 ---
 
-## 6. エラーと注意点
+## 6. ユーザー管理（SystemMessage）
 
-### 6.1 よくあるエラー
+ユーザーの登録・入退室・改名を `BidirectionalStreamRequest.system` で行う。
+
+### プロトコル
+
+`BidirectionalStreamRequest` の `system` フィールドに `SystemMessage` を格納して送信する。
+
+#### ユーザー登録
+```python
+BidirectionalStreamRequest(
+    system=SystemMessage(
+        action="user_register",
+        nickname="Bob",           # 任意
+    )
+)
+# → サーバー応答: SystemMessage(action="user_register", user_id="abc123", text="Your user ID: abc123")
+```
+
+#### ユーザー入室
+```python
+BidirectionalStreamRequest(
+    system=SystemMessage(
+        action="user_entered",
+        user_id="abc123",         # 登録済みの user_id
+    )
+)
+# → サーバー応答: SystemMessage(action="user_entered", text="Welcome, Bob")
+```
+
+#### ユーザー退室
+```python
+BidirectionalStreamRequest(
+    system=SystemMessage(
+        action="user_left",
+        user_id="abc123",
+    )
+)
+# → サーバー応答: SystemMessage(action="user_left", text="Goodbye, Bob")
+```
+
+#### ニックネーム変更
+```python
+BidirectionalStreamRequest(
+    system=SystemMessage(
+        action="nickname_update",
+        user_id="abc123",
+        nickname="Robert",
+    )
+)
+# → サーバー応答: SystemMessage(action="nickname_update", text="Nickname changed to 'Robert'")
+```
+
+### 動作仕様
+
+| アクション | 必須フィールド | サーバー処理 |
+|-----------|---------------|-------------|
+| `user_register` | `nickname`（任意） | UserStore に登録、user_id を割り当てて返す |
+| `user_entered` | `user_id` | ShortTermMemory にユーザー追加、記憶に「入室」を保存 |
+| `user_left` | `user_id` | ShortTermMemory からユーザー削除、記憶に「退室」を保存、proactive 抑制解除 |
+| `nickname_update` | `user_id`, `nickname` | UserStore のニックネームを更新、ShortTermMemory も更新 |
+
+### セッション切断時の自動処理
+
+クライアントが切断（`user_left` を送信せずに接続断）した場合でも、サーバーは同一セッションに紐づく全ユーザーの退室処理を自動で行う。クライアント側での明示的な `user_left` 送信は推奨されるが、必須ではない。
+
+---
+
+## 7. エラーと注意点
+
+### 7.1 よくあるエラー
 
 | 症状 | 原因 | 対処 |
 |------|------|------|
@@ -224,7 +292,7 @@ Client                         Iris Mind
 | 応答が返ってこない | セッションが無効 | メタデータを含めて再接続 |
 | メッセージが無視される | 不正な BidirectionalStreamRequest | `BidirectionalStreamRequest` に適切な `message` または `command` を格納しているか確認 |
 
-### 6.2 セッション管理
+### 7.2 セッション管理
 
 - メタデータ認証成功後、同一 gRPC ストリームで入出力を行う
 - セッションは gRPC 接続断で自動的に削除される
@@ -233,7 +301,7 @@ Client                         Iris Mind
 - サーバー応答の `Message.session_id` からセッションID を取得可能（通常は未使用でも問題ない）
 - ACK メカニズム（`metadata.ack_required: true`）で到着確認が可能
 
-### 6.3 制限事項
+### 7.3 制限事項
 
 | 項目 | 制限 |
 |------|------|
@@ -244,7 +312,7 @@ Client                         Iris Mind
 
 ---
 
-## 7. クイックリファレンス
+## 8. クイックリファレンス
 
 ### 最小限の接続シーケンス
 

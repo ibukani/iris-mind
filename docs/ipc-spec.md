@@ -101,8 +101,10 @@ message BidirectionalStreamResponse {
 | Client → Server | `BidirectionalStreamRequest.message` | テキスト入力、制御、アクション結果 |
 | Client → Server | `BidirectionalStreamRequest.message` (msg_type=voice_indicator) | 音声録音状態の制御信号（sensory/pending_input非保存、EventBus経由でProactive抑制） |
 | Client → Server | `BidirectionalStreamRequest.command` | システムコマンド（`CommandInput` fast-path） |
+| Client → Server | `BidirectionalStreamRequest.system` | ユーザー管理プロトコル（登録・入退室・改名） |
 | Server → Client | `BidirectionalStreamResponse.message` | 応答、アクション要求、確認（`direction:stream`/`direction:response` で配送） |
 | Server → Client | `BidirectionalStreamResponse.command` | コマンド応答（`CommandOutput` fast-path） |
+| Server → Client | `BidirectionalStreamResponse.system` | ユーザー管理プロトコルの応答（ユーザーID割当・確認メッセージ） |
 
 ---
 
@@ -145,6 +147,29 @@ message BidirectionalStreamResponse {
 | `ack` | Server→Client | 受信確認（`metadata.ack_required` 時） |
 | `error` | Server→Client | エラー通知 |
 | `voice_indicator` | Client→Server | 音声録音状態通知（制御信号）。`content` が `"true"` で録音開始、`"false"` で録音終了。`direction:event` で送信 |
+
+### 4.6 SystemMessage (`BidirectionalStreamRequest.system` / `BidirectionalStreamResponse.system`)
+
+ユーザー管理プロトコル。クライアントがユーザーの入退室・登録・改名を通知し、サーバーが応答する。
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `action` | string | アクション種別（下記参照） |
+| `user_id` | string | サーバー割当のユーザーID（登録時は空文字、サーバーが返す） |
+| `nickname` | string | 表示用ニックネーム |
+| `text` | string | サーバーからの応答メッセージ（サーバー→クライアントのみ） |
+
+**action 定義**:
+
+| action | 方向 | 説明 | 必須フィールド |
+|--------|------|------|---------------|
+| `user_register` | C→S, S→C | 新規ユーザー登録。サーバーが user_id を割り当てる | `nickname`（任意） |
+| `user_entered` | C→S, S→C | ユーザー入室通知。接続時に送信 | `user_id` |
+| `user_left` | C→S, S→C | ユーザー退室通知。切断前に送信 | `user_id` |
+| `nickname_update` | C→S, S→C | ニックネーム変更 | `user_id`, `nickname` |
+
+**自動発行**:
+- セッション切断時、サーバーは同一セッションに紐づく全ユーザーの `user_left` を自動発行する（クライアントからの明示的な送信がなくても退室処理が行われる）
 
 ---
 
@@ -197,6 +222,38 @@ sequenceDiagram
     Kernel-->>Server: CommandResult
     Server-->>Client: BidirectionalStreamResponse(CommandOutput: content="Status: OK")
     deactivate Server
+```
+
+### 5.3 ユーザー管理フロー (SystemMessage)
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server as GrpcServer
+    participant GW as Gateway
+    participant Handler as MemoryHandler
+
+    Note over Client,Handler: ユーザー登録
+    Client->>Server: BidirectionalStreamRequest(SystemMessage: action="user_register", nickname="Bob")
+    Server->>GW: on_grpc_system(sys_msg, session_id)
+    GW->>Handler: handle_system_message(msg, session_id)
+    Handler->>Handler: publish(SystemMessageEvent) to EventBus
+    Handler->>Handler: UserStore.create(nickname)
+    Handler-->>GW: SystemMessage(action="user_register", user_id="abc123", text="Your user ID: abc123")
+    GW-->>Server: route_system_message
+    Server-->>Client: BidirectionalStreamResponse(SystemMessage: action="user_register", user_id="abc123", text="Your user ID: abc123")
+
+    Note over Client,Handler: ユーザー入室
+    Client->>Server: BidirectionalStreamRequest(SystemMessage: action="user_entered", user_id="abc123")
+    Server->>GW: on_grpc_system(sys_msg, session_id)
+    GW->>Handler: handle_system_message(msg, session_id)
+    Handler->>Handler: publish(SystemMessageEvent) to EventBus
+    Handler->>Handler: ShortTerm.add_user(user_id, nickname, session_id)
+    Handler->>Handler: Sensory.store_raw("[system] Bob が入室しました")
+    Handler->>Handler: flush_pending → InputReady
+    Handler-->>GW: SystemMessage(action="user_entered", text="Welcome, Bob")
+    GW-->>Server: route_system_message
+    Server-->>Client: BidirectionalStreamResponse(SystemMessage: action="user_entered", text="Welcome, Bob")
 ```
 
 ---

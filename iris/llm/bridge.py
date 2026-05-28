@@ -1,7 +1,8 @@
 """LLM Bridge — マルチプロバイダルーター。
 
-ModelConfig に基づき複数の LangChain ChatModel インスタンスを管理し、
+ModelConfig に基づき複数のプロバイダ ChatModel インスタンスを管理し、
 モデル名に応じて適切なプロバイダへルーティングする。
+プロバイダ固有のロジックは BaseLLMProvider 実装に委譲している。
 """
 
 from __future__ import annotations
@@ -11,14 +12,12 @@ from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
-from langchain_ollama import ChatOllama
 from loguru import logger
 
-from iris.kernel.config import ModelConfig
+from iris.kernel.config import ModelConfig, ModelEntry
 
-from .health import check_bridge_available
 from .interrupt_token import InterruptToken
-from .model_factory import build_ollama_options, build_openai_kwargs, create_chat_model, resolve_connection, unload_model
+from .model_factory import resolve_connection
 from .priority_lock import PriorityLock
 from .repetition import RepetitionDetector
 
@@ -27,20 +26,34 @@ class LLMBridge:
     """複数の LLM プロバイダへのアクセスを抽象化し、ルーティングを行うブリッジクラス。"""
 
     def __init__(self, model_config: ModelConfig) -> None:
-        self._providers: dict[str, BaseChatModel] = {}
+        from .providers import get_provider_class
+
+        self._chat_models: dict[str, BaseChatModel] = {}
         self._model_map: dict[str, str] = {}
         self._entries: dict[str, ModelEntry] = {}
+        self._model_providers: dict[str, BaseLLMProvider] = {}
+        self._provider_instances: dict[str, BaseLLMProvider] = {}
         self._model_config = model_config
         self._priority_lock = PriorityLock()
         self._repetition_detector = RepetitionDetector()
 
         for entry in model_config.models:
             base_url, api_key = resolve_connection(entry, model_config)
+            provider_cls = get_provider_class(entry.provider)
             key = f"{entry.provider}|{base_url}|{api_key}"
-            if key not in self._providers:
-                self._providers[key] = create_chat_model(entry, base_url, api_key, model_config)
+
+            if key not in self._provider_instances:
+                provider = provider_cls()
+                self._provider_instances[key] = provider
+            else:
+                provider = self._provider_instances[key]
+
+            if key not in self._chat_models:
+                self._chat_models[key] = provider.create_chat_model(entry, base_url, api_key, model_config)
+
             self._model_map[entry.name] = key
             self._entries[entry.name] = entry
+            self._model_providers[entry.name] = provider
 
     @staticmethod
     def _extract_content(resp_message: AIMessage) -> str:
@@ -63,11 +76,21 @@ class LLMBridge:
         **kwargs: Any,
     ) -> AIMessage:
         model_name = model or self._get_default_model()
-        provider = self._resolve_provider(model_name)
+        chat_model = self._resolve_chat_model(model_name)
         entry = self._entries.get(model_name)
+        provider = self._get_provider_for_model(model_name)
 
-        call_kwargs = self._build_call_kwargs(provider, temperature, max_tokens, entry, kwargs, reasoning=reasoning)
-        active_model = provider.bind_tools(tools) if tools else provider
+        call_kwargs = provider.build_call_kwargs(
+            temperature,
+            max_tokens,
+            entry,
+            kwargs,
+            reasoning=reasoning,
+            default_num_ctx=self._model_config.default_num_ctx,
+        )
+        call_kwargs.update(kwargs)
+
+        active_model = chat_model.bind_tools(tools) if tools else chat_model
 
         local_interrupt_token = interrupt_token or InterruptToken()
         accumulated_text: list[str] = []
@@ -100,29 +123,6 @@ class LLMBridge:
                 new_msg.tool_calls = resp_message.tool_calls
             return new_msg
         return resp_message
-
-    def _build_call_kwargs(
-        self,
-        provider: BaseChatModel,
-        temperature: float,
-        max_tokens: int,
-        entry: ModelEntry | None,
-        kwargs: dict[str, Any],
-        reasoning: bool | None = None,
-    ) -> dict[str, Any]:
-        if isinstance(provider, ChatOllama):
-            call_options = build_ollama_options(temperature, max_tokens, entry, kwargs)
-            instance_options = dict(getattr(provider, "options", None) or {})
-            merged = {**instance_options, **call_options}
-            if "num_ctx" not in merged:
-                merged["num_ctx"] = self._model_config.default_num_ctx
-            call_kwargs: dict[str, Any] = {"options": merged}
-            if reasoning is not None:
-                call_kwargs["reasoning"] = reasoning
-        else:
-            call_kwargs = build_openai_kwargs(temperature, max_tokens, kwargs)
-        call_kwargs.update(kwargs)
-        return call_kwargs
 
     async def _stream_or_invoke(
         self,
@@ -160,10 +160,19 @@ class LLMBridge:
         **kwargs: Any,
     ) -> Any:
         model_name = model or self._get_default_model()
-        provider = self._resolve_provider(model_name)
-        call_kwargs = self._build_call_kwargs(provider, temperature, max_tokens, None, kwargs)
+        chat_model = self._resolve_chat_model(model_name)
+        provider = self._get_provider_for_model(model_name)
+        entry = self._entries.get(model_name)
 
-        active_model = provider.with_structured_output(schema)
+        call_kwargs = provider.build_call_kwargs(
+            temperature,
+            max_tokens,
+            entry,
+            kwargs,
+            default_num_ctx=self._model_config.default_num_ctx,
+        )
+
+        active_model = chat_model.with_structured_output(schema)
         return await active_model.ainvoke(messages, **call_kwargs)
 
     def _detect_repetition(self, text: str) -> bool:
@@ -173,22 +182,47 @@ class LLMBridge:
         return self._repetition_detector.trim(text)
 
     def is_available(self) -> bool:
-        return check_bridge_available(self._providers)
+        for key, chat_model in self._chat_models.items():
+            provider = self._provider_instances.get(key)
+            if provider and provider.check_health(chat_model):
+                return True
+        return False
 
     def unload_model(self, model_name: str | None = None) -> None:
-        unload_model(model_name, self._model_map, self._providers)
+        if not model_name:
+            return
+        key = self._model_map.get(model_name)
+        if not key:
+            return
+        provider = self._provider_instances.get(key)
+        chat_model = self._chat_models.get(key)
+        if provider and chat_model:
+            provider.unload(model_name, chat_model)
 
-    def _resolve_provider(self, model_name: str) -> BaseChatModel:
-        """モデル名から対応するプロバイダインスタンスを解決する。"""
+    def _resolve_chat_model(self, model_name: str) -> BaseChatModel:
+        """モデル名から対応する ChatModel インスタンスを解決する。"""
         key = self._model_map.get(model_name)
         if key:
-            return self._providers[key]
-        first = next(iter(self._providers.values()))
-        logger.warning("Model {!r} not found in provider map, using first provider", model_name)
+            return self._chat_models[key]
+        first = next(iter(self._chat_models.values()))
+        logger.warning("Model {!r} not found in model map, using first provider", model_name)
+        return first
+
+    def _get_provider_for_model(self, model_name: str) -> BaseLLMProvider:
+        """モデル名から対応する BaseLLMProvider インスタンスを取得する。"""
+        provider = self._model_providers.get(model_name)
+        if provider:
+            return provider
+        first = next(iter(self._provider_instances.values()))
+        logger.warning("No provider found for model {!r}, using first available", model_name)
         return first
 
     def _get_default_model(self) -> str:
-        """デフォルト of モデル名を取得する（マップの最初のモデル）。"""
         for name in self._model_map:
             return name
         return ""
+
+
+# ── 循環インポート回避のための型インポート ──────────────────
+
+from .providers import BaseLLMProvider  # noqa: E402

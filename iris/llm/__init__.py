@@ -9,19 +9,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol, discover_sub_plugins
+from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
 
 from .bridge import LLMBridge
 from .capability import CapabilityChecker
-from .context import LLMContextWindowManager
+from .context import LLMContextWindowManager, SummarizerProtocol
 from .interrupt_token import InterruptToken
 from .priority_lock import PriorityLock
 from .prompt import Personality
 from .providers import (
+    BaseLLMProvider,
     GoogleProvider,
     OllamaProvider,
     OpenRouterProvider,
     get_provider_class,
+    register_provider,
 )
 from .token_utils import estimate_messages_tokens, estimate_tokens
 from .tokenizer import TokenizerManager
@@ -77,11 +79,6 @@ class LlmPlugin:
 
         manager.provide(DebugCapture, debug_capture)
 
-        for sub_module in discover_sub_plugins("iris/llm/providers"):
-            register_fn = getattr(sub_module, "register", None)
-            if register_fn is not None:
-                register_fn(llm)
-
         from .hooks import register_hooks
 
         register_hooks(manager)
@@ -96,6 +93,7 @@ class LlmPlugin:
 plugin: PluginProtocol = LlmPlugin()
 
 __all__ = [
+    "BaseLLMProvider",
     "CapabilityChecker",
     "GoogleProvider",
     "InterruptToken",
@@ -105,8 +103,10 @@ __all__ = [
     "OpenRouterProvider",
     "Personality",
     "PriorityLock",
+    "SummarizerProtocol",
     "TokenizerManager",
     "estimate_messages_tokens",
     "estimate_tokens",
     "get_provider_class",
+    "register_provider",
 ]

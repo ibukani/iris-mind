@@ -1,72 +1,43 @@
-"""Providers — LLM 環境検証関数群。
+"""Providers — LLM プロバイダレジストリ。
 
-各プロバイダの環境確認（APIキー存在確認、Ollama プロセス確認等）を
-クラスメソッド経由で提供する。新規プロバイダ追加時は以下の 3 箇所を更新する:
+新規プロバイダ追加手順:
+  1. BaseLLMProvider を継承し provider_name を設定したクラスを providers/ 配下に作成
+  2. 以上 (auto-discover + auto-register が自動処理)
+  ヒトの作業 = ファイル 1 つ作成のみ。
 
-1. クラス定義（ensure_environment を実装）
-2. `_PROVIDER_CLASSES` に追加
-3. `__all__` に追加
+注: OpenAICompatibleProvider のように 1 クラスで複数 provider_type を
+     扱うケースは例外的に明示的な register_provider() を __init__.py に記述する。
 """
 
 from __future__ import annotations
 
-from iris.kernel.config import ModelConfig, ModelEntry
+from .base import BaseLLMProvider, discover_providers, get_provider_class, register_provider
 
-from . import ollama_environment as ollama_env
+# ── Auto-discover: providers/ の全 .py を import → __init_subclass__ で auto-register ──
 
+discover_providers()
 
-def _check_api_key(entries: list[ModelEntry], model_config: ModelConfig) -> bool:
-    """APIキー設定の有無を確認する汎用チェック。"""
-    for entry in entries:
-        conn = model_config.providers.get(entry.provider)
-        if not conn or not conn.api_key:
-            return False
-    return True
+# ── 複数 provider_type → 1 クラスのマッピング (例外) ──────────────────
 
+from .openai_compatible import OpenAICompatibleProvider as _OpenAICompatibleProvider
 
-class OllamaProvider:
-    """Ollama 環境検証クラス。"""
+register_provider("openrouter", _OpenAICompatibleProvider)
+register_provider("google", _OpenAICompatibleProvider)
 
-    @classmethod
-    def ensure_environment(cls, entries: list[ModelEntry], model_config: ModelConfig) -> bool:
-        return ollama_env.ensure_environment(entries, model_config)
+# ── Re-exports (後方互換) ──────────────────────────────────
 
-
-class OpenRouterProvider:
-    """OpenRouter 環境検証クラス（APIキー確認のみ）。"""
-
-    @classmethod
-    def ensure_environment(cls, entries: list[ModelEntry], model_config: ModelConfig) -> bool:
-        return _check_api_key(entries, model_config)
-
-
-class GoogleProvider:
-    """Google 環境検証クラス（APIキー確認のみ）。"""
-
-    @classmethod
-    def ensure_environment(cls, entries: list[ModelEntry], model_config: ModelConfig) -> bool:
-        return _check_api_key(entries, model_config)
-
-
-_PROVIDER_CLASSES: dict[str, type[OllamaProvider | OpenRouterProvider | GoogleProvider]] = {
-    "ollama": OllamaProvider,
-    "openrouter": OpenRouterProvider,
-    "google": GoogleProvider,
-}
-
-
-def get_provider_class(provider_type: str) -> type[OllamaProvider | OpenRouterProvider | GoogleProvider]:
-    """指定されたプロバイダタイプに対応する環境検証クラスを取得する。"""
-    cls = _PROVIDER_CLASSES.get(provider_type)
-    if cls is None:
-        msg = f"Unknown provider type: {provider_type!r}"
-        raise ValueError(msg)
-    return cls
-
+from .ollama import OllamaProvider as OllamaProvider
+from .openai_compatible import GoogleProvider as GoogleProvider
+from .openai_compatible import OpenAICompatibleProvider as OpenAICompatibleProvider
+from .openai_compatible import OpenRouterProvider as OpenRouterProvider
 
 __all__ = [
+    "BaseLLMProvider",
     "GoogleProvider",
     "OllamaProvider",
+    "OpenAICompatibleProvider",
     "OpenRouterProvider",
+    "discover_providers",
     "get_provider_class",
+    "register_provider",
 ]

@@ -151,7 +151,7 @@ START → SetupNode → GeneralChatNode (fixed entry)
 | パラメータ | ソース |
 |-----------|--------|
 | model | `ModelConfig.get_model(plan.model_role)` |
-| temperature | `ModelConfig.get_effective_temperature(role)` + 感情変調 |
+| temperature | `ModelConfig.get_effective_temperature(role)` |
 | max_tokens | plan.max_tokens or `get_effective_max_tokens(role)` |
 | tools | ToolRegistry.list_tools() |
 | on_token | SetupNode 設定（常時有効） |
@@ -164,7 +164,7 @@ START → SetupNode → GeneralChatNode (fixed entry)
 
 - `record_user_input()`: ユーザー入力時にカウンタリセット
 - `record_output()`: 出力後に frequency / talkative を評価。フラグリストを返す
-- `set_emotion_state(v, a, d)`: 現在の感情状態を監視に反映
+
 
 ### フラグ
 

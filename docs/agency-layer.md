@@ -28,11 +28,11 @@ class PlanDecided:
 ```python
 class AgencyManager:
     """Agency 層の外から呼ばれる操作を中継する。
-    現在は compact_context の中継のみ。InputReady は PlanningManager が直接購読する。
+    主に compact_context の中継を行う。InputReady は PlanningManager が直接購読する。
     """
 ```
 
-AgencyManager は現在最小限の役割のみ持つ。global EventBus の `InputReady` は PlanningManager が直接購読するため、AgencyManager を経由しない。
+AgencyManager は compact_context の中継に特化している。global EventBus の `InputReady` は PlanningManager が直接購読するため、AgencyManager を経由しない。
 
 ## 処理フロー（統合後）
 

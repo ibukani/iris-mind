@@ -127,14 +127,13 @@ class CommandHandler:
     """
 
     def handle(self, name: str, args: str) -> str
-        # /status        → 設定・感情状態表示
+        # /status        → 設定・状態表示
         # /shutdown      → KernelProcess.shutdown
         # /help          → コマンド一覧
         # /compact       → AgencyManager.compact_context
         # /memory recent → MemoryManager.retrieve("episodic")
         # /memory search → MemoryManager.search("semantic")
         # /memory clear  → MemoryManager.clear()
-        # /emotion       → 感情状態表示（via diagnostics）
         # /sessions      → SessionManager.get_sessions_summary()
 ```
 

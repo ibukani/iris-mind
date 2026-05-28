@@ -113,6 +113,4 @@ plan = {
 
 (現在未実装)
 
-## (削除) 感情による温度変調
 
-Limbic層削除に伴い EmotionTemperatureModulator は実装されていません。

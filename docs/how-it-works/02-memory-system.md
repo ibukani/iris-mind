@@ -143,14 +143,14 @@ flush 時は `flush_callback(session_id, content)` が呼ばれる。
 
 - 保存形式: JSONL (`.iris/data/episodes.jsonl`)
 - 上限: 30 エントリ
-- 構造: `{"content": str, "kind": str, "timestamp": str, "emotion": dict}`
+- 構造: `{"content": str, "kind": str, "timestamp": str}`
 - 上限超過時: 古いエントリ同士をマージ圧縮（LLM要約）
 
 ### 意味記憶 (SemanticStore + VectorStore)
 
 - 保存形式: JSONL (`.iris/data/semantic.jsonl`) + ChromaDB
 - 上限: 100 エントリ
-- 保存要素: `{content, type, tags, timestamp, emotion, embedding}`
+- 保存要素: `{content, type, tags, timestamp, embedding}`
 
 #### ハイブリッド検索スコア
 
@@ -197,5 +197,5 @@ if goal.weight < remove_threshold (0.1): 削除
 
 ### 永続化
 
-現在はインメモリ管理。`save(path)` / `load(path)` で JSON ファイルにダンプ可能。
+インメモリ管理。`save(path)` / `load(path)` で JSON ファイルにダンプ可能。
 MemoryManager から定期的に呼ばれる想定。

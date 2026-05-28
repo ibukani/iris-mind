@@ -57,7 +57,7 @@ model:
   base_url: http://localhost:11434
   models:
     - name: qwen3.5:9b
-      roles: [default]
+      roles: default
 session:
   host: 127.0.0.1
   port: 9876
@@ -88,12 +88,10 @@ uv run python main.py --verbose
 | `/memory recent [n]` | 直近のエピソード記憶を n 件表示 |
 | `/memory search <q>` | 意味記憶を検索 |
 | `/memory clear [type]` | 記憶を消去（episodic/semantic） |
-| `/emotion` | 現在の感情状態（PAD） |
 | `/sessions` | アクティブセッション一覧 |
 | `/ping` | LLM ヘルスチェック |
 | `/tools` | 登録ツール一覧 |
 | `/llm` | LLM 設定情報 |
-| `/personality` | Big Five パーソナリティ |
 | `/state [path] [--history] [--json]` | システム状態クエリ |
 | `/events [n] [--type=TYPE]` | 最近のイベント一覧 |
 | `/health` | ヘルスチェック |
@@ -186,7 +184,7 @@ flowchart LR
 ## Features
 
 - **LLM 会話** — Ollama / OpenRouter / Google 等のマルチプロバイダ経由で会話
-- **自律発話 (Proactive)** — PFCスコアリング（時間×記憶×文脈×ムード）＋基底核抑制制御で適切なタイミングに自発発話
+- **自律発話 (Proactive)** — PFCスコアリング（時間×記憶×文脈）＋基底核抑制制御で適切なタイミングに自発発話
 - **記憶システム** — 感覚バッファ→短期記憶→長期記憶の3層。エピソード記憶 (JSONL)、意味記憶 (ChromaDB + BM25 ハイブリッド検索)、GoalStore長期目標管理
 - **会話履歴圧縮** — LLMContextWindowManager が token window 超過時に自動要約
 - **動的ツール拡張** — `@tool()` デコレータで実行時ツール追加

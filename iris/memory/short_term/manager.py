@@ -76,6 +76,16 @@ class ShortTermMemoryManager:
         self._max_topics = max_topics
         self._importance_scorer = importance_scorer or DefaultImportanceScorer()
         self._entity_extractor = entity_extractor or RegexEntityExtractor()
+        self._active_users: dict[str, str] = {}
+
+    def add_user(self, user_id: str, nickname: str) -> None:
+        self._active_users[user_id] = nickname
+
+    def remove_user(self, user_id: str) -> None:
+        self._active_users.pop(user_id, None)
+
+    def get_active_users(self) -> list[tuple[str, str]]:
+        return list(self._active_users.items())
 
     def add_turn(self, role: str, blocks: list[ContentBlock], user_identity: str = "") -> None:
         if not blocks:
@@ -154,6 +164,7 @@ class ShortTermMemoryManager:
             search_fn=self.search,
             max_chars=max_chars,
             query=query,
+            active_users=self.get_active_users(),
         )
 
     def get_recent_turns(self, n: int = 4) -> list[TurnData]:
@@ -178,6 +189,7 @@ class ShortTermMemoryManager:
         self._turns.clear()
         self._current_topics.clear()
         self._active_references.clear()
+        self._active_users.clear()
 
     def should_consolidate(self) -> bool:
         """メモリの圧縮（要約化）が必要かどうかを判定する。

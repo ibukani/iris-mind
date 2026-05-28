@@ -48,20 +48,20 @@ class CommandHandler:
             debug_capture=debug_capture,
         )
 
-        self._commands: dict[str, Callable[[str], str]] = {
-            "help": lambda _: self._help(),
-            "status": lambda _: self._status(),
-            "shutdown": lambda _: self._shutdown(),
-            "compact": lambda _: self._compact(),
+        self._commands: dict[str, Callable[..., str]] = {
+            "help": lambda *_: self._help(),
+            "status": lambda *_: self._status(),
+            "shutdown": lambda *_: self._shutdown(),
+            "compact": lambda *_: self._compact(),
             "memory": self._mem_cmds.handle,
-            "sessions": lambda _: self._info_cmds.sessions(),
-            "ping": lambda _: self._info_cmds.ping(),
-            "tools": lambda _: self._info_cmds.tools(),
-            "llm": lambda _: self._info_cmds.llm_info(),
+            "sessions": lambda *_: self._info_cmds.sessions(),
+            "ping": lambda *_: self._info_cmds.ping(),
+            "tools": lambda *_: self._info_cmds.tools(),
+            "llm": lambda *_: self._info_cmds.llm_info(),
             "state": self._debug_cmds._state_cmd,
             "events": self._debug_cmds._events_cmd,
-            "health": lambda _: self._debug_cmds._health_cmd(),
-            "report": lambda _: self._debug_cmds._report_cmd(),
+            "health": lambda *_: self._debug_cmds._health_cmd(),
+            "report": lambda *_: self._debug_cmds._report_cmd(),
             "debug": self._debug_cmds.handle,
         }
 
@@ -89,7 +89,7 @@ class CommandHandler:
     def set_diagnostics(self, diagnostics: SystemDiagnostics) -> None:
         self._debug_cmds.set_diagnostics(diagnostics)
 
-    def handle(self, name: str, args: str = "") -> str:
+    def handle(self, name: str, args: str = "", session_id: str = "") -> str:
         logger.info("CommandHandler: /{} {}", name, args[:100] if args else "")
         handler = self._commands.get(name)
         if handler is None:

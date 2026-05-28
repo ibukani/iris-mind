@@ -25,7 +25,7 @@ def _message_event(session_id: str = "", content: str = "") -> MessageEvent:
 
 def _memory_with_handler(event_bus: EventBus, proactive_config: Any = None) -> MemoryManager:
     mgr = MemoryManager()
-    _MemoryEventHandler(event_bus, mgr.sensory, proactive_config)
+    _MemoryEventHandler(event_bus, mgr.sensory, proactive_config, short_term=mgr.short_term, user_store=None)
     return mgr
 
 

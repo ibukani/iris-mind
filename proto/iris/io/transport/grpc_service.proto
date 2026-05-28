@@ -71,19 +71,34 @@ message CommandOutput {
   string state = 6;
 }
 
-// Client-to-server frame wrapping either a Message or a CommandInput.
+// A system message for user management protocol.
+// Used for user_register, user_entered, user_left, nickname_update.
+message SystemMessage {
+  // Action type: "user_register" / "user_entered" / "user_left" / "nickname_update"
+  string action = 1;
+  // Server-assigned user ID (empty for new registration, UUID for reconnect/update)
+  string user_id = 2;
+  // Display nickname
+  string nickname = 3;
+  // Human-readable response from server (server-to-client only)
+  string text = 4;
+}
+
+// Client-to-server frame wrapping either a Message, a CommandInput, or a SystemMessage.
 message BidirectionalStreamRequest {
   oneof frame {
     Message message = 1;
     CommandInput command = 2;
+    SystemMessage system = 3;
   }
 }
 
-// Server-to-client frame wrapping either a Message or a CommandOutput.
+// Server-to-client frame wrapping either a Message, a CommandOutput, or a SystemMessage.
 message BidirectionalStreamResponse {
   oneof frame {
     Message message = 1;
     CommandOutput command = 2;
+    SystemMessage system = 3;
   }
 }
 

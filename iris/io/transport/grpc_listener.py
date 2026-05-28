@@ -7,7 +7,7 @@ import threading
 
 from loguru import logger
 
-from iris.io.models import CommandInput, Message
+from iris.io.models import CommandInput, Message, SystemMessage
 from iris.io.session.manager import SessionManager
 from iris.io.transport.grpc_server import GrpcServer
 
@@ -20,10 +20,12 @@ class GrpcListener:
         session_manager: SessionManager,
         on_message: Callable[[Message], None] | None = None,
         on_command: Callable[[CommandInput], None] | None = None,
+        on_system_message: Callable[[SystemMessage, str, str], None] | None = None,
     ) -> None:
         self._session_manager = session_manager
         self._on_message = on_message
         self._on_command = on_command
+        self._on_system_message = on_system_message
         self._server_impl: GrpcServer | None = None
         self._loop: asyncio.AbstractEventLoop | None = None
         self._thread: threading.Thread | None = None
@@ -37,6 +39,11 @@ class GrpcListener:
         self._on_command = on_command
         if self._server_impl:
             self._server_impl.set_on_command(on_command)
+
+    def set_on_system_message(self, on_system_message: Callable[[SystemMessage, str, str], None]) -> None:
+        self._on_system_message = on_system_message
+        if self._server_impl:
+            self._server_impl.set_on_system_message(on_system_message)
 
     def start(self, host: str, port: int) -> None:
         self._loop = asyncio.new_event_loop()
@@ -83,6 +90,7 @@ class GrpcListener:
             self._session_manager,
             on_message=self._on_message,
             on_command=self._on_command,
+            on_system_message=self._on_system_message,
         )
         try:
             self._loop.run_until_complete(self._server_impl.start(host, port))

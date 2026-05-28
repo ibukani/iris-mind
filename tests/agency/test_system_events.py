@@ -1,17 +1,16 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-import time
 
-from iris.agency import LLMGateway, ProactiveScorer
+from iris.agency import LLMGateway
 from iris.event.event_bus import EventBus
-from iris.event.event_types import ClientSessionEvent
 from iris.io.models import AuthMessage
 from iris.io.session.manager import SessionManager
-from iris.kernel.config import Config, SessionConfig
+from iris.kernel.config import SessionConfig
 from iris.llm.prompt import Personality
 from iris.memory.handler import _MemoryEventHandler
 from iris.memory.manager import MemoryManager
+from iris.memory.user_store import UserStore
 
 
 class DummyConnection:
@@ -19,27 +18,19 @@ class DummyConnection:
         pass
 
 
-def test_session_manager_disconnect_time_and_events():
+def test_session_manager_disconnect_no_auto_user_events():
     event_bus = EventBus()
     session_mgr = SessionManager(config=SessionConfig(access_token="test_token"), event_bus=event_bus)
 
     events = []
-    event_bus.subscribe("ClientSessionEvent", lambda ev: events.append(ev))
+    event_bus.subscribe("MessageEvent", lambda ev: events.append(ev))
 
     conn = DummyConnection()
     msg = AuthMessage(access_token="test_token", role="user", identity="test_user")
     resp = session_mgr.authenticate(conn, msg)
     assert resp.msg_type == "auth_success"
-    session_id = resp.session_id
-
-    assert len(events) == 1
-    assert events[0].action == "connected"
-    assert events[0].offline_duration == ""
-
-    events.clear()
-    session_mgr.remove_session(session_id)
-    assert len(events) == 1
-    assert events[0].action == "disconnected"
+    user_events = [e for e in events if e.msg_type in ("user_entered", "user_left")]
+    assert len(user_events) == 0
 
     key = "user:test_user"
     session_mgr._last_disconnect_times[key] = datetime.now() - timedelta(hours=1, minutes=10)
@@ -47,58 +38,131 @@ def test_session_manager_disconnect_time_and_events():
     events.clear()
     resp = session_mgr.authenticate(conn, msg)
     assert resp.msg_type == "auth_success"
-    assert len(events) == 1
-    assert events[0].action == "connected"
-    assert events[0].offline_duration == "1時間10分間"
+    user_events = [e for e in events if e.msg_type in ("user_entered", "user_left")]
+    assert len(user_events) == 0
 
 
-def test_memory_manager_subscribes_client_session_event():
+def test_handle_system_user_register():
     event_bus = EventBus()
     memory_mgr = MemoryManager()
-    _MemoryEventHandler(event_bus, memory_mgr.sensory, None)
-    assert memory_mgr is not None
+    user_store = UserStore()
+    event_handler = _MemoryEventHandler(
+        event_bus,
+        memory_mgr.sensory,
+        None,
+        short_term=memory_mgr.short_term,
+        user_store=user_store,
+    )
+
+    resp = event_handler.handle_system_message(
+        {"action": "user_register", "nickname": "John"},
+        session_id="s1",
+        role="external",
+    )
+
+    assert resp is not None
+    assert resp["action"] == "user_register"
+    assert len(resp["user_id"]) == 16
+    assert resp["nickname"] == "John"
+    assert resp["text"].startswith("Your user ID: ")
+    assert user_store.get(resp["user_id"]) == "John"
+
+
+def test_handle_system_user_entered():
+    event_bus = EventBus()
+    memory_mgr = MemoryManager()
+    user_store = UserStore()
+    user_id, _ = user_store.create("John")
+    event_handler = _MemoryEventHandler(
+        event_bus,
+        memory_mgr.sensory,
+        None,
+        short_term=memory_mgr.short_term,
+        user_store=user_store,
+    )
 
     inputs_ready = []
     event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
 
-    ev = ClientSessionEvent(
-        timestamp=datetime.now(),
-        source="session",
-        session_id="session_123",
-        action="connected",
-        role="user",
-        identity="test_user",
-        offline_duration="2時間",
+    resp = event_handler.handle_system_message(
+        {"action": "user_entered", "user_id": user_id},
+        session_id="s1",
+        role="external",
     )
-    event_bus.publish(ev)
+
+    assert resp is not None
+    assert resp["action"] == "user_entered"
+    assert resp["nickname"] == "John"
+    assert "Welcome" in resp["text"]
 
     assert len(inputs_ready) == 1
-    ir = inputs_ready[0]
-    assert ir.session_id == "session_123"
-    assert ir.context.get("system_event") == "connected"
-    assert ir.context.get("offline_duration") == "2時間"
-    assert ir.context.get("role") == "user"
+    assert "[system]" in inputs_ready[0].content
+    assert "John" in inputs_ready[0].content
+    assert "入室" in inputs_ready[0].content
 
 
-def test_scoring_with_system_event_context():
+def test_handle_system_user_left():
     event_bus = EventBus()
-    cfg = Config()
-    cfg.proactive.speak_threshold = 0.5
     memory_mgr = MemoryManager()
-    _MemoryEventHandler(event_bus, memory_mgr.sensory, cfg.proactive)
-    scoring = ProactiveScorer(config=cfg.proactive, memory=memory_mgr)
-
-    context = {"system_event": "connected", "role": "user", "offline_duration": "3時間"}
-
-    from iris.agency import ScoreContext
-
-    total, _ = scoring.compute(
-        ScoreContext(
-            now=time.time(),
-            context=context,
-        )
+    user_store = UserStore()
+    user_id, _ = user_store.create("John")
+    event_handler = _MemoryEventHandler(
+        event_bus,
+        memory_mgr.sensory,
+        None,
+        short_term=memory_mgr.short_term,
+        user_store=user_store,
     )
-    assert total >= 0.6
+    memory_mgr.short_term.add_user(user_id, "John")
+
+    inputs_ready = []
+    event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
+
+    resp = event_handler.handle_system_message(
+        {"action": "user_left", "user_id": user_id},
+        session_id="s1",
+        role="external",
+    )
+
+    assert resp is not None
+    assert resp["action"] == "user_left"
+    assert "Goodbye" in resp["text"]
+
+    assert len(inputs_ready) == 1
+    assert "退室" in inputs_ready[0].content
+
+
+def test_handle_system_nickname_update():
+    event_bus = EventBus()
+    memory_mgr = MemoryManager()
+    user_store = UserStore()
+    user_id, _ = user_store.create("John")
+    event_handler = _MemoryEventHandler(
+        event_bus,
+        memory_mgr.sensory,
+        None,
+        short_term=memory_mgr.short_term,
+        user_store=user_store,
+    )
+    memory_mgr.short_term.add_user(user_id, "John")
+
+    inputs_ready = []
+    event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
+
+    resp = event_handler.handle_system_message(
+        {"action": "nickname_update", "user_id": user_id, "nickname": "Jane"},
+        session_id="s1",
+        role="external",
+    )
+
+    assert resp is not None
+    assert resp["action"] == "nickname_update"
+    assert resp["nickname"] == "Jane"
+    assert "Jane" in resp["text"]
+
+    assert user_store.get(user_id) == "Jane"
+    assert len(inputs_ready) == 1
+    assert "改名" in inputs_ready[0].content
 
 
 def test_pipeline_injects_datetime():

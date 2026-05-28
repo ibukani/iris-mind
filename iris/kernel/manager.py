@@ -68,6 +68,7 @@ class PluginManager:
         self._hook_registry.freeze()
         self._di.freeze()
         self._init_builtin()
+        self._wire_cross_layer_dependencies()
 
     def start_all(self) -> None:
         self._lifecycle.start_all(self)
@@ -166,6 +167,7 @@ class PluginManager:
         from iris.kernel.debug_capture import DebugCapture
         from iris.llm.bridge import LLMBridge
         from iris.memory.manager import MemoryManager
+        from iris.memory.user_store import UserStore
         from iris.tools.registry import ToolRegistry
 
         agency = self._di.resolve_optional(AgencyManager)
@@ -190,8 +192,19 @@ class PluginManager:
             registry=self._di.resolve_optional(ToolRegistry),
             debug_capture=self._di.resolve_optional(DebugCapture),
             diagnostics=self._diagnostics,
+            user_store=self._di.resolve_optional(UserStore),
         )
 
         io_mgr = self._di.resolve_optional(IOManager)
         if io_mgr is not None:
             io_mgr.set_command_handler(self._cmd_handler.handle)
+
+    def _wire_cross_layer_dependencies(self) -> None:
+        """Plugin間の依存関係をkernelで配線する。"""
+        from iris.io.manager import IOManager
+        from iris.memory.handler import _MemoryEventHandler
+
+        io_mgr = self._di.resolve_optional(IOManager)
+        handler = self._di.resolve_optional(_MemoryEventHandler)
+        if io_mgr is not None and handler is not None:
+            io_mgr.set_system_handler(handler.handle_system_message)

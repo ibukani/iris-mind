@@ -9,7 +9,7 @@ import grpc
 from loguru import logger
 import orjson
 
-from iris.io.models import AuthMessage, CommandInput, Direction, Message, Permission
+from iris.io.models import AuthMessage, CommandInput, Direction, Message, Permission, SystemMessage
 from iris.io.session.manager import SessionManager
 from iris.io.transport import grpc_service_pb2, grpc_service_pb2_grpc
 
@@ -39,10 +39,12 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
         session_manager: SessionManager,
         on_message: Callable[[Message], None] | None = None,
         on_command: Callable[[CommandInput], None] | None = None,
+        on_system_message: Callable[[SystemMessage, str, str], None] | None = None,
     ) -> None:
         self._session_manager = session_manager
         self._on_message = on_message or self._noop
         self._on_command = on_command
+        self._on_system_message = on_system_message
         self._server: grpc.aio.Server | None = None
 
     @staticmethod
@@ -54,6 +56,9 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
 
     def set_on_command(self, on_command: Callable[[CommandInput], None]) -> None:
         self._on_command = on_command
+
+    def set_on_system_message(self, on_system_message: Callable[[SystemMessage, str, str], None]) -> None:
+        self._on_system_message = on_system_message
 
     async def start(self, host: str, port: int) -> None:
         self._server = grpc.aio.server()
@@ -129,7 +134,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
         yield grpc_service_pb2.BidirectionalStreamResponse(message=ack)  # type: ignore[attr-defined]
 
         # 3. 受信ループ起動 (Client -> Server)
-        receive_task = asyncio.create_task(self._receive_loop(request_iterator, session_id, session_role))
+        receive_task = asyncio.create_task(self._receive_loop(request_iterator, session_id, session_role, grpc_conn))
 
         try:
             # 3. 送信ループ (Server -> Client)
@@ -152,11 +157,22 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             raw = await grpc_conn.queue.get()
             data = orjson.loads(raw)
             msg_type = data.get("msg_type", "")
+            action = data.get("action")
             frame = grpc_service_pb2.BidirectionalStreamResponse()  # type: ignore[attr-defined]
 
             if msg_type == "command":
                 cmd_out = self._build_command_frame(data)
                 frame.command.CopyFrom(cmd_out)
+            elif action:
+                sys_out = grpc_service_pb2.SystemMessage(  # type: ignore[attr-defined]
+                    action=action,
+                    user_id=data.get("user_id", ""),
+                    nickname=data.get("nickname", ""),
+                )
+                text = data.get("text")
+                if text:
+                    sys_out.text = text
+                frame.system.CopyFrom(sys_out)
             else:
                 msg = self._build_message_frame(data)
                 frame.message.CopyFrom(msg)
@@ -196,7 +212,9 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             msg.metadata[k] = str(v)
         return msg
 
-    async def _receive_loop(self, request_iterator: Any, session_id: str, session_role: str) -> None:
+    async def _receive_loop(
+        self, request_iterator: Any, session_id: str, session_role: str, grpc_conn: GrpcConnection
+    ) -> None:
         try:
             async for client_frame in request_iterator:
                 self._session_manager.update_activity(session_id)
@@ -206,6 +224,8 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
                     await self._dispatch_message(client_frame.message, session_id, session_role)
                 elif frame_type == "command":
                     await self._handle_command(client_frame.command, session_id, session_role)
+                elif frame_type == "system":
+                    await self._dispatch_system(client_frame.system, session_id, session_role)
                 else:
                     logger.warning("GrpcServer: unknown frame type received")
 
@@ -295,3 +315,19 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
 
         if self._on_command:
             await asyncio.to_thread(self._on_command, cmd)
+
+    async def _dispatch_system(self, sys_proto: Any, session_id: str, session_role: str) -> None:
+        if self._on_system_message is None:
+            logger.warning("GrpcServer: no system message handler for session {}", session_id)
+            return
+        try:
+            sys_msg = SystemMessage(
+                action=sys_proto.action,
+                user_id=sys_proto.user_id,
+                nickname=sys_proto.nickname,
+            )
+        except Exception:
+            logger.warning("GrpcServer: invalid system message parse failed")
+            return
+
+        await asyncio.to_thread(self._on_system_message, sys_msg, session_id, session_role)

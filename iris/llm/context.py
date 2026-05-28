@@ -35,8 +35,7 @@ class SummarizerProtocol(Protocol):
         temperature: float = 0.7,
         max_tokens: int = 4096,
         **kwargs: Any,
-    ) -> AIMessage:
-        ...
+    ) -> AIMessage: ...
 
 
 class LLMContextWindowManager:

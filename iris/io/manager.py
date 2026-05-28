@@ -25,9 +25,13 @@ class IOManager:
 
         self._grpc_listener.set_on_message(gateway.on_grpc_message)
         self._grpc_listener.set_on_command(gateway.on_grpc_command)
+        self._grpc_listener.set_on_system_message(gateway.on_grpc_system)
 
     def set_command_handler(self, handler: Callable[[str, str], str]) -> None:
         self._gateway.set_command_handler(handler)
+
+    def set_system_handler(self, handler: Callable[[dict, str, str], dict | None]) -> None:
+        self._gateway.set_system_handler(handler)
 
     def start(self, host: str, port: int) -> None:
         self._host = host

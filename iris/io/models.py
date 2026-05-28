@@ -79,6 +79,13 @@ class CommandInput(BaseModel):
     content: str
 
 
+class SystemMessage(BaseModel):
+    action: str = ""
+    user_id: str = ""
+    nickname: str = ""
+    text: str = ""
+
+
 class CommandOutput(BaseModel):
     id: str = Field(default_factory=lambda: uuid4().hex[:12])
     correlation_id: str | None = None

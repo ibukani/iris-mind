@@ -185,6 +185,7 @@ class MemoryConfig(BaseModel):
     semantic_max_entries: int = 100
     agents_md_path: str = ".iris/config/iris_profile.md"
     agents_md_max_bytes: int = 2048
+    users_path: str = ".iris/data/users.jsonl"
 
 
 class ResponseReadinessConfig(BaseModel):

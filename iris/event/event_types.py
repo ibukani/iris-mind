@@ -93,19 +93,12 @@ class MessageEvent(Event):
 
 @dataclass
 class InputReady(Event):
+    timestamp: datetime | None = None
+    source: str = ""
     session_id: str = ""
     content: str = ""
     user_identity: str = ""
     context: dict | None = None
-
-
-@dataclass
-class ClientSessionEvent(Event):
-    session_id: str = ""
-    action: str = ""  # "connected" | "disconnected"
-    role: str = ""
-    identity: str = ""
-    offline_duration: str = ""
 
 
 @dataclass
@@ -140,7 +133,6 @@ def new_trace_id() -> str:
 __all__ = [
     "AgentAnomalyEvent",
     "AgentStateChangeEvent",
-    "ClientSessionEvent",
     "DebugSnapshotEvent",
     "Event",
     "InhibitionAction",

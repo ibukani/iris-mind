@@ -15,6 +15,7 @@ from iris.io.models import (
     Permission,
     SessionInfo,
     SessionState,
+    SystemMessage,
 )
 
 if TYPE_CHECKING:
@@ -51,13 +52,6 @@ class SessionManager:
             offline_duration = self._compute_offline_duration(session)
 
             logger.info("Session created: {} (role={})", session_id, msg.role)
-
-        self._publish_client_event(
-            action="connected",
-            session=session,
-            timestamp=now,
-            offline_duration=offline_duration,
-        )
 
         return ControlMessage(msg_type="auth_success", session_id=session_id)
 
@@ -106,29 +100,6 @@ class SessionManager:
             return f"{secs // 3600}時間{(secs % 3600) // 60}分間"
         return f"{secs // 86400}日間"
 
-    def _publish_client_event(
-        self,
-        action: str,
-        session: SessionInfo,
-        timestamp: datetime,
-        offline_duration: str = "",
-    ) -> None:
-        if not self._event_bus:
-            return
-        from iris.event.event_types import ClientSessionEvent
-
-        self._event_bus.publish(
-            ClientSessionEvent(
-                timestamp=timestamp,
-                source="session",
-                session_id=session.session_id,
-                action=action,
-                role=session.role,
-                identity=session.identity,
-                offline_duration=offline_duration,
-            )
-        )
-
     def route_message(self, msg: Message) -> None:
         session: SessionInfo | None = None
         targets: list[SessionInfo] = []
@@ -167,6 +138,17 @@ class SessionManager:
             logger.debug("route_message: skipped {} session(s) due to permission: {}", len(skipped), skipped)
         if not targets:
             logger.debug("route_message: no active sessions to route msg_type={}", msg.msg_type)
+
+    def route_system_message(self, sys_msg: SystemMessage, session_id: str) -> None:
+        with self._lock:
+            session = self._sessions.get(session_id)
+        if session is None:
+            logger.warning("System message route for unknown session: {}", session_id)
+            return
+        if session.state != SessionState.ACTIVE or session.conn is None:
+            return
+        raw = sys_msg.model_dump_json().encode("utf-8")
+        session.conn.send_bytes(raw)
 
     def route_command_output(self, session_id: str, msg: CommandOutput) -> None:
         with self._lock:
@@ -211,13 +193,6 @@ class SessionManager:
                 logger.info("Session removed: {}", session_id)
                 key = f"{session.role}:{session.identity}" if session.identity else session.role
                 self._last_disconnect_times[key] = now
-
-        if session:
-            self._publish_client_event(
-                action="disconnected",
-                session=session,
-                timestamp=now,
-            )
 
     def has_active_sessions(self) -> bool:
         with self._lock:

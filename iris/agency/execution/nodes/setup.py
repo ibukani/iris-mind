@@ -46,7 +46,12 @@ class SetupNode:
         if content:
             state["messages"].append(HumanMessage(content=content))
         if content and self._memory:
-            self._memory.short_term.add_turn("user", [text_block(content)], plan.user_identity)
+            is_system = content.startswith("[system]")
+            self._memory.short_term.add_turn(
+                "system" if is_system else "user",
+                [text_block(content)],
+                plan.user_identity,
+            )
 
         if show_thinking and self._event_bus:
             self._event_bus.publish(

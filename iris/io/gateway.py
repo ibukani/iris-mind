@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from iris.event.event_types import MessageEvent
-from iris.io.models import CommandInput, CommandOutput, Direction, Message
+from iris.io.models import CommandInput, CommandOutput, Direction, Message, SystemMessage
 
 if TYPE_CHECKING:
     from iris.event.event_bus import EventBus
@@ -18,14 +18,26 @@ class _IOGateway:
         self,
         event_bus: EventBus,
         session_manager: SessionManager,
-        command_handler: Callable[[str, str], str] | None = None,
+        command_handler: Callable[..., str] | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._session_mgr = session_manager
         self._cmd_handler = command_handler
+        self._system_handler: Callable[[dict, str, str], dict | None] | None = None
 
-    def set_command_handler(self, handler: Callable[[str, str], str]) -> None:
+    def set_command_handler(self, handler: Callable[..., str]) -> None:
         self._cmd_handler = handler
+
+    def set_system_handler(self, handler: Callable[[dict, str, str], dict | None]) -> None:
+        self._system_handler = handler
+
+    def on_grpc_system(self, sys_msg: SystemMessage, session_id: str, session_role: str) -> None:
+        if not self._system_handler:
+            return
+        result = self._system_handler(sys_msg.model_dump(), session_id, session_role)
+        if result:
+            response = SystemMessage(**result)
+            self._session_mgr.route_system_message(response, session_id)
 
     def on_grpc_message(self, msg: Message) -> None:
         if msg.direction != Direction.REQUEST:
@@ -78,7 +90,7 @@ class _IOGateway:
 
         logger.debug("IOGateway: command session={} cmd=/{} args={:.100}", msg.session_id, name, args)
 
-        result = self._cmd_handler(name, args) if self._cmd_handler else f"No command handler: /{name}"
+        result = self._cmd_handler(name, args, msg.session_id) if self._cmd_handler else f"No command handler: /{name}"
 
         logger.debug("IOGateway: command result session={} result={:.100}", msg.session_id, result)
         self._session_mgr.route_command_output(

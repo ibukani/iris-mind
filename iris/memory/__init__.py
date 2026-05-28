@@ -29,7 +29,7 @@ MANIFEST = PluginManifest(
     category=PluginCategory.LAYER,
     phase=PluginPhase.LAYER,
     dependencies={"EventBus"},
-    provides=["MemoryManager", "SensoryMemoryManager", "ShortTermMemoryManager", "LongTermMemoryManager"],
+    provides=["MemoryManager", "SensoryMemoryManager", "ShortTermMemoryManager", "LongTermMemoryManager", "UserStore"],
     description="記憶系（感覚野+海馬+皮質）",
 )
 
@@ -39,29 +39,42 @@ class MemoryPlugin:
 
     def init(self, manager: PluginManager) -> None:
         manager.register_manifest(MANIFEST)
+        components = self._build_components(manager)
+        self._provide_components(manager, components)
+        self._wire_event_handler(manager, components)
+        from .hooks import register_hooks
 
+        register_hooks(manager)
+
+    def _build_components(self, manager: PluginManager) -> dict:
         from iris.memory.builder import build_memory
 
-        components = build_memory(manager)
+        return build_memory(manager)
 
+    def _provide_components(self, manager: PluginManager, components: dict) -> None:
         manager.provide(MemoryManager, components["memory"])
         manager.provide(SensoryMemoryManager, components["sensory"])
         manager.provide(ShortTermMemoryManager, components["short_term"])
         manager.provide(LongTermMemoryManager, components["long_term"])
         manager.provide(VectorStore, components["vector_store"])
 
+        from iris.memory.user_store import UserStore
+
+        manager.provide(UserStore, components["user_store"])
+
+    def _wire_event_handler(self, manager: PluginManager, components: dict) -> None:
         from iris.event.event_bus import EventBus
         from iris.memory.handler import _MemoryEventHandler
 
-        _MemoryEventHandler(
+        event_handler = _MemoryEventHandler(
             event_bus=manager.resolve(EventBus),
             sensory=components["sensory"],
             proactive_config=manager.config.proactive,
+            short_term=components["short_term"],
+            user_store=components["user_store"],
         )
 
-        from .hooks import register_hooks
-
-        register_hooks(manager)
+        manager.provide(_MemoryEventHandler, event_handler)
 
     def start(self, manager: PluginManager) -> None:
         pass

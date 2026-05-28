@@ -27,10 +27,23 @@ def render_short_term_context(
     search_fn: Callable[..., list[SearchResult]],
     max_chars: int = 600,
     query: str | None = None,
+    active_users: list[tuple[str, str]] | None = None,
 ) -> str:
     if not turns:
         return ""
     parts: list[str] = []
+
+    chat_turns = [t for t in turns if t.get("role") not in ("system",)]
+    if not chat_turns and not query:
+        if active_users:
+            user_lines = [f"- {nick}" for _, nick in active_users]
+            parts.append("### 現在の参加者")
+            parts.extend(user_lines)
+            text = "\n".join(parts)
+            if len(text) > max_chars:
+                text = text[: max_chars - 3] + "..."
+            return text
+        return ""
 
     if query:
         parts.append("### 直近の会話（関連）")
@@ -43,7 +56,7 @@ def render_short_term_context(
             prefix = "(思考) " if role == "thought" else ""
             text = _render_blocks(r.get("blocks", []), max_chars=100)
             parts.append(f"- {label}: {prefix}「{text}」(関連度 {r.get('relevance', 0):.2f})")
-        for t in reversed(turns[-4:]):
+        for t in reversed(chat_turns[-4:]):
             idx = turns.index(t)
             if idx in shown_indices:
                 continue
@@ -59,6 +72,12 @@ def render_short_term_context(
         refs = sorted(active_references, key=len, reverse=True)[:5]
         parts.append("### 参照エンティティ")
         parts.append(", ".join(refs))
+
+    if active_users:
+        user_lines = [f"- {nick}" for _, nick in active_users]
+        if user_lines:
+            parts.append("### 現在の参加者")
+            parts.extend(user_lines)
 
     if not parts:
         return ""

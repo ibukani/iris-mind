@@ -126,6 +126,21 @@ class InhibitionEvent(Event):
     duration: float = 0.0
 
 
+@dataclass
+class SessionDisconnectEvent(Event):
+    session_id: str = ""
+    identity: str = ""
+
+
+@dataclass
+class SystemMessageEvent(Event):
+    action: str = ""
+    user_id: str = ""
+    nickname: str = ""
+    text: str = ""
+    session_id: str = ""
+
+
 def new_trace_id() -> str:
     return _uuid.uuid4().hex[:12]
 
@@ -141,6 +156,8 @@ __all__ = [
     "InterruptEvent",
     "MemoryUpdateEvent",
     "MessageEvent",
+    "SessionDisconnectEvent",
+    "SystemMessageEvent",
     "TimerTick",
     "new_trace_id",
 ]

@@ -6,6 +6,7 @@ import pytest
 
 from iris.event import Event, EventBus
 from iris.event.event_types import InputReady, MessageEvent, TimerTick
+from iris.io.models import Direction, Message
 from iris.memory.handler import _MemoryEventHandler
 from iris.memory.manager import MemoryManager
 
@@ -233,3 +234,82 @@ class TestMemoryManagerInputPending:
         )
         assert len(ready_events) == 1
         assert ready_events[0].content == "second"
+
+
+class TestHandleMessage:
+    """handle_message: Gateway → handler の直接コールバック経路。"""
+
+    def test_handle_message_publishes_message_event(self, event_bus: EventBus) -> None:
+        _memory_with_handler(event_bus)
+        received: list[MessageEvent] = []
+        event_bus.subscribe("MessageEvent", lambda e: received.append(e))
+
+        msg = Message(
+            id="m1",
+            session_id="s1",
+            source_role="cli",
+            target_role="mind",
+            direction=Direction.REQUEST,
+            msg_type="chat",
+            content="hello",
+        )
+        handler = _MemoryEventHandler.__new__(_MemoryEventHandler)
+        handler.event_bus = event_bus
+        handler.handle_message(msg)
+
+        assert len(received) == 1
+        assert received[0].content == "hello"
+        assert received[0].session_id == "s1"
+        assert received[0].direction == "request"
+
+    def test_handle_message_stores_pending(self, event_bus: EventBus) -> None:
+        mem = _memory_with_handler(event_bus)
+        ready_events: list[InputReady] = []
+        event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
+
+        msg = Message(
+            id="m1",
+            session_id="s1",
+            source_role="cli",
+            target_role="mind",
+            direction=Direction.REQUEST,
+            msg_type="chat",
+            content="テスト",
+        )
+        handler = _MemoryEventHandler.__new__(_MemoryEventHandler)
+        handler.event_bus = event_bus
+        handler.sensory = mem.sensory
+        handler.proactive_config = {"enabled": True}
+        handler.short_term = mem.short_term
+        handler.user_store = None
+        handler._pending_input = {}
+        from threading import Lock
+
+        handler._pending_lock = Lock()
+
+        handler.handle_message(msg)
+        event_bus.publish(TimerTick(timestamp=None, source="kernel", tick_count=0))
+
+        assert len(ready_events) == 1
+        assert ready_events[0].content == "テスト"
+
+    def test_handle_message_voice_indicator(self, event_bus: EventBus) -> None:
+        _memory_with_handler(event_bus)
+        inhibition_events: list = []
+        event_bus.subscribe("InhibitionEvent", lambda e: inhibition_events.append(e))
+
+        msg = Message(
+            id="m1",
+            session_id="s1",
+            source_role="cli",
+            target_role="mind",
+            direction=Direction.REQUEST,
+            msg_type="voice_indicator",
+            content="true",
+        )
+        handler = _MemoryEventHandler.__new__(_MemoryEventHandler)
+        handler.event_bus = event_bus
+        handler.handle_message(msg)
+
+        assert len(inhibition_events) == 1
+        assert inhibition_events[0].action.value == "suppress"

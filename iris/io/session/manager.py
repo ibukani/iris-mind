@@ -194,6 +194,18 @@ class SessionManager:
                 key = f"{session.role}:{session.identity}" if session.identity else session.role
                 self._last_disconnect_times[key] = now
 
+        if session is not None and self._event_bus is not None:
+            from iris.event.event_types import SessionDisconnectEvent
+
+            self._event_bus.publish(
+                SessionDisconnectEvent(
+                    timestamp=None,
+                    source="session",
+                    session_id=session_id,
+                    identity=session.identity,
+                )
+            )
+
     def has_active_sessions(self) -> bool:
         with self._lock:
             return any(s.state == SessionState.ACTIVE for s in self._sessions.values())

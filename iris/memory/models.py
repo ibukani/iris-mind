@@ -15,6 +15,24 @@ def text_block(text: str) -> ContentBlock:
     return {"type": "text", "text": text}
 
 
+def system_event_block(
+    text: str,
+    *,
+    event_type: str,
+    user_id: str = "",
+    nickname: str = "",
+) -> ContentBlock:
+    return {
+        "type": "system_event",
+        "text": text,
+        "metadata": {
+            "event_type": event_type,
+            "user_id": user_id,
+            "nickname": nickname,
+        },
+    }
+
+
 def blocks_text(blocks: list[ContentBlock]) -> str:
     return "".join(b.get("text", "") for b in blocks if b.get("text"))
 

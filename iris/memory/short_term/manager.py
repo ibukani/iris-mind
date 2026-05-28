@@ -49,6 +49,10 @@ class ShortTermMemoryProtocol(Protocol):
     def mark_consolidated(self, up_to_index: int | None = None) -> None: ...
     def clear(self) -> None: ...
     def should_consolidate(self) -> bool: ...
+    def add_user(self, user_id: str, nickname: str, session_id: str = "") -> None: ...
+    def remove_user(self, user_id: str) -> None: ...
+    def get_active_users(self) -> list[tuple[str, str]]: ...
+    def get_users_by_session(self, session_id: str) -> list[tuple[str, str]]: ...
     @property
     def current_topics(self) -> list[str]: ...
     @property
@@ -77,15 +81,28 @@ class ShortTermMemoryManager:
         self._importance_scorer = importance_scorer or DefaultImportanceScorer()
         self._entity_extractor = entity_extractor or RegexEntityExtractor()
         self._active_users: dict[str, str] = {}
+        self._session_users: dict[str, list[str]] = {}
 
-    def add_user(self, user_id: str, nickname: str) -> None:
+    def add_user(self, user_id: str, nickname: str, session_id: str = "") -> None:
         self._active_users[user_id] = nickname
+        if session_id:
+            uid_list = self._session_users.setdefault(session_id, [])
+            if user_id not in uid_list:
+                uid_list.append(user_id)
 
     def remove_user(self, user_id: str) -> None:
         self._active_users.pop(user_id, None)
+        for uid_list in self._session_users.values():
+            if user_id in uid_list:
+                uid_list.remove(user_id)
+                break
 
     def get_active_users(self) -> list[tuple[str, str]]:
         return list(self._active_users.items())
+
+    def get_users_by_session(self, session_id: str) -> list[tuple[str, str]]:
+        uid_list = self._session_users.get(session_id, [])
+        return [(uid, self._active_users.get(uid, uid)) for uid in uid_list if uid in self._active_users]
 
     def add_turn(self, role: str, blocks: list[ContentBlock], user_identity: str = "") -> None:
         if not blocks:
@@ -190,6 +207,7 @@ class ShortTermMemoryManager:
         self._current_topics.clear()
         self._active_references.clear()
         self._active_users.clear()
+        self._session_users.clear()
 
     def should_consolidate(self) -> bool:
         """メモリの圧縮（要約化）が必要かどうかを判定する。

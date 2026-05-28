@@ -5,7 +5,7 @@ from pathlib import Path
 
 from loguru import logger
 
-from iris.memory.long_term.base import _JsonlStore
+from iris.memory.base import _JsonlStore
 from iris.memory.long_term.vector_store import VectorStore
 
 

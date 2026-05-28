@@ -2,7 +2,6 @@
 name: iris-plugin-hook
 description: Iris プラグインへの Hook 追加ワークフロー
 license: MIT
-compatibility: *
 metadata:
   audience: developers
   workflow: iris-extension

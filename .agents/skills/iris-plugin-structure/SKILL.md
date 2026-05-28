@@ -2,7 +2,6 @@
 name: iris-plugin-structure
 description: Iris プラグイン内部のファイル分割・コンポーネント命名規則
 license: MIT
-compatibility: *
 metadata:
   audience: developers
   workflow: iris-extension

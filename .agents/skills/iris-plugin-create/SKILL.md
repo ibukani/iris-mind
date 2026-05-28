@@ -2,7 +2,6 @@
 name: iris-plugin-create
 description: Iris 新規プラグイン作成の定式化ワークフロー
 license: MIT
-compatibility: *
 metadata:
   audience: developers
   workflow: iris-extension

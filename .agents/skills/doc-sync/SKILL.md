@@ -2,7 +2,6 @@
 name: doc-sync
 description: Iris プロジェクトの変更時に更新すべきドキュメントをチェックするワークフロー
 license: MIT
-compatibility: *
 metadata:
   audience: developers
   workflow: iris-docs

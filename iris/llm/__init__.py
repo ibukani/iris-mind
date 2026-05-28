@@ -13,7 +13,7 @@ from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, Plug
 
 from .bridge import LLMBridge
 from .capability import CapabilityChecker
-from .context import LLMContextWindowManager, estimate_messages_tokens, estimate_tokens
+from .context import LLMContextWindowManager
 from .interrupt_token import InterruptToken
 from .priority_lock import PriorityLock
 from .prompt import Personality
@@ -23,6 +23,7 @@ from .providers import (
     OpenRouterProvider,
     get_provider_class,
 )
+from .token_utils import estimate_messages_tokens, estimate_tokens
 from .tokenizer import TokenizerManager
 
 if TYPE_CHECKING:

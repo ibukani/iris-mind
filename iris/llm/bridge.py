@@ -12,15 +12,13 @@ from typing import Any
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage
 from langchain_ollama import ChatOllama
-from langchain_openai import ChatOpenAI
 from loguru import logger
-from pydantic import SecretStr
 
-from iris.kernel.config import ModelConfig, ModelEntry
+from iris.kernel.config import ModelConfig
 
-from .health import check_bridge_available, unload_model
+from .health import check_bridge_available
 from .interrupt_token import InterruptToken
-from .param_builder import _PROVIDER_DEFAULTS, build_ollama_options, build_openai_kwargs
+from .model_factory import build_ollama_options, build_openai_kwargs, create_chat_model, resolve_connection, unload_model
 from .priority_lock import PriorityLock
 from .repetition import RepetitionDetector
 
@@ -37,66 +35,12 @@ class LLMBridge:
         self._repetition_detector = RepetitionDetector()
 
         for entry in model_config.models:
-            base_url, api_key = self._resolve_connection(entry)
+            base_url, api_key = resolve_connection(entry, model_config)
             key = f"{entry.provider}|{base_url}|{api_key}"
             if key not in self._providers:
-                self._providers[key] = self._create_chat_model(entry, base_url, api_key)
+                self._providers[key] = create_chat_model(entry, base_url, api_key, model_config)
             self._model_map[entry.name] = key
             self._entries[entry.name] = entry
-
-    def _resolve_connection(self, entry: ModelEntry) -> tuple[str, str]:
-        conn = self._model_config.providers.get(entry.provider)
-        base_url = conn.base_url if conn else ""
-        api_key = conn.api_key if conn else ""
-        default_url = _PROVIDER_DEFAULTS.get(entry.provider)
-        if default_url:
-            base_url = base_url or default_url
-        return base_url, api_key
-
-    def _create_chat_model(self, entry: ModelEntry, base_url: str, api_key: str) -> BaseChatModel:
-        """モデル設定に基づいて LangChain ChatModel インスタンスを生成する。"""
-        if entry.provider == "ollama":
-            options: dict[str, Any] = {
-                "num_ctx": entry.num_ctx if entry.num_ctx is not None else self._model_config.default_num_ctx,
-                "num_gpu": entry.num_gpu if entry.num_gpu is not None else self._model_config.default_num_gpu,
-            }
-            if entry.presence_penalty is not None:
-                options["presence_penalty"] = entry.presence_penalty
-            if entry.frequency_penalty is not None:
-                options["frequency_penalty"] = entry.frequency_penalty
-            if entry.repeat_penalty is not None:
-                options["repeat_penalty"] = entry.repeat_penalty
-            return ChatOllama(
-                model=entry.name,
-                base_url=base_url,
-                keep_alive=entry.keep_alive or "10m",
-                reasoning=entry.reasoning,
-                client_kwargs={"timeout": 120},
-                async_client_kwargs={"timeout": 120},
-                options=options,  # type: ignore[call-arg]
-            )
-
-        # openrouter / google 等の OpenAI 互換プロバイダ
-        extra_headers = {}
-        if entry.provider == "openrouter":
-            extra_headers = {
-                "HTTP-Referer": "https://github.com/ibukani/iris-kernel",
-                "X-Title": "Iris Kernel",
-            }
-
-        model_kwargs: dict[str, Any] = {}
-        if entry.presence_penalty is not None:
-            model_kwargs["presence_penalty"] = entry.presence_penalty
-        if entry.frequency_penalty is not None:
-            model_kwargs["frequency_penalty"] = entry.frequency_penalty
-
-        return ChatOpenAI(
-            model=entry.name,
-            api_key=SecretStr(api_key),
-            base_url=base_url,
-            default_headers=extra_headers if extra_headers else None,
-            model_kwargs=model_kwargs,
-        )
 
     @staticmethod
     def _extract_content(resp_message: AIMessage) -> str:

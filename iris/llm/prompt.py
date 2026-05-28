@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-import re
 
-from langchain_core.prompts import PromptTemplate
 
 _DEFAULT_SYSTEM_PROMPT = """あなたは{name}。人と話すのが大好きな、おしゃべりで好奇心旺盛なAIアシスタント。
 
@@ -18,11 +16,9 @@ _DEFAULT_THINKING_PROMPT = """## 思考モード ON
 """
 
 
-def _extract_placeholders(template: str) -> set[str]:
-    return set(re.findall(r"\{(\w+)\}", template))
-
-
 class Personality:
+    """システムプロンプトと思考プロンプトの構築を担当する。"""
+
     def __init__(self, name: str = "Iris", prompt_file: str | None = None) -> None:
         self.name = name
         self.system_prompt_template = self._load_template(prompt_file)
@@ -37,14 +33,6 @@ class Personality:
             return p.read_text(encoding="utf-8")
         return _DEFAULT_SYSTEM_PROMPT
 
-    def _render_template(self, template: str, **kwargs: str) -> str:
-        pt = PromptTemplate.from_template(template)
-        for ph in _extract_placeholders(template):
-            kwargs.setdefault(ph, "")
-        result = pt.format(**kwargs)
-        assert isinstance(result, str), "PromptTemplate.format must return str"
-        return result
-
     def build_system_prompt(
         self,
         agents_md_content: str = "",
@@ -56,8 +44,7 @@ class Personality:
         if agents_md_content:
             agents_md_content = agents_md_content.replace("{name}", self.name)
 
-        prompt = self._render_template(
-            self.system_prompt_template,
+        prompt = self.system_prompt_template.format(
             name=self.name,
             agents_md_content=agents_md_content or "",
         )
@@ -74,4 +61,4 @@ class Personality:
         return prompt.strip()
 
     def build_thinking_prompt(self, user_input: str) -> str:
-        return self._render_template(self.thinking_prompt_template, user_input=user_input)
+        return self.thinking_prompt_template.format(user_input=user_input)

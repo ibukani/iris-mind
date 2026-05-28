@@ -26,25 +26,4 @@ def _check_provider_available(provider: BaseChatModel) -> bool:
     return False
 
 
-def unload_model(model_name: str | None, model_map: dict[str, str], providers: dict[str, BaseChatModel]) -> None:
-    if not model_name:
-        return
-    key = model_map.get(model_name)
-    if not key:
-        return
-    provider = providers[key]
-    if isinstance(provider, ChatOllama):
-        _unload_ollama_model(model_name, provider)
 
-
-def _unload_ollama_model(model_name: str, provider: ChatOllama) -> None:
-    from ollama import Client
-
-    try:
-        Client(host=getattr(provider, "base_url", None)).chat(
-            model=model_name,
-            messages=[{"role": "user", "content": ""}],
-            keep_alive=0,
-        )
-    except Exception as e:
-        logger.warning("Failed to unload ollama model {}: {}", model_name, e)

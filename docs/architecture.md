@@ -242,12 +242,14 @@ iris/
 │   ├── context.py             LLMContextWindowManager
 │   ├── hooks.py               Plugin Hook登録
 │   ├── interrupt_token.py     InterruptToken
-│   ├── param_builder.py       パラメータ構築
+│   ├── model_factory.py       ChatModelファクトリ
 │   ├── priority_lock.py       PriorityLock
 │   ├── prompt.py              Personality（システムプロンプト構築）
 │   ├── repetition.py          繰り返し検出
+│   ├── token_utils.py         トークン推定ユーティリティ
 │   ├── tokenizer.py           TokenizerManager
 │   └── providers/
+│       ├── __init__.py        ProviderFactory + 環境検証クラス
 │       └── ollama_env.py      Ollama環境チェック
 │
 ├── tools/                     # @tool, ToolRegistry

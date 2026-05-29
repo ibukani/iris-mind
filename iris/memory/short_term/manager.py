@@ -40,7 +40,7 @@ class ShortTermMemoryProtocol(Protocol):
     モック化やテスト用の代替実装を容易にするため。
     """
 
-    def add_turn(self, role: str, blocks: list[ContentBlock], user_identity: str = "") -> None: ...
+    def add_turn(self, role: str, blocks: list[ContentBlock], user_id: str = "") -> None: ...
     def search(self, query: str, max_results: int = 5) -> list[SearchResult]: ...
     def search_entities(self, entity_name: str) -> list[TurnData]: ...
     def render_context(self, max_chars: int = MAX_CONTEXT_CHARS, query: str | None = None) -> str: ...
@@ -104,7 +104,7 @@ class ShortTermMemoryManager:
         uid_list = self._session_users.get(session_id, [])
         return [(uid, self._active_users.get(uid, uid)) for uid in uid_list if uid in self._active_users]
 
-    def add_turn(self, role: str, blocks: list[ContentBlock], user_identity: str = "") -> None:
+    def add_turn(self, role: str, blocks: list[ContentBlock], user_id: str = "") -> None:
         if not blocks:
             return
         truncated_blocks = _truncate_blocks(blocks, MAX_TURN_LENGTH)
@@ -115,7 +115,7 @@ class ShortTermMemoryManager:
             "timestamp": datetime.now(UTC).isoformat(),
             "consolidated": False,
             "importance": self._importance_scorer.score(text),
-            "user_identity": user_identity,
+            "user_id": user_id,
         }
         self._turns.append(entry)
         if len(self._turns) > self._max_turns:

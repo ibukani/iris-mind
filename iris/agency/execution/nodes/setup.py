@@ -50,7 +50,7 @@ class SetupNode:
             self._memory.short_term.add_turn(
                 "system" if is_system else "user",
                 [text_block(content)],
-                plan.user_identity,
+                plan.user_id,
             )
 
         if show_thinking and self._event_bus:
@@ -67,8 +67,8 @@ class SetupNode:
 
         if self._session_roles_getter:
             self._pipeline.set_session_roles_summary(self._session_roles_getter())
-        if plan.user_identity:
-            self._pipeline.set_current_user_identity(plan.user_identity)
+        if plan.user_id:
+            self._pipeline.set_current_user_id(plan.user_id)
 
     def _set_on_token_callback(self) -> None:
         event_bus = self._event_bus

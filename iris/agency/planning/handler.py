@@ -52,16 +52,16 @@ class _PlanningEventHandler:
         if proactive_context is None:
             return
         plan = self._proactive_strategy.build_proactive(proactive_context)
-        self._publish(plan, event.session_id, event.user_identity or context.get("identity", ""), from_timer=True)
+        self._publish(plan, event.session_id, event.user_id or context.get("identity", ""), from_timer=True)
 
     def _on_user_input(self, event: InputReady) -> None:
         chaos_level = (event.context or {}).get("chaos_level", 0.0)
         plan = self._response_strategy.build_response(event.content, chaos_level=chaos_level)
-        self._publish(plan, event.session_id, event.user_identity, from_timer=False)
+        self._publish(plan, event.session_id, event.user_id, from_timer=False)
 
-    def _publish(self, plan: Plan, session_id: str, user_identity: str, from_timer: bool) -> None:
+    def _publish(self, plan: Plan, session_id: str, user_id: str, from_timer: bool) -> None:
         plan.session_id = session_id
-        plan.user_identity = user_identity
+        plan.user_id = user_id
         if plan.silent:
             plan.overrides["allow_side_effects"] = False
             plan.overrides["max_tool_iterations"] = 3

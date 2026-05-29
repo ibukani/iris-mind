@@ -15,6 +15,7 @@ from iris.llm.interrupt_token import InterruptToken
 from iris.llm.prompt import Personality
 from iris.memory.long_term.stores import AgentsMdStore
 from iris.memory.manager import MemoryManager
+from iris.memory.user_store import UserStore
 
 
 class LLMGateway:
@@ -29,6 +30,7 @@ class LLMGateway:
         capability_checker: CapabilityChecker | None = None,
         debug_capture: DebugCapture | None = None,
         prompts_dir: str | None = None,
+        user_store: UserStore | None = None,
     ) -> None:
         self._llm = llm
         self._model_config = model_config
@@ -36,9 +38,10 @@ class LLMGateway:
         self._capability_checker = capability_checker
         self._debug_capture = debug_capture
         self._session_roles_summary: str = ""
-        self._current_user_identity: str = ""
+        self._current_nickname: str = ""
         self._last_system_prompt: str = ""
         self._last_call_model_role: str = "medium"
+        self._user_store = user_store
 
         self._prompt_builder = SystemPromptBuilder(
             personality=personality,
@@ -51,8 +54,11 @@ class LLMGateway:
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
 
-    def set_current_user_identity(self, identity: str) -> None:
-        self._current_user_identity = identity
+    def set_current_user_id(self, user_id: str) -> None:
+        if user_id and self._user_store:
+            self._current_nickname = self._user_store.resolve(user_id)
+        else:
+            self._current_nickname = user_id
 
     def build_system_messages(
         self,
@@ -67,7 +73,7 @@ class LLMGateway:
             context_hint=context_hint,
             response_style=response_style,
             session_roles_summary=self._session_roles_summary,
-            current_user_identity=self._current_user_identity,
+            current_nickname=self._current_nickname,
             include_profile=include_profile,
             chaos_level=chaos_level,
         )

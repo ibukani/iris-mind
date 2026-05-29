@@ -38,7 +38,7 @@ class SystemPromptBuilder:
         context_hint: str = "",
         response_style: str = "",
         session_roles_summary: str = "",
-        current_user_identity: str = "",
+        current_nickname: str = "",
         include_profile: bool = True,
         chaos_level: float = 0.0,
     ) -> list[BaseMessage]:
@@ -49,7 +49,7 @@ class SystemPromptBuilder:
                 self._profile_builder.build(
                     response_style=response_style,
                     session_roles_summary=session_roles_summary,
-                    current_user_identity=current_user_identity,
+                    current_nickname=current_nickname,
                 )
             )
 

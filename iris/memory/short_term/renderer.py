@@ -51,7 +51,7 @@ def render_short_term_context(
         shown_indices = {r.get("index", -1) for r in relevant}
         for r in relevant:
             role = r.get("role", "system")
-            uid = r.get("user_identity", "")
+            uid = r.get("user_id", "")
             label = uid or ("User" if role == "user" else "Iris")
             prefix = "(思考) " if role == "thought" else ""
             text = _render_blocks(r.get("blocks", []), max_chars=100)
@@ -62,7 +62,7 @@ def render_short_term_context(
                 continue
             shown_indices.add(idx)
             role = t.get("role", "system")
-            uid = t.get("user_identity", "")
+            uid = t.get("user_id", "")
             label = uid or ("User" if role == "user" else "Iris")
             prefix = "(思考) " if role == "thought" else ""
             text = _render_blocks(t.get("blocks", []), max_chars=100)

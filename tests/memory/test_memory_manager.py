@@ -6,7 +6,6 @@ import pytest
 
 from iris.event import Event, EventBus
 from iris.event.event_types import InputReady, MessageEvent, TimerTick
-from iris.io.models import Direction, Message
 from iris.memory.handler import _MemoryEventHandler
 from iris.memory.manager import MemoryManager
 
@@ -249,7 +248,7 @@ class TestInputReadySubscription:
             source="io",
             session_id="s1",
             content="hello",
-            user_identity="",
+            user_id="",
             context={
                 "source_role": "cli",
                 "target_role": "mind",
@@ -273,7 +272,7 @@ class TestInputReadySubscription:
             source="io",
             session_id="s1",
             content="テスト",
-            user_identity="",
+            user_id="",
             context={
                 "source_role": "cli",
                 "target_role": "mind",
@@ -296,7 +295,7 @@ class TestInputReadySubscription:
             source="io",
             session_id="s1",
             content="true",
-            user_identity="",
+            user_id="",
             context={
                 "source_role": "cli",
                 "target_role": "mind",

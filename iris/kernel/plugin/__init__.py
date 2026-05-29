@@ -13,8 +13,8 @@ from iris.kernel.plugin.protocol import PluginProtocol
 from iris.kernel.plugin.service_container import ServiceContainer
 
 __all__ = [
-    "DependencyError",
     "HOOK_POINTS",
+    "DependencyError",
     "HookPoint",
     "HookPriority",
     "HookRegistry",

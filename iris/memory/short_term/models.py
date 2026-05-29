@@ -14,7 +14,7 @@ class TurnData(TypedDict, total=False):
     timestamp: str
     consolidated: bool
     importance: int
-    user_identity: str
+    user_id: str
 
 
 class SearchResult(TurnData, total=False):

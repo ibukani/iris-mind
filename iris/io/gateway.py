@@ -89,7 +89,7 @@ class _IOGateway:
                 source="io",
                 session_id=msg.session_id,
                 content=msg.content,
-                user_identity=msg.user_identity,
+                user_id=msg.user_id,
                 context={
                     "source_role": msg.source_role,
                     "target_role": msg.target_role,

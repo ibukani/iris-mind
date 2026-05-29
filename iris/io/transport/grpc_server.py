@@ -205,9 +205,9 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             state=data.get("state") or "",
         )
         meta = data.get("metadata", {})
-        uid = data.get("user_identity", "")
+        uid = data.get("user_id", "")
         if uid:
-            meta["user_identity"] = uid
+            meta["user_id"] = uid
         for k, v in meta.items():
             msg.metadata[k] = str(v)
         return msg
@@ -277,7 +277,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
                 session_id=session_id,
                 source_role=session_role,
                 target_role=msg_proto.target_role or "*",
-                user_identity=metadata.get("user_identity", ""),
+                user_id=metadata.get("user_id", ""),
                 direction=Direction(msg_proto.direction),
                 msg_type=msg_proto.msg_type,
                 content=msg_proto.content,

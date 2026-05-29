@@ -30,7 +30,7 @@ class ProfileBuilder:
         self,
         response_style: str = "",
         session_roles_summary: str = "",
-        current_user_identity: str = "",
+        current_nickname: str = "",
     ) -> SystemMessage:
         agents_md = self._load_agents_md()
         user_prefs = self._build_user_preferences_section()
@@ -46,8 +46,8 @@ class ProfileBuilder:
         parts: list[str] = [base]
         parts.append(f"## 現在日時\n{self._build_time_string()}")
 
-        if current_user_identity:
-            parts.append(f"## 現在の会話相手\n{current_user_identity}")
+        if current_nickname:
+            parts.append(f"## 現在の会話相手\n{current_nickname}")
 
         return SystemMessage(content="\n\n".join(parts))
 

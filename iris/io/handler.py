@@ -33,7 +33,7 @@ class _IOEventHandler:
             source_role="mind",
             target_role=target_role,
             session_id=event.session_id,
-            user_identity=event.user_identity,
+            user_id=event.user_id,
             direction=Direction(direction),
         )
         logger.debug(

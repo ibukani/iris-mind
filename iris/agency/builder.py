@@ -58,6 +58,7 @@ def build_agency(manager: PluginManager) -> AgencyComponents:
     from iris.llm.prompt import Personality
     from iris.memory.long_term.stores import AgentsMdStore
     from iris.memory.manager import MemoryManager
+    from iris.memory.user_store import UserStore
     from iris.tools.registry import ToolRegistry
 
     event_bus = manager.resolve(EventBus)
@@ -82,6 +83,8 @@ def build_agency(manager: PluginManager) -> AgencyComponents:
 
     agents_md_store = AgentsMdStore(path=config.memory.agents_md_path, max_bytes=config.memory.agents_md_max_bytes)
 
+    user_store = manager.resolve_optional(UserStore)
+
     pipeline = LLMGateway(
         llm=llm,
         model_config=config.model,
@@ -91,6 +94,7 @@ def build_agency(manager: PluginManager) -> AgencyComponents:
         capability_checker=capability_checker,
         debug_capture=debug_capture,
         prompts_dir=config.personality.node_prompts_dir,
+        user_store=user_store,
     )
 
     tool_exec = ToolEngine(registry=tool_registry)

@@ -82,12 +82,12 @@ class _MemoryEventHandler:
             return
         self.sensory.store_raw(event.content)
         with self._pending_lock:
-            self._pending_input[event.session_id] = [(event.content, event.user_identity)]
+            self._pending_input[event.session_id] = [(event.content, event.user_id)]
         logger.debug(
             "MemoryManager: input pending session={} content={:.80} identity={}",
             event.session_id,
             event.content,
-            event.user_identity,
+            event.user_id,
         )
 
     def _on_input_ready(self, event: InputReady) -> None:
@@ -110,7 +110,7 @@ class _MemoryEventHandler:
                 session_id=event.session_id,
                 source_role=context.get("source_role", ""),
                 target_role=context.get("target_role", ""),
-                user_identity=event.user_identity,
+                user_id=event.user_id,
                 direction="request",
                 msg_type=context.get("msg_type", "chat"),
                 content=event.content,
@@ -262,7 +262,7 @@ class _MemoryEventHandler:
         if not pending:
             return {}
         for session_id, entries in pending.items():
-            for content, user_identity in entries:
+            for content, user_id in entries:
                 bus.publish(
                     InterruptEvent(
                         timestamp=None,
@@ -276,7 +276,7 @@ class _MemoryEventHandler:
                         source="memory",
                         session_id=session_id,
                         content=content,
-                        user_identity=user_identity,
+                        user_id=user_id,
                         context={},
                     )
                 )

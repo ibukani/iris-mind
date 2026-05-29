@@ -18,7 +18,7 @@ from iris.event.event_types import (
 from iris.memory.models import ContentBlock, system_event_block
 
 if TYPE_CHECKING:
-    from typing import Any
+    pass
 
 
 class _MemoryEventHandler:
@@ -215,15 +215,15 @@ class _MemoryEventHandler:
 
         if action == "nickname_update":
             if not user_id or not nickname:
-                return SystemMessage(action="nickname_update", text="Error: user_id and nickname required")
+                return SystemMessageEvent(timestamp=None, source="memory", action="nickname_update", text="Error: user_id and nickname required")
             self.user_store.set_nickname(user_id, nickname)
             if self.short_term:
                 self.short_term.add_user(user_id, nickname, session_id=session_id)
             text = f"[system] {nickname} に改名しました"
             block = system_event_block(text, event_type="nickname_update", user_id=user_id, nickname=nickname)
             self._store_and_flush_pending_block(block, user_id, session_id)
-            return SystemMessage(
-                action="nickname_update", user_id=user_id, nickname=nickname, text=f"Nickname changed to '{nickname}'"
+            return SystemMessageEvent(
+                timestamp=None, source="memory", action="nickname_update", user_id=user_id, nickname=nickname, text=f"Nickname changed to '{nickname}'"
             )
 
         logger.warning("MemoryManager: unknown system action={}", action)

@@ -1,6 +1,8 @@
 ---
 name: capability-pattern
-description: Iris capability 追加の最小ワークフロー
+description: |
+  Use ONLY when adding a new Tool/capability (new @tool decorated function with register function).
+  Do NOT use: creating plugins, adding hooks, adding LLM providers.
 license: MIT
 compatibility: *
 metadata:

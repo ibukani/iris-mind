@@ -1,6 +1,9 @@
 ---
 name: doc-sync
-description: Iris プロジェクトの変更時に更新すべきドキュメントをチェックするワークフロー
+description: |
+  Use ONLY after making changes to iris code (new features, refactoring, architecture changes).
+  Checks which docs need updating.
+  Do NOT use: purely informational requests, no code changes made.
 license: MIT
 metadata:
   audience: developers

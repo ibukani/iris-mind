@@ -1,6 +1,8 @@
 ---
 name: iris-plugin-hook
-description: Iris プラグインへの Hook 追加ワークフロー
+description: |
+  Use when: adding a new handler to an existing HookPoint, or defining a new HookPoint.
+  Do NOT use: creating a new plugin, adding sub-plugins, adding capabilities.
 license: MIT
 metadata:
   audience: developers

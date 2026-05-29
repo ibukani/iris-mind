@@ -1,12 +1,8 @@
 ---
 name: iris-visualize
 description: |
-  Irisプロジェクトの脳科学層アーキテクチャおよびEventBusシーケンス図の可視化、Mermaidシンタックス検証、SVG/ASCIIレンダリングを行うスキル。
-
-  使用タイミング:
-  1. 新規モジュールやレイヤーの構成図、シーケンス図を作成/更新するとき
-  2. Mermaidの記述エラーがないかシンタックス検証を行うとき
-  3. MermaidコードからSVGまたはASCIIアートを生成するとき
+  Use ONLY when creating/updating architecture diagrams, sequence diagrams, or rendering Mermaid.
+  Do NOT use: general coding, plugin creation, capability addition.
 ---
 
 # Iris Visualize Skill

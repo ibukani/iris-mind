@@ -1,6 +1,8 @@
 ---
 name: iris-plugin-create
-description: Iris 新規プラグイン作成の定式化ワークフロー
+description: |
+  Use ONLY when creating a brand-new Plugin class (new layer/category/feature/tool).
+  Do NOT use: modifying existing plugins, adding hooks, adding sub-plugins.
 license: MIT
 metadata:
   audience: developers

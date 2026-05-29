@@ -1,6 +1,8 @@
 ---
 name: iris-plugin-provider
-description: Iris LLMプロバイダ/ストア/VDB などのサブプラグイン追加ワークフロー
+description: |
+  Use when: adding a new LLM provider, store backend, vector DB, or any swappable sub-plugin.
+  Do NOT use: creating a new plugin, adding hooks, adding capabilities.
 license: MIT
 metadata:
   audience: developers

@@ -1,6 +1,8 @@
 ---
 name: iris-plugin-structure
-description: Iris プラグイン内部のファイル分割・コンポーネント命名規則
+description: |
+  Use when: refactoring an existing plugin's internal file layout, or deciding component structure for a new plugin.
+  Do NOT use: creating a plugin from scratch (see iris-plugin-create), adding hooks.
 license: MIT
 metadata:
   audience: developers

@@ -20,8 +20,6 @@ from iris.memory.models import ContentBlock, system_event_block
 if TYPE_CHECKING:
     from typing import Any
 
-    from iris.io.models import Message, SystemMessage
-
 
 class _MemoryEventHandler:
     """Memory 層のイベントハンドラ。
@@ -29,16 +27,12 @@ class _MemoryEventHandler:
     責務:
     - EventBus 上のイベントを購読し、記憶系の処理を行う
     - IO 層からの system メッセージを受信し、EventBus に publish してから処理を行う
-    - IO 層からの通常メッセージを受信し、EventBus に publish してから処理を行う
     - 処理結果を SystemMessage として返す（IO 層がクライアントに返送）
 
     設計:
-    - EventBus は memory 層が管理する。IO 層（Gateway）は EventBus を直接操作しない。
-    - system メッセージは Gateway → handler への直接コールバックで受信し、
-      handler 内部で SystemMessageEvent を EventBus に publish する。
-    - 通常メッセージは Gateway → handler への直接コールバックで受信し、
-      handler 内部で MessageEvent を EventBus に publish する。
-      これにより、他のレイヤー（proactive, agency, io 等）も EventBus 経由で監視できる。
+    - 通常メッセージ: Gateway → EventBus.publish(InputReady) → subscribe で受信
+    - system メッセージ: Gateway → handler コールバック（同期レスポンス必要）
+    - EventBus は memory 層が管理する。
     """
 
     def __init__(
@@ -58,6 +52,7 @@ class _MemoryEventHandler:
         self._pending_input: dict[str, list[tuple[str, str]]] = {}
         self._pending_lock = Lock()
 
+        event_bus.subscribe("InputReady", self._on_input_ready)
         event_bus.subscribe("MessageEvent", self._on_message_event)
         event_bus.subscribe("TimerTick", self._on_timer_tick)
         event_bus.subscribe("SessionDisconnectEvent", self._on_session_disconnect)
@@ -98,6 +93,33 @@ class _MemoryEventHandler:
             event.user_identity,
         )
 
+    def _on_input_ready(self, event: InputReady) -> None:
+        """Gateway から EventBus 経由で受信した通常メッセージを処理する。
+
+        InputReady イベントを MessageEvent に変換して EventBus に publish し、
+        _on_message_event（記憶処理）および io/handler（レスポンス・ストリームのルーティング）を動作させる。
+        source="io" のみ処理。source="memory"（flush_pending からの発行）は無視してループ防止。
+        """
+        if event.source != "io":
+            return
+        if not event.content:
+            return
+
+        context = event.context or {}
+        self.event_bus.publish(
+            MessageEvent(
+                timestamp=None,
+                source="io",
+                session_id=event.session_id,
+                source_role=context.get("source_role", ""),
+                target_role=context.get("target_role", ""),
+                user_identity=event.user_identity,
+                direction="request",
+                msg_type=context.get("msg_type", "chat"),
+                content=event.content,
+            )
+        )
+
     def _on_session_disconnect(self, event: SessionDisconnectEvent) -> None:
         if not self.short_term:
             return
@@ -121,7 +143,7 @@ class _MemoryEventHandler:
                 )
             )
 
-    def handle_system_message(self, msg: SystemMessage, session_id: str) -> SystemMessage | None:
+    def handle_system_message(self, msg: Any, session_id: str) -> Any:
         """Gateway から呼ばれる system メッセージのエントリポイント。
 
         受信した SystemMessage を EventBus に publish してから処理を行う。
@@ -206,27 +228,6 @@ class _MemoryEventHandler:
 
         logger.warning("MemoryManager: unknown system action={}", action)
         return None
-
-    def handle_message(self, msg: Message) -> None:
-        """Gateway から呼ばれる通常メッセージのエントリポイント。
-
-        受信した Message を MessageEvent に変換して EventBus に publish する。
-        これにより、_on_message_event（記憶処理）および
-        io/handler（レスポンス・ストリームのルーティング）が動作する。
-        """
-        self.event_bus.publish(
-            MessageEvent(
-                timestamp=None,
-                source="io",
-                session_id=msg.session_id,
-                source_role=msg.source_role,
-                target_role=msg.target_role,
-                user_identity=msg.user_identity,
-                direction=msg.direction.value,
-                msg_type=msg.msg_type,
-                content=msg.content,
-            )
-        )
 
     def _store_and_flush_pending_block(self, block: ContentBlock, user_id: str, session_id: str) -> None:
         if not self.sensory:

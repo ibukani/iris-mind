@@ -202,9 +202,9 @@ class PluginManager:
     def _wire_cross_layer_dependencies(self) -> None:
         """Plugin間の依存関係をkernelで配線する。
 
-        system メッセージと通常メッセージは、IO 層（Gateway）→ memory 層（Handler）への
-        直接コールバックで接続する。EventBus は handler 内部で利用し、
-        Gateway は EventBus を直接操作しない（IO アダプタの責務に留める）。
+        system メッセージは IO 層（Gateway）→ memory 層（Handler）への
+        直接コールバックで接続する（同期レスポンスが必要なため）。
+        通常メッセージは EventBus 経由で接続する（Gateway → InputReady → Handler）。
         """
         from iris.io.manager import IOManager
         from iris.memory.handler import _MemoryEventHandler
@@ -213,4 +213,3 @@ class PluginManager:
         handler = self._di.resolve_optional(_MemoryEventHandler)
         if io_mgr is not None and handler is not None:
             io_mgr.set_system_handler(handler.handle_system_message)
-            io_mgr.set_message_handler(handler.handle_message)

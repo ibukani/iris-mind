@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
+from iris.event.event_types import InputReady
 from iris.io.models import CommandInput, CommandOutput, Direction, Message, SystemMessage
 
 if TYPE_CHECKING:
@@ -15,25 +16,27 @@ class _IOGateway:
     """IO層のアダプタ。gRPC と内部レイヤーの橋渡しを行う。
 
     責務:
-    - gRPC メッセージを内部表現に変換し、適切なハンドラに渡す
-    - ハンドラからのレスポンスを gRPC 経由でクライアントに返す
+    - gRPC メッセージを内部表現に変換し、EventBus に publish する
+    - command メッセージは直接コールバックで処理（同期レスポンス必要）
+    - system メッセージは直接コールバックで処理（同期レスポンス必要）
     - IO レベルのルーティング（target_role ≠ mind は直接セッションに転送）
 
-    注意:
-    - EventBus は直接利用しない。EventBus 経由の通信は memory 層（handler）が担当する。
-    - Gateway は IO アダプタとしての責務のみを持ち、イベントの publish/subscribe は行わない。
-    - 全メッセージパス（system, message, command）で handler コールバック pattern を統一する。
+    設計:
+    - 通常メッセージ: EventBus.publish(InputReady) のみ（send-only）
+    - system メッセージ: 同期レスポンスが必要なためコールバック維持
+    - command メッセージ: 同期レスポンスが必要なためコールバック維持
     """
 
     def __init__(
         self,
         session_manager: SessionManager,
+        event_bus: Any,
         command_handler: Callable[..., str] | None = None,
     ) -> None:
         self._session_mgr = session_manager
+        self._event_bus = event_bus
         self._cmd_handler = command_handler
         self._system_handler: Callable[[SystemMessage, str], SystemMessage | None] | None = None
-        self._message_handler: Callable[[Message], None] | None = None
 
     def set_command_handler(self, handler: Callable[..., str]) -> None:
         self._cmd_handler = handler
@@ -43,17 +46,9 @@ class _IOGateway:
 
         handler は gRPC の SystemMessage と session_id を受け取り、
         レスポンスの SystemMessage または None を返す。
-        EventBus の publish/subscribe は handler 側で行う。
+        同期レスポンスが必要なため、コールバック pattern を維持する。
         """
         self._system_handler = handler
-
-    def set_message_handler(self, handler: Callable[[Message], None]) -> None:
-        """通常メッセージのハンドラを設定する。
-
-        handler は Message を受け取り、EventBus への publish を含む処理を行う。
-        Gateway は IO アダプタとしての責務のみを持ち、EventBus を直接操作しない。
-        """
-        self._message_handler = handler
 
     def on_grpc_system(self, sys_msg: SystemMessage, session_id: str, session_role: str) -> None:
         if not self._system_handler:
@@ -63,11 +58,11 @@ class _IOGateway:
             self._session_mgr.route_system_message(result, session_id)
 
     def on_grpc_message(self, msg: Message) -> None:
-        """通常メッセージをハンドラに渡す。
+        """通常メッセージを EventBus に publish する（send-only）。
 
         IO ルーティング: target_role ≠ mind は直接セッションに転送。
-        mind 対象のメッセージは handler コールバックに渡す。
-        handler 内部で EventBus に publish し、memory 層が処理する。
+        mind 対象のメッセージは InputReady イベントとして publish し、
+        memory 層が subscribe して処理する。
         """
         if msg.direction != Direction.REQUEST:
             logger.warning("IOGateway: unexpected direction from client: {}", msg.direction)
@@ -88,8 +83,20 @@ class _IOGateway:
             truncated,
         )
 
-        if self._message_handler:
-            self._message_handler(msg)
+        self._event_bus.publish(
+            InputReady(
+                timestamp=None,
+                source="io",
+                session_id=msg.session_id,
+                content=msg.content,
+                user_identity=msg.user_identity,
+                context={
+                    "source_role": msg.source_role,
+                    "target_role": msg.target_role,
+                    "msg_type": msg.msg_type,
+                },
+            )
+        )
 
     def on_grpc_command(self, msg: CommandInput) -> None:
         content = msg.content

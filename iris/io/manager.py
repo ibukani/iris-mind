@@ -7,7 +7,7 @@ from iris.io.transport.grpc_listener import GrpcListener
 
 if TYPE_CHECKING:
     from iris.io.gateway import _IOGateway
-    from iris.io.models import Message, SystemMessage
+    from iris.io.models import SystemMessage
     from iris.io.session.manager import SessionManager
 
 
@@ -36,17 +36,9 @@ class IOManager:
 
         handler は SystemMessage と session_id を受け取り、
         レスポンスの SystemMessage または None を返す。
-        EventBus の publish/subscribe は handler 内で完結する。
+        同期レスポンスが必要なため、コールバック pattern を維持する。
         """
         self._gateway.set_system_handler(handler)
-
-    def set_message_handler(self, handler: Callable[[Message], None]) -> None:
-        """通常メッセージハンドラを設定する。
-
-        handler は Message を受け取り、EventBus への publish を含む処理を行う。
-        Gateway は IO アダプタとしての責務のみを持ち、EventBus を直接操作しない。
-        """
-        self._gateway.set_message_handler(handler)
 
     def start(self, host: str, port: int) -> None:
         self._host = host

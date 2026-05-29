@@ -113,3 +113,20 @@ markers = [
   "integration: 統合テスト",
   "slow: 低速テスト",
 ]
+
+[tool.coverage.run]
+source = ["iris"]
+omit = [
+  "iris/io/transport/*_pb2*.py",
+  "tests/*",
+]
+
+[tool.coverage.report]
+fail_under = 70
+show_missing = true
+exclude_lines = [
+  "pragma: no cover",
+  "if TYPE_CHECKING:",
+  "if __name__ == .__main__.",
+  "@overload",
+]

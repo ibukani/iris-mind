@@ -14,6 +14,15 @@ if TYPE_CHECKING:
     from iris.kernel.manager import PluginManager
 
 
+class DependencyError(Exception):
+    """プラグインの依存関係エラー。"""
+
+    def __init__(self, plugin_name: str, missing: set[str]) -> None:
+        self.plugin_name = plugin_name
+        self.missing = missing
+        super().__init__(f"Plugin '{plugin_name}' has unresolved dependencies: {missing}")
+
+
 class PluginInstance:
     __slots__ = ("manifest", "module", "state")
 
@@ -49,6 +58,23 @@ class PluginLifecycle:
             self._plugins[manifest.name] = PluginInstance(manifest=manifest, module=module)
 
         self._resolve_order()
+        self._verify_dependencies()
+
+    def _verify_dependencies(self) -> None:
+        """全プラグインの依存関係を事前検証する。
+
+        未解決の依存がある場合は DependencyError を発生させる。
+        これにより、init 時に初めて依存不足が発見される問題を防ぐ。
+        """
+        known_services: set[str] = set(self._plugins.keys())
+        for p in self._plugins.values():
+            known_services.update(p.manifest.provides)
+        known_services.update(self._builtin_service_names)
+
+        for name, p in self._plugins.items():
+            missing = p.manifest.dependencies - known_services
+            if missing:
+                raise DependencyError(name, missing)
 
     # ── Lifecycle phases ──
 
@@ -81,13 +107,22 @@ class PluginLifecycle:
                 self._stop_started_before(name, manager)
                 raise
 
+    def mark_all_ready(self) -> None:
+        """全プラグインの起動が完了したことを記録する。"""
+        for name in self._order:
+            p = self._plugins[name]
+            if p.state == PluginState.STARTED:
+                p.state = PluginState.READY
+                logger.info("PluginLifecycle: '{}' marked as READY", name)
+
     def stop_all(self, manager: PluginManager) -> None:
         for name in reversed(self._order):
             p = self._plugins.get(name)
-            if p is None or p.state not in (PluginState.STARTED, PluginState.INITIALIZED):
+            if p is None or p.state not in (PluginState.STARTED, PluginState.READY, PluginState.INITIALIZED):
                 continue
             try:
                 plugin = self._resolve_plugin(p.module)
+                p.state = PluginState.STOPPING
                 plugin.stop(manager)
                 p.state = PluginState.STOPPED
                 logger.info("PluginLifecycle: stopped '{}'", name)

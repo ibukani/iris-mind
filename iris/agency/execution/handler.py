@@ -29,8 +29,8 @@ class _FlowExecutionHandler:
     ) -> None:
         self._controller = controller
         self._inhibition = inhibition
-        event_bus.subscribe("InterruptEvent", self._on_interrupt)
-        internal_bus.subscribe("PlanDecided", self._on_plan)
+        event_bus.subscribe(InterruptEvent, self._on_interrupt)
+        internal_bus.subscribe(PlanDecided, self._on_plan)
 
     def _on_interrupt(self, event: InterruptEvent) -> None:
         logger.info("FlowExecutionHandler: cancelling current execution due to interrupt")

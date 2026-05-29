@@ -26,7 +26,7 @@ class _InhibitionEventHandler:
         inhibition: InhibitionManager,
     ) -> None:
         self._inhibition = inhibition
-        event_bus.subscribe("InhibitionEvent", self._on_inhibition_event)
+        event_bus.subscribe(InhibitionEvent, self._on_inhibition_event)
 
     def _on_inhibition_event(self, event: InhibitionEvent) -> None:
         logger.debug(

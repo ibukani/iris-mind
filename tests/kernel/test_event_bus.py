@@ -14,10 +14,10 @@ def test_publish_calls_handler() -> None:
     bus = EventBus()
     received: list[Event] = []
 
-    def handler(event: Event) -> None:
+    def handler(event: TimerTick) -> None:
         received.append(event)
 
-    bus.subscribe("TimerTick", handler)
+    bus.subscribe(TimerTick, handler)
     event = TimerTick(timestamp=None, source="test", tick_count=0)
     bus.publish(event)
 
@@ -29,8 +29,8 @@ def test_multiple_handlers() -> None:
     bus = EventBus()
     results: list[int] = []
 
-    bus.subscribe("TimerTick", lambda _: results.append(1))
-    bus.subscribe("TimerTick", lambda _: results.append(2))
+    bus.subscribe(TimerTick, lambda _: results.append(1))
+    bus.subscribe(TimerTick, lambda _: results.append(2))
 
     bus.publish(TimerTick(timestamp=None, source="test", tick_count=0))
     assert results == [1, 2]
@@ -40,11 +40,11 @@ def test_unsubscribe() -> None:
     bus = EventBus()
     results: list[int] = []
 
-    def handler(_: Event) -> None:
+    def handler(_: AgentAnomalyEvent) -> None:
         results.append(1)
 
-    bus.subscribe("AgentAnomalyEvent", handler)
-    bus.unsubscribe("AgentAnomalyEvent", handler)
+    bus.subscribe(AgentAnomalyEvent, handler)
+    bus.unsubscribe(AgentAnomalyEvent, handler)
     bus.publish(AgentAnomalyEvent(timestamp=None, source="test", anomaly_type="test", severity="info", detail=""))
     assert results == []
 
@@ -59,14 +59,14 @@ def test_handler_error_does_not_affect_others() -> None:
     bus = EventBus()
     results: list[int] = []
 
-    def failing_handler(_: Event) -> None:
+    def failing_handler(_: TimerTick) -> None:
         raise ValueError("oops")
 
-    def good_handler(_: Event) -> None:
+    def good_handler(_: TimerTick) -> None:
         results.append(1)
 
-    bus.subscribe("TimerTick", failing_handler)
-    bus.subscribe("TimerTick", good_handler)
+    bus.subscribe(TimerTick, failing_handler)
+    bus.subscribe(TimerTick, good_handler)
 
     bus.publish(TimerTick(timestamp=None, source="test", tick_count=0))
     assert results == [1]
@@ -76,10 +76,10 @@ def test_subscribe_registers_handler() -> None:
     bus = EventBus()
     results: list[str] = []
 
-    def handler(_: Event) -> None:
+    def handler(_: AgentStateChangeEvent) -> None:
         results.append("called")
 
-    bus.subscribe("AgentStateChangeEvent", handler)
+    bus.subscribe(AgentStateChangeEvent, handler)
     bus.publish(AgentStateChangeEvent(timestamp=None, source="test", previous_state="idle", new_state="processing"))
     assert results == ["called"]
 
@@ -88,8 +88,8 @@ def test_multiple_event_types() -> None:
     bus = EventBus()
     received: list[str] = []
 
-    bus.subscribe("TimerTick", lambda _: received.append("tick"))
-    bus.subscribe("MemoryUpdateEvent", lambda _: received.append("memory"))
+    bus.subscribe(TimerTick, lambda _: received.append("tick"))
+    bus.subscribe(MemoryUpdateEvent, lambda _: received.append("memory"))
 
     bus.publish(TimerTick(timestamp=None, source="test", tick_count=0))
     bus.publish(MemoryUpdateEvent(timestamp=None, source="test", entry_type="semantic", content="data"))
@@ -109,13 +109,10 @@ def test_all_event_types_can_be_published() -> None:
     def collect(event: Event) -> None:
         received.append(type(event).__name__)
 
-    for name in [
-        "TimerTick",
-        "AgentStateChangeEvent",
-        "MemoryUpdateEvent",
-        "AgentAnomalyEvent",
-    ]:
-        bus.subscribe(name, collect)
+    bus.subscribe(TimerTick, collect)
+    bus.subscribe(AgentStateChangeEvent, collect)
+    bus.subscribe(MemoryUpdateEvent, collect)
+    bus.subscribe(AgentAnomalyEvent, collect)
 
     bus.publish(TimerTick(timestamp=None, source="t", tick_count=0))
     bus.publish(AgentStateChangeEvent(timestamp=None, source="t", previous_state=None, new_state=None))
@@ -128,3 +125,16 @@ def test_all_event_types_can_be_published() -> None:
         "MemoryUpdateEvent",
         "AgentAnomalyEvent",
     ]
+
+
+def test_backward_compat_string_subscribe() -> None:
+    """文字列による後方互換テスト。"""
+    bus = EventBus()
+    received: list[Event] = []
+
+    def handler(event: Event) -> None:
+        received.append(event)
+
+    bus.subscribe("TimerTick", handler)
+    bus.publish(TimerTick(timestamp=None, source="test", tick_count=0))
+    assert len(received) == 1

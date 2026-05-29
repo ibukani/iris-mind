@@ -31,7 +31,7 @@ class _PlanningEventHandler:
         self._response_strategy = response_strategy
         self._inhibition = inhibition
 
-        event_bus.subscribe("InputReady", self._on_input_ready)
+        event_bus.subscribe(InputReady, self._on_input_ready)
 
     def _on_input_ready(self, event: InputReady) -> None:
         context = event.context or {}

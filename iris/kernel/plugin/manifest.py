@@ -26,6 +26,8 @@ class PluginState(Enum):
     UNLOADED = "unloaded"
     INITIALIZED = "initialized"
     STARTED = "started"
+    READY = "ready"
+    STOPPING = "stopping"
     STOPPED = "stopped"
     ERROR = "error"
 

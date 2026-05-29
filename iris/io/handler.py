@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 class _IOEventHandler:
     def __init__(self, event_bus: EventBus, session_manager: SessionManager) -> None:
         self._session_mgr = session_manager
-        event_bus.subscribe("MessageEvent", self._on_message_event)
+        event_bus.subscribe(MessageEvent, self._on_message_event)
 
     def _on_message_event(self, event: MessageEvent) -> None:
         direction = event.direction or "response"

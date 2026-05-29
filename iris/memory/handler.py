@@ -52,10 +52,10 @@ class _MemoryEventHandler:
         self._pending_input: dict[str, list[tuple[str, str]]] = {}
         self._pending_lock = Lock()
 
-        event_bus.subscribe("InputReady", self._on_input_ready)
-        event_bus.subscribe("MessageEvent", self._on_message_event)
-        event_bus.subscribe("TimerTick", self._on_timer_tick)
-        event_bus.subscribe("SessionDisconnectEvent", self._on_session_disconnect)
+        event_bus.subscribe(InputReady, self._on_input_ready)
+        event_bus.subscribe(MessageEvent, self._on_message_event)
+        event_bus.subscribe(TimerTick, self._on_timer_tick)
+        event_bus.subscribe(SessionDisconnectEvent, self._on_session_disconnect)
 
     def _on_message_event(self, event: MessageEvent) -> None:
         if event.msg_type == "voice_indicator":

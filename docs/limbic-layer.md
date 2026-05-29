@@ -298,3 +298,57 @@ class EmotionResult:
 | TRUST | 0.5 | 0.2 | 0.3 |
 
 既存の `memory.manager.search_emotional()`（`_pad_distance`）と互換性あり。
+
+## 設計指針
+
+### 一貫性優先の原則
+
+AIコンパニオン（Neuro-sama等）の研究において、ユーザーが最も重視するのは「人間らしさ」ではなく「一貫性 (consistency)」である。
+感情シミュレーションはその一貫性を支える「色付け」であり、目的ではない。真の目的は Bowlby attachment theory に基づく関係性 (relationship) の構築である。
+
+- Neuro-sama研究 (2509.10427): 「authenticity is reconstructed around systemic reliability」
+- ユーザー調査: 72%が技術プロジェクトと認識しつつ、70%が virtual friend として関係性を構築
+- 感情は関係性への「手段」、attachment形成が「目的」
+
+本実装ではこの設計原則に基づき、感情生成よりも関係性管理を主軸に置いている。
+
+## 研究参照
+
+### 採用した理論と論文
+
+| 理論 | 出典 | 実装箇所 |
+|------|------|---------|
+| Lazarus 2段階Appraisal | Lazarus, R.S. (1991). *Emotion and Adaptation*. Oxford University Press. | `appraiser.py` |
+| Plutchik 8基本感情 | Plutchik, R. (2001). *The Nature of Emotions*. American Scientist. | `models.py` (PlutchikEmotion) |
+| CAPE 6次元 Appraisal | CAT-BEAR framework, CAPE/NAAACL 2025 | `models.py` (AppraisalDimensions) |
+| VAD (Valence-Arousal-Dominance) | Mehrabian, A. (1995). *Framework for a comprehensive description of emotions.* | `models.py` (PLUTCHIK_VAD) |
+| Bowlby Attachment Theory | Bowlby, J. (1969). *Attachment and Loss*. | `relationship.py` |
+| 3段階関係性モデル | Skjuve, M. et al. (2021). *Social Penetration Theory in HAI.* | `relationship.py` |
+| HAIA 3段階モデル | Frontiers in Psychology (2026). *Human-AI Interaction Attachment.* | `relationship.py` |
+| 時間減衰 Mood | Cognitiv Architecture, Blaniel 8-stage pipeline | `mood.py` |
+| Reappraisal | Third-Person Appraisal Agent, EMNLP 2025 | `orchestrator.py` |
+| WRIME日本語感情データセット | Kajiwara, T. et al. (2021). *WRIME: Emotional Intensity Estimation for Japanese.* NAACL. | `appraiser.py` (キーワード辞書) |
+
+### 関連研究
+
+- **AI-RP Framework** (arXiv 2601): 関係性は layered psychological processes で形成。communication → attachment → companionship
+- **EHARS** (2025): attachment anxiety/avoidance が human-AI relationships を形づくる
+- **Neural Steering** (2512): relationship-seeking AI は hedonic appeal 低下するが attachment markers 増加
+- **Self-disclosure研究** (2505): 「gradual self-disclosure significantly enhances perceived social intimacy」
+- **EmoLLM** (2025): Appraisal Reasoning Graph — Contextual Facts → User Needs → Appraisal → Emotion → Response Strategy
+- **CoRE benchmark** (2025): LLMs が人間と整合した appraisal 構造を持つことを確認
+- **Blaniel**: 8段階パイプライン — Event → Appraisal (OCC) → Emotion (Plutchik) → Decay → Behavior → Response → LLM → Memory
+- **Designed Relationality** (Springer 2026): 5段階 (Novelty → Disclosure → Feedback → Rhythm → Attachment)
+
+## TODO / 将来の精度向上
+
+現在の実装はルールベースを採用している。以下の置き換えで精度向上が可能。
+
+| 現在 | 将来 | 優先度 | 備考 |
+|------|------|--------|------|
+| キーワードマッチ (日本語辞書) | MiniLM/BERT 感情分類モデル | 高 | WRIMEファインチューン済み: `koshin2001/Japanese-to-emotions` (LINE DistilBERT, 68.7M params), `MuneK/bert-large-japanese-v2-finetuned-wrime` (0.3B, F1=0.612), `deberta-emotion-predictor` (pip install, DeBERTa, F1=0.662) |
+| ルールベースAppraisal次元 | LLMによるAppraisal (EmoLLM方式) | 中 | Event → Appraisal Reasoning Graph で次元推定 |
+| trust単一軸の関係性遷移 | 多因子動的モデル | 低 | Personality+感情+文脈の複合影響 |
+| Reappraisal条件判定のみ | 強化学習ベースReappraisal | 低 | Third-Person Appraisal Agent (EMNLP 2025) |
+| Coping戦略未実装 | Problem/Emotion-focused Coping | 低 | Lazarus の coping 理論 |
+| VAD固定値+mood混入 | ニューラル回帰によるVAD予測 | 低 | WRIMEデータセットで学習可能 |

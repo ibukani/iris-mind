@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import importlib
+import sys
 from graphlib import TopologicalSorter
 from types import ModuleType
 from typing import TYPE_CHECKING
@@ -91,6 +93,18 @@ class PluginLifecycle:
                 p.state = PluginState.ERROR
                 raise
 
+    def notify_config_loaded(self, manager: PluginManager) -> None:
+        """全プラグインの init 後に on_config_loaded を呼ぶ。"""
+        for name in self._order:
+            p = self._plugins[name]
+            if p.state != PluginState.INITIALIZED:
+                continue
+            try:
+                plugin = self._resolve_plugin(p.module)
+                plugin.on_config_loaded(manager)
+            except Exception:
+                logger.exception("PluginLifecycle: on_config_loaded failed for '{}'", name)
+
     def start_all(self, manager: PluginManager) -> None:
         for name in self._order:
             p = self._plugins[name]
@@ -107,13 +121,39 @@ class PluginLifecycle:
                 self._stop_started_before(name, manager)
                 raise
 
-    def mark_all_ready(self) -> None:
-        """全プラグインの起動が完了したことを記録する。"""
+    def mark_all_ready(self, manager: PluginManager | None = None) -> None:
+        """全プラグインの起動が完了したことを記録し、on_all_ready を呼ぶ。"""
         for name in self._order:
             p = self._plugins[name]
             if p.state == PluginState.STARTED:
                 p.state = PluginState.READY
                 logger.info("PluginLifecycle: '{}' marked as READY", name)
+        if manager is not None:
+            self._notify_all_ready(manager)
+
+    def _notify_all_ready(self, manager: PluginManager) -> None:
+        """全プラグインに対して on_all_ready を呼ぶ。"""
+        for name in self._order:
+            p = self._plugins[name]
+            if p.state not in (PluginState.READY, PluginState.STARTED):
+                continue
+            try:
+                plugin = self._resolve_plugin(p.module)
+                plugin.on_all_ready(manager)
+            except Exception:
+                logger.exception("PluginLifecycle: on_all_ready failed for '{}'", name)
+
+    def notify_pre_shutdown(self, manager: PluginManager) -> None:
+        """シャットダウン前に全プラグインに on_pre_shutdown を呼ぶ。"""
+        for name in reversed(self._order):
+            p = self._plugins.get(name)
+            if p is None or p.state not in (PluginState.STARTED, PluginState.READY, PluginState.INITIALIZED):
+                continue
+            try:
+                plugin = self._resolve_plugin(p.module)
+                plugin.on_pre_shutdown(manager)
+            except Exception:
+                logger.exception("PluginLifecycle: on_pre_shutdown failed for '{}'", name)
 
     def stop_all(self, manager: PluginManager) -> None:
         for name in reversed(self._order):
@@ -128,6 +168,69 @@ class PluginLifecycle:
                 logger.info("PluginLifecycle: stopped '{}'", name)
             except Exception:
                 logger.exception("PluginLifecycle: stop failed for '{}'", name)
+
+    def reload_plugin(self, plugin_name: str, manager: PluginManager) -> bool:
+        """プラグインをホットリロードする。
+
+        1. プラグインを停止
+        2. モジュールをリロード
+        3. 再初期化・再起動
+
+        Args:
+            plugin_name: リロード対象のプラグイン名。
+            manager: PluginManager インスタンス。
+
+        Returns:
+            成功した場合 True。
+        """
+        if plugin_name not in self._plugins:
+            logger.warning("PluginLifecycle: plugin '{}' not found for reload", plugin_name)
+            return False
+
+        p = self._plugins[plugin_name]
+        if p.state not in (PluginState.STARTED, PluginState.READY):
+            logger.warning("PluginLifecycle: plugin '{}' is not running (state={})", plugin_name, p.state.value)
+            return False
+
+        # Step 1: Stop
+        try:
+            plugin = self._resolve_plugin(p.module)
+            p.state = PluginState.STOPPING
+            plugin.stop(manager)
+            p.state = PluginState.STOPPED
+            logger.info("PluginLifecycle: '{}' stopped for reload", plugin_name)
+        except Exception:
+            logger.exception("PluginLifecycle: stop failed for '{}' during reload", plugin_name)
+            p.state = PluginState.ERROR
+            return False
+
+        # Step 2: Reload module
+        try:
+            module_name = p.module.__name__
+            if module_name in sys.modules:
+                new_module = importlib.reload(p.module)
+            else:
+                new_module = importlib.import_module(module_name)
+            p.module = new_module
+            logger.info("PluginLifecycle: '{}' module reloaded", plugin_name)
+        except Exception:
+            logger.exception("PluginLifecycle: module reload failed for '{}'", plugin_name)
+            p.state = PluginState.ERROR
+            return False
+
+        # Step 3: Re-init and start
+        try:
+            new_plugin = self._resolve_plugin(new_module)
+            new_plugin.init(manager)
+            p.state = PluginState.INITIALIZED
+            new_plugin.start(manager)
+            p.state = PluginState.STARTED
+            logger.info("PluginLifecycle: '{}' reloaded successfully", plugin_name)
+            return True
+        except Exception:
+            logger.exception("PluginLifecycle: re-init/start failed for '{}'", plugin_name)
+            p.state = PluginState.ERROR
+            return False
 
     # ── Internal ──
 

@@ -65,6 +65,7 @@ class PluginManager:
         manifests = discover_plugin_manifests(self._config.plugins.paths)
         self._lifecycle.load(manifests, self._config.plugins.disabled)
         self._lifecycle.init_all(self)
+        self._lifecycle.notify_config_loaded(self)
         self._hook_registry.freeze()
         self._di.freeze()
         self._init_builtin()
@@ -72,22 +73,24 @@ class PluginManager:
 
     def start_all(self) -> None:
         self._lifecycle.start_all(self)
+        self._lifecycle.mark_all_ready(self)
         logger.info("PluginManager: all plugins started")
 
     def stop_all(self) -> None:
         logger.info("PluginManager: stopping")
+        self._lifecycle.notify_pre_shutdown(self)
         self._lifecycle.stop_all(self)
 
     # ── DI ──
 
-    def provide[T](self, key: type[T], instance: T) -> None:
-        self._di.provide(key, instance)
+    def provide[T](self, key: type[T], instance: T, *, name: str = "default") -> None:
+        self._di.provide(key, instance, name=name)
 
-    def resolve[T](self, key: type[T]) -> T:
-        return self._di.resolve(key)
+    def resolve[T](self, key: type[T], *, name: str = "default") -> T:
+        return self._di.resolve(key, name=name)
 
-    def resolve_optional[T](self, key: type[T]) -> T | None:
-        return self._di.resolve_optional(key)
+    def resolve_optional[T](self, key: type[T], *, name: str = "default") -> T | None:
+        return self._di.resolve_optional(key, name=name)
 
     # ── State ──
 
@@ -127,6 +130,9 @@ class PluginManager:
             from .plugin.lifecycle import PluginInstance
 
             self._lifecycle.plugins[manifest.name] = PluginInstance(manifest=manifest, module=None)  # type: ignore[arg-type]
+
+    def reload_plugin(self, plugin_name: str) -> bool:
+        return self._lifecycle.reload_plugin(plugin_name, self)
 
     # ── Built-in ──
 

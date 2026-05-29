@@ -1,4 +1,4 @@
-from iris.event.event_bus import EventBus, EventBusProtocol
+from iris.event.event_bus import EventBus, EventBusMetrics, EventBusProtocol
 from iris.event.event_types import (
     AgentAnomalyEvent,
     AgentStateChangeEvent,
@@ -15,6 +15,7 @@ __all__ = [
     "AgentStateChangeEvent",
     "Event",
     "EventBus",
+    "EventBusMetrics",
     "EventBusProtocol",
     "InputReady",
     "MemoryUpdateEvent",

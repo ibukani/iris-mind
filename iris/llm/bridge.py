@@ -147,7 +147,7 @@ class LLMBridge:
             raise
 
         if interrupt_token.is_cancelled:
-            return AIMessage(content="")
+            return full_message or AIMessage(content="")
         return full_message or AIMessage(content="")
 
     async def chat_with_structured_output(

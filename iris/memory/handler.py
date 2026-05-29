@@ -143,7 +143,7 @@ class _MemoryEventHandler:
                 )
             )
 
-    def handle_system_message(self, msg: Any, session_id: str) -> Any:
+    def handle_system_message(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent | None:
         """Gateway から呼ばれる system メッセージのエントリポイント。
 
         受信した SystemMessage を EventBus に publish してから処理を行う。
@@ -174,11 +174,11 @@ class _MemoryEventHandler:
             nickname = nickname or "anonymous"
             uid, nickname = self.user_store.create(nickname)
             logger.info("MemoryManager: registered user_id={} nickname={}", uid, nickname)
-            return SystemMessage(action="user_register", user_id=uid, nickname=nickname, text=f"Your user ID: {uid}")
+            return SystemMessageEvent(timestamp=None, source="memory", action="user_register", user_id=uid, nickname=nickname, text=f"Your user ID: {uid}")
 
         if action == "user_entered":
             if not user_id:
-                return SystemMessage(action="user_entered", text="Error: user_id required")
+                return SystemMessageEvent(timestamp=None, source="memory", action="user_entered", text="Error: user_id required")
             nickname = self.user_store.resolve(user_id) or user_id
             active = dict(self.short_term.get_active_users() if self.short_term else [])
             is_reconnect = user_id in active
@@ -191,11 +191,11 @@ class _MemoryEventHandler:
             block = system_event_block(text, event_type=event_type, user_id=user_id, nickname=nickname)
             self._store_and_flush_pending_block(block, user_id, session_id)
             reply = f"Welcome back, {nickname}" if is_reconnect else f"Welcome, {nickname}"
-            return SystemMessage(action="user_entered", user_id=user_id, nickname=nickname, text=reply)
+            return SystemMessageEvent(timestamp=None, source="memory", action="user_entered", user_id=user_id, nickname=nickname, text=reply)
 
         if action == "user_left":
             if not user_id:
-                return SystemMessage(action="user_left", text="Error: user_id required")
+                return SystemMessageEvent(timestamp=None, source="memory", action="user_left", text="Error: user_id required")
             nickname = self.user_store.resolve(user_id) or user_id
             if self.short_term:
                 self.short_term.remove_user(user_id)
@@ -211,7 +211,7 @@ class _MemoryEventHandler:
                         reason="voice_recording",
                     )
                 )
-            return SystemMessage(action="user_left", user_id=user_id, text=f"Goodbye, {nickname}")
+            return SystemMessageEvent(timestamp=None, source="memory", action="user_left", user_id=user_id, text=f"Goodbye, {nickname}")
 
         if action == "nickname_update":
             if not user_id or not nickname:

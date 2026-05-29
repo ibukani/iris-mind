@@ -218,4 +218,27 @@ class PluginManager:
         io_mgr = self._di.resolve_optional(IOManager)
         handler = self._di.resolve_optional(_MemoryEventHandler)
         if io_mgr is not None and handler is not None:
-            io_mgr.set_system_handler(handler.handle_system_message)
+            from iris.event.event_types import SystemMessageEvent
+            from iris.io.models import SystemMessage as IOSysMsg
+
+            def _adapt_system_message(msg: IOSysMsg, session_id: str) -> IOSysMsg | None:
+                evt = SystemMessageEvent(
+                    timestamp=None,
+                    source="io",
+                    action=msg.action,
+                    user_id=msg.user_id,
+                    nickname=msg.nickname,
+                    text=msg.text,
+                    session_id=session_id,
+                )
+                result = handler.handle_system_message(evt, session_id)
+                if result is None:
+                    return None
+                return IOSysMsg(
+                    action=result.action,
+                    user_id=result.user_id,
+                    nickname=result.nickname,
+                    text=result.text,
+                )
+
+            io_mgr.set_system_handler(_adapt_system_message)

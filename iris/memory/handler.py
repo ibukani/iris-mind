@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from threading import Lock
-from typing import TYPE_CHECKING
+from typing import Any
 
 from loguru import logger
 
@@ -16,9 +16,6 @@ from iris.event.event_types import (
     TimerTick,
 )
 from iris.memory.models import ContentBlock, system_event_block
-
-if TYPE_CHECKING:
-    pass
 
 
 class _MemoryEventHandler:

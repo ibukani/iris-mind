@@ -15,7 +15,6 @@ from iris.llm.interrupt_token import InterruptToken
 from iris.llm.prompt import Personality
 from iris.memory.long_term.stores import AgentsMdStore
 from iris.memory.manager import MemoryManager
-from iris.memory.user_store import UserStore
 
 
 class LLMGateway:
@@ -30,7 +29,7 @@ class LLMGateway:
         capability_checker: CapabilityChecker | None = None,
         debug_capture: DebugCapture | None = None,
         prompts_dir: str | None = None,
-        user_store: UserStore | None = None,
+        account_provider: Any | None = None,
     ) -> None:
         self._llm = llm
         self._model_config = model_config
@@ -41,7 +40,7 @@ class LLMGateway:
         self._current_nickname: str = ""
         self._last_system_prompt: str = ""
         self._last_call_model_role: str = "medium"
-        self._user_store = user_store
+        self._account_provider = account_provider
 
         self._prompt_builder = SystemPromptBuilder(
             personality=personality,
@@ -55,8 +54,8 @@ class LLMGateway:
         self._session_roles_summary = summary
 
     def set_current_user_id(self, user_id: str) -> None:
-        if user_id and self._user_store:
-            self._current_nickname = self._user_store.resolve(user_id)
+        if user_id and self._account_provider:
+            self._current_nickname = self._account_provider.resolve_nickname(user_id)
         else:
             self._current_nickname = user_id
 

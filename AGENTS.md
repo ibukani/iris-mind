@@ -72,6 +72,14 @@ iris/                             ← アプリケーションコア
 │   ├── event_bus.py              ← EventBus（kernel から分離）
 │   ├── event_types.py            ← イベント型定義
 │   └── tracer.py                 ← EventTracer（デバッグトレース）
+├── account/                      ← アカウント管理: ユーザー識別・外部ID連携
+│   ├── __init__.py               ← AccountPlugin (STORE phase)
+│   ├── models.py                 ← Account, SessionBinding
+│   ├── store.py                  ← AccountStore（JSONL永続化）
+│   ├── provider.py               ← AccountProvider（コアサービス）
+│   ├── events.py                 ← AccountCreated/Updated/SessionBound/Unbound
+│   ├── handler.py                ← _AccountEventHandler（SystemMessage処理）
+│   └── hooks.py                  ← EventBus Hook登録
 ├── heartbeat/                    ← TimerTick heartbeat Plugin
 │   └── service.py                ← HeartbeatService
 ├── memory/                       ← 記憶系: 感覚野+皮質（3層構造）
@@ -83,7 +91,6 @@ iris/                             ← アプリケーションコア
 │   ├── hooks.py                  ← Plugin Hook登録
 │   ├── base.py                   ← _JsonlStore 基底
 │   ├── models.py                 ← ContentBlock等 共通型定義
-│   ├── user_store.py             ← user_id↔nickname 永続化
 │   ├── sensory/                  ← 感覚記憶
 │   │   ├── manager.py            ← SensoryMemoryManager（断片+生入力 2系統）
 │   │   └── readiness.py          ← ReadinessEvaluator
@@ -239,6 +246,7 @@ iris/                             ← アプリケーションコア
 | `io/` | 入出力中継（TCP、セッション） |
 | `event/` | グローバルEventBus（全層間通信） |
 | `heartbeat/` | TimerTick heartbeat Plugin |
+| `account/` | ユーザー識別・外部ID連携・セッション紐付け |
 | `memory/` | 感覚→短期→長期記憶、人格 |
 | `limbic/` | 感情・関係性（Appraisal理論） |
 | `agency/` | 意思決定（planning）と実行（execution） |

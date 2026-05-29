@@ -49,7 +49,6 @@ class SessionManager:
             now = datetime.now()
             session = self._create_session(conn, msg, now)
             session_id = session.session_id
-            offline_duration = self._compute_offline_duration(session)
 
             logger.info("Session created: {} (role={})", session_id, msg.role)
 
@@ -76,6 +75,7 @@ class SessionManager:
             permissions=msg.permissions[:],
             identity=msg.identity,
             description=msg.description,
+            user_id=msg.user_id,
             conn=conn,
             created_at=now,
             last_activity=now,

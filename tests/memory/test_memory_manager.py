@@ -25,7 +25,7 @@ def _message_event(session_id: str = "", content: str = "") -> MessageEvent:
 
 def _memory_with_handler(event_bus: EventBus, proactive_config: Any = None) -> MemoryManager:
     mgr = MemoryManager()
-    _MemoryEventHandler(event_bus, mgr.sensory, proactive_config, short_term=mgr.short_term, user_store=None)
+    _MemoryEventHandler(event_bus, mgr.sensory, proactive_config, short_term=mgr.short_term, account_handler=None)
     return mgr
 
 
@@ -263,7 +263,7 @@ class TestInputReadySubscription:
         assert received[0].direction == "request"
 
     def test_input_ready_stores_pending(self, event_bus: EventBus) -> None:
-        mem = _memory_with_handler(event_bus)
+        _memory_with_handler(event_bus)
         flushed_events: list[InputReady] = []
         event_bus.subscribe("InputReady", lambda e: flushed_events.append(e) if e.source == "memory" else None)
 

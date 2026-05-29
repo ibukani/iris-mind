@@ -238,7 +238,7 @@ sequenceDiagram
     Server->>GW: on_grpc_system(sys_msg, session_id)
     GW->>Handler: handle_system_message(msg, session_id)
     Handler->>Handler: publish(SystemMessageEvent) to EventBus
-    Handler->>Handler: UserStore.create(nickname)
+    Handler->>Handler: AccountProvider.register(nickname)
     Handler-->>GW: SystemMessage(action="user_register", user_id="abc123", text="Your user ID: abc123")
     GW-->>Server: route_system_message
     Server-->>Client: BidirectionalStreamResponse(SystemMessage: action="user_register", user_id="abc123", text="Your user ID: abc123")

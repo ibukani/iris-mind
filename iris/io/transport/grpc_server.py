@@ -99,6 +99,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             permissions=permissions,
             identity=metadata.get("identity", ""),
             description=metadata.get("description", ""),
+            user_id=metadata.get("user_id", ""),
         )
 
         auth_res = self._session_manager.authenticate(grpc_conn, auth_msg)

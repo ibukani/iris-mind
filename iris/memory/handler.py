@@ -38,14 +38,14 @@ class _MemoryEventHandler:
         sensory: Any,
         proactive_config: Any,
         short_term: Any,
-        user_store: Any,
+        account_handler: Any = None,
     ) -> None:
 
         self.event_bus = event_bus
         self.sensory = sensory
         self.proactive_config = proactive_config
         self.short_term = short_term
-        self.user_store = user_store
+        self._account_handler = account_handler
         self._pending_input: dict[str, list[tuple[str, str]]] = {}
         self._pending_lock = Lock()
 
@@ -147,8 +147,8 @@ class _MemoryEventHandler:
         これにより、proactive/agency 等の他のレイヤーも system メッセージを
         EventBus 経由で監視できる。
         """
-        if self.user_store is None:
-            logger.warning("MemoryManager: handle_system_message skipped, no user_store")
+        if self._account_handler is None:
+            logger.warning("MemoryManager: handle_system_message skipped, no account_handler")
             return None
 
         self.event_bus.publish(
@@ -163,68 +163,40 @@ class _MemoryEventHandler:
             )
         )
 
-        action = msg.action
-        user_id = msg.user_id
-        nickname = msg.nickname
+        result = self._account_handler.handle_system_message(msg, session_id)
 
-        if action == "user_register":
-            nickname = nickname or "anonymous"
-            uid, nickname = self.user_store.create(nickname)
-            logger.info("MemoryManager: registered user_id={} nickname={}", uid, nickname)
-            return SystemMessageEvent(timestamp=None, source="memory", action="user_register", user_id=uid, nickname=nickname, text=f"Your user ID: {uid}")
+        if result and result.action in ("user_entered", "user_left", "user_register", "nickname_update"):
+            action = result.action
+            user_id = result.user_id
+            nickname = result.nickname
 
-        if action == "user_entered":
-            if not user_id:
-                return SystemMessageEvent(timestamp=None, source="memory", action="user_entered", text="Error: user_id required")
-            nickname = self.user_store.resolve(user_id) or user_id
-            active = dict(self.short_term.get_active_users() if self.short_term else [])
-            is_reconnect = user_id in active
-            if self.short_term:
-                self.short_term.add_user(user_id, nickname, session_id=session_id)
-            text = (
-                f"[system] {nickname} が入室しました" if not is_reconnect else f"[system] {nickname} が再接続しました"
-            )
-            event_type = "user_reconnected" if is_reconnect else "user_entered"
-            block = system_event_block(text, event_type=event_type, user_id=user_id, nickname=nickname)
-            self._store_and_flush_pending_block(block, user_id, session_id)
-            reply = f"Welcome back, {nickname}" if is_reconnect else f"Welcome, {nickname}"
-            return SystemMessageEvent(timestamp=None, source="memory", action="user_entered", user_id=user_id, nickname=nickname, text=reply)
+            if action == "user_entered":
+                if self.short_term:
+                    self.short_term.add_user(user_id, nickname, session_id=session_id)
+                text = result.text or f"[system] {nickname} が入室しました"
+                block = system_event_block(text, event_type="user_entered", user_id=user_id, nickname=nickname)
+                self._store_and_flush_pending_block(block, user_id, session_id)
 
-        if action == "user_left":
-            if not user_id:
-                return SystemMessageEvent(timestamp=None, source="memory", action="user_left", text="Error: user_id required")
-            nickname = self.user_store.resolve(user_id) or user_id
-            if self.short_term:
-                self.short_term.remove_user(user_id)
-            text = f"[system] {nickname} が退室しました"
-            block = system_event_block(text, event_type="user_left", user_id=user_id, nickname=nickname)
-            self._store_and_flush_pending_block(block, user_id, session_id)
-            if self.event_bus:
-                self.event_bus.publish(
-                    InhibitionEvent(
-                        timestamp=None,
-                        source="memory",
-                        action=InhibitionAction.UNSUPPRESS,
-                        reason="voice_recording",
-                    )
-                )
-            return SystemMessageEvent(timestamp=None, source="memory", action="user_left", user_id=user_id, text=f"Goodbye, {nickname}")
+            elif action == "user_left":
+                if self.short_term:
+                    self.short_term.remove_user(user_id)
+                text = result.text or f"[system] {nickname} が退室しました"
+                block = system_event_block(text, event_type="user_left", user_id=user_id, nickname=nickname)
+                self._store_and_flush_pending_block(block, user_id, session_id)
 
-        if action == "nickname_update":
-            if not user_id or not nickname:
-                return SystemMessageEvent(timestamp=None, source="memory", action="nickname_update", text="Error: user_id and nickname required")
-            self.user_store.set_nickname(user_id, nickname)
-            if self.short_term:
-                self.short_term.add_user(user_id, nickname, session_id=session_id)
-            text = f"[system] {nickname} に改名しました"
-            block = system_event_block(text, event_type="nickname_update", user_id=user_id, nickname=nickname)
-            self._store_and_flush_pending_block(block, user_id, session_id)
-            return SystemMessageEvent(
-                timestamp=None, source="memory", action="nickname_update", user_id=user_id, nickname=nickname, text=f"Nickname changed to '{nickname}'"
-            )
+            elif action == "user_register":
+                text = result.text or f"[system] {nickname} が登録しました"
+                block = system_event_block(text, event_type="user_register", user_id=user_id, nickname=nickname)
+                self._store_and_flush_pending_block(block, user_id, session_id)
 
-        logger.warning("MemoryManager: unknown system action={}", action)
-        return None
+            elif action == "nickname_update":
+                if self.short_term:
+                    self.short_term.add_user(user_id, nickname, session_id=session_id)
+                text = result.text or f"[system] {nickname} に改名しました"
+                block = system_event_block(text, event_type="nickname_update", user_id=user_id, nickname=nickname)
+                self._store_and_flush_pending_block(block, user_id, session_id)
+
+        return result  # type: ignore[no-any-return]
 
     def _store_and_flush_pending_block(self, block: ContentBlock, user_id: str, session_id: str) -> None:
         if not self.sensory:

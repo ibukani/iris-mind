@@ -70,12 +70,19 @@ flowchart TD
         EB["Global EventBus"]
     end
 
+    subgraph Account["account/ アカウント管理"]
+        ACC_Provider["AccountProvider<br/>CRUD・外部ID連携"]
+        ACC_Store["AccountStore<br/>JSONL永続化"]
+        ACC_Handler["_AccountEventHandler<br/>SystemMessage処理"]
+    end
+
     EB ---|全層を結合| Kernel
     EB --- IO
     EB --- Memory
     EB --- Agency
     EB --- Limbic
     EB --- Infra
+    EB --- Account
 
     A_Bus --- Planning
     A_Bus --- Execution
@@ -178,6 +185,15 @@ iris/
 │   ├── event_types.py         イベント型定義
 │   └── tracer.py              EventTracer
 │
+├── account/                   # アカウント管理: ユーザー識別・外部ID連携
+│   ├── __init__.py            AccountPlugin (STORE phase)
+│   ├── models.py              Account, SessionBinding
+│   ├── store.py               AccountStore（JSONL永続化）
+│   ├── provider.py            AccountProvider（コアサービス）
+│   ├── events.py              AccountCreated/Updated/SessionBound/Unbound
+│   ├── handler.py             _AccountEventHandler（SystemMessage処理）
+│   └── hooks.py               EventBus Hook登録
+│
 ├── heartbeat/                 # TimerTick heartbeat Plugin
 │   ├── __init__.py
 │   └── service.py             HeartbeatService
@@ -192,7 +208,6 @@ iris/
 │   ├── hooks.py               Plugin Hook登録
 │   ├── base.py                _JsonlStore 基底
 │   ├── models.py              ContentBlock等 共通型定義
-│   ├── user_store.py          user_id↔nickname 永続化
 │   ├── sensory/               # 感覚記憶: 生入力の一時保持
 │   │   ├── __init__.py
 │   │   ├── manager.py         SensoryMemoryManager（断片入力 + raw入力 2系統）

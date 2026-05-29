@@ -48,6 +48,7 @@ class AuthMessage(BaseModel):
     permissions: list[Permission] = []
     identity: str = ""
     description: str = ""
+    user_id: str = ""
 
 
 class ControlMessage(BaseModel):
@@ -110,6 +111,8 @@ class SessionInfo(BaseModel):
     permissions: list[Permission] = []
     identity: str = ""
     description: str = ""
+    user_id: str = ""
+    account_id: str = ""
     conn: Any | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_activity: datetime = Field(default_factory=lambda: datetime.now(UTC))

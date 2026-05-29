@@ -173,7 +173,6 @@ class PluginManager:
         from iris.kernel.debug_capture import DebugCapture
         from iris.llm.bridge import LLMBridge
         from iris.memory.manager import MemoryManager
-        from iris.memory.user_store import UserStore
         from iris.tools.registry import ToolRegistry
 
         agency = self._di.resolve_optional(AgencyManager)
@@ -198,7 +197,6 @@ class PluginManager:
             registry=self._di.resolve_optional(ToolRegistry),
             debug_capture=self._di.resolve_optional(DebugCapture),
             diagnostics=self._diagnostics,
-            user_store=self._di.resolve_optional(UserStore),
         )
 
         io_mgr = self._di.resolve_optional(IOManager)

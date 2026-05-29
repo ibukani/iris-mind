@@ -20,9 +20,11 @@ def hook(hook_name: str, priority: int = 500) -> Callable[[Callable], Callable]:
     PluginLifecycle が init 時にこのデコレータを検出し、
     HookRegistry に自動登録する。
     """
+
     def decorator(fn: Callable) -> Callable:
         fn._hook_metadata = (hook_name, priority)  # type: ignore[attr-defined]
         return fn
+
     return decorator
 
 

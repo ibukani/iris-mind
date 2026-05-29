@@ -12,7 +12,6 @@ if TYPE_CHECKING:
     from iris.memory.manager import MemoryManager
     from iris.memory.sensory.manager import SensoryMemoryManager
     from iris.memory.short_term.manager import ShortTermMemoryManager
-    from iris.memory.user_store import UserStore
 
 
 class MemoryComponents(TypedDict):
@@ -23,7 +22,6 @@ class MemoryComponents(TypedDict):
     vector_store: VectorStore
     episodic: EpisodicStore
     semantic: SemanticStore
-    user_store: UserStore
 
 
 def build_memory(manager: PluginManager) -> MemoryComponents:
@@ -35,7 +33,6 @@ def build_memory(manager: PluginManager) -> MemoryComponents:
     from iris.memory.sensory.manager import SensoryMemoryManager
     from iris.memory.sensory.readiness import ReadinessEvaluator
     from iris.memory.short_term.manager import ShortTermMemoryManager
-    from iris.memory.user_store import UserStore
 
     config = manager.config
     mem_cfg = config.memory
@@ -55,7 +52,6 @@ def build_memory(manager: PluginManager) -> MemoryComponents:
     )
     short_term = ShortTermMemoryManager()
     sensory = SensoryMemoryManager()
-    user_store = UserStore(path=mem_cfg.users_path)
 
     mem = MemoryManager(
         sensory=sensory,
@@ -80,5 +76,4 @@ def build_memory(manager: PluginManager) -> MemoryComponents:
         "vector_store": vector_store,
         "episodic": episodic,
         "semantic": semantic,
-        "user_store": user_store,
     }

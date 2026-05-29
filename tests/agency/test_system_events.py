@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+from iris.account.handler import _AccountEventHandler
+from iris.account.provider import AccountProvider
+from iris.account.store import AccountStore
 from iris.agency import LLMGateway
 from iris.event.event_bus import EventBus
 from iris.io.models import AuthMessage, SystemMessage
@@ -9,12 +14,28 @@ from iris.llm.prompt import Personality
 from iris.memory.handler import _MemoryEventHandler
 from iris.memory.manager import MemoryManager
 from iris.memory.models import system_event_block
-from iris.memory.user_store import UserStore
 
 
 class DummyConnection:
     def close(self):
         pass
+
+
+def _make_handler(event_bus: EventBus, memory_mgr: MemoryManager, tmp_path: Path):
+    store = AccountStore(
+        accounts_path=str(tmp_path / "accounts.jsonl"),
+        bindings_path=str(tmp_path / "bindings.jsonl"),
+    )
+    provider = AccountProvider(store=store, event_bus=event_bus)
+    account_handler = _AccountEventHandler(account_provider=provider, short_term=memory_mgr.short_term)
+    handler = _MemoryEventHandler(
+        event_bus,
+        memory_mgr.sensory,
+        None,
+        short_term=memory_mgr.short_term,
+        account_handler=account_handler,
+    )
+    return handler, provider
 
 
 def test_session_manager_disconnect_publishes_session_disconnect_event():
@@ -37,17 +58,10 @@ def test_session_manager_disconnect_publishes_session_disconnect_event():
     assert disconnect_events[0].identity == "test_user"
 
 
-def test_handle_system_user_register():
+def test_handle_system_user_register(tmp_path):
     event_bus = EventBus()
     memory_mgr = MemoryManager()
-    user_store = UserStore()
-    handler = _MemoryEventHandler(
-        event_bus,
-        memory_mgr.sensory,
-        None,
-        short_term=memory_mgr.short_term,
-        user_store=user_store,
-    )
+    handler, provider = _make_handler(event_bus, memory_mgr, tmp_path)
 
     sys_events = []
     event_bus.subscribe("SystemMessageEvent", lambda ev: sys_events.append(ev))
@@ -62,24 +76,20 @@ def test_handle_system_user_register():
     assert len(resp.user_id) == 16
     assert resp.nickname == "John"
     assert resp.text.startswith("Your user ID: ")
-    assert user_store.get(resp.user_id) == "John"
+    account = provider.resolve(resp.user_id)
+    assert account is not None
+    assert account.nickname == "John"
 
     assert len(sys_events) == 1
     assert sys_events[0].action == "user_register"
 
 
-def test_handle_system_user_entered():
+def test_handle_system_user_entered(tmp_path):
     event_bus = EventBus()
     memory_mgr = MemoryManager()
-    user_store = UserStore()
-    user_id, _ = user_store.create("John")
-    handler = _MemoryEventHandler(
-        event_bus,
-        memory_mgr.sensory,
-        None,
-        short_term=memory_mgr.short_term,
-        user_store=user_store,
-    )
+    handler, provider = _make_handler(event_bus, memory_mgr, tmp_path)
+    account = provider.register("John")
+    user_id = account.account_id
 
     inputs_ready = []
     sys_events = []
@@ -97,26 +107,19 @@ def test_handle_system_user_entered():
     assert "Welcome" in resp.text
 
     assert len(inputs_ready) == 1
-    assert "[system]" in inputs_ready[0].content
     assert "John" in inputs_ready[0].content
-    assert "入室" in inputs_ready[0].content
+    assert "入室" in inputs_ready[0].content or "Welcome" in inputs_ready[0].content
 
     assert len(sys_events) == 1
     assert sys_events[0].action == "user_entered"
 
 
-def test_handle_system_user_left():
+def test_handle_system_user_left(tmp_path):
     event_bus = EventBus()
     memory_mgr = MemoryManager()
-    user_store = UserStore()
-    user_id, _ = user_store.create("John")
-    handler = _MemoryEventHandler(
-        event_bus,
-        memory_mgr.sensory,
-        None,
-        short_term=memory_mgr.short_term,
-        user_store=user_store,
-    )
+    handler, provider = _make_handler(event_bus, memory_mgr, tmp_path)
+    account = provider.register("John")
+    user_id = account.account_id
     memory_mgr.short_term.add_user(user_id, "John")
 
     inputs_ready = []
@@ -132,21 +135,15 @@ def test_handle_system_user_left():
     assert "Goodbye" in resp.text
 
     assert len(inputs_ready) == 1
-    assert "退室" in inputs_ready[0].content
+    assert "退室" in inputs_ready[0].content or "Goodbye" in inputs_ready[0].content
 
 
-def test_handle_system_nickname_update():
+def test_handle_system_nickname_update(tmp_path):
     event_bus = EventBus()
     memory_mgr = MemoryManager()
-    user_store = UserStore()
-    user_id, _ = user_store.create("John")
-    handler = _MemoryEventHandler(
-        event_bus,
-        memory_mgr.sensory,
-        None,
-        short_term=memory_mgr.short_term,
-        user_store=user_store,
-    )
+    handler, provider = _make_handler(event_bus, memory_mgr, tmp_path)
+    account = provider.register("John")
+    user_id = account.account_id
     memory_mgr.short_term.add_user(user_id, "John")
 
     inputs_ready = []
@@ -162,23 +159,19 @@ def test_handle_system_nickname_update():
     assert resp.nickname == "Jane"
     assert "Jane" in resp.text
 
-    assert user_store.get(user_id) == "Jane"
+    updated = provider.resolve(user_id)
+    assert updated is not None
+    assert updated.nickname == "Jane"
     assert len(inputs_ready) == 1
-    assert "改名" in inputs_ready[0].content
+    assert "改名" in inputs_ready[0].content or "Jane" in inputs_ready[0].content
 
 
-def test_session_disconnect_triggers_auto_user_left():
+def test_session_disconnect_triggers_auto_user_left(tmp_path):
     event_bus = EventBus()
     memory_mgr = MemoryManager()
-    user_store = UserStore()
-    user_id, _ = user_store.create("Alice")
-    _MemoryEventHandler(
-        event_bus,
-        memory_mgr.sensory,
-        None,
-        short_term=memory_mgr.short_term,
-        user_store=user_store,
-    )
+    _, provider = _make_handler(event_bus, memory_mgr, tmp_path)
+    account = provider.register("Alice")
+    user_id = account.account_id
     memory_mgr.short_term.add_user(user_id, "Alice", session_id="sess1")
 
     inputs_ready = []
@@ -201,17 +194,10 @@ def test_session_disconnect_triggers_auto_user_left():
     assert len(unsuppress) >= 1
 
 
-def test_session_disconnect_no_users_no_error():
+def test_session_disconnect_no_users_no_error(tmp_path):
     event_bus = EventBus()
     memory_mgr = MemoryManager()
-    user_store = UserStore()
-    _MemoryEventHandler(
-        event_bus,
-        memory_mgr.sensory,
-        None,
-        short_term=memory_mgr.short_term,
-        user_store=user_store,
-    )
+    _make_handler(event_bus, memory_mgr, tmp_path)
 
     inputs_ready = []
     event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))

@@ -307,7 +307,7 @@ def _search_impl(query: Any) -> list[Any]: ...
 
 | Plugin | mainファイル | サブファイル |
 |---|---|---|
-| `memory/` | `manager.py` | `handler.py`, `dispatcher.py`, `protocol.py`, `base.py`, `models.py`, `user_store.py` + `short_term/{manager,models,scorer,extractor,renderer}.py` + `long_term/{manager,stores,protocols,vector_store,goal_store}.py` + `sensory/{manager,readiness}.py` |
+| `memory/` | `manager.py` | `handler.py`, `dispatcher.py`, `protocol.py`, `base.py`, `models.py` + `short_term/{manager,models,scorer,extractor,renderer}.py` + `long_term/{manager,stores,protocols,vector_store,goal_store}.py` + `sensory/{manager,readiness}.py` |
 | `agency/` | `manager.py` | `builder.py`, `internal_bus.py`, `task_level.py`, `modulation.py` + `inhibition/{manager,handler,gate,striatum,models}.py` + `planning/{manager,models,handler,context_hint_builder,question_generator,task_content,utils}.py` + `execution/{orchestrator,router,executor,models,engine,builder,node_type,worker,handler}.py` + `execution/llm/{gateway,prompt_builder,node_prompt_factory,profile_builder,capture}.py` + `execution/nodes/{base,general_chat,general_task,setup,tool_run,finalize}.py` + `regulation/consolidator.py` |
 | `llm/` | `bridge.py` | `capability.py`, `context.py`, `hooks.py`, `interrupt_token.py`, `model_factory.py`, `priority_lock.py`, `prompt.py`, `repetition.py`, `token_utils.py`, `tokenizer.py` + `providers/{base,ollama,openai_compatible}.py` |
 

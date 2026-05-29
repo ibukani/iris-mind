@@ -15,6 +15,11 @@ memory:
     semantic_path: .iris/data/semantic.jsonl
     vector_db_path: .iris/data/chroma_db
 
+# アカウント管理 — ユーザー識別・外部ID連携
+account:
+    accounts_path: .iris/data/accounts.jsonl
+    bindings_path: .iris/data/account_bindings.jsonl
+
 # 自発発話 — プロアクティブな割り込みの重み・閾値
 proactive:
     check_interval_sec: 5.0
@@ -50,17 +55,17 @@ model:
     # モデル定義（接続情報は providers に集約）
     # roles: モデルが担当する役割（low/medium/high）。fallbackとしてdefaultも使用可。
     models:
-        - name: qwen3.5:4b
-          roles: [default]
-          provider: ollama
-          max_tokens: 1024
-          reasoning: false
-          tokenizer_repo_id: Qwen/Qwen3.5-4B
-        # - name: gemini-3.1-flash-lite
+        # - name: qwen3.5:4b
         #   roles: [default]
-        #   provider: google
-        #   max_tokens: 4096
+        #   provider: ollama
+        #   max_tokens: 1024
+        #   reasoning: false
         #   tokenizer_repo_id: Qwen/Qwen3.5-4B
+        - name: gemini-3.1-flash-lite
+          roles: [default]
+          provider: google
+          max_tokens: 4096
+          tokenizer_repo_id: Qwen/Qwen3.5-4B
 
 # TCP サーバー — 外部クライアント接続の listen 設定
 session:

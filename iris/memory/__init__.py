@@ -28,8 +28,8 @@ MANIFEST = PluginManifest(
     version="0.1.0",
     category=PluginCategory.LAYER,
     phase=PluginPhase.LAYER,
-    dependencies={"EventBus"},
-    provides=["MemoryManager", "SensoryMemoryManager", "ShortTermMemoryManager", "LongTermMemoryManager", "UserStore"],
+    dependencies={"EventBus", "account"},
+    provides=["MemoryManager", "SensoryMemoryManager", "ShortTermMemoryManager", "LongTermMemoryManager"],
     description="記憶系（感覚野+海馬+皮質）",
 )
 
@@ -58,20 +58,19 @@ class MemoryPlugin:
         manager.provide(LongTermMemoryManager, components["long_term"])
         manager.provide(VectorStore, components["vector_store"])
 
-        from iris.memory.user_store import UserStore
-
-        manager.provide(UserStore, components["user_store"])
-
     def _wire_event_handler(self, manager: PluginManager, components: dict) -> None:
+        from iris.account.handler import _AccountEventHandler
         from iris.event.event_bus import EventBus
         from iris.memory.handler import _MemoryEventHandler
+
+        account_handler = manager.resolve_optional(_AccountEventHandler)
 
         event_handler = _MemoryEventHandler(
             event_bus=manager.resolve(EventBus),
             sensory=components["sensory"],
             proactive_config=manager.config.proactive,
             short_term=components["short_term"],
-            user_store=components["user_store"],
+            account_handler=account_handler,
         )
 
         manager.provide(_MemoryEventHandler, event_handler)

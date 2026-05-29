@@ -14,7 +14,7 @@
 
 - `iris/kernel/` はドメイン層。外部サービス実装を直接持ち込まない。
 - `iris/llm/`, `iris/tools/` は kernel へ注入されるインフラ層。
-- `iris/io/`, `iris/agency/`, `iris/memory/`, `iris/event/` は kernel から分離された独立層。
+- `iris/io/`, `iris/agency/`, `iris/memory/`, `iris/event/`, `iris/account/` は kernel から分離された独立層。
 - 全層は EventBus (`iris/event/`) を介して疎結合。
 - `debug_tools/` は `iris/` に依存してよいが、`iris/` から `debug_tools/` へ依存しない。
 - IPC とプロセス設計の詳細は `docs/architecture.md` を読む。

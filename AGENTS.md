@@ -242,6 +242,12 @@ iris/                             ← アプリケーションコア
 - 新プラグイン追加は `.agents/skills/iris-plugin-create/SKILL.md` 参照
 - `debug_tools/` → `iris/` のみ。逆方向は物理禁止
 
+### EventBus 利用規約
+- `bus.subscribe(TimerTick, handler)` の型安全版を使用すること
+- `bus.publish(event, strict=True)` でデバッグ時にハンドラ例外を再 raise 可能
+- `bus.metrics.summary()` で配信数・エラー数を確認可能
+- `bus.publish_async(event)` で非同期ハンドラをサポート
+
 詳細は `docs/architecture.md` を参照。
 構成図やシーケンス図の作成・レンダリングは `.agents/skills/iris-visualize/SKILL.md` を参照。
 
@@ -288,8 +294,10 @@ uv run pyright .
 
 - Plugin categories: `CORE` / `LAYER` / `FEATURE` / `PROVIDER` / `TOOL`
 - Plugin phases: `INFRA(0)` → `CORE(10)` → `STORE(15)` → `LAYER(20)` → `COGNITIVE(30)` → `FEATURE(40)`
-- ライフサイクル: `UNLOADED` → `INITIALIZED` → `STARTED` → `STOPPED`
+- ライフサイクル: `UNLOADED` → `INITIALIZED` → `STARTED` → `READY` → `STOPPING` → `STOPPED`
 - サブプラグイン（Provider、built-ins等）は親Pluginが `discover_sub_plugins()` で自動発見
+- 依存検証: 起動時に未解決依存を自動検出し、`DependencyError` を発生
+- ホットリロード: `manager.reload_plugin("plugin_name")` で実行中の再読み込みが可能
 
 テンプレート:
 - 新規プラグイン: `.agents/skills/iris-plugin-create/SKILL.md`

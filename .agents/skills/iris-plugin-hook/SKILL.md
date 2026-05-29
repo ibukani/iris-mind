@@ -40,6 +40,8 @@ metadata:
 
 ### 既存HookPointにハンドラを登録する
 
+方法1: 手動登手動登録（従来通り）
+
 ```python
 # iris/<plugin>/hooks.py
 def register_hooks(manager):
@@ -50,6 +52,30 @@ def register_hooks(manager):
         return messages
 
     hooks.register("llm.before_chat", _my_before_chat, priority=500)
+```
+
+方法2: `@hook` デコレータ（推奨）
+
+```python
+# iris/<plugin>/hooks.py
+from iris.kernel.plugin import hook
+
+class MyHooks:
+    @hook("llm.before_chat", priority=100)
+    def _my_before_chat(self, messages):
+        return messages
+
+    @hook("memory.after_search", priority=500)
+    def _my_after_search(self, hits):
+        return hits
+```
+
+Plugin の `init()` で `manager.hook_registry.register_decorated(self)` を呼ぶと、
+`@hook` デコレータ付きメソッドが全て自動登録される。
+
+```python
+def init(self, manager):
+    manager.hook_registry.register_decorated(self)
 ```
 
 ルール:

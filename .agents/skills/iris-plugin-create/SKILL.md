@@ -97,7 +97,8 @@ def register_hooks(manager):
 ```python
 def subscribe_events(manager):
     bus = manager.event_bus
-    bus.subscribe("MessageEvent", _on_message)
+    bus.subscribe(MessageEvent, _on_message)  # 型安全版（推奨）
+    # bus.subscribe("MessageEvent", _on_message)  # 後方互換（文字列）
 ```
 
 ### 5. 依存を確認する
@@ -173,10 +174,12 @@ git commit -m "feat: <plugin_name> プラグインを追加"
 
 - `__init__.py` に `MANIFEST` + `class XxxPlugin` + `plugin = XxxPlugin()` が必須
 - `init(manager)` で DI resolve → create → wire → provide → hooks
-- 依存は `MANIFEST.dependencies` に必ず宣言すること
+- 依存は `MANIFEST.dependencies` に必ず宣言すること（未解決依存は起動時に `DependencyError` が発生）
 - `manager.register_manifest(MANIFEST)` を `init()` の最初に呼ぶこと
 - `PluginState` は PluginManager が管理する。プラグイン側で触らない
 - `start()` / `stop()` は非ブロッキング。バックグラウンドは Plugin 内部でスレッド管理
+- EventBus subscribe は型安全版を使用すること（`bus.subscribe(TimerTick, handler)`）
+- ホットリロード: `manager.reload_plugin("plugin_name")` で実行中の再読み込みが可能
 
 ## Plugin 標準実装契約
 
@@ -187,8 +190,28 @@ git commit -m "feat: <plugin_name> プラグインを追加"
 | `init(manager)` | Yes | DI wiring + component creation + hook registration |
 | `start(manager)` | No | バックグラウンドスレッド開始 |
 | `stop(manager)` | No | リソースクリーンアップ |
+| `on_config_loaded(manager)` | No | 全プラグイン init 後に呼ばれる。設定の最終確認に使用 |
+| `on_all_ready(manager)` | No | 全プラグイン start 後に呼ばれる。遅延初期化に使用 |
+| `on_pre_shutdown(manager)` | No | シャットダウン前に呼ばれる。リソース解放の前に実行 |
 | `get_state()` | No | デバッグスナップショット用の状態辞書を返す |
 | `health()` | No | 健全性チェック。`(bool, str)` を返す |
+
+### Lifecycle フックの使い分け
+
+```
+discover_and_build_all():
+  init_all() → notify_config_loaded() → freeze
+
+start_all():
+  start_all() → mark_all_ready() → notify_all_ready()
+
+stop_all():
+  notify_pre_shutdown() → stop_all()
+```
+
+- `on_config_loaded`: DI が確定した直後。設定値の最終検証に使用
+- `on_all_ready`: 全プラグインが起動した後。他プラグインへの依存が全て揃った状態
+- `on_pre_shutdown`: stop の前。非同期処理の完了待ち等に使用
 
 ## Plugin 内部ファイル分割規則
 

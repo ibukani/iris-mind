@@ -217,17 +217,23 @@ from typing import Any
 
 from loguru import logger
 
+from iris.event.event_types import MessageEvent, TimerTick
+
 
 class _XxxEventHandler:
     def __init__(self, event_bus: Any, dependency: Any) -> None:
-        event_bus.subscribe("SomeEvent", self._on_event)
+        event_bus.subscribe(MessageEvent, self._on_event)  # 型安全版
+        event_bus.subscribe(TimerTick, self._on_tick)
 
-    def _on_event(self, event: SomeEvent) -> None:
+    def _on_event(self, event: MessageEvent) -> None:
+        ...
+
+    def _on_tick(self, event: TimerTick) -> None:
         ...
 
 
 # iris/<plugin>/__init__.py の init() 内
-_MemoryEventHandler(
+_XxxEventHandler(
     event_bus=manager.resolve(EventBus),
     dependency=components["dependency"],
 )
@@ -240,12 +246,14 @@ handler が manager のメソッドを呼び戻す必要がある場合は `Prot
 from __future__ import annotations
 from typing import Protocol
 
+from iris.event.event_types import SomeEvent
+
 class _XxxControlProtocol(Protocol):
     def some_action(self) -> None: ...
 
 class _XxxEventHandler:
     def __init__(self, event_bus: Any, controller: _XxxControlProtocol) -> None:
-        event_bus.subscribe("SomeEvent", self._on_event)
+        event_bus.subscribe(SomeEvent, self._on_event)  # 型安全版
 
     def _on_event(self, event: SomeEvent) -> None:
         self._controller.some_action()

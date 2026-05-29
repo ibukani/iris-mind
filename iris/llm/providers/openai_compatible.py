@@ -37,8 +37,8 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         extra_headers: dict[str, str] = {}
         if entry.provider == "openrouter":
             extra_headers = {
-                "HTTP-Referer": "https://github.com/ibukani/iris-kernel",
-                "X-Title": "Iris Kernel",
+                "HTTP-Referer": "https://github.com/ibukani/iris-mind",
+                "X-Title": "Iris Mind",
             }
 
         model_kwargs: dict[str, Any] = {}

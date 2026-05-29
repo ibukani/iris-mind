@@ -15,7 +15,7 @@
 
 ## 1. プロジェクト概要
 
-Iris = Python製の自律AIアシスタントKernel。Ollama/OpenRouter上で動作。神経科学ベースの層アーキテクチャ。
+Iris = Python製のAIコンパニオン・アシスタントKernel。Ollama/OpenRouter上で動作。神経科学ベースの層アーキテクチャ。自律的行動・タスク実行を担い、最終的には自己進化を目指す。
 
 - **シングルモード**: modelsが1つ。全処理で同一モデル
 - **マルチモード**: modelsが2つ以上。`get_model(role)` で選択。未知roleは`models[0]`フォールバック

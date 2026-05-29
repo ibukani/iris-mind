@@ -1,8 +1,8 @@
-# Iris — Autonomous AI Assistant _(iris-kernel)_
+# Iris — AI Companion & Assistant Kernel _(iris-mind)_
 
-自律的に行動・進化できるAIアシスタント
+AIコンパニオンであり、AIアシスタントとしても機能するKernel
 
-Iris は自律的に行動・進化できるAIアシスタント。Python 製で Ollama または OpenRouter 上で動作する。脳科学・神経科学の構造を参考にした層分割アーキテクチャを採用する。
+Iris はAIコンパニオンであり、AIアシスタントとしても機能するKernel。自律的行動・タスク実行を担い、最終的には自己進化を目指す。Python 製で Ollama または OpenRouter 上で動作する。脳科学・神経科学の構造を参考にした層分割アーキテクチャを採用する。
 
 ## Table of Contents
 

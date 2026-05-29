@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iris-mind"
-version = "0.3.0"
-description = "Autonomous AI assistant that learns and evolves"
+version = "0.4.0"
+description = "AI companion and assistant kernel with autonomous action and task execution"
 requires-python = ">=3.13"
 dependencies = [
     "ollama>=0.6",

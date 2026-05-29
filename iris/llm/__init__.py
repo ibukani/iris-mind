@@ -42,7 +42,7 @@ MANIFEST = PluginManifest(
 )
 
 
-class LlmPlugin:
+class LlmPlugin(PluginProtocol):
     MANIFEST = MANIFEST
 
     def init(self, manager: PluginManager) -> None:

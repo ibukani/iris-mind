@@ -35,7 +35,7 @@ MANIFEST = PluginManifest(
 )
 
 
-class IoPlugin:
+class IoPlugin(PluginProtocol):
     MANIFEST = MANIFEST
 
     def init(self, manager: PluginManager) -> None:

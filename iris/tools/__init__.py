@@ -21,7 +21,7 @@ MANIFEST = PluginManifest(
 )
 
 
-class ToolsPlugin:
+class ToolsPlugin(PluginProtocol):
     MANIFEST = MANIFEST
 
     def init(self, manager: PluginManager) -> None:

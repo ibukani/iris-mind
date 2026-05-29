@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
+from iris.memory.builder import MemoryComponents
 from iris.memory.long_term.manager import LongTermMemoryManager
 from iris.memory.long_term.protocols import (
     AgentsMdStoreProtocol,
@@ -34,7 +35,7 @@ MANIFEST = PluginManifest(
 )
 
 
-class MemoryPlugin:
+class MemoryPlugin(PluginProtocol):
     MANIFEST = MANIFEST
 
     def init(self, manager: PluginManager) -> None:
@@ -46,19 +47,19 @@ class MemoryPlugin:
 
         register_hooks(manager)
 
-    def _build_components(self, manager: PluginManager) -> dict:
+    def _build_components(self, manager: PluginManager) -> MemoryComponents:
         from iris.memory.builder import build_memory
 
         return build_memory(manager)
 
-    def _provide_components(self, manager: PluginManager, components: dict) -> None:
+    def _provide_components(self, manager: PluginManager, components: MemoryComponents) -> None:
         manager.provide(MemoryManager, components["memory"])
         manager.provide(SensoryMemoryManager, components["sensory"])
         manager.provide(ShortTermMemoryManager, components["short_term"])
         manager.provide(LongTermMemoryManager, components["long_term"])
         manager.provide(VectorStore, components["vector_store"])
 
-    def _wire_event_handler(self, manager: PluginManager, components: dict) -> None:
+    def _wire_event_handler(self, manager: PluginManager, components: MemoryComponents) -> None:
         from iris.account.handler import _AccountEventHandler
         from iris.event.event_bus import EventBus
         from iris.memory.handler import _MemoryEventHandler

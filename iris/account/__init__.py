@@ -18,7 +18,7 @@ MANIFEST = PluginManifest(
 )
 
 
-class AccountPlugin:
+class AccountPlugin(PluginProtocol):
     MANIFEST = MANIFEST
 
     def init(self, manager: PluginManager) -> None:

@@ -21,7 +21,7 @@ MANIFEST = PluginManifest(
 )
 
 
-class HeartbeatPlugin:
+class HeartbeatPlugin(PluginProtocol):
     MANIFEST = MANIFEST
 
     def init(self, manager: PluginManager) -> None:

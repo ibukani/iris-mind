@@ -40,7 +40,7 @@ MANIFEST = PluginManifest(
 )
 
 
-class AgencyPlugin:
+class AgencyPlugin(PluginProtocol):
     MANIFEST = MANIFEST
 
     def init(self, manager: PluginManager) -> None:

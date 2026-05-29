@@ -99,6 +99,16 @@ iris/                             ← アプリケーションコア
 │       ├── stores.py             ← EpisodicStore, SemanticStore, AgentsMdStore
 │       ├── protocols.py          ← Store プロトコル定義
 │       └── vector_store.py       ← VectorStore（ChromaDB+BM25）
+├── limbic/                       ← 辺縁系: 感情・関係性 (Appraisal理論)
+│   ├── __init__.py               ← LimbicPlugin (LAYER/phase=20)
+│   ├── models.py                 ← AppraisalDimensions, CompanionEmotion, RelationshipState等
+│   ├── appraiser.py              ← 2段階Appraisal (Lazarus: Primary + Secondary)
+│   ├── generator.py              ← Appraisal→Plutchik 8感情変換
+│   ├── mood.py                   ← Mood dynamics (時間減衰 + 累積影響)
+│   ├── relationship.py           ← Bowlby attachment + 3段階関係性
+│   ├── state.py                  ← EmotionStateManager (状態統合)
+│   ├── orchestrator.py           ← パイプライン統合 (Event→Appraisal→Emotion→Relationship)
+│   └── hooks.py                  ← MessageEvent購読
 ├── agency/                       ← 高度認知: PFC+基底核+運動野
 │   ├── builder.py                ← コンポーネント組み立て工場
 │   ├── task_level.py             ← TaskLevel定義（chat/light/normal/deep/research）
@@ -224,12 +234,13 @@ iris/                             ← アプリケーションコア
 ### 層構造（脳科学対応）
 
 | 層 | 責務 |
-|---|---|
+|---|---|---|
 | `kernel/` | プロセス管理、DI、Command |
 | `io/` | 入出力中継（TCP、セッション） |
 | `event/` | グローバルEventBus（全層間通信） |
 | `heartbeat/` | TimerTick heartbeat Plugin |
 | `memory/` | 感覚→短期→長期記憶、人格 |
+| `limbic/` | 感情・関係性（Appraisal理論） |
 | `agency/` | 意思決定（planning）と実行（execution） |
 | `llm/` | LLMプロバイダ、ContextWindow管理 |
 | `tools/` | @toolデコレータ、ToolRegistry |

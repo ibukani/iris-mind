@@ -1,0 +1,300 @@
+# Iris Limbic 層
+
+> **注記**: 脳科学・神経科学の用語との対応付けは設計指針であり、厳密な解剖学的正確性を保証するものではありません。
+
+**脳科学対応**: 大脳辺縁系（扁桃体・帯状回・海馬傍回）
+
+## 責務
+
+- Appraisal（認知的評価）: Lazarus 2段階理論に基づくイベントの意味づけ
+- 感情生成: Appraisal次元 → Plutchik 8基本感情への変換
+- Mood dynamics: 会話の累積影響による slow-moving baseline、時間減衰
+- 関係性管理: Bowlby attachment theory に基づく3段階関係性構築
+- Reappraisal: 強いネガティブ感情時の認知的再評価提案
+
+## Manager 定義
+
+```python
+class LimbicOrchestrator:
+    """Appraisal → Emotion → Relationship パイプライン統合。
+    hooks.py が MessageEvent (direction=inbound) を購読し、process() を呼び出す。
+    """
+
+    def process(
+        self,
+        text: str,
+        context: dict[str, Any] | None = None,
+        user_profile: dict[str, Any] | None = None,
+    ) -> EmotionResult:
+        # 1. Appraiser.appraise_primary(text, ctx)
+        # 2. Appraiser.appraise_secondary(primary, profile)
+        # 3. Appraiser.compute_dimensions(primary, secondary)
+        # 4. EmotionGenerator.generate(dimensions, mood)
+        # 5. MoodDynamics.update(emotion)
+        # 6. RelationshipManager.update(emotion, context_type, profile)
+        # 7. EmotionStateManager.update(result)
+```
+
+## 処理フロー
+
+```mermaid
+sequenceDiagram
+    participant EB as Global EventBus
+    participant HOOK as hooks.py
+    participant ORCH as LimbicOrchestrator
+    participant APP as Appraiser
+    participant GEN as EmotionGenerator
+    participant MOOD as MoodDynamics
+    participant REL as RelationshipManager
+    participant ST as EmotionStateManager
+
+    EB-->>HOOK: MessageEvent(direction=inbound, content)
+    HOOK->>ORCH: process(text, context)
+
+    ORCH->>APP: appraise_primary(text)
+    APP-->>ORCH: PrimaryAppraisal
+
+    ORCH->>APP: appraise_secondary(primary, profile)
+    APP-->>ORCH: SecondaryAppraisal
+
+    ORCH->>APP: compute_dimensions(primary, secondary)
+    APP-->>ORCH: AppraisalDimensions
+
+    ORCH->>GEN: generate(dimensions, mood)
+    GEN-->>ORCH: CompanionEmotion
+
+    ORCH->>MOOD: update(emotion)
+    MOOD-->>ORCH: Mood
+
+    ORCH->>REL: update(emotion, context_type)
+    REL-->>ORCH: RelationshipState
+
+    ORCH->>ST: update(EmotionResult)
+    ORCH-->>ORCH: check_reappraisal_needed()
+    ORCH-->>HOOK: EmotionResult
+```
+
+## コンポーネント詳細
+
+### appraiser.py — 2段階Appraisal
+
+```python
+class Appraiser:
+    """Lazarus 2段階評価 (Primary + Secondary) + CAPE 6次元"""
+
+    def appraise_primary(self, text: str, context: dict | None = None) -> PrimaryAppraisal
+    def appraise_secondary(self, primary: PrimaryAppraisal, user_profile: dict | None = None) -> SecondaryAppraisal
+    def compute_dimensions(self, primary: PrimaryAppraisal, secondary: SecondaryAppraisal) -> AppraisalDimensions
+    def detect_word_emotions(self, text: str) -> dict[str, float]
+    def detect_context_type(self, text: str) -> str | None
+```
+
+**PrimaryAppraisal** — イベントの個人的意味づけ:
+
+| 次元 | 範囲 | 意味 |
+|------|------|------|
+| novelty | 0.0–1.0 | 新規性（新話題=0.8, 話題変更=0.6, 継続=0.3） |
+| pleasantness | -1.0–1.0 | 快不快（キーワード検出でスコア） |
+| goal_relevance | 0.0–1.0 | 目標関連性（文脈パターンから判定） |
+| agency | 0.0–1.0 | 自己主体性 |
+| coping_potential | 0.0–1.0 | 対処可能性（trust × familiarity から算出） |
+
+**SecondaryAppraisal** — 自己の対処能力評価:
+
+| 次元 | 範囲 | 意味 |
+|------|------|------|
+| accountability | 0.0–1.0 | 責任帰属（trust + familiarity） |
+| control | 0.0–1.0 | 統制可能性（coping_potential + trust） |
+| controllability | 0.0–1.0 | 可制御性（coping_potential + familiarity） |
+| social_norms | 0.0–1.0 | 社会的規範一致度 |
+
+**CAPE 6 次元**（`AppraisalDimensions`）:
+
+| 次元 | 算出元 |
+|------|---------|
+| unpleasantness | max(0, -primary.pleasantness) |
+| control | secondary.control |
+| responsibility | secondary.accountability |
+| certainty | 1.0 - primary.novelty |
+| effort | 1.0 - primary.coping_potential |
+| attention | primary.goal_relevance |
+
+**感情キーワード辞書**: 日本語 8 感情（joy/sadness/anticipation/surprise/anger/fear/disgust/trust）のキーワードリスト。`detect_word_emotions()` が正規表現マッチでスコアリング。
+
+**文脈パターン**: self_disclosure / support_seeking / positive_feedback / negative_feedback の4種。`detect_context_type()` が正規表現で最マッチを返す。
+
+### generator.py — Emotion 生成
+
+```python
+class EmotionGenerator:
+    """AppraisalDimensions → Plutchik 8基本感情への変換"""
+
+    def generate(self, appraisal: AppraisalDimensions, mood: Mood | None = None) -> CompanionEmotion
+```
+
+- 6次元 × 8感情の重み行列で各感情スコアを算出
+- 最高スコアを primary、次点を secondary とする
+- VAD座標は Plutchik 既定値に mood を 30% 混入
+
+### mood.py — Mood Dynamics
+
+```python
+class MoodDynamics:
+    """slow-moving baseline: 会話による感情の累積影響と時間減衰"""
+```
+
+- 半減期 600秒（10分）の指数減衰
+- 新しい感情が発生するたびに `update(emotion)` でバイアス更新
+- 時間経過でベースライン (VAD=全て0) に復帰
+
+### relationship.py — 関係性管理
+
+```python
+class RelationshipManager:
+    """Bowlby attachment theory ベースの関係性管理"""
+```
+
+**3段階関係性**:
+
+| 段階 | trust 閾値 | 特徴 |
+|------|-----------|------|
+| ACQUAINTANCE | 0.1–0.3 | 初期接触、探索的 |
+| FAMILIAR | 0.3–0.7 | 信頼形成、自己開示の開始 |
+| BONDED | 0.7–1.0 | 強い愛着、安定的関係 |
+
+**感情 → 関係性影響マップ**:
+
+| 感情 | trust 影響 | familiarity 影響 |
+|------|-----------|-----------------|
+| JOY | +0.02 | +0.03 |
+| TRUST | +0.04 | +0.02 |
+| ANGER | -0.03 | -0.01 |
+| DISGUST | -0.04 | -0.02 |
+
+**Bowlby Attachment Styles**: SECURE / ANXIOUS / AVOIDANT / DISORGANIZED（ユーザープロフィールから設定可能）
+
+### state.py — 状態管理
+
+```python
+class EmotionStateManager:
+    """Limbic system の統合状態管理"""
+```
+
+- 最新 `EmotionResult` の保持
+- 履歴（最大50件）のリングバッファ
+- `get_emotion_for_prompt()` で LLM プロンプト用データを提供
+
+### orchestrator.py — パイプライン統合
+
+```python
+class LimbicOrchestrator:
+    """全コンポーネントの統合"""
+```
+
+Reappraisal 判定条件:
+- anger/fear/disgust かつ intensity > 0.6
+- または unpleasantness > 0.7 かつ control < 0.3
+
+### hooks.py — EventBus 統合
+
+- `MessageEvent`（`direction=inbound`）を購読
+- 例外発生時は `logger.exception` で捕捉、EventBus 全体に影響しない
+
+## Plugin 定義
+
+- **カテゴリ**: `LAYER`
+- **フェーズ**: `LAYER`（phase=20、memory と agency の間）
+- **依存関係**: `{EventBus}`
+- **提供**: `LimbicOrchestrator`
+- **state**: `get_state()` → 最新の emotion / mood / relationship を返す
+
+## 関連モデル
+
+```python
+# iris/limbic/models.py
+
+@dataclass
+class PrimaryAppraisal:
+    novelty: float = 0.0
+    pleasantness: float = 0.0
+    goal_relevance: float = 0.0
+    agency: float = 0.0
+    coping_potential: float = 0.0
+
+@dataclass
+class SecondaryAppraisal:
+    accountability: float = 0.0
+    control: float = 0.0
+    controllability: float = 0.0
+    social_norms: float = 0.0
+
+@dataclass
+class AppraisalDimensions:
+    unpleasantness: float = 0.0
+    control: float = 0.0
+    responsibility: float = 0.0
+    certainty: float = 0.0
+    effort: float = 0.0
+    attention: float = 0.0
+
+class PlutchikEmotion(Enum):
+    JOY / SADNESS / ANTICIPATION / SURPRISE / ANGER / FEAR / DISGUST / TRUST
+
+class RelationshipLevel(IntEnum):
+    ACQUAINTANCE = 0 / FAMILIAR = 1 / BONDED = 2
+
+class AttachmentStyle(Enum):
+    SECURE / ANXIOUS / AVOIDANT / DISORGANIZED
+
+@dataclass
+class CompanionEmotion:
+    primary: PlutchikEmotion
+    intensity: float
+    valence: float
+    arousal: float
+    dominance: float
+    secondary: PlutchikEmotion | None
+    secondary_intensity: float
+
+@dataclass
+class Mood:
+    valence: float = 0.0
+    arousal: float = 0.0
+    dominance: float = 0.0
+    last_updated: float = 0.0
+
+@dataclass
+class RelationshipState:
+    level: RelationshipLevel
+    trust: float
+    familiarity: float
+    attachment_style: AttachmentStyle
+    interaction_count: int
+    disclosure_depth: float
+
+@dataclass
+class EmotionResult:
+    appraisal: AppraisalDimensions
+    emotion: CompanionEmotion
+    mood: Mood
+    relationship: RelationshipState
+    reappraisal_needed: bool
+    reappraisal_suggestion: str
+```
+
+## VAD 座標
+
+各 Plutchik 基本感情の Valence/Arousal/Dominance マッピング:
+
+| 感情 | V | A | D |
+|------|---|---|---|
+| JOY | 0.8 | 0.6 | 0.6 |
+| SADNESS | -0.6 | -0.4 | -0.3 |
+| ANTICIPATION | 0.4 | 0.7 | 0.3 |
+| SURPRISE | 0.2 | 0.9 | -0.2 |
+| ANGER | -0.7 | 0.8 | 0.5 |
+| FEAR | -0.7 | 0.8 | -0.6 |
+| DISGUST | -0.6 | 0.3 | 0.1 |
+| TRUST | 0.5 | 0.2 | 0.3 |
+
+既存の `memory.manager.search_emotional()`（`_pad_distance`）と互換性あり。

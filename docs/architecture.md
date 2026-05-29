@@ -53,6 +53,14 @@ flowchart TD
         end
     end
 
+    subgraph Limbic["limbic/ 大脳辺縁系"]
+        L_Orch["LimbicOrchestrator<br/>Appraisal→Emotion→Relationship"]
+        L_App["Appraiser<br/>2段階Appraisal"]
+        L_Gen["EmotionGenerator<br/>Plutchik変換"]
+        L_Mood["MoodDynamics<br/>時間減衰"]
+        L_Rel["RelationshipManager<br/>Bowlby attachment"]
+    end
+
     subgraph Infra["LLM / Tools"]
         I_LLM["llm/<br/>LLMBridge + Tokenizer + Provider"]
         I_TOOLS["tools/<br/>ToolRegistry"]
@@ -66,6 +74,7 @@ flowchart TD
     EB --- IO
     EB --- Memory
     EB --- Agency
+    EB --- Limbic
     EB --- Infra
 
     A_Bus --- Planning
@@ -80,12 +89,15 @@ sequenceDiagram
     participant TCP as 外部Client
     participant IO as IO層
     participant EB as Global EventBus
+    participant LIM as Limbic層
     participant MEM as Memory層
     participant AG as Agency層
     participant KRN as Kernel層
 
     TCP->>IO: Message (direction:request, target_role:mind)
     IO->>EB: MessageEvent(...)
+    EB->>LIM: MessageEvent (Limbic購読)
+    LIM->>LIM: Appraisal→Emotion→Relationship更新
     EB->>MEM: MessageEvent (MemoryManager購読)
     MEM->>MEM: sensory buffer → flush
     MEM->>EB: InputReady(content)
@@ -261,6 +273,17 @@ iris/
 │       └── regulation/
 │           └── consolidator.py     Context圧縮
 │
+├── limbic/                    # 辺縁系: 感情・関係性 (階段整合
+│   ├── __init__.py            LimbicPlugin (LAYER/phase=20)
+│   ├── models.py              データ型定義
+│   ├── appraiser.py           2段階Appraisal (Lazarus)
+│   ├── generator.py           Appraisal→Emotion (Plutchik)
+│   ├── mood.py                Mood dynamics
+│   ├── relationship.py        Bowlby attachment + 3段階関係性
+│   ├── state.py               状態統合
+│   ├── orchestrator.py        パイプライン統合
+│   └── hooks.py               EventBus購読
+│
 │   ├── llm/                       # LLM 基盤
 │   │   ├── __init__.py
 │   │   ├── bridge.py              LLMBridge（マルチプロバイダルーター）
@@ -377,11 +400,13 @@ flowchart LR
         MS["MemoryManager<br/>(記憶状態)"]
         AS["AgencyManager<br/>(実行状態)"]
         IS["IOManager<br/>(接続状態)"]
+        LS["LimbicOrchestrator<br/>(感情/関係性状態)"]
     end
 
     MS -->|DebugSnapshotEvent| KS
     AS -->|DebugSnapshotEvent| KS
     IS -->|DebugSnapshotEvent| KS
+    LS -->|DebugSnapshotEvent| KS
 ```
 
 状態の種類と責任層:
@@ -404,6 +429,7 @@ flowchart LR
     Agency --> Event
     Agency --> Memory
     Agency --> LLM
+    Limbic --> Event
     Memory --> Event
     IO --> Event
     LLM --> Event
@@ -413,6 +439,7 @@ flowchart LR
         IO
         Memory
         Agency
+        Limbic
         Kernel
     end
 ```

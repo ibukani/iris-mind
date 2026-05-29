@@ -182,7 +182,7 @@ def test_session_disconnect_triggers_auto_user_left(tmp_path):
     from iris.event.event_types import SessionDisconnectEvent
 
     event_bus.publish(
-        SessionDisconnectEvent(timestamp=None, source="session", session_id="sess1", identity="alice@example.com")
+        SessionDisconnectEvent(timestamp=None, source="session", session_id="sess1", identity="alice@example.com"),
     )
 
     assert len(inputs_ready) == 1
@@ -205,7 +205,7 @@ def test_session_disconnect_no_users_no_error(tmp_path):
     from iris.event.event_types import SessionDisconnectEvent
 
     event_bus.publish(
-        SessionDisconnectEvent(timestamp=None, source="session", session_id="empty_sess", identity="nobody")
+        SessionDisconnectEvent(timestamp=None, source="session", session_id="empty_sess", identity="nobody"),
     )
 
     assert len(inputs_ready) == 0

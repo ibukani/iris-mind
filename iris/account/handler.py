@@ -69,13 +69,19 @@ class _AccountEventHandler:
         user_id = msg.user_id
         if not user_id:
             return SystemMessageEvent(
-                timestamp=None, source="account", action="user_entered", text="Error: user_id required"
+                timestamp=None,
+                source="account",
+                action="user_entered",
+                text="Error: user_id required",
             )
 
         account = self._provider.resolve(user_id)
         if not account:
             return SystemMessageEvent(
-                timestamp=None, source="account", action="user_entered", text=f"Error: unknown account_id={user_id}"
+                timestamp=None,
+                source="account",
+                action="user_entered",
+                text=f"Error: unknown account_id={user_id}",
             )
 
         nickname = account.nickname
@@ -99,7 +105,10 @@ class _AccountEventHandler:
         user_id = msg.user_id
         if not user_id:
             return SystemMessageEvent(
-                timestamp=None, source="account", action="user_left", text="Error: user_id required"
+                timestamp=None,
+                source="account",
+                action="user_left",
+                text="Error: user_id required",
             )
 
         account = self._provider.resolve(user_id)
@@ -125,13 +134,19 @@ class _AccountEventHandler:
         nickname = msg.nickname
         if not user_id or not nickname:
             return SystemMessageEvent(
-                timestamp=None, source="account", action="nickname_update", text="Error: user_id and nickname required"
+                timestamp=None,
+                source="account",
+                action="nickname_update",
+                text="Error: user_id and nickname required",
             )
 
         account = self._provider.resolve(user_id)
         if not account:
             return SystemMessageEvent(
-                timestamp=None, source="account", action="nickname_update", text=f"Error: unknown account_id={user_id}"
+                timestamp=None,
+                source="account",
+                action="nickname_update",
+                text=f"Error: unknown account_id={user_id}",
             )
 
         self._provider.update_nickname(user_id, nickname)
@@ -153,7 +168,10 @@ class _AccountEventHandler:
         account = self._provider.get_account_by_session(session_id)
         if not account:
             return SystemMessageEvent(
-                timestamp=None, source="account", action="account.get_id", text="Error: not logged in"
+                timestamp=None,
+                source="account",
+                action="account.get_id",
+                text="Error: not logged in",
             )
         return SystemMessageEvent(
             timestamp=None,
@@ -169,7 +187,10 @@ class _AccountEventHandler:
         account = self._provider.get_account_by_session(session_id)
         if not account:
             return SystemMessageEvent(
-                timestamp=None, source="account", action="account.get_profile", text="Error: not logged in"
+                timestamp=None,
+                source="account",
+                action="account.get_profile",
+                text="Error: not logged in",
             )
 
         import orjson
@@ -189,13 +210,19 @@ class _AccountEventHandler:
         account = self._provider.get_account_by_session(session_id)
         if not account:
             return SystemMessageEvent(
-                timestamp=None, source="account", action="account.link", text="Error: not logged in"
+                timestamp=None,
+                source="account",
+                action="account.link",
+                text="Error: not logged in",
             )
 
         discord_id = msg.text
         if not discord_id:
             return SystemMessageEvent(
-                timestamp=None, source="account", action="account.link", text="Error: discord_id required"
+                timestamp=None,
+                source="account",
+                action="account.link",
+                text="Error: discord_id required",
             )
 
         self._provider.link_discord(account.account_id, discord_id)

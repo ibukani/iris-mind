@@ -35,7 +35,8 @@ class TestRegister:
         assert result.user_id != ""
 
     def test_user_register_binds_session(
-        self, handler_and_provider: tuple[_AccountEventHandler, AccountProvider]
+        self,
+        handler_and_provider: tuple[_AccountEventHandler, AccountProvider],
     ) -> None:
         h, p = handler_and_provider
         result = h.handle_system_message(_msg("user_register", nickname="bob"), "s1")

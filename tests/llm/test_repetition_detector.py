@@ -20,8 +20,8 @@ def _make_bridge() -> LLMBridge:
                 "presence_penalty": 0.5,
                 "frequency_penalty": 0.5,
                 "repeat_penalty": 1.2,
-            }
-        ]
+            },
+        ],
     )
     return LLMBridge(config)
 
@@ -109,7 +109,7 @@ def test_chat_streaming_repetition() -> None:
             messages=[HumanMessage(content="hello")],
             on_token=captured_tokens.append,
             interrupt_token=interrupt_token,
-        )
+        ),
     )
 
     # 4回目の「全部、」の時点でキャンセルされ、それ以降のトークンは呼ばれない

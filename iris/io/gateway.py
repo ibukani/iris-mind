@@ -95,7 +95,7 @@ class _IOGateway:
                     "target_role": msg.target_role,
                     "msg_type": msg.msg_type,
                 },
-            )
+            ),
         )
 
     def on_grpc_command(self, msg: CommandInput) -> None:

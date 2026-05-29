@@ -50,7 +50,7 @@ class SystemPromptBuilder:
                     response_style=response_style,
                     session_roles_summary=session_roles_summary,
                     current_nickname=current_nickname,
-                )
+                ),
             )
 
         msgs.append(
@@ -58,7 +58,7 @@ class SystemPromptBuilder:
                 node_type=node_type,
                 context_hint=context_hint,
                 chaos_level=chaos_level,
-            )
+            ),
         )
 
         return msgs

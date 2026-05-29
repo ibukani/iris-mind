@@ -51,7 +51,7 @@ line-length = 120
 exclude = ["*_pb2.py", "*_pb2_grpc.py"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP", "RUF", "C4", "SIM", "RET", "PERF", "PIE", "FA", "ISC"]
+select = ["E", "F", "W", "I", "B", "UP", "RUF", "C4", "SIM", "RET", "PERF", "PIE", "FA", "ISC", "PT", "T10"]
 ignore = [
     "E501",
     "B008",

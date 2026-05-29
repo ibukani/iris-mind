@@ -69,7 +69,7 @@ class ReadinessEvaluator:
                     model=self._llm_model_role,
                     temperature=0.0,
                     max_tokens=10,
-                )
+                ),
             )
             content = str(resp.content).strip().lower()
             return content.startswith("yes")

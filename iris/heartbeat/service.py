@@ -49,7 +49,7 @@ class TimerService:
                 timestamp=None,
                 source="heartbeat:manual",
                 tick_count=-1,
-            )
+            ),
         )
 
     def reset(self) -> None:
@@ -69,7 +69,7 @@ class TimerService:
                     timestamp=None,
                     source="heartbeat",
                     tick_count=self._tick_count,
-                )
+                ),
             )
             self._tick_count += 1
             self._wait_for_interval()

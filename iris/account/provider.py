@@ -35,7 +35,9 @@ class AccountProvider:
             existing = self._store.find_account_by_discord_id(discord_id)
             if existing:
                 logger.info(
-                    "AccountProvider: discord_id {} already mapped to account {}", discord_id, existing.account_id
+                    "AccountProvider: discord_id {} already mapped to account {}",
+                    discord_id,
+                    existing.account_id,
                 )
                 return existing
 
@@ -50,7 +52,7 @@ class AccountProvider:
                     account_id=account.account_id,
                     nickname=account.nickname,
                     discord_id=account.discord_id,
-                )
+                ),
             )
 
         return account
@@ -89,7 +91,7 @@ class AccountProvider:
                     field_name="nickname",
                     old_value=old,
                     new_value=nickname,
-                )
+                ),
             )
 
         logger.info("AccountProvider: updated account_id={} nickname={}", account_id, nickname)
@@ -121,7 +123,7 @@ class AccountProvider:
                         field_name=f"profile.{key}",
                         old_value=old,
                         new_value=value,
-                    )
+                    ),
                 )
 
         account.last_seen = datetime.now(UTC).isoformat()
@@ -133,7 +135,9 @@ class AccountProvider:
         existing = self._store.find_account_by_discord_id(discord_id)
         if existing and existing.account_id != account_id:
             logger.warning(
-                "AccountProvider: discord_id {} already linked to account {}", discord_id, existing.account_id
+                "AccountProvider: discord_id {} already linked to account {}",
+                discord_id,
+                existing.account_id,
             )
             return
 
@@ -156,7 +160,7 @@ class AccountProvider:
                     field_name="discord_id",
                     old_value=old,
                     new_value=discord_id,
-                )
+                ),
             )
 
         logger.info("AccountProvider: linked discord_id={} to account_id={}", discord_id, account_id)
@@ -173,7 +177,7 @@ class AccountProvider:
                     source="account",
                     session_id=session_id,
                     account_id=account_id,
-                )
+                ),
             )
 
         logger.debug("AccountProvider: bound session={} to account={}", session_id, account_id)
@@ -194,7 +198,7 @@ class AccountProvider:
                     source="account",
                     session_id=session_id,
                     account_id=binding.account_id,
-                )
+                ),
             )
 
         logger.debug("AccountProvider: unbound session={}", session_id)

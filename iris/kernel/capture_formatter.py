@@ -40,7 +40,7 @@ class CaptureEntry:
         tc = self.token_counts
         lines.append(
             f"Tokens: system={tc.get('system', 0)}  history={tc.get('history', 0)}  "
-            f"tools={tc.get('tools', 0)}  response={tc.get('response', 0)}  total={total}"
+            f"tools={tc.get('tools', 0)}  response={tc.get('response', 0)}  total={total}",
         )
         if self.tool_iterations:
             lines.append(f"Iterations: {len(self.tool_iterations)}")

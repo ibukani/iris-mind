@@ -59,7 +59,7 @@ def test_kernel_does_not_directly_import_debug_tools() -> None:
             for prefix in forbidden_prefixes:
                 if imp.startswith(prefix):
                     raise AssertionError(
-                        f"{filepath} imports '{imp}' (violates dependency rule: kernel must not depend on debug_tools)"
+                        f"{filepath} imports '{imp}' (violates dependency rule: kernel must not depend on debug_tools)",
                     )
 
 

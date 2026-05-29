@@ -17,7 +17,9 @@ class AccountStore:
     """
 
     def __init__(
-        self, accounts_path: str = ".iris/data/accounts.jsonl", bindings_path: str = ".iris/data/account_bindings.jsonl"
+        self,
+        accounts_path: str = ".iris/data/accounts.jsonl",
+        bindings_path: str = ".iris/data/account_bindings.jsonl",
     ) -> None:
         self._accounts_path = Path(accounts_path)
         self._bindings_path = Path(bindings_path)

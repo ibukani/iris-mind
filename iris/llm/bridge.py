@@ -108,7 +108,12 @@ class LLMBridge:
 
         async with self._priority_lock(priority):
             resp_message = await self._stream_or_invoke(
-                active_model, messages, call_kwargs, on_token, local_interrupt_token, wrapped_on_token
+                active_model,
+                messages,
+                call_kwargs,
+                on_token,
+                local_interrupt_token,
+                wrapped_on_token,
             )
 
         return self._handle_response_content(resp_message)

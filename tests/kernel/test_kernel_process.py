@@ -8,7 +8,7 @@ def _dummy_config() -> Config:
     return Config(
         model=ModelConfig(
             models=[{"name": "test", "roles": ["default"]}],  # pyright: ignore[reportArgumentType]
-        )
+        ),
     )
 
 

@@ -63,7 +63,7 @@ class _MemoryEventHandler:
                         source="memory",
                         action=InhibitionAction.SUPPRESS,
                         reason="voice_recording",
-                    )
+                    ),
                 )
             else:
                 self.event_bus.publish(
@@ -72,7 +72,7 @@ class _MemoryEventHandler:
                         source="memory",
                         action=InhibitionAction.UNSUPPRESS,
                         reason="voice_recording",
-                    )
+                    ),
                 )
             return
 
@@ -114,7 +114,7 @@ class _MemoryEventHandler:
                 direction="request",
                 msg_type=context.get("msg_type", "chat"),
                 content=event.content,
-            )
+            ),
         )
 
     def _on_session_disconnect(self, event: SessionDisconnectEvent) -> None:
@@ -137,7 +137,7 @@ class _MemoryEventHandler:
                     source="memory",
                     action=InhibitionAction.UNSUPPRESS,
                     reason="voice_recording",
-                )
+                ),
             )
 
     def handle_system_message(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent | None:
@@ -160,7 +160,7 @@ class _MemoryEventHandler:
                 nickname=msg.nickname,
                 text=msg.text,
                 session_id=session_id,
-            )
+            ),
         )
 
         result = self._account_handler.handle_system_message(msg, session_id)
@@ -221,7 +221,7 @@ class _MemoryEventHandler:
                 session_id="",
                 content="",
                 context={"from_timer": True},
-            )
+            ),
         )
 
     def flush_pending(self) -> dict[str, list[tuple[str, str]]]:
@@ -240,7 +240,7 @@ class _MemoryEventHandler:
                         timestamp=None,
                         source="memory",
                         session_id=session_id,
-                    )
+                    ),
                 )
                 bus.publish(
                     InputReady(
@@ -250,6 +250,6 @@ class _MemoryEventHandler:
                         content=content,
                         user_id=user_id,
                         context={},
-                    )
+                    ),
                 )
         return pending

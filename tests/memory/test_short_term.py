@@ -6,7 +6,7 @@ from iris.memory.models import blocks_text, text_block
 from iris.memory.short_term.manager import ShortTermMemoryManager
 
 
-@pytest.fixture()
+@pytest.fixture
 def stm() -> ShortTermMemoryManager:
     return ShortTermMemoryManager(max_turns=10, max_topics=5)
 

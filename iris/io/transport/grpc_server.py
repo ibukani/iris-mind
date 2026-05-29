@@ -214,7 +214,11 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
         return msg
 
     async def _receive_loop(
-        self, request_iterator: Any, session_id: str, session_role: str, grpc_conn: GrpcConnection
+        self,
+        request_iterator: Any,
+        session_id: str,
+        session_role: str,
+        grpc_conn: GrpcConnection,
     ) -> None:
         try:
             async for client_frame in request_iterator:

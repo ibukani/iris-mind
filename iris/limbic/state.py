@@ -20,7 +20,7 @@ class EmotionStateManager:
                 "emotion": result.emotion.to_dict(),
                 "mood": result.mood.to_dict(),
                 "relationship": result.relationship.to_dict(),
-            }
+            },
         )
         if len(self._history) > self._max_history:
             self._history = self._history[-self._max_history :]

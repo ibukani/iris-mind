@@ -219,7 +219,11 @@ class FakeContextManager:
         self._compact_messages: list[dict] = []
 
     def check_and_summarize(
-        self, messages: list[dict], context_window: int, threshold: float = 0.7, preserve_last: int = 4
+        self,
+        messages: list[dict],
+        context_window: int,
+        threshold: float = 0.7,
+        preserve_last: int = 4,
     ) -> str:
         return self._summary
 
@@ -230,7 +234,7 @@ class FakeContextManager:
 
     def build_compact_messages(self, messages: list[dict], preserve_last: int = 4) -> list[dict]:
         return self._compact_messages or [
-            {"role": "system", "content": f"[Compact summary of {len(messages)} messages]"}
+            {"role": "system", "content": f"[Compact summary of {len(messages)} messages]"},
         ]
 
     def clear(self) -> None:
@@ -251,14 +255,18 @@ class FakeCapabilityRegistry:
         return self._tools
 
     def register_func(
-        self, name: str, description: str = "", parameters: dict | None = None, **kwargs: Any
+        self,
+        name: str,
+        description: str = "",
+        parameters: dict | None = None,
+        **kwargs: Any,
     ) -> Callable:
         def decorator(func: Callable) -> Callable:
             self._tools.append(
                 {
                     "type": "function",
                     "function": {"name": name, "description": description, "parameters": parameters or {}},
-                }
+                },
             )
             return func
 

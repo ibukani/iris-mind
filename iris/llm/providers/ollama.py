@@ -194,7 +194,7 @@ class OllamaProvider(BaseLLMProvider):
     def _confirm_pull(model_name: str) -> bool:
         try:
             resp = input(
-                f"モデル '{model_name}' が見つかりません。\n  ollama pull {model_name}\nを実行してダウンロードしますか？ [y/N] "
+                f"モデル '{model_name}' が見つかりません。\n  ollama pull {model_name}\nを実行してダウンロードしますか？ [y/N] ",
             )
         except EOFError:
             logger.warning("Non-interactive environment: skipping model pull for '{}'", model_name)

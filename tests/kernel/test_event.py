@@ -47,7 +47,11 @@ def test_event_roundtrip_to_dict_and_back() -> None:
 
 def test_to_dict_includes_type_and_all_fields() -> None:
     event = AgentAnomalyEvent(
-        timestamp=None, source="test", anomaly_type="latency", severity="critical", detail="timeout"
+        timestamp=None,
+        source="test",
+        anomaly_type="latency",
+        severity="critical",
+        detail="timeout",
     )
     data = event.to_dict()
     assert data["type"] == "AgentAnomalyEvent"

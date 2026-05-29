@@ -203,7 +203,7 @@ class SessionManager:
                     source="session",
                     session_id=session_id,
                     identity=session.identity,
-                )
+                ),
             )
 
     def has_active_sessions(self) -> bool:

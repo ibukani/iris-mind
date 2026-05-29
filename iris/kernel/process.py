@@ -34,17 +34,32 @@ class KernelProcess:
         logger.info("KernelProcess: starting")
 
         self._manager = PluginManager(self._config, debug=self._debug)
-        self._manager.discover_and_build_all()
+        try:
+            self._manager.discover_and_build_all()
 
-        from iris.io.manager import IOManager
+            from iris.io.manager import IOManager
 
-        host = self._config.session.host
-        port = self._config.session.port
-        io_mgr = self._manager.resolve(IOManager)
-        io_mgr.start(host=host, port=port)
+            host = self._config.session.host
+            port = self._config.session.port
+            io_mgr = self._manager.resolve(IOManager)
+            io_mgr.start(host=host, port=port)
 
-        self._manager.start_all()
+            self._manager.start_all()
+        except Exception:
+            logger.exception("KernelProcess: start failed, cleaning up")
+            self._cleanup()
+            raise
         logger.info("KernelProcess: started")
+
+    def _cleanup(self) -> None:
+        manager = self._manager
+        if manager is None:
+            return
+        try:
+            manager.stop_all()
+        except Exception:
+            logger.exception("KernelProcess: cleanup error")
+        self._manager = None
 
     def shutdown(self) -> None:
         logger.info("KernelProcess: shutting down")
@@ -60,5 +75,5 @@ class KernelProcess:
         agency = manager.resolve_optional(AgencyManager)
         if agency is not None and hasattr(agency, "shutdown"):
             agency.shutdown()
-        manager.stop_all()
+        self._cleanup()
         logger.info("KernelProcess: shutdown complete")

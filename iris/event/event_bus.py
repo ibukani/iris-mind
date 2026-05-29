@@ -80,6 +80,7 @@ class EventBus:
     def __init__(self, tracer: EventTracer | None = None) -> None:
         self._subscribers: dict[str, list[Callable]] = defaultdict(list)
         self._lock: threading.Lock = threading.Lock()
+        self._metrics_lock: threading.Lock = threading.Lock()
         self._tracer = tracer
         self._metrics = EventBusMetrics()
 
@@ -104,7 +105,8 @@ class EventBus:
         if self._tracer is not None:
             self._tracer.on_event(event)
         event_type = type(event).__name__
-        self._metrics.published += 1
+        with self._metrics_lock:
+            self._metrics.published += 1
         with self._lock:
             handlers = list(self._subscribers.get(event_type, []))
         for handler in handlers:
@@ -112,10 +114,12 @@ class EventBus:
                 start = datetime.now(UTC)
                 handler(event)
                 elapsed = (datetime.now(UTC) - start).total_seconds()
-                self._metrics.handler_times[handler.__qualname__] = elapsed
-                self._metrics.handled += 1
+                with self._metrics_lock:
+                    self._metrics.handler_times[handler.__qualname__] = elapsed
+                    self._metrics.handled += 1
             except Exception:
-                self._metrics.errors += 1
+                with self._metrics_lock:
+                    self._metrics.errors += 1
                 if strict:
                     raise
                 logger.exception(
@@ -177,7 +181,8 @@ class EventBus:
         if self._tracer is not None:
             self._tracer.on_event(event)
         event_type = type(event).__name__
-        self._metrics.published += 1
+        with self._metrics_lock:
+            self._metrics.published += 1
         with self._lock:
             handlers = list(self._subscribers.get(event_type, []))
         for handler in handlers:
@@ -186,9 +191,11 @@ class EventBus:
                     await handler(event)
                 else:
                     await asyncio.to_thread(handler, event)
-                self._metrics.handled += 1
+                with self._metrics_lock:
+                    self._metrics.handled += 1
             except Exception:
-                self._metrics.errors += 1
+                with self._metrics_lock:
+                    self._metrics.errors += 1
                 if strict:
                     raise
                 logger.exception(

@@ -128,6 +128,20 @@ class VectorStore:
                     "_bm25_score": bscore,
                 }
 
+        bm25_only_ids = [eid for eid, d in merged.items() if not d["content"]]
+        if bm25_only_ids:
+            try:
+                fetched = self._db.get(ids=bm25_only_ids)
+                for i, eid in enumerate(fetched["ids"]):
+                    docs = fetched.get("documents") or []
+                    if i < len(docs) and docs[i]:
+                        merged[eid]["content"] = docs[i]
+                        meta = (fetched.get("metadatas") or [None])[i]
+                        if meta:
+                            merged[eid]["type"] = meta.get("type", "lesson")
+            except Exception:
+                logger.debug("VectorStore: failed to fetch BM25-only docs by ID")
+
         scored = [(data["_vector_score"] * 0.6 + data["_bm25_score"] * 0.4, data) for data in merged.values()]
         results = [(s, d) for s, d in scored if s >= min_score]
         results.sort(key=lambda x: x[0], reverse=True)

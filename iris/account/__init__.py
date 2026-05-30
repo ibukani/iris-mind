@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from iris.account.models import Provider
 from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
 
 if TYPE_CHECKING:
     from iris.kernel.manager import PluginManager
+
+__all__ = ["MANIFEST", "AccountPlugin", "Provider"]
 
 MANIFEST = PluginManifest(
     name="account",

@@ -5,7 +5,7 @@ from enum import Enum, StrEnum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 HOST = "127.0.0.1"
 PORT = 9876
@@ -61,6 +61,18 @@ class Identity(BaseModel):
     subject: str = ""
     provider_name: str = ""
     metadata: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, v: str) -> str:
+        from iris.account.models import Provider
+
+        if not v:
+            return v
+        for p in Provider:
+            if p.value == v:
+                return v
+        raise ValueError(f"Unknown provider: {v}")
 
 
 class Message(BaseModel):

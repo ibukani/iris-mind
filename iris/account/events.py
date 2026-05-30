@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from iris.account.models import Provider
 from iris.event.event_types import Event
 
 
@@ -23,6 +24,6 @@ class AccountUpdatedEvent(Event):
 @dataclass
 class AccountIdentityLinkedEvent(Event):
     account_id: str = ""
-    provider: str = ""
+    provider: Provider = Provider.LOCAL
     subject: str = ""
     provider_name: str = ""

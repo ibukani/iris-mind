@@ -5,6 +5,7 @@ from typing import Any
 from loguru import logger
 import orjson
 
+from iris.account.models import Provider
 from iris.event.event_types import ControlMessageEvent
 
 
@@ -40,7 +41,7 @@ class _AccountDispatcher:
         identity: dict[str, Any] | None,
     ) -> tuple[str, str]:
         provider, subject, provider_name, metadata = self._parse_identity(identity)
-        if not provider or not subject:
+        if provider is None or not subject:
             return "", ""
 
         account = self._account_manager.resolve_or_create_identity(
@@ -53,7 +54,7 @@ class _AccountDispatcher:
 
     def _handle_identify(self, msg: ControlMessageEvent) -> ControlMessageEvent:
         provider, subject, provider_name, metadata = self._parse_identity(msg.identity)
-        if not provider or not subject:
+        if provider is None or not subject:
             return self._error("account.identify", "identity.provider and identity.subject required")
 
         account = self._account_manager.resolve_or_create_identity(
@@ -116,7 +117,7 @@ class _AccountDispatcher:
             return self._error("account.link", "not identified")
 
         provider, subject, provider_name, metadata = self._parse_identity(msg.identity)
-        if not provider or not subject:
+        if provider is None or not subject:
             return self._error("account.link", "identity.provider and identity.subject required")
 
         if not self._account_manager.link_identity(
@@ -135,7 +136,7 @@ class _AccountDispatcher:
             account_id=account.account_id,
             display_name=account.display_name,
             identity=msg.identity,
-            text=f"Linked identity: {provider}:{subject}",
+            text=f"Linked identity: {provider.value}:{subject}",
         )
 
     def _resolve_target_account(self, msg: ControlMessageEvent) -> Any:
@@ -145,7 +146,7 @@ class _AccountDispatcher:
                 return account
 
         provider, subject, _provider_name, _metadata = self._parse_identity(msg.identity)
-        if provider and subject:
+        if provider is not None and subject:
             account = self._account_manager.get_account_by_identity(provider, subject)
             if account is not None:
                 return account
@@ -153,13 +154,19 @@ class _AccountDispatcher:
         return None
 
     @staticmethod
-    def _parse_identity(identity: dict[str, Any] | None) -> tuple[str, str, str, dict[str, object]]:
+    def _parse_identity(identity: dict[str, Any] | None) -> tuple[Provider | None, str, str, dict[str, object]]:
         if not identity:
-            return "", "", "", {}
+            return None, "", "", {}
         raw_metadata = identity.get("metadata", {})
         metadata: dict[str, object] = raw_metadata if isinstance(raw_metadata, dict) else {}
+        raw_provider = str(identity.get("provider", ""))
+        try:
+            provider = Provider(raw_provider)
+        except ValueError:
+            logger.warning("AccountDispatcher: unknown provider={}", raw_provider)
+            return None, "", "", {}
         return (
-            str(identity.get("provider", "")),
+            provider,
             str(identity.get("subject", "")),
             str(identity.get("provider_name", "")),
             metadata,

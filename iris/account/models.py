@@ -2,8 +2,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import StrEnum
 from typing import cast
 from uuid import uuid4
+
+
+class Provider(StrEnum):
+    LOCAL = "local"
+    DISCORD = "discord"
 
 
 @dataclass
@@ -53,7 +59,7 @@ class Account:
 class AccountIdentity:
     """外部IDとアカウントの紐付け。"""
 
-    provider: str
+    provider: Provider
     subject: str
     account_id: str
     provider_name: str = ""
@@ -67,11 +73,11 @@ class AccountIdentity:
 
     @property
     def key(self) -> tuple[str, str]:
-        return self.provider, self.subject
+        return self.provider.value, self.subject
 
     def to_dict(self) -> dict[str, object]:
         return {
-            "provider": self.provider,
+            "provider": self.provider.value,
             "subject": self.subject,
             "account_id": self.account_id,
             "provider_name": self.provider_name,
@@ -89,8 +95,13 @@ class AccountIdentity:
         metadata: dict[str, object] = {}
         if isinstance(raw_metadata, dict):
             metadata = cast("dict[str, object]", raw_metadata)
+        raw_provider = str(data.get("provider", ""))
+        try:
+            provider = Provider(raw_provider)
+        except ValueError:
+            provider = Provider.LOCAL
         return cls(
-            provider=str(data.get("provider", "")),
+            provider=provider,
             subject=str(data.get("subject", "")),
             account_id=str(data.get("account_id", "")),
             provider_name=str(data.get("provider_name", "")),

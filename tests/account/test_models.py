@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from iris.account.models import Account, AccountIdentity
+from iris.account.models import Account, AccountIdentity, Provider
 
 
 class TestAccountModel:
@@ -21,14 +21,14 @@ class TestAccountModel:
 class TestAccountIdentity:
     def test_to_dict_roundtrip(self) -> None:
         identity = AccountIdentity(
-            provider="discord",
+            provider=Provider.DISCORD,
             subject="12345",
             account_id="a1",
             provider_name="Alice",
             metadata={"guild_id": "g1"},
         )
         restored = AccountIdentity.from_dict(identity.to_dict())
-        assert restored.provider == "discord"
+        assert restored.provider == Provider.DISCORD
         assert restored.subject == "12345"
         assert restored.account_id == "a1"
         assert restored.provider_name == "Alice"

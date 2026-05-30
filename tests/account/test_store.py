@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from iris.account.models import Account, AccountIdentity
+from iris.account.models import Account, AccountIdentity, Provider
 from iris.account.store import AccountStore
 
 
@@ -39,17 +39,17 @@ class TestAccountStore:
 
 class TestIdentityStore:
     def test_add_and_find_identity(self, tmp_store: AccountStore) -> None:
-        identity = AccountIdentity(provider="discord", subject="999", account_id="a1")
+        identity = AccountIdentity(provider=Provider.DISCORD, subject="999", account_id="a1")
         tmp_store.add_identity(identity)
-        found = tmp_store.find_identity("discord", "999")
+        found = tmp_store.find_identity(Provider.DISCORD.value, "999")
         assert found is not None
         assert found.account_id == "a1"
 
     def test_find_identities_by_account(self, tmp_store: AccountStore) -> None:
-        tmp_store.add_identity(AccountIdentity(provider="discord", subject="1", account_id="a1"))
-        tmp_store.add_identity(AccountIdentity(provider="local", subject="2", account_id="a1"))
+        tmp_store.add_identity(AccountIdentity(provider=Provider.DISCORD, subject="1", account_id="a1"))
+        tmp_store.add_identity(AccountIdentity(provider=Provider.LOCAL, subject="2", account_id="a1"))
         assert len(tmp_store.find_identities_by_account("a1")) == 2
 
     def test_find_nonexistent_returns_none(self, tmp_store: AccountStore) -> None:
         assert tmp_store.find_account_by_id("nope") is None
-        assert tmp_store.find_identity("discord", "nope") is None
+        assert tmp_store.find_identity(Provider.DISCORD.value, "nope") is None

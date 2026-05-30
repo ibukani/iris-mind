@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from iris.account.manager import AccountManager
+from iris.account.models import Provider
 from iris.account.store import AccountStore
 from iris.event import EventBus
 
@@ -37,27 +38,27 @@ class TestRegister:
 
 class TestIdentity:
     def test_resolve_or_create_identity_creates_account(self, provider: AccountManager) -> None:
-        account = provider.resolve_or_create_identity("discord", "123", provider_name="Bob")
+        account = provider.resolve_or_create_identity(Provider.DISCORD, "123", provider_name="Bob")
         assert account.display_name == "Bob"
-        found = provider.get_account_by_identity("discord", "123")
+        found = provider.get_account_by_identity(Provider.DISCORD, "123")
         assert found is not None
         assert found.account_id == account.account_id
 
     def test_resolve_or_create_identity_reuses_existing(self, provider: AccountManager) -> None:
-        a1 = provider.resolve_or_create_identity("discord", "999", provider_name="First")
-        a2 = provider.resolve_or_create_identity("discord", "999", provider_name="Second")
+        a1 = provider.resolve_or_create_identity(Provider.DISCORD, "999", provider_name="First")
+        a2 = provider.resolve_or_create_identity(Provider.DISCORD, "999", provider_name="Second")
         assert a1.account_id == a2.account_id
 
     def test_link_identity(self, provider: AccountManager) -> None:
         account = provider.register("u1")
-        assert provider.link_identity(account.account_id, "discord", "555", provider_name="User")
-        assert provider.get_account_by_identity("discord", "555") is not None
+        assert provider.link_identity(account.account_id, Provider.DISCORD, "555", provider_name="User")
+        assert provider.get_account_by_identity(Provider.DISCORD, "555") is not None
 
     def test_link_identity_conflict_ignored(self, provider: AccountManager) -> None:
-        a1 = provider.resolve_or_create_identity("discord", "111", provider_name="u1")
+        a1 = provider.resolve_or_create_identity(Provider.DISCORD, "111", provider_name="u1")
         a2 = provider.register("u2")
-        assert not provider.link_identity(a2.account_id, "discord", "111")
-        found = provider.get_account_by_identity("discord", "111")
+        assert not provider.link_identity(a2.account_id, Provider.DISCORD, "111")
+        found = provider.get_account_by_identity(Provider.DISCORD, "111")
         assert found is not None
         assert found.account_id == a1.account_id
 

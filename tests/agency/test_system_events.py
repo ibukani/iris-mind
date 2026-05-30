@@ -4,6 +4,7 @@ from pathlib import Path
 
 from iris.account.dispatcher import _AccountDispatcher
 from iris.account.manager import AccountManager
+from iris.account.models import Provider
 from iris.account.store import AccountStore
 from iris.agency import LLMGateway
 from iris.event.event_bus import EventBus
@@ -84,7 +85,7 @@ def test_handle_account_identify(tmp_path):
     resp = account_handler.handle_control_message(
         ControlMessageEvent(
             action="account.identify",
-            identity={"provider": "discord", "subject": "123", "provider_name": "John"},
+            identity={"provider": Provider.DISCORD, "subject": "123", "provider_name": "John"},
             source="test",
             timestamp=None,
         ),
@@ -104,7 +105,7 @@ def test_handle_account_profile(tmp_path):
     memory_mgr = MemoryManager()
     account_handler, _, account_provider, _ = _make_handlers(event_bus, memory_mgr, tmp_path)
 
-    account = account_provider.resolve_or_create_identity("discord", "123", provider_name="John")
+    account = account_provider.resolve_or_create_identity(Provider.DISCORD, "123", provider_name="John")
 
     resp = account_handler.handle_control_message(
         ControlMessageEvent(
@@ -126,7 +127,7 @@ def test_room_join_creates_system_event(tmp_path):
     _, room_handler, account_provider, room_provider = _make_handlers(event_bus, memory_mgr, tmp_path)
 
     room = room_provider.create_room("test")
-    account = account_provider.resolve_or_create_identity("discord", "123", provider_name="John")
+    account = account_provider.resolve_or_create_identity(Provider.DISCORD, "123", provider_name="John")
 
     inputs_ready = []
     event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
@@ -155,7 +156,7 @@ def test_room_leave_creates_system_event(tmp_path):
     _, room_handler, account_provider, room_provider = _make_handlers(event_bus, memory_mgr, tmp_path)
 
     room = room_provider.create_room("test")
-    account = account_provider.resolve_or_create_identity("discord", "123", provider_name="John")
+    account = account_provider.resolve_or_create_identity(Provider.DISCORD, "123", provider_name="John")
     room_provider.join_room(room.room_id, account.account_id, session_id="s1")
 
     inputs_ready = []

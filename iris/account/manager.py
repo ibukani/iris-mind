@@ -10,7 +10,7 @@ from iris.account.events import (
     AccountIdentityLinkedEvent,
     AccountUpdatedEvent,
 )
-from iris.account.models import Account, AccountIdentity
+from iris.account.models import Account, AccountIdentity, Provider
 from iris.account.store import AccountStore
 
 
@@ -53,23 +53,23 @@ class AccountManager:
         account = self.resolve(account_id)
         return account.display_name if account else account_id
 
-    def get_account_by_identity(self, provider: str, subject: str) -> Account | None:
+    def get_account_by_identity(self, provider: Provider, subject: str) -> Account | None:
         """外部IDからアカウントを取得する。"""
-        identity = self._store.find_identity(provider, subject)
+        identity = self._store.find_identity(provider.value, subject)
         if identity is None:
             return None
         return self.resolve(identity.account_id)
 
     def resolve_or_create_identity(
         self,
-        provider: str,
+        provider: Provider,
         subject: str,
         provider_name: str = "",
         metadata: dict[str, object] | None = None,
     ) -> Account:
         """外部IDからアカウントを解決し、なければ作成する。"""
         now = datetime.now(UTC).isoformat()
-        identity = self._store.find_identity(provider, subject)
+        identity = self._store.find_identity(provider.value, subject)
         if identity is not None:
             identity.provider_name = provider_name or identity.provider_name
             identity.metadata = metadata or identity.metadata
@@ -83,7 +83,7 @@ class AccountManager:
                 self._store.update_account(account)
                 return account
 
-        account = self.register(provider_name or f"{provider}:{subject}")
+        account = self.register(provider_name or f"{provider.value}:{subject}")
         self.link_identity(account.account_id, provider, subject, provider_name=provider_name, metadata=metadata)
         return account
 
@@ -150,17 +150,17 @@ class AccountManager:
     def link_identity(
         self,
         account_id: str,
-        provider: str,
+        provider: Provider,
         subject: str,
         provider_name: str = "",
         metadata: dict[str, object] | None = None,
     ) -> bool:
         """外部IDを紐付ける。"""
-        existing = self._store.find_identity(provider, subject)
+        existing = self._store.find_identity(provider.value, subject)
         if existing and existing.account_id != account_id:
             logger.warning(
                 "AccountManager: identity {}:{} already linked to account {}",
-                provider,
+                provider.value,
                 subject,
                 existing.account_id,
             )
@@ -201,7 +201,7 @@ class AccountManager:
                 ),
             )
 
-        logger.info("AccountManager: linked identity={}:{} account_id={}", provider, subject, account_id)
+        logger.info("AccountManager: linked identity={}:{} account_id={}", provider.value, subject, account_id)
         return True
 
     def list_accounts(self) -> list[Account]:

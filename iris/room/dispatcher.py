@@ -5,6 +5,7 @@ from typing import Any
 from loguru import logger
 import orjson
 
+from iris.account.models import Provider
 from iris.event.event_types import ControlMessageEvent
 
 
@@ -216,7 +217,7 @@ class _RoomDispatcher:
         if not self._account_manager:
             return None
         provider, subject, provider_name, metadata = self._parse_identity(msg.identity)
-        if not provider or not subject:
+        if provider is None or not subject:
             return None
         return self._account_manager.resolve_or_create_identity(
             provider,
@@ -226,13 +227,19 @@ class _RoomDispatcher:
         )
 
     @staticmethod
-    def _parse_identity(identity: dict[str, Any] | None) -> tuple[str, str, str, dict[str, object]]:
+    def _parse_identity(identity: dict[str, Any] | None) -> tuple[Provider | None, str, str, dict[str, object]]:
         if not identity:
-            return "", "", "", {}
+            return None, "", "", {}
         raw_metadata = identity.get("metadata", {})
         metadata: dict[str, object] = raw_metadata if isinstance(raw_metadata, dict) else {}
+        raw_provider = str(identity.get("provider", ""))
+        try:
+            provider = Provider(raw_provider)
+        except ValueError:
+            logger.warning("RoomDispatcher: unknown provider={}", raw_provider)
+            return None, "", "", {}
         return (
-            str(identity.get("provider", "")),
+            provider,
             str(identity.get("subject", "")),
             str(identity.get("provider_name", "")),
             metadata,

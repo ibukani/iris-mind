@@ -18,8 +18,8 @@ class ResponsePlanStrategy:
         self._cfg = config
         self._context_builder = context_builder
 
-    def build_response(self, content: str, chaos_level: float = 0.0) -> Plan:
-        context_hint = self._context_builder.build_user_context_hint(content, chaos_level=chaos_level)
+    def build_response(self, content: str, chaos_level: float = 0.0, room_id: str = "") -> Plan:
+        context_hint = self._context_builder.build_user_context_hint(content, chaos_level=chaos_level, room_id=room_id)
         is_task = is_task_content(content)
 
         level = "light" if not is_task else "normal"

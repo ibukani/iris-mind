@@ -46,7 +46,9 @@ class ProactiveJudge:
 
         chaos_level = context.get("chaos_level", 0.0)
         context_hint = (
-            self._context_builder.build_proactive_context_hint(context, scores, chaos_level=chaos_level)
+            self._context_builder.build_proactive_context_hint(
+                context, scores, chaos_level=chaos_level, room_id=event.room_id,
+            )
             if self._context_builder
             else ""
         )

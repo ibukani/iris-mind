@@ -42,7 +42,7 @@ class ContextHintBuilder:
         if wc:
             parts.append("ワーキングメモリ:\n" + wc)
 
-        pref_ctx = self.build_user_preferences_context()
+        pref_ctx = self.build_user_preferences_context(room_id=room_id)
         if pref_ctx:
             parts.append(pref_ctx)
 
@@ -140,11 +140,11 @@ class ContextHintBuilder:
             label += f"（{ts}）"
         return label
 
-    def build_user_preferences_context(self) -> str | None:
+    def build_user_preferences_context(self, room_id: str = "", account_id: str = "") -> str | None:
         if not self._memory:
             return None
         try:
-            prefs = self._memory.get_user_preferences()
+            prefs = self._memory.get_user_preferences(room_id=room_id, account_id=account_id)
             if prefs:
                 return f"ユーザーの関心: {prefs[0].get('content', '')[:80]}"
         except Exception:

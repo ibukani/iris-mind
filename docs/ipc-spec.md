@@ -168,7 +168,7 @@ message BidirectionalStreamResponse {
 | `action` | string | アクション種別（下記参照） |
 | `account_id` | string | Iris内部アカウントID |
 | `room_id` | string | 会話ルームID。アカウント制御とpresenceの対象ルーム |
-| `nickname` | string | 表示用ニックネーム |
+| `display_name` | string | 表示名 |
 | `text` | string | サーバーからの応答メッセージ（サーバー→クライアントのみ） |
 | `identity` | Identity | 外部ID |
 | `profile` | map<string,string> | 更新するプロフィール |
@@ -180,7 +180,7 @@ message BidirectionalStreamResponse {
 |--------|------|------|---------------|
 | `account.identify` | C→S | identity解決/作成、アカウント情報返却（旧 `account.join`） | `identity.provider`, `identity.subject` |
 | `account.profile` | C→S, S→C | 現セッションのアカウント情報取得（旧 `account.get`） | なし |
-| `account.update` | C→S, S→C | ニックネーム・プロフィール更新 | `nickname` または `profile` |
+| `account.update` | C→S, S→C | 表示名・プロフィール更新 | `display_name` または `profile` |
 | `account.link` | C→S, S→C | 外部ID追加紐付け（旧 `account.link_identity`） | `identity.provider`, `identity.subject` |
 | `room.create` | C→S, S→C | ルーム作成 | `text` (ルーム名) |
 | `room.list` | C→S, S→C | ルーム一覧取得 | なし |
@@ -314,7 +314,7 @@ sequenceDiagram
     Server->>GW: on_grpc_message(msg)
     GW->>MemoryHandler: publish(InputReady speaker, room_id)
     MemoryHandler->>AccountHandler: identify_message_speaker(session_id, identity)
-    AccountHandler-->>MemoryHandler: (account_id, nickname)
+    AccountHandler-->>MemoryHandler: (account_id, display_name)
     MemoryHandler->>RoomProvider: join_room(room_id, account_id, session_id)
     MemoryHandler->>MemoryHandler: publish(MessageEvent account_id, room_id)
 ```

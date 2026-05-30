@@ -46,9 +46,8 @@ class AuthMessage(BaseModel):
     access_token: str | None = None
     role: str = "external"
     permissions: list[Permission] = []
-    identity: str = ""
+    session_tag: str = ""
     description: str = ""
-    user_id: str = ""
 
 
 class AuthResult(BaseModel):
@@ -60,7 +59,7 @@ class AuthResult(BaseModel):
 class Identity(BaseModel):
     provider: str = ""
     subject: str = ""
-    display_name: str = ""
+    provider_name: str = ""
     metadata: dict[str, str] = Field(default_factory=dict)
 
 
@@ -70,7 +69,7 @@ class Message(BaseModel):
     session_id: str = ""
     source_role: str = ""
     target_role: str = "*"
-    user_id: str = ""
+    account_id: str = ""
     direction: Direction
     msg_type: str
     content: str
@@ -93,7 +92,7 @@ class ControlMessage(BaseModel):
     action: str = ""
     account_id: str = ""
     room_id: str = ""
-    nickname: str = ""
+    display_name: str = ""
     text: str = ""
     identity: Identity | None = None
     profile: dict[str, str] = Field(default_factory=dict)
@@ -122,9 +121,8 @@ class SessionInfo(BaseModel):
     state: SessionState
     role: str = "external"
     permissions: list[Permission] = []
-    identity: str = ""
+    session_tag: str = ""
     description: str = ""
-    user_id: str = ""
     account_id: str = ""
     conn: Any | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

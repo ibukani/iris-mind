@@ -43,11 +43,11 @@ class LongTermMemoryProtocol(Protocol):
     @property
     def semantic(self) -> SemanticStoreProtocol | None: ...
 
-    def store_episodic(self, data: Any, kind: str = "", room_id: str = "") -> None: ...
-    def get_episodic_recent(self, n: int = 5, room_id: str = "") -> list[dict[str, Any]]: ...
+    def store_episodic(self, data: Any, kind: str = "", room_id: str = "", account_id: str = "") -> None: ...
+    def get_episodic_recent(self, n: int = 5, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]: ...
     def clear_episodic(self) -> None: ...
-    def store_semantic(self, data: Any, room_id: str = "") -> None: ...
-    def search_semantic(self, query: str, max_results: int = 3, room_id: str = "") -> list[dict[str, Any]]: ...
+    def store_semantic(self, data: Any, room_id: str = "", account_id: str = "") -> None: ...
+    def search_semantic(self, query: str, max_results: int = 3, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]: ...
     def clear_semantic(self) -> None: ...
     def search_vector(self, query: str, max_results: int = 3) -> list[dict[str, Any]]: ...
     def search_emotional(
@@ -81,7 +81,7 @@ class LongTermMemoryManager:
 
     # ---- エピソード記憶 ----
 
-    def store_episodic(self, data: Any, kind: str = "", room_id: str = "") -> None:
+    def store_episodic(self, data: Any, kind: str = "", room_id: str = "", account_id: str = "") -> None:
         if self._episodic is None:
             return
         summary = ""
@@ -91,14 +91,15 @@ class LongTermMemoryManager:
             summary = data.get("content") or data.get("summary") or str(data)
             kind = data.get("kind", kind)
             room_id = data.get("room_id", room_id)
+            account_id = data.get("account_id", account_id)
         if kind and not summary.startswith(f"[{kind}]"):
             summary = f"[{kind}] {summary}"
-        self._episodic.add(summary, room_id=room_id)
+        self._episodic.add(summary, room_id=room_id, account_id=account_id)
 
-    def get_episodic_recent(self, n: int = 5, room_id: str = "") -> list[dict[str, Any]]:
+    def get_episodic_recent(self, n: int = 5, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:
         if self._episodic is None:
             return []
-        return self._episodic.get_recent(n, room_id=room_id)
+        return self._episodic.get_recent(n, room_id=room_id, account_id=account_id)
 
     def clear_episodic(self) -> None:
         if self._episodic is not None:
@@ -106,23 +107,24 @@ class LongTermMemoryManager:
 
     # ---- 意味記憶 ----
 
-    def store_semantic(self, data: Any, room_id: str = "") -> None:
+    def store_semantic(self, data: Any, room_id: str = "", account_id: str = "") -> None:
         if self._semantic is None:
             return
         if isinstance(data, dict):
             room_id = data.get("room_id", room_id)
-            self._semantic.add(data, room_id=room_id)
+            account_id = data.get("account_id", account_id)
+            self._semantic.add(data, room_id=room_id, account_id=account_id)
         else:
-            self._semantic.add({"content": str(data)}, room_id=room_id)
+            self._semantic.add({"content": str(data)}, room_id=room_id, account_id=account_id)
 
-    def search_semantic(self, query: str, max_results: int = 3, room_id: str = "") -> list[dict[str, Any]]:
+    def search_semantic(self, query: str, max_results: int = 3, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:
         if self._semantic is not None:
-            results = self._semantic.search(query=query, max_results=max_results)
+            results = self._semantic.search(query=query, max_results=max_results, account_id=account_id)
             if room_id:
                 results = [r for r in results if r.get("room_id") == room_id]
             return _format_search_result(results)
         if self._vector_store is not None:
-            results = self._vector_store.search(query=query, max_results=max_results)
+            results = self._vector_store.search(query=query, max_results=max_results, account_id=account_id)
             if room_id:
                 results = [r for r in results if r.get("room_id") == room_id]
             return _format_search_result(results)

@@ -44,7 +44,7 @@ class SessionManager:
             if not success:
                 return AuthResult(msg_type="auth_failure", error_message=error)
 
-            self._replace_duplicate_session(msg.identity)
+            self._replace_duplicate_session(msg.session_tag)
 
             now = datetime.now()
             session = self._create_session(conn, msg, now)
@@ -54,17 +54,17 @@ class SessionManager:
 
         return AuthResult(msg_type="auth_success", session_id=session_id)
 
-    def _replace_duplicate_session(self, identity: str | None) -> None:
-        if not identity:
+    def _replace_duplicate_session(self, session_tag: str | None) -> None:
+        if not session_tag:
             return
         for sid, s in list(self._sessions.items()):
-            if s.identity == identity and s.state == SessionState.ACTIVE:
+            if s.session_tag == session_tag and s.state == SessionState.ACTIVE:
                 s.state = SessionState.CLOSED
                 if s.conn is not None:
                     with contextlib.suppress(Exception):
                         s.conn.close()
                 del self._sessions[sid]
-                logger.info("SessionManager: replaced duplicate session {} (identity={})", sid, identity)
+                logger.info("SessionManager: replaced duplicate session {} (session_tag={})", sid, session_tag)
 
     def _create_session(self, conn: Any, msg: AuthMessage, now: datetime) -> SessionInfo:
         session_id = uuid4().hex[:16]
@@ -73,9 +73,8 @@ class SessionManager:
             state=SessionState.ACTIVE,
             role=msg.role or "external",
             permissions=msg.permissions[:],
-            identity=msg.identity,
+            session_tag=msg.session_tag,
             description=msg.description,
-            user_id=msg.user_id,
             conn=conn,
             created_at=now,
             last_activity=now,
@@ -86,7 +85,7 @@ class SessionManager:
     def _compute_offline_duration(self, session: SessionInfo, now: datetime | None = None) -> str:
         if now is None:
             now = datetime.now()
-        key = f"{session.role}:{session.identity}" if session.identity else session.role
+        key = f"{session.role}:{session.session_tag}" if session.session_tag else session.role
         disc_time = self._last_disconnect_times.get(key)
         if not disc_time:
             return ""
@@ -204,7 +203,7 @@ class SessionManager:
                     with contextlib.suppress(Exception):
                         session.conn.close()
                 logger.info("Session removed: {}", session_id)
-                key = f"{session.role}:{session.identity}" if session.identity else session.role
+                key = f"{session.role}:{session.session_tag}" if session.session_tag else session.role
                 self._last_disconnect_times[key] = now
 
         if session is not None and self._event_bus is not None:
@@ -215,7 +214,7 @@ class SessionManager:
                     timestamp=None,
                     source="session",
                     session_id=session_id,
-                    identity=session.identity,
+                    session_tag=session.session_tag,
                 ),
             )
 

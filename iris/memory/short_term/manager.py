@@ -40,17 +40,17 @@ class ShortTermMemoryProtocol(Protocol):
     モック化やテスト用の代替実装を容易にするため。
     """
 
-    def add_turn(self, role: str, blocks: list[ContentBlock], user_id: str = "", room_id: str = "") -> None: ...
-    def search(self, query: str, max_results: int = 5, room_id: str = "") -> list[SearchResult]: ...
+    def add_turn(self, role: str, blocks: list[ContentBlock], account_id: str = "", room_id: str = "") -> None: ...
+    def search(self, query: str, max_results: int = 5, room_id: str = "", account_id: str = "") -> list[SearchResult]: ...
     def search_entities(self, entity_name: str) -> list[TurnData]: ...
-    def render_context(self, max_chars: int = MAX_CONTEXT_CHARS, query: str | None = None, room_id: str = "") -> str: ...
-    def get_recent_turns(self, n: int = 4, room_id: str = "") -> list[TurnData]: ...
-    def get_unconsolidated_turns(self, room_id: str = "") -> list[TurnData]: ...
+    def render_context(self, max_chars: int = MAX_CONTEXT_CHARS, query: str | None = None, room_id: str = "", account_id: str = "") -> str: ...
+    def get_recent_turns(self, n: int = 4, room_id: str = "", account_id: str = "") -> list[TurnData]: ...
+    def get_unconsolidated_turns(self, room_id: str = "", account_id: str = "") -> list[TurnData]: ...
     def mark_consolidated(self, up_to_index: int | None = None) -> None: ...
     def clear(self) -> None: ...
     def should_consolidate(self) -> bool: ...
-    def add_user(self, user_id: str, nickname: str, session_id: str = "", room_id: str = "") -> None: ...
-    def remove_user(self, user_id: str, session_id: str = "", room_id: str = "") -> None: ...
+    def add_user(self, account_id: str, display_name: str, session_id: str = "", room_id: str = "") -> None: ...
+    def remove_user(self, account_id: str, session_id: str = "", room_id: str = "") -> None: ...
     def get_active_users(self) -> list[tuple[str, str]]: ...
     def get_users_by_session(self, session_id: str) -> list[tuple[str, str]]: ...
     def get_users_by_room(self, room_id: str) -> list[tuple[str, str]]: ...
@@ -86,48 +86,48 @@ class ShortTermMemoryManager:
         self._room_users: dict[str, list[str]] = {}
         self._session_rooms: dict[str, set[str]] = {}
 
-    def add_user(self, user_id: str, nickname: str, session_id: str = "", room_id: str = "") -> None:
-        self._active_users[user_id] = nickname
+    def add_user(self, account_id: str, display_name: str, session_id: str = "", room_id: str = "") -> None:
+        self._active_users[account_id] = display_name
         if session_id:
             uid_list = self._session_users.setdefault(session_id, [])
-            if user_id not in uid_list:
-                uid_list.append(user_id)
+            if account_id not in uid_list:
+                uid_list.append(account_id)
         if room_id:
             uid_list = self._room_users.setdefault(room_id, [])
-            if user_id not in uid_list:
-                uid_list.append(user_id)
+            if account_id not in uid_list:
+                uid_list.append(account_id)
             if session_id:
                 self._session_rooms.setdefault(session_id, set()).add(room_id)
 
-    def remove_user(self, user_id: str, session_id: str = "", room_id: str = "") -> None:
+    def remove_user(self, account_id: str, session_id: str = "", room_id: str = "") -> None:
         if session_id:
             uid_list = self._session_users.get(session_id, [])
-            if user_id in uid_list:
-                uid_list.remove(user_id)
+            if account_id in uid_list:
+                uid_list.remove(account_id)
         else:
             for uid_list in self._session_users.values():
-                while user_id in uid_list:
-                    uid_list.remove(user_id)
+                while account_id in uid_list:
+                    uid_list.remove(account_id)
 
         if room_id:
             uid_list = self._room_users.get(room_id, [])
-            if user_id in uid_list:
-                uid_list.remove(user_id)
+            if account_id in uid_list:
+                uid_list.remove(account_id)
         elif session_id:
             for current_room_id in self._session_rooms.get(session_id, set()):
                 uid_list = self._room_users.get(current_room_id, [])
-                while user_id in uid_list:
-                    uid_list.remove(user_id)
+                while account_id in uid_list:
+                    uid_list.remove(account_id)
         else:
             for uid_list in self._room_users.values():
-                while user_id in uid_list:
-                    uid_list.remove(user_id)
+                while account_id in uid_list:
+                    uid_list.remove(account_id)
 
-        still_present = any(user_id in users for users in self._session_users.values()) or any(
-            user_id in users for users in self._room_users.values()
+        still_present = any(account_id in users for users in self._session_users.values()) or any(
+            account_id in users for users in self._room_users.values()
         )
         if not still_present:
-            self._active_users.pop(user_id, None)
+            self._active_users.pop(account_id, None)
 
     def get_active_users(self) -> list[tuple[str, str]]:
         return list(self._active_users.items())
@@ -140,7 +140,7 @@ class ShortTermMemoryManager:
         uid_list = self._room_users.get(room_id, [])
         return [(uid, self._active_users.get(uid, uid)) for uid in uid_list if uid in self._active_users]
 
-    def add_turn(self, role: str, blocks: list[ContentBlock], user_id: str = "", room_id: str = "") -> None:
+    def add_turn(self, role: str, blocks: list[ContentBlock], account_id: str = "", room_id: str = "") -> None:
         if not blocks:
             return
         truncated_blocks = _truncate_blocks(blocks, MAX_TURN_LENGTH)
@@ -151,7 +151,7 @@ class ShortTermMemoryManager:
             "timestamp": datetime.now(UTC).isoformat(),
             "consolidated": False,
             "importance": self._importance_scorer.score(text),
-            "user_id": user_id,
+            "account_id": account_id,
             "room_id": room_id,
         }
         self._turns.append(entry)
@@ -188,13 +188,15 @@ class ShortTermMemoryManager:
         overlap = len(q_words & t_words)
         return overlap / len(q_words)
 
-    def search(self, query: str, max_results: int = 5, room_id: str = "") -> list[SearchResult]:
+    def search(self, query: str, max_results: int = 5, room_id: str = "", account_id: str = "") -> list[SearchResult]:
         if not query:
             return []
 
         turns = self._turns
+        if account_id:
+            turns = [t for t in self._turns if t.get("account_id") == account_id]
         if room_id:
-            turns = [t for t in self._turns if t.get("room_id") == room_id]
+            turns = [t for t in turns if t.get("room_id") == room_id]
 
         scored: list[tuple[float, int, SearchResult]] = []
         for turn in turns:
@@ -216,10 +218,12 @@ class ShortTermMemoryManager:
         results: list[TurnData] = [turn for turn in self._turns if entity_lower in self._turn_text(turn).lower()]
         return results[-5:]
 
-    def render_context(self, max_chars: int = MAX_CONTEXT_CHARS, query: str | None = None, room_id: str = "") -> str:
+    def render_context(self, max_chars: int = MAX_CONTEXT_CHARS, query: str | None = None, room_id: str = "", account_id: str = "") -> str:
         turns = self._turns
+        if account_id:
+            turns = [t for t in self._turns if t.get("account_id") == account_id]
         if room_id:
-            turns = [t for t in self._turns if t.get("room_id") == room_id]
+            turns = [t for t in turns if t.get("room_id") == room_id]
         return render_short_term_context(
             turns=turns,
             active_references=self._active_references,
@@ -229,18 +233,22 @@ class ShortTermMemoryManager:
             active_users=self.get_active_users(),
         )
 
-    def get_recent_turns(self, n: int = 4, room_id: str = "") -> list[TurnData]:
+    def get_recent_turns(self, n: int = 4, room_id: str = "", account_id: str = "") -> list[TurnData]:
         """直近のNターンを取得する。"""
         turns = self._turns
+        if account_id:
+            turns = [t for t in self._turns if t.get("account_id") == account_id]
         if room_id:
-            turns = [t for t in self._turns if t.get("room_id") == room_id]
+            turns = [t for t in turns if t.get("room_id") == room_id]
         return turns[-n:]
 
-    def get_unconsolidated_turns(self, room_id: str = "") -> list[TurnData]:
+    def get_unconsolidated_turns(self, room_id: str = "", account_id: str = "") -> list[TurnData]:
         """まだ圧縮（長期記憶化）されていないターンの一覧を取得する。"""
         turns = self._turns
+        if account_id:
+            turns = [t for t in self._turns if t.get("account_id") == account_id]
         if room_id:
-            turns = [t for t in self._turns if t.get("room_id") == room_id]
+            turns = [t for t in turns if t.get("room_id") == room_id]
         return [t for t in turns if not t.get("consolidated")]
 
     def mark_consolidated(self, up_to_index: int | None = None) -> None:

@@ -186,14 +186,14 @@ class TestSessionManager:
         msg = AuthMessage(
             role="cli",
             permissions=[Permission.PERMISSION_RECEIVE_CHAT],
-            identity="debug-console",
+            session_tag="debug-console",
             description="Debug console on Mac mini",
         )
         response = manager.authenticate(conn, msg)
         assert response.session_id is not None
 
         info = manager._sessions[response.session_id]
-        assert info.identity == "debug-console"
+        assert info.session_tag == "debug-console"
         assert info.description == "Debug console on Mac mini"
 
     def test_get_sessions_summary_returns_empty_when_no_sessions(self, manager: SessionManager) -> None:

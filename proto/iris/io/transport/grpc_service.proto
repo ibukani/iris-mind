@@ -22,7 +22,7 @@ message Identity {
   // Stable user ID within the provider.
   string subject = 2;
   // Display name from the provider.
-  string display_name = 3;
+  string provider_name = 3;
   // Provider-specific metadata.
   map<string, string> metadata = 4;
 }
@@ -91,8 +91,8 @@ message CommandOutput {
 message ControlMessage {
   // Action type: "account.join" / "account.leave" / "account.get" / "account.update" / "account.link_identity"
   string action = 1;
-  // Display nickname.
-  string nickname = 2;
+  // Display name.
+  string display_name = 2;
   // Human-readable response from server (server-to-client only).
   string text = 3;
   // Internal Iris account ID.

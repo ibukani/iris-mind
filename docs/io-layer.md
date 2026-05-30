@@ -114,7 +114,7 @@ class ControlMessage(BaseModel)   # account / presence 制御
 class Message(BaseModel)          # source_role, target_role, direction, msg_type, content, speaker, room_id
 class CommandInput(BaseModel)     # システムコマンド入力（fast-path）
 class CommandOutput(BaseModel)    # コマンド応答（fast-path）
-class SessionInfo(BaseModel)      # session_id, role, permissions, conn
+class SessionInfo(BaseModel)      # session_id, session_tag, account_id, role, permissions, conn
 ```
 
 **Message の方向制御**: `direction` フィールド (`request`/`response`/`stream`/`event`) でメッセージの意味を区別。`target_role` で配送先を指定（`*` = 全セッションにブロードキャスト）。

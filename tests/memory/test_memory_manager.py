@@ -262,7 +262,7 @@ class TestInputReadySubscription:
             source="io",
             session_id="s1",
             content="hello",
-            user_id="",
+            account_id="",
             context={
                 "source_role": "cli",
                 "target_role": "mind",
@@ -286,7 +286,7 @@ class TestInputReadySubscription:
             source="io",
             session_id="s1",
             content="テスト",
-            user_id="",
+            account_id="",
             context={
                 "source_role": "cli",
                 "target_role": "mind",
@@ -309,7 +309,7 @@ class TestInputReadySubscription:
             source="io",
             session_id="s1",
             content="true",
-            user_id="",
+            account_id="",
             context={
                 "source_role": "cli",
                 "target_role": "mind",
@@ -368,10 +368,10 @@ class TestRoomId:
             def __init__(self) -> None:
                 self.stored: list[tuple[str, str]] = []
 
-            def add(self, summary: str, room_id: str = "") -> None:
+            def add(self, summary: str, room_id: str = "", account_id: str = "") -> None:
                 self.stored.append((summary, room_id))
 
-            def get_recent(self, n: int = 5, room_id: str = "") -> list[dict[str, Any]]:
+            def get_recent(self, n: int = 5, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:
                 return []
 
             def clear(self) -> None:
@@ -400,10 +400,10 @@ class TestRoomId:
             def __init__(self) -> None:
                 self.stored: list[tuple[str, str]] = []
 
-            def add(self, summary: str, room_id: str = "") -> None:
+            def add(self, summary: str, room_id: str = "", account_id: str = "") -> None:
                 self.stored.append((summary, room_id))
 
-            def get_recent(self, n: int = 5, room_id: str = "") -> list[dict[str, Any]]:
+            def get_recent(self, n: int = 5, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:
                 return []
 
             def clear(self) -> None:
@@ -432,10 +432,10 @@ class TestRoomId:
             def __init__(self) -> None:
                 self.stored: list[tuple[str, str]] = []
 
-            def add(self, summary: str, room_id: str = "") -> None:
+            def add(self, summary: str, room_id: str = "", account_id: str = "") -> None:
                 self.stored.append((summary, room_id))
 
-            def get_recent(self, n: int = 5, room_id: str = "") -> list[dict[str, Any]]:
+            def get_recent(self, n: int = 5, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:
                 return []
 
             def clear(self) -> None:
@@ -462,10 +462,10 @@ class TestRoomId:
             def __init__(self) -> None:
                 self.stored: list[tuple[dict, str]] = []
 
-            def add(self, data: dict, room_id: str = "") -> None:
+            def add(self, data: dict, room_id: str = "", account_id: str = "") -> None:
                 self.stored.append((data, room_id))
 
-            def search(self, query: str, max_results: int = 3) -> list[dict[str, Any]]:
+            def search(self, query: str, max_results: int = 3, account_id: str = "") -> list[dict[str, Any]]:
                 return []
 
             def clear(self) -> None:
@@ -485,14 +485,14 @@ class TestRoomId:
         from iris.memory.long_term.manager import LongTermMemoryManager
 
         class FakeSemantic:
-            def search(self, query: str, max_results: int = 3) -> list[dict[str, Any]]:
+            def search(self, query: str, max_results: int = 3, account_id: str = "") -> list[dict[str, Any]]:
                 return [
                     {"content": "a", "room_id": "room1", "tags": []},
                     {"content": "b", "room_id": "room2", "tags": []},
                     {"content": "c", "room_id": "room1", "tags": []},
                 ]
 
-            def add(self, data: dict, room_id: str = "") -> None:
+            def add(self, data: dict, room_id: str = "", account_id: str = "") -> None:
                 pass
 
             def clear(self) -> None:
@@ -512,12 +512,12 @@ class TestRoomId:
         from iris.memory.long_term.manager import LongTermMemoryManager
 
         class FakeEpisodic:
-            def get_recent(self, n: int = 5, room_id: str = "") -> list[dict[str, Any]]:
+            def get_recent(self, n: int = 5, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:
                 if room_id == "room1":
                     return [{"content": "a"}, {"content": "b"}]
                 return [{"content": "x"}, {"content": "y"}, {"content": "z"}]
 
-            def add(self, summary: str, room_id: str = "") -> None:
+            def add(self, summary: str, room_id: str = "", account_id: str = "") -> None:
                 pass
 
             def clear(self) -> None:
@@ -582,7 +582,7 @@ class TestRoomId:
                 timestamp=None,
                 source="room",
                 account_id="user1",
-                nickname="Alice",
+                display_name="Alice",
                 session_id="s1",
                 room_id="room1",
             ),
@@ -606,7 +606,7 @@ class TestRoomId:
                 timestamp=None,
                 source="room",
                 account_id="user1",
-                nickname="Alice",
+                display_name="Alice",
                 session_id="s1",
                 room_id="room1",
             ),
@@ -622,7 +622,7 @@ class TestRoomId:
                 timestamp=None,
                 source="room",
                 account_id="user1",
-                nickname="Alice",
+                display_name="Alice",
                 session_id="s1",
                 room_id="room1",
             ),
@@ -669,7 +669,7 @@ class TestRoomId:
                 timestamp=None,
                 source="room",
                 account_id="user1",
-                nickname="Alice",
+                display_name="Alice",
                 session_id="s1",
                 room_id="room1",
             ),
@@ -688,7 +688,7 @@ class TestRoomId:
                 timestamp=None,
                 source="room",
                 account_id="user1",
-                nickname="Alice",
+                display_name="Alice",
                 session_id="s1",
                 room_id="room1",
             ),
@@ -699,7 +699,7 @@ class TestRoomId:
                 timestamp=None,
                 source="room",
                 account_id="user1",
-                nickname="Alice",
+                display_name="Alice",
                 session_id="s1",
                 room_id="room1",
             ),

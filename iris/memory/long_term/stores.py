@@ -73,15 +73,17 @@ class EpisodicStore(_JsonlStore):
             self.path.unlink()
         logger.info("EpisodicStore: cleared")
 
-    def add(self, summary: str, metadata: dict | None = None, room_id: str = "") -> None:
-        entry: dict[str, object] = {"summary": summary, "timestamp": datetime.now(UTC).isoformat(), "room_id": room_id}
+    def add(self, summary: str, metadata: dict | None = None, room_id: str = "", account_id: str = "") -> None:
+        entry: dict[str, object] = {"summary": summary, "timestamp": datetime.now(UTC).isoformat(), "room_id": room_id, "account_id": account_id}
         if metadata:
             entry["metadata"] = metadata
         self._add_entry(entry, self.max_entries)
         logger.info("EpisodicStore: added entry")
 
-    def get_recent(self, n: int = 5, room_id: str = "") -> list[dict]:
+    def get_recent(self, n: int = 5, room_id: str = "", account_id: str = "") -> list[dict]:
         entries = self.load_all()
+        if account_id:
+            entries = [e for e in entries if e.get("account_id") == account_id]
         if room_id:
             entries = [e for e in entries if e.get("room_id") == room_id]
         return entries[-n:]
@@ -108,11 +110,11 @@ class SemanticStore(_JsonlStore):
             if unsynced <= 0:
                 return
             for e in entries[self._synced_count :]:
-                self.vector.add(e)
+                self.vector.add(e, account_id=e.get("account_id", ""))
             self._synced_count = len(entries)
             logger.info("SemanticStore: synced {} entries to vector store", unsynced)
 
-    def add(self, entry: dict, room_id: str = "") -> None:
+    def add(self, entry: dict, room_id: str = "", account_id: str = "") -> None:
         with self._lock:
             entries = self.load_all()
             if self._is_duplicate(entry.get("content", ""), entries):
@@ -122,11 +124,12 @@ class SemanticStore(_JsonlStore):
             entry.setdefault("tags", [])
             entry.setdefault("type", "lesson")
             entry["room_id"] = room_id
+            entry["account_id"] = account_id
             entries.append(entry)
             if len(entries) > self.max_entries:
                 entries = entries[-self.max_entries :]
             self._write_file(entries)
-            self.vector.add(entry)
+            self.vector.add(entry, account_id=account_id)
             self._synced_count = len(entries)
             logger.info("SemanticStore: added entry, type={}", entry.get("type", "unknown"))
 
@@ -137,8 +140,8 @@ class SemanticStore(_JsonlStore):
         self._synced_count = 0
         logger.info("SemanticStore: cleared")
 
-    def search(self, query: str, max_results: int = 3) -> list[dict]:
-        return self.vector.search(query, max_results=max_results)
+    def search(self, query: str, max_results: int = 3, account_id: str = "") -> list[dict]:
+        return self.vector.search(query, max_results=max_results, account_id=account_id)
 
     def _is_duplicate(self, content: str, entries: list[dict]) -> bool:
         return any(e.get("content") == content for e in entries)

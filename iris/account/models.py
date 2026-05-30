@@ -11,7 +11,7 @@ class Account:
     """アカウント情報。"""
 
     account_id: str = ""
-    nickname: str = ""
+    display_name: str = ""
     created_at: str = ""
     last_seen: str | None = None
     profile: dict[str, object] = field(default_factory=dict)
@@ -25,7 +25,7 @@ class Account:
     def to_dict(self) -> dict[str, object]:
         return {
             "account_id": self.account_id,
-            "nickname": self.nickname,
+            "display_name": self.display_name,
             "created_at": self.created_at,
             "last_seen": self.last_seen,
             "profile": self.profile,
@@ -42,7 +42,7 @@ class Account:
             profile = cast("dict[str, object]", raw_profile)
         return cls(
             account_id=str(data.get("account_id", "")),
-            nickname=str(data.get("nickname", "")),
+            display_name=str(data.get("display_name", "")),
             created_at=str(data.get("created_at", "")),
             last_seen=last_seen,
             profile=profile,
@@ -56,7 +56,7 @@ class AccountIdentity:
     provider: str
     subject: str
     account_id: str
-    display_name: str = ""
+    provider_name: str = ""
     linked_at: str = ""
     last_seen: str | None = None
     metadata: dict[str, object] = field(default_factory=dict)
@@ -74,7 +74,7 @@ class AccountIdentity:
             "provider": self.provider,
             "subject": self.subject,
             "account_id": self.account_id,
-            "display_name": self.display_name,
+            "provider_name": self.provider_name,
             "linked_at": self.linked_at,
             "last_seen": self.last_seen,
             "metadata": self.metadata,
@@ -93,7 +93,7 @@ class AccountIdentity:
             provider=str(data.get("provider", "")),
             subject=str(data.get("subject", "")),
             account_id=str(data.get("account_id", "")),
-            display_name=str(data.get("display_name", "")),
+            provider_name=str(data.get("provider_name", "")),
             linked_at=str(data.get("linked_at", "")),
             last_seen=last_seen,
             metadata=metadata,

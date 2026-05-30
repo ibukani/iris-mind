@@ -80,7 +80,7 @@ class ShortTermMemoryManager:
     """現在処理中の会話内容（ターン・話題・参照エンティティ）を保持。
     長期記憶への転送（consolidation）を担う。
     脳科学対応: 前頭前野 (PFC) のワーキングメモリ。"""
-    def add_turn(self, role: str, content: str, user_identity: str = "") -> None
+    def add_turn(self, role: str, content: str, account_id: str = "") -> None
     def search(self, query: str, max_results: int = 5) -> list[dict]
     def search_entities(self, entity_name: str) -> list[dict]
     def render_context(self, max_chars: int = 600, query: str | None = None) -> str
@@ -96,9 +96,9 @@ class ShortTermMemoryManager:
 ```
 
 **add_turn のタイミング**:
-- `FlowExecutor._on_plan()` Plan決定後、LLM呼出直前に `add_turn("user", content, user_identity)`
-- LLM応答受信直後に `add_turn("assistant", response_text, user_identity)`
-- `user_identity` は `Plan.user_identity` から伝搬される。グループチャット時は発話者の識別子、それ以外は空文字
+    - `FlowExecutor._on_plan()` Plan決定後、LLM呼出直前に `add_turn("user", content, account_id)`
+- LLM応答受信直後に `add_turn("assistant", response_text, account_id)`
+- `account_id` は `Plan.account_id` から伝搬される。グループチャット時は発話者の識別子、それ以外は空文字
 - Planning段階では short_term に最新ターンは存在しない（Planの `content` フィールド経由でアクセスする）
 
 **render_context(query=None)**:
@@ -194,10 +194,10 @@ sequenceDiagram
     participant LTM as long_term
 
     alt ユーザー入力
-        EB-->>MGR: MessageEvent(content, direction=request, user_identity)
+        EB-->>MGR: MessageEvent(content, direction=request, account_id)
         MGR->>SEN: store_raw(content)
-        MGR->>MGR: pending_dict[session_id].append((content, user_identity))
-        MGR->>EB: TimerTick → flush → InputReady(content, user_identity)
+        MGR->>MGR: pending_dict[session_id].append((content, account_id))
+        MGR->>EB: TimerTick → flush → InputReady(content, account_id)
         MGR->>EB: InterruptEvent(session_id)
 
         Note over EB,STM: PlanningManager が Plan 決定後に FlowExecutor が add_turn
@@ -233,6 +233,6 @@ ContextWindow 圧縮は LLMContextWindowManager（iris/llm/context.py の `LLMCo
 
 | イベント | タイミング | フィールド |
 |----------|-----------|-----------|
-| `InputReady` | 入力確定時 / TimerTick / 再接続時 | content, session_id, user_identity, context |
+| `InputReady` | 入力確定時 / TimerTick / 再接続時 | content, session_id, account_id, context |
 | `InterruptEvent` | 入力確定時 | session_id |
 

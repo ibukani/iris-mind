@@ -40,27 +40,27 @@ class _AccountDispatcher:
         session_id: str,
         identity: dict[str, Any] | None,
     ) -> tuple[str, str]:
-        provider, subject, display_name, metadata = self._parse_identity(identity)
+        provider, subject, provider_name, metadata = self._parse_identity(identity)
         if not provider or not subject:
             return "", ""
 
         account = self._account_manager.resolve_or_create_identity(
             provider,
             subject,
-            display_name=display_name,
+            provider_name=provider_name,
             metadata=metadata,
         )
-        return account.account_id, account.nickname
+        return account.account_id, account.display_name
 
     def _handle_identify(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent:
-        provider, subject, display_name, metadata = self._parse_identity(msg.identity)
+        provider, subject, provider_name, metadata = self._parse_identity(msg.identity)
         if not provider or not subject:
             return self._error("account.identify", "identity.provider and identity.subject required")
 
         account = self._account_manager.resolve_or_create_identity(
             provider,
             subject,
-            display_name=display_name or msg.nickname,
+            provider_name=provider_name or msg.display_name,
             metadata=metadata,
         )
 
@@ -69,9 +69,9 @@ class _AccountDispatcher:
             source="account",
             action="account.identified",
             account_id=account.account_id,
-            nickname=account.nickname,
+            display_name=account.display_name,
             identity=msg.identity,
-            text=f"Identified: {account.nickname}",
+            text=f"Identified: {account.display_name}",
         )
 
     def _handle_profile(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent:
@@ -87,7 +87,7 @@ class _AccountDispatcher:
             source="account",
             action="account.profile",
             account_id=account.account_id,
-            nickname=account.nickname,
+            display_name=account.display_name,
             text=orjson.dumps(data).decode("utf-8"),
         )
 
@@ -96,9 +96,9 @@ class _AccountDispatcher:
         if account is None:
             return self._error("account.update", "not identified")
 
-        if msg.nickname:
-            self._account_manager.update_nickname(account.account_id, msg.nickname)
-            account.nickname = msg.nickname
+        if msg.display_name:
+            self._account_manager.update_display_name(account.account_id, msg.display_name)
+            account.display_name = msg.display_name
         if msg.profile:
             self._account_manager.update_profile(account.account_id, **msg.profile)
 
@@ -107,8 +107,8 @@ class _AccountDispatcher:
             source="account",
             action="account.updated",
             account_id=account.account_id,
-            nickname=account.nickname,
-            text=f"Updated: {account.nickname}",
+            display_name=account.display_name,
+            text=f"Updated: {account.display_name}",
         )
 
     def _handle_link(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent:
@@ -116,7 +116,7 @@ class _AccountDispatcher:
         if account is None:
             return self._error("account.link", "not identified")
 
-        provider, subject, display_name, metadata = self._parse_identity(msg.identity)
+        provider, subject, provider_name, metadata = self._parse_identity(msg.identity)
         if not provider or not subject:
             return self._error("account.link", "identity.provider and identity.subject required")
 
@@ -124,7 +124,7 @@ class _AccountDispatcher:
             account.account_id,
             provider,
             subject,
-            display_name=display_name,
+            provider_name=provider_name,
             metadata=metadata,
         ):
             return self._error("account.link", "identity already linked")
@@ -134,7 +134,7 @@ class _AccountDispatcher:
             source="account",
             action="account.linked",
             account_id=account.account_id,
-            nickname=account.nickname,
+            display_name=account.display_name,
             identity=msg.identity,
             text=f"Linked identity: {provider}:{subject}",
         )
@@ -145,7 +145,7 @@ class _AccountDispatcher:
             if account is not None:
                 return account
 
-        provider, subject, _display_name, _metadata = self._parse_identity(msg.identity)
+        provider, subject, _provider_name, _metadata = self._parse_identity(msg.identity)
         if provider and subject:
             account = self._account_manager.get_account_by_identity(provider, subject)
             if account is not None:
@@ -162,7 +162,7 @@ class _AccountDispatcher:
         return (
             str(identity.get("provider", "")),
             str(identity.get("subject", "")),
-            str(identity.get("display_name", "")),
+            str(identity.get("provider_name", "")),
             metadata,
         )
 

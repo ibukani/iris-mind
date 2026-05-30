@@ -23,7 +23,7 @@ def test_room_joined_event_broadcasts_presence() -> None:
             room_id="room1",
             account_id="a1",
             session_id="s1",
-            nickname="Alice",
+            display_name="Alice",
         ),
     )
 
@@ -31,7 +31,7 @@ def test_room_joined_event_broadcasts_presence() -> None:
     raw = conn.send_bytes.call_args.args[0].decode("utf-8")
     assert '"action":"presence.joined"' in raw
     assert '"account_id":"a1"' in raw
-    assert '"nickname":"Alice"' in raw
+    assert '"display_name":"Alice"' in raw
 
 
 def test_room_left_event_broadcasts_presence() -> None:
@@ -48,7 +48,7 @@ def test_room_left_event_broadcasts_presence() -> None:
             room_id="room1",
             account_id="a1",
             session_id="s1",
-            nickname="Alice",
+            display_name="Alice",
         ),
     )
 

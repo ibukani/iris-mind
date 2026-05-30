@@ -1,12 +1,13 @@
 {
-  "$schema": "https://opencode.ai/config.json",
-  "instructions": [".agents/*.md"],
-  "skills": {
-    "paths": [".agents/skills"]
-  },
-  "permission": {
-    "skill": {
-      "*": "allow"
-    }
-  }
+    "$schema": "https://opencode.ai/config.json",
+    "instructions": [".agents/*.md"],
+    "skills": {
+        "paths": [".agents/skills"]
+    },
+    "permission": {
+        "skill": {
+            "*": "allow"
+        }
+    },
+    "lsp": true
 }

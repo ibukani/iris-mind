@@ -370,7 +370,7 @@ class MessageEvent(Event):
     session_id: str = ""
     source_role: str = ""
     target_role: str = ""
-    user_id: str = ""
+    account_id: str = ""
     room_id: str = ""
     direction: str = ""      # "request" | "response" | "stream" | "event"
     msg_type: str = ""       # "chat" | "system" | "stream" | "response" | ...
@@ -382,7 +382,7 @@ class MessageEvent(Event):
 class InputReady(Event):
     session_id: str = ""
     content: str = ""
-    user_id: str = ""
+    account_id: str = ""
     room_id: str = ""
     context: dict | None = None
 
@@ -391,7 +391,7 @@ class ClientSessionEvent(Event):
     session_id: str = ""
     action: str = ""         # "connected" | "disconnected"
     role: str = ""
-    identity: str = ""
+    session_tag: str = ""
     offline_duration: str = ""
 
 @dataclass

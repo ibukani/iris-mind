@@ -258,7 +258,7 @@ BidirectionalStreamRequest(
 BidirectionalStreamRequest(
     control=ControlMessage(
         action="account.update",
-        nickname="Robert",
+        display_name="Robert",
         profile={"lang": "ja"},
     )
 )
@@ -274,7 +274,7 @@ BidirectionalStreamRequest(
         identity=Identity(provider="discord", subject="1234567890"),
     )
 )
-# → ControlMessage(action="account.identified", account_id="abc123", nickname="Bob")
+# → ControlMessage(action="account.identified", account_id="abc123", display_name="Bob")
 
 # アカウント情報取得
 BidirectionalStreamRequest(control=ControlMessage(action="account.profile"))
@@ -296,7 +296,7 @@ BidirectionalStreamRequest(
 |-----------|---------------|------|
 | `account.identify` | `identity.provider`, `identity.subject` | identity解決/作成、アカウント情報返却 |
 | `account.profile` | なし | アカウント情報取得 |
-| `account.update` | `nickname` または `profile` | ニックネーム・プロフィール更新 |
+| `account.update` | `display_name` または `profile` | 表示名・プロフィール更新 |
 | `account.link` | `identity.provider`, `identity.subject` | 現アカウントへ外部ID追加 |
 | `room.join` | `room_id`, (`account_id` or `identity`) | ルーム参加（identityからaccount作成も可） |
 | `room.leave` | `room_id`, (`account_id` or `identity`) | ルーム退室 |
@@ -319,7 +319,7 @@ BidirectionalStreamRequest(
 ControlMessage(
     action="presence.joined",
     account_id="abc123",
-    nickname="Bob",
+    display_name="Bob",
     identity=Identity(provider="discord", subject="1234567890"),
 )
 ```

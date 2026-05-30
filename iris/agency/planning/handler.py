@@ -53,17 +53,17 @@ class _PlanningEventHandler:
             return
         plan = self._proactive_strategy.build_proactive(proactive_context)
         self._publish(
-            plan, event.session_id, event.user_id or context.get("identity", ""), event.room_id, from_timer=True
+            plan, event.session_id, event.account_id or context.get("identity", ""), event.room_id, from_timer=True
         )
 
     def _on_user_input(self, event: InputReady) -> None:
         chaos_level = (event.context or {}).get("chaos_level", 0.0)
         plan = self._response_strategy.build_response(event.content, chaos_level=chaos_level)
-        self._publish(plan, event.session_id, event.user_id, event.room_id, from_timer=False)
+        self._publish(plan, event.session_id, event.account_id, event.room_id, from_timer=False)
 
-    def _publish(self, plan: Plan, session_id: str, user_id: str, room_id: str, from_timer: bool) -> None:
+    def _publish(self, plan: Plan, session_id: str, account_id: str, room_id: str, from_timer: bool) -> None:
         plan.session_id = session_id
-        plan.user_id = user_id
+        plan.account_id = account_id
         plan.room_id = room_id
         if plan.silent:
             plan.overrides["allow_side_effects"] = False

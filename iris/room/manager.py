@@ -130,7 +130,7 @@ class RoomManager:
                     room_id=room_id,
                     account_id=account_id,
                     session_id=session_id,
-                    nickname=self._resolve_nickname(account_id),
+                    display_name=self._resolve_display_name(account_id),
                 ),
             )
 
@@ -160,7 +160,7 @@ class RoomManager:
                     room_id=room_id,
                     account_id=account_id,
                     session_id=session_id,
-                    nickname=self._resolve_nickname(account_id),
+                    display_name=self._resolve_display_name(account_id),
                 ),
             )
 
@@ -184,7 +184,7 @@ class RoomManager:
                         room_id=member.room_id,
                         account_id=member.account_id,
                         session_id=session_id,
-                        nickname=self._resolve_nickname(member.account_id),
+                        display_name=self._resolve_display_name(member.account_id),
                     ),
                 )
 
@@ -213,12 +213,12 @@ class RoomManager:
         member = self._store.find_member(room_id, account_id)
         return member is not None and member.is_active
 
-    def _resolve_nickname(self, account_id: str) -> str:
-        """account_id からニックネームを解決する。見つからない場合は account_id を返す。"""
+    def _resolve_display_name(self, account_id: str) -> str:
+        """account_id から表示名を解決する。見つからない場合は account_id を返す。"""
         if self._account_manager:
             account = self._account_manager.resolve(account_id)
             if account:
-                return str(account.nickname)
+                return str(account.display_name)
         return account_id
 
     def get_default_room(self) -> Room | None:

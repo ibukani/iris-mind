@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n$iris/io/transport/grpc_service.proto\x12\x11iris.io.transport\"\xb1\x01\n\x08Identity\x12\x10\n\x08provider\x18\x01 \x01(\t\x12\x0f\n\x07subject\x18\x02 \x01(\t\x12\x14\n\x0c\x64isplay_name\x18\x03 \x01(\t\x12;\n\x08metadata\x18\x04 \x03(\x0b\x32).iris.io.transport.Identity.MetadataEntry\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xf2\x02\n\x07Message\x12\n\n\x02id\x18\x01 \x01(\t\x12\x16\n\x0e\x63orrelation_id\x18\x02 \x01(\t\x12\x12\n\nsession_id\x18\x03 \x01(\t\x12\x13\n\x0bsource_role\x18\x04 \x01(\t\x12\x13\n\x0btarget_role\x18\x05 \x01(\t\x12\x11\n\tdirection\x18\x06 \x01(\t\x12\x10\n\x08msg_type\x18\x07 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x08 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\t \x01(\t\x12\r\n\x05state\x18\n \x01(\t\x12:\n\x08metadata\x18\x0b \x03(\x0b\x32(.iris.io.transport.Message.MetadataEntry\x12,\n\x07speaker\x18\x0c \x01(\x0b\x32\x1b.iris.io.transport.Identity\x12\x0f\n\x07room_id\x18\r \x01(\t\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"f\n\x0c\x43ommandInput\x12\x10\n\x08msg_type\x18\x01 \x01(\t\x12\n\n\x02id\x18\x02 \x01(\t\x12\x12\n\nsession_id\x18\x03 \x01(\t\x12\x13\n\x0bsource_role\x18\x04 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x05 \x01(\t\"y\n\rCommandOutput\x12\n\n\x02id\x18\x01 \x01(\t\x12\x16\n\x0e\x63orrelation_id\x18\x02 \x01(\t\x12\x12\n\nsession_id\x18\x03 \x01(\t\x12\x10\n\x08msg_type\x18\x04 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x05 \x01(\t\x12\r\n\x05state\x18\x06 \x01(\t\"\xf9\x02\n\x0e\x43ontrolMessage\x12\x0e\n\x06\x61\x63tion\x18\x01 \x01(\t\x12\x10\n\x08nickname\x18\x02 \x01(\t\x12\x0c\n\x04text\x18\x03 \x01(\t\x12\x12\n\naccount_id\x18\x04 \x01(\t\x12-\n\x08identity\x18\x05 \x01(\x0b\x32\x1b.iris.io.transport.Identity\x12?\n\x07profile\x18\x06 \x03(\x0b\x32..iris.io.transport.ControlMessage.ProfileEntry\x12\x0f\n\x07room_id\x18\x07 \x01(\t\x12\x41\n\x08metadata\x18\x08 \x03(\x0b\x32/.iris.io.transport.ControlMessage.MetadataEntry\x1a.\n\x0cProfileEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xbe\x01\n\x1a\x42idirectionalStreamRequest\x12-\n\x07message\x18\x01 \x01(\x0b\x32\x1a.iris.io.transport.MessageH\x00\x12\x32\n\x07\x63ommand\x18\x02 \x01(\x0b\x32\x1f.iris.io.transport.CommandInputH\x00\x12\x34\n\x07\x63ontrol\x18\x03 \x01(\x0b\x32!.iris.io.transport.ControlMessageH\x00\x42\x07\n\x05\x66rame\"\xc0\x01\n\x1b\x42idirectionalStreamResponse\x12-\n\x07message\x18\x01 \x01(\x0b\x32\x1a.iris.io.transport.MessageH\x00\x12\x33\n\x07\x63ommand\x18\x02 \x01(\x0b\x32 .iris.io.transport.CommandOutputH\x00\x12\x34\n\x07\x63ontrol\x18\x03 \x01(\x0b\x32!.iris.io.transport.ControlMessageH\x00\x42\x07\n\x05\x66rame*\x96\x02\n\nPermission\x12\x1a\n\x16PERMISSION_UNSPECIFIED\x10\x00\x12\x18\n\x14PERMISSION_SEND_CHAT\x10\x01\x12\x1b\n\x17PERMISSION_RECEIVE_CHAT\x10\x02\x12\x1b\n\x17PERMISSION_SEND_COMMAND\x10\x03\x12\x1e\n\x1aPERMISSION_RECEIVE_COMMAND\x10\x04\x12\x1a\n\x16PERMISSION_RECEIVE_LOG\x10\x05\x12\x18\n\x14PERMISSION_INTERRUPT\x10\x06\x12\x1d\n\x19PERMISSION_EXECUTE_ACTION\x10\x07\x12#\n\x1fPERMISSION_SEND_VOICE_INDICATOR\x10\x08\x32\x87\x01\n\x0bIrisService\x12x\n\x13\x42idirectionalStream\x12-.iris.io.transport.BidirectionalStreamRequest\x1a..iris.io.transport.BidirectionalStreamResponse(\x01\x30\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n$iris/io/transport/grpc_service.proto\x12\x11iris.io.transport\"\xb2\x01\n\x08Identity\x12\x10\n\x08provider\x18\x01 \x01(\t\x12\x0f\n\x07subject\x18\x02 \x01(\t\x12\x15\n\rprovider_name\x18\x03 \x01(\t\x12;\n\x08metadata\x18\x04 \x03(\x0b\x32).iris.io.transport.Identity.MetadataEntry\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xf2\x02\n\x07Message\x12\n\n\x02id\x18\x01 \x01(\t\x12\x16\n\x0e\x63orrelation_id\x18\x02 \x01(\t\x12\x12\n\nsession_id\x18\x03 \x01(\t\x12\x13\n\x0bsource_role\x18\x04 \x01(\t\x12\x13\n\x0btarget_role\x18\x05 \x01(\t\x12\x11\n\tdirection\x18\x06 \x01(\t\x12\x10\n\x08msg_type\x18\x07 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x08 \x01(\t\x12\x14\n\x0c\x63ontent_type\x18\t \x01(\t\x12\r\n\x05state\x18\n \x01(\t\x12:\n\x08metadata\x18\x0b \x03(\x0b\x32(.iris.io.transport.Message.MetadataEntry\x12,\n\x07speaker\x18\x0c \x01(\x0b\x32\x1b.iris.io.transport.Identity\x12\x0f\n\x07room_id\x18\r \x01(\t\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"f\n\x0c\x43ommandInput\x12\x10\n\x08msg_type\x18\x01 \x01(\t\x12\n\n\x02id\x18\x02 \x01(\t\x12\x12\n\nsession_id\x18\x03 \x01(\t\x12\x13\n\x0bsource_role\x18\x04 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x05 \x01(\t\"y\n\rCommandOutput\x12\n\n\x02id\x18\x01 \x01(\t\x12\x16\n\x0e\x63orrelation_id\x18\x02 \x01(\t\x12\x12\n\nsession_id\x18\x03 \x01(\t\x12\x10\n\x08msg_type\x18\x04 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x05 \x01(\t\x12\r\n\x05state\x18\x06 \x01(\t\"\xfd\x02\n\x0e\x43ontrolMessage\x12\x0e\n\x06\x61\x63tion\x18\x01 \x01(\t\x12\x14\n\x0c\x64isplay_name\x18\x02 \x01(\t\x12\x0c\n\x04text\x18\x03 \x01(\t\x12\x12\n\naccount_id\x18\x04 \x01(\t\x12-\n\x08identity\x18\x05 \x01(\x0b\x32\x1b.iris.io.transport.Identity\x12?\n\x07profile\x18\x06 \x03(\x0b\x32..iris.io.transport.ControlMessage.ProfileEntry\x12\x0f\n\x07room_id\x18\x07 \x01(\t\x12\x41\n\x08metadata\x18\x08 \x03(\x0b\x32/.iris.io.transport.ControlMessage.MetadataEntry\x1a.\n\x0cProfileEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x1a/\n\rMetadataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\xbe\x01\n\x1a\x42idirectionalStreamRequest\x12-\n\x07message\x18\x01 \x01(\x0b\x32\x1a.iris.io.transport.MessageH\x00\x12\x32\n\x07\x63ommand\x18\x02 \x01(\x0b\x32\x1f.iris.io.transport.CommandInputH\x00\x12\x34\n\x07\x63ontrol\x18\x03 \x01(\x0b\x32!.iris.io.transport.ControlMessageH\x00\x42\x07\n\x05\x66rame\"\xc0\x01\n\x1b\x42idirectionalStreamResponse\x12-\n\x07message\x18\x01 \x01(\x0b\x32\x1a.iris.io.transport.MessageH\x00\x12\x33\n\x07\x63ommand\x18\x02 \x01(\x0b\x32 .iris.io.transport.CommandOutputH\x00\x12\x34\n\x07\x63ontrol\x18\x03 \x01(\x0b\x32!.iris.io.transport.ControlMessageH\x00\x42\x07\n\x05\x66rame*\x96\x02\n\nPermission\x12\x1a\n\x16PERMISSION_UNSPECIFIED\x10\x00\x12\x18\n\x14PERMISSION_SEND_CHAT\x10\x01\x12\x1b\n\x17PERMISSION_RECEIVE_CHAT\x10\x02\x12\x1b\n\x17PERMISSION_SEND_COMMAND\x10\x03\x12\x1e\n\x1aPERMISSION_RECEIVE_COMMAND\x10\x04\x12\x1a\n\x16PERMISSION_RECEIVE_LOG\x10\x05\x12\x18\n\x14PERMISSION_INTERRUPT\x10\x06\x12\x1d\n\x19PERMISSION_EXECUTE_ACTION\x10\x07\x12#\n\x1fPERMISSION_SEND_VOICE_INDICATOR\x10\x08\x32\x87\x01\n\x0bIrisService\x12x\n\x13\x42idirectionalStream\x12-.iris.io.transport.BidirectionalStreamRequest\x1a..iris.io.transport.BidirectionalStreamResponse(\x01\x30\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -39,30 +39,30 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_CONTROLMESSAGE_PROFILEENTRY']._serialized_options = b'8\001'
   _globals['_CONTROLMESSAGE_METADATAENTRY']._loaded_options = None
   _globals['_CONTROLMESSAGE_METADATAENTRY']._serialized_options = b'8\001'
-  _globals['_PERMISSION']._serialized_start=1608
-  _globals['_PERMISSION']._serialized_end=1886
+  _globals['_PERMISSION']._serialized_start=1613
+  _globals['_PERMISSION']._serialized_end=1891
   _globals['_IDENTITY']._serialized_start=60
-  _globals['_IDENTITY']._serialized_end=237
-  _globals['_IDENTITY_METADATAENTRY']._serialized_start=190
-  _globals['_IDENTITY_METADATAENTRY']._serialized_end=237
-  _globals['_MESSAGE']._serialized_start=240
-  _globals['_MESSAGE']._serialized_end=610
-  _globals['_MESSAGE_METADATAENTRY']._serialized_start=190
-  _globals['_MESSAGE_METADATAENTRY']._serialized_end=237
-  _globals['_COMMANDINPUT']._serialized_start=612
-  _globals['_COMMANDINPUT']._serialized_end=714
-  _globals['_COMMANDOUTPUT']._serialized_start=716
-  _globals['_COMMANDOUTPUT']._serialized_end=837
-  _globals['_CONTROLMESSAGE']._serialized_start=840
-  _globals['_CONTROLMESSAGE']._serialized_end=1217
-  _globals['_CONTROLMESSAGE_PROFILEENTRY']._serialized_start=1122
-  _globals['_CONTROLMESSAGE_PROFILEENTRY']._serialized_end=1168
-  _globals['_CONTROLMESSAGE_METADATAENTRY']._serialized_start=190
-  _globals['_CONTROLMESSAGE_METADATAENTRY']._serialized_end=237
-  _globals['_BIDIRECTIONALSTREAMREQUEST']._serialized_start=1220
-  _globals['_BIDIRECTIONALSTREAMREQUEST']._serialized_end=1410
-  _globals['_BIDIRECTIONALSTREAMRESPONSE']._serialized_start=1413
-  _globals['_BIDIRECTIONALSTREAMRESPONSE']._serialized_end=1605
-  _globals['_IRISSERVICE']._serialized_start=1889
-  _globals['_IRISSERVICE']._serialized_end=2024
+  _globals['_IDENTITY']._serialized_end=238
+  _globals['_IDENTITY_METADATAENTRY']._serialized_start=191
+  _globals['_IDENTITY_METADATAENTRY']._serialized_end=238
+  _globals['_MESSAGE']._serialized_start=241
+  _globals['_MESSAGE']._serialized_end=611
+  _globals['_MESSAGE_METADATAENTRY']._serialized_start=191
+  _globals['_MESSAGE_METADATAENTRY']._serialized_end=238
+  _globals['_COMMANDINPUT']._serialized_start=613
+  _globals['_COMMANDINPUT']._serialized_end=715
+  _globals['_COMMANDOUTPUT']._serialized_start=717
+  _globals['_COMMANDOUTPUT']._serialized_end=838
+  _globals['_CONTROLMESSAGE']._serialized_start=841
+  _globals['_CONTROLMESSAGE']._serialized_end=1222
+  _globals['_CONTROLMESSAGE_PROFILEENTRY']._serialized_start=1127
+  _globals['_CONTROLMESSAGE_PROFILEENTRY']._serialized_end=1173
+  _globals['_CONTROLMESSAGE_METADATAENTRY']._serialized_start=191
+  _globals['_CONTROLMESSAGE_METADATAENTRY']._serialized_end=238
+  _globals['_BIDIRECTIONALSTREAMREQUEST']._serialized_start=1225
+  _globals['_BIDIRECTIONALSTREAMREQUEST']._serialized_end=1415
+  _globals['_BIDIRECTIONALSTREAMRESPONSE']._serialized_start=1418
+  _globals['_BIDIRECTIONALSTREAMRESPONSE']._serialized_end=1610
+  _globals['_IRISSERVICE']._serialized_start=1894
+  _globals['_IRISSERVICE']._serialized_end=2029
 # @@protoc_insertion_point(module_scope)

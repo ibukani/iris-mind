@@ -9,7 +9,7 @@ from iris.event.event_types import Event
 @dataclass
 class AccountCreatedEvent(Event):
     account_id: str = ""
-    nickname: str = ""
+    display_name: str = ""
 
 
 @dataclass
@@ -25,4 +25,4 @@ class AccountIdentityLinkedEvent(Event):
     account_id: str = ""
     provider: str = ""
     subject: str = ""
-    display_name: str = ""
+    provider_name: str = ""

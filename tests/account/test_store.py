@@ -18,20 +18,20 @@ def tmp_store(tmp_path: Path) -> AccountStore:
 
 class TestAccountStore:
     def test_add_and_find_by_id(self, tmp_store: AccountStore) -> None:
-        a = Account(nickname="alice")
+        a = Account(display_name="alice")
         tmp_store.add_account(a)
         found = tmp_store.find_account_by_id(a.account_id)
         assert found is not None
-        assert found.nickname == "alice"
+        assert found.display_name == "alice"
 
     def test_update_account(self, tmp_store: AccountStore) -> None:
-        a = Account(nickname="old")
+        a = Account(display_name="old")
         tmp_store.add_account(a)
-        a.nickname = "new"
+        a.display_name = "new"
         tmp_store.update_account(a)
         found = tmp_store.find_account_by_id(a.account_id)
         assert found is not None
-        assert found.nickname == "new"
+        assert found.display_name == "new"
 
     def test_load_accounts_empty(self, tmp_store: AccountStore) -> None:
         assert tmp_store.load_accounts() == []

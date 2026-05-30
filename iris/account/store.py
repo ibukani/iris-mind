@@ -46,7 +46,7 @@ class AccountStore:
             accounts = self.load_accounts()
             accounts.append(account)
             self.save_accounts(accounts)
-            logger.info("AccountStore: added account_id={} nickname={}", account.account_id, account.nickname)
+            logger.info("AccountStore: added account_id={} display_name={}", account.account_id, account.display_name)
 
     def update_account(self, account: Account) -> None:
         with self._lock:

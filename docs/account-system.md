@@ -37,7 +37,7 @@ iris/account/
 @dataclass
 class Account:
     account_id: str          # UUID hex[:16] (自動生成)
-    nickname: str            # 表示名
+    display_name: str        # 表示名
     created_at: str          # ISO 8601 (自動設定)
     last_seen: str | None    # 最終アクセス
     profile: dict            # プロフィール情報 (自由形式)
@@ -51,7 +51,7 @@ class AccountIdentity:
     provider: str            # discord / local / web
     subject: str             # provider内の安定ID
     account_id: str          # 紐付くアカウント
-    display_name: str        # provider側表示名
+    provider_name: str       # provider側表示名
     linked_at: str           # 紐付け日時
     last_seen: str | None    # 最終アクセス
     metadata: dict           # 追加情報
@@ -61,13 +61,13 @@ class AccountIdentity:
 
 | メソッド | 説明 |
 |----------|------|
-| `register(nickname)` | 新規アカウント作成 |
+| `register(display_name)` | 新規アカウント作成 |
 | `resolve(account_id)` | account_id からアカウント取得 |
-| `resolve_nickname(account_id)` | account_id からニックネーム取得 |
+| `resolve_display_name(account_id)` | account_id から表示名取得 |
 | `get_account_by_identity(provider, subject)` | 外部IDからアカウント取得 |
-| `resolve_or_create_identity(provider, subject, display_name="", metadata=None)` | 外部IDから解決、なければ作成 |
-| `link_identity(account_id, provider, subject, display_name="", metadata=None)` | 外部ID紐付け |
-| `update_nickname(account_id, nickname)` | ニックネーム更新 |
+| `resolve_or_create_identity(provider, subject, provider_name="", metadata=None)` | 外部IDから解決、なければ作成 |
+| `link_identity(account_id, provider, subject, provider_name="", metadata=None)` | 外部ID紐付け |
+| `update_display_name(account_id, display_name)` | 表示名更新 |
 | `update_last_seen(account_id)` | last_seen 更新 |
 | `update_profile(account_id, **fields)` | プロフィール更新 |
 | `list_accounts()` | 全アカウント一覧 |
@@ -78,7 +78,7 @@ class AccountIdentity:
 | イベント | 発行タイミング |
 |----------|---------------|
 | `AccountCreatedEvent` | アカウント作成時 |
-| `AccountUpdatedEvent` | プロフィール/ニックネーム更新時 |
+| `AccountUpdatedEvent` | プロフィール/表示名更新時 |
 | `AccountIdentityLinkedEvent` | 外部ID紐付け時 |
 
 ## ControlMessage 処理
@@ -89,14 +89,14 @@ class AccountIdentity:
 |-----------|------|
 | `account.identify` | identity解決 + アカウント作成 |
 | `account.profile` | プロフィール取得 |
-| `account.update` | ニックネーム/プロフィール更新 |
+| `account.update` | 表示名/プロフィール更新 |
 | `account.link` | 外部ID紐付け |
 
 ## 依存関係
 
 ```
 Memory層 ──→ AccountDispatcher (identify_message_speaker呼出)
-Agency層 ──→ AccountManager (ニックネーム解決)
+Agency層 ──→ AccountManager (表示名解決)
 IO層    ──→ EventBus (ControlMessageEvent発行)
 Kernel層 ──→ EventBus (ControlMessage変換)
 ```

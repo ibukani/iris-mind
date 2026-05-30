@@ -42,7 +42,7 @@ class VectorStore:
 
     # ---- CRUD ----
 
-    def add(self, entry: dict) -> None:
+    def add(self, entry: dict, account_id: str = "") -> None:
         with self._lock:
             eid = entry.get("id", str(hash(entry.get("content", ""))))
             content = entry.get("content", "")
@@ -51,12 +51,13 @@ class VectorStore:
                 "type": entry.get("type", "lesson"),
                 "tags": ",".join(entry.get("tags", [])),
                 "timestamp": entry.get("timestamp", ""),
+                "account_id": account_id,
             }
             self._db.add_texts(texts=[content], metadatas=[metadata], ids=[eid])
             self._rebuild_bm25()
             logger.info("VectorStore: added doc id={} type={}", eid, metadata["type"])
 
-    def update(self, entry: dict) -> None:
+    def update(self, entry: dict, account_id: str = "") -> None:
         with self._lock:
             eid = entry.get("id", "")
             if not eid:
@@ -67,6 +68,7 @@ class VectorStore:
                 "type": entry.get("type", "lesson"),
                 "tags": ",".join(entry.get("tags", [])),
                 "timestamp": entry.get("timestamp", ""),
+                "account_id": account_id,
             }
             self._db.update_document(
                 document_id=eid,
@@ -94,14 +96,19 @@ class VectorStore:
 
     # ---- Search ----
 
-    def search(self, query: str, max_results: int = 3, min_score: float = 0.2) -> list[dict]:
+    def search(self, query: str, max_results: int = 3, min_score: float = 0.2, account_id: str = "") -> list[dict]:
         with self._lock:
             if len(self._db.get()["ids"]) == 0:
                 return []
             if self._bm25 is None:
                 self._rebuild_bm25()
 
-            dense_results = self._db.similarity_search_with_score(query, k=max_results * 2)
+            if account_id:
+                dense_results = self._db.similarity_search_with_score(
+                    query, k=max_results * 2, filter={"account_id": account_id}
+                )
+            else:
+                dense_results = self._db.similarity_search_with_score(query, k=max_results * 2)
             bm25_scores = self._bm25_score(query)
 
         merged: dict[str, dict] = {}

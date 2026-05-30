@@ -97,9 +97,8 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             access_token=metadata.get("access_token"),
             role=metadata.get("role", "external"),
             permissions=permissions,
-            identity=metadata.get("identity", ""),
+            session_tag=metadata.get("session_tag", ""),
             description=metadata.get("description", ""),
-            user_id=metadata.get("user_id", ""),
         )
 
         auth_res = self._session_manager.authenticate(grpc_conn, auth_msg)
@@ -169,7 +168,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
                     action=action,
                     account_id=data.get("account_id", ""),
                     room_id=data.get("room_id", ""),
-                    nickname=data.get("nickname", ""),
+                    display_name=data.get("display_name", ""),
                 )
                 text = data.get("text")
                 if text:
@@ -218,9 +217,9 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             state=data.get("state") or "",
         )
         meta = data.get("metadata", {})
-        uid = data.get("user_id", "")
+        uid = data.get("account_id", "")
         if uid:
-            meta["user_id"] = uid
+            meta["account_id"] = uid
         room_id = data.get("room_id", "")
         if room_id:
             msg.room_id = room_id
@@ -236,7 +235,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
         identity = grpc_service_pb2.Identity(  # type: ignore[attr-defined]
             provider=str(data.get("provider", "")),
             subject=str(data.get("subject", "")),
-            display_name=str(data.get("display_name", "")),
+            provider_name=str(data.get("provider_name", "")),
         )
         metadata = data.get("metadata", {})
         if isinstance(metadata, dict):
@@ -306,6 +305,9 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
     async def _dispatch_message(self, msg_proto: Any, session_id: str, session_role: str) -> None:
         metadata = self._parse_message_metadata(msg_proto.metadata)
 
+        session_info = self._session_manager.get_session_info(session_id)
+        account_id = session_info.account_id if session_info else ""
+
         try:
             msg = Message(
                 id=msg_proto.id,
@@ -313,7 +315,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
                 session_id=session_id,
                 source_role=session_role,
                 target_role=msg_proto.target_role or "*",
-                user_id=metadata.get("user_id", ""),
+                account_id=account_id,
                 direction=Direction(msg_proto.direction),
                 msg_type=msg_proto.msg_type,
                 content=msg_proto.content,
@@ -363,7 +365,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
                 action=control_proto.action,
                 account_id=control_proto.account_id,
                 room_id=control_proto.room_id,
-                nickname=control_proto.nickname,
+                display_name=control_proto.display_name,
                 text=control_proto.text,
                 identity=self._parse_identity(control_proto.identity),
                 profile=dict(control_proto.profile),
@@ -382,6 +384,6 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
         return Identity(
             provider=identity_proto.provider,
             subject=identity_proto.subject,
-            display_name=identity_proto.display_name,
+            provider_name=identity_proto.provider_name,
             metadata=dict(identity_proto.metadata),
         )

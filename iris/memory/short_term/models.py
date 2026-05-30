@@ -14,7 +14,7 @@ class TurnData(TypedDict, total=False):
     timestamp: str
     consolidated: bool
     importance: int
-    user_id: str
+    account_id: str
     room_id: str
 
 

@@ -218,13 +218,13 @@ class _RoomDispatcher:
     def _resolve_or_create_account(self, msg: ControlMessageEvent) -> Any:
         if not self._account_manager:
             return None
-        provider, subject, display_name, metadata = self._parse_identity(msg.identity)
+        provider, subject, provider_name, metadata = self._parse_identity(msg.identity)
         if not provider or not subject:
             return None
         return self._account_manager.resolve_or_create_identity(
             provider,
             subject,
-            display_name=display_name or msg.nickname,
+            provider_name=provider_name or msg.display_name,
             metadata=metadata,
         )
 
@@ -237,7 +237,7 @@ class _RoomDispatcher:
         return (
             str(identity.get("provider", "")),
             str(identity.get("subject", "")),
-            str(identity.get("display_name", "")),
+            str(identity.get("provider_name", "")),
             metadata,
         )
 

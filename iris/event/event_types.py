@@ -83,7 +83,7 @@ class MessageEvent(Event):
     session_id: str = ""
     source_role: str = ""
     target_role: str = ""
-    user_id: str = ""
+    account_id: str = ""
     direction: str = ""
     msg_type: str = ""
     content: str = ""
@@ -99,7 +99,7 @@ class InputReady(Event):
     source: str = ""
     session_id: str = ""
     content: str = ""
-    user_id: str = ""
+    account_id: str = ""
     room_id: str = ""
     context: dict | None = None
 
@@ -132,7 +132,7 @@ class InhibitionEvent(Event):
 @dataclass
 class SessionDisconnectEvent(Event):
     session_id: str = ""
-    identity: str = ""
+    session_tag: str = ""
 
 
 @dataclass
@@ -140,7 +140,7 @@ class ControlMessageEvent(Event):
     action: str = ""
     account_id: str = ""
     room_id: str = ""
-    nickname: str = ""
+    display_name: str = ""
     text: str = ""
     session_id: str = ""
     identity: dict[str, Any] | None = None
@@ -153,7 +153,7 @@ class RoomJoinedEvent(Event):
     room_id: str = ""
     account_id: str = ""
     session_id: str = ""
-    nickname: str = ""
+    display_name: str = ""
 
 
 @dataclass
@@ -161,7 +161,7 @@ class RoomLeftEvent(Event):
     room_id: str = ""
     account_id: str = ""
     session_id: str = ""
-    nickname: str = ""
+    display_name: str = ""
 
 
 def new_trace_id() -> str:

@@ -23,7 +23,7 @@ def subscribe_events(manager: PluginManager, orchestrator: LimbicOrchestrator) -
         try:
             orchestrator.process(
                 event.content,
-                context={"session_id": event.session_id, "user_id": event.user_id},
+                context={"session_id": event.session_id, "account_id": event.account_id},
             )
         except Exception:
             logger.exception("Limbic: failed to process message event")

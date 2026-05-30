@@ -35,7 +35,7 @@ class _IOEventHandler:
             source_role="mind",
             target_role=target_role,
             session_id=event.session_id,
-            user_id=event.user_id,
+            account_id=event.account_id,
             direction=Direction(direction),
             room_id=event.room_id,
         )
@@ -57,7 +57,7 @@ class _IOEventHandler:
                 action="presence.joined",
                 account_id=event.account_id,
                 room_id=event.room_id,
-                nickname=event.nickname,
+                display_name=event.display_name,
             ),
         )
 
@@ -67,6 +67,6 @@ class _IOEventHandler:
                 action="presence.left",
                 account_id=event.account_id,
                 room_id=event.room_id,
-                nickname=event.nickname,
+                display_name=event.display_name,
             ),
         )

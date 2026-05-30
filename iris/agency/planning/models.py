@@ -22,7 +22,7 @@ class Plan:
     reason: PlanReason = PlanReason.USER_INPUT
     context_hint: str = ""
     session_id: str = ""
-    user_id: str = ""
+    account_id: str = ""
     room_id: str = ""
     overrides: dict[str, Any] = field(default_factory=dict)
     modulation: ModulationState = field(default_factory=ModulationState)

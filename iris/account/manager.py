@@ -27,9 +27,9 @@ class AccountManager:
         self._store = store
         self._event_bus = event_bus
 
-    def register(self, nickname: str) -> Account:
+    def register(self, display_name: str) -> Account:
         """新規アカウントを作成する。"""
-        account = Account(nickname=nickname)
+        account = Account(display_name=display_name)
         self._store.add_account(account)
 
         if self._event_bus:
@@ -38,7 +38,7 @@ class AccountManager:
                     timestamp=datetime.now(UTC),
                     source="account",
                     account_id=account.account_id,
-                    nickname=account.nickname,
+                    display_name=account.display_name,
                 ),
             )
 
@@ -48,10 +48,10 @@ class AccountManager:
         """account_id からアカウントを取得する。"""
         return self._store.find_account_by_id(account_id)
 
-    def resolve_nickname(self, account_id: str) -> str:
-        """account_id からニックネームを取得する。見つからない場合は account_id を返す。"""
+    def resolve_display_name(self, account_id: str) -> str:
+        """account_id から表示名を取得する。見つからない場合は account_id を返す。"""
         account = self.resolve(account_id)
-        return account.nickname if account else account_id
+        return account.display_name if account else account_id
 
     def get_account_by_identity(self, provider: str, subject: str) -> Account | None:
         """外部IDからアカウントを取得する。"""
@@ -64,38 +64,38 @@ class AccountManager:
         self,
         provider: str,
         subject: str,
-        display_name: str = "",
+        provider_name: str = "",
         metadata: dict[str, object] | None = None,
     ) -> Account:
         """外部IDからアカウントを解決し、なければ作成する。"""
         now = datetime.now(UTC).isoformat()
         identity = self._store.find_identity(provider, subject)
         if identity is not None:
-            identity.display_name = display_name or identity.display_name
+            identity.provider_name = provider_name or identity.provider_name
             identity.metadata = metadata or identity.metadata
             identity.last_seen = now
             self._store.update_identity(identity)
             account = self.resolve(identity.account_id)
             if account is not None:
                 account.last_seen = now
-                if display_name and not account.nickname:
-                    account.nickname = display_name
+                if provider_name and not account.display_name:
+                    account.display_name = provider_name
                 self._store.update_account(account)
                 return account
 
-        account = self.register(display_name or f"{provider}:{subject}")
-        self.link_identity(account.account_id, provider, subject, display_name=display_name, metadata=metadata)
+        account = self.register(provider_name or f"{provider}:{subject}")
+        self.link_identity(account.account_id, provider, subject, provider_name=provider_name, metadata=metadata)
         return account
 
-    def update_nickname(self, account_id: str, nickname: str) -> None:
-        """ニックネームを更新する。"""
+    def update_display_name(self, account_id: str, display_name: str) -> None:
+        """表示名を更新する。"""
         account = self.resolve(account_id)
         if not account:
             logger.warning("AccountManager: account not found: {}", account_id)
             return
 
-        old = account.nickname
-        account.nickname = nickname
+        old = account.display_name
+        account.display_name = display_name
         account.last_seen = datetime.now(UTC).isoformat()
         self._store.update_account(account)
 
@@ -105,13 +105,13 @@ class AccountManager:
                     timestamp=datetime.now(UTC),
                     source="account",
                     account_id=account_id,
-                    field_name="nickname",
+                    field_name="display_name",
                     old_value=old,
-                    new_value=nickname,
+                    new_value=display_name,
                 ),
             )
 
-        logger.info("AccountManager: updated account_id={} nickname={}", account_id, nickname)
+        logger.info("AccountManager: updated account_id={} display_name={}", account_id, display_name)
 
     def update_last_seen(self, account_id: str) -> None:
         """last_seen を更新する。"""
@@ -152,7 +152,7 @@ class AccountManager:
         account_id: str,
         provider: str,
         subject: str,
-        display_name: str = "",
+        provider_name: str = "",
         metadata: dict[str, object] | None = None,
     ) -> bool:
         """外部IDを紐付ける。"""
@@ -173,7 +173,7 @@ class AccountManager:
 
         now = datetime.now(UTC).isoformat()
         if existing:
-            existing.display_name = display_name or existing.display_name
+            existing.provider_name = provider_name or existing.provider_name
             existing.metadata = metadata or existing.metadata
             existing.last_seen = now
             self._store.update_identity(existing)
@@ -183,7 +183,7 @@ class AccountManager:
                     provider=provider,
                     subject=subject,
                     account_id=account_id,
-                    display_name=display_name,
+                    provider_name=provider_name,
                     metadata=metadata or {},
                     last_seen=now,
                 ),
@@ -197,7 +197,7 @@ class AccountManager:
                     account_id=account_id,
                     provider=provider,
                     subject=subject,
-                    display_name=display_name,
+                    provider_name=provider_name,
                 ),
             )
 

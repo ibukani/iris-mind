@@ -73,7 +73,7 @@ flowchart TD
     subgraph Account["account/ アカウント管理"]
         ACC_Provider["AccountManager<br/>CRUD・外部ID連携"]
         ACC_Store["AccountStore<br/>JSONL永続化"]
-        ACC_Handler["_AccountEventHandler<br/>ControlMessage処理"]
+        ACC_Handler["_AccountDispatcher<br/>ControlMessage処理"]
     end
 
     EB ---|全層を結合| Kernel
@@ -191,7 +191,7 @@ iris/
 │   ├── store.py               AccountStore（JSONL永続化）
 │   ├── manager.py             AccountManager（コアサービス）
 │   ├── events.py              AccountCreated/Updated/SessionBound/Unbound
-│   ├── handler.py             _AccountEventHandler（ControlMessage処理）
+│   ├── dispatcher.py          _AccountDispatcher（ControlMessage処理）
 │   └── hooks.py               EventBus Hook登録
 │
 ├── heartbeat/                 # TimerTick heartbeat Plugin

@@ -8,19 +8,18 @@ import orjson
 from iris.event.event_types import ControlMessageEvent
 
 
-class _RoomEventHandler:
-    """Room 層のシステムメッセージハンドラ。
+class _RoomDispatcher:
+    """ルーム管理のControlMessage振り分け＋レスポンス構築。
 
     責務:
-    - room.create/list/info/join/leave/update/delete/members
-    - handle_session_disconnect
-
-    room.join 時にアカウントが存在しなければ AccountManager で作成する。
+    - action文字列ルーティング
+    - 入力検証
+    - ControlMessageEvent レスポンス構築
     """
 
-    def __init__(self, room_provider: Any, account_provider: Any = None) -> None:
-        self._provider = room_provider
-        self._account_provider = account_provider
+    def __init__(self, room_manager: Any, account_manager: Any = None) -> None:
+        self._room_manager = room_manager
+        self._account_manager = account_manager
 
     def handle_control_message(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent | None:
         action = msg.action
@@ -42,12 +41,11 @@ class _RoomEventHandler:
         if action == "room.members":
             return self._handle_members(msg, session_id)
 
-        logger.debug("RoomHandler: unhandled action={}", action)
+        logger.debug("RoomDispatcher: unhandled action={}", action)
         return None
 
     def handle_session_disconnect(self, session_id: str) -> None:
-        """セッション配下の全ルームから退室させる。"""
-        self._provider.unbind_all_for_session(session_id)
+        self._room_manager.unbind_all_for_session(session_id)
 
     def _handle_create(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent:
         name = msg.text.strip() if msg.text else ""
@@ -55,7 +53,7 @@ class _RoomEventHandler:
             return self._error("room.create", "room name required")
 
         account_id = msg.account_id or ""
-        room = self._provider.create_room(name, created_by=account_id)
+        room = self._room_manager.create_room(name, created_by=account_id)
 
         return ControlMessageEvent(
             timestamp=None,
@@ -67,7 +65,7 @@ class _RoomEventHandler:
         )
 
     def _handle_list(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent:
-        rooms = self._provider.list_rooms()
+        rooms = self._room_manager.list_rooms()
         data = [r.to_dict() for r in rooms]
         return ControlMessageEvent(
             timestamp=None,
@@ -83,7 +81,7 @@ class _RoomEventHandler:
         if not room_id:
             return self._error("room.info", "room_id required")
 
-        room = self._provider.get_room(room_id)
+        room = self._room_manager.get_room(room_id)
         if not room:
             return self._error("room.info", f"room not found: {room_id}")
 
@@ -103,14 +101,14 @@ class _RoomEventHandler:
             return self._error("room.join", "room_id required")
 
         account_id = msg.account_id
-        if not account_id and self._account_provider:
+        if not account_id and self._account_manager:
             account = self._resolve_or_create_account(msg)
             if account is not None:
                 account_id = account.account_id
         if not account_id:
             return self._error("room.join", "account_id or identity required")
 
-        self._provider.join_room(room_id, account_id, session_id=session_id)
+        self._room_manager.join_room(room_id, account_id, session_id=session_id)
 
         return ControlMessageEvent(
             timestamp=None,
@@ -127,14 +125,14 @@ class _RoomEventHandler:
             return self._error("room.leave", "room_id required")
 
         account_id = msg.account_id
-        if not account_id and self._account_provider:
+        if not account_id and self._account_manager:
             account = self._resolve_or_create_account(msg)
             if account is not None:
                 account_id = account.account_id
         if not account_id:
             return self._error("room.leave", "account_id or identity required")
 
-        self._provider.leave_room(room_id, account_id, session_id=session_id)
+        self._room_manager.leave_room(room_id, account_id, session_id=session_id)
 
         return ControlMessageEvent(
             timestamp=None,
@@ -150,7 +148,7 @@ class _RoomEventHandler:
         if not room_id:
             return self._error("room.update", "room_id required")
 
-        room = self._provider.get_room(room_id)
+        room = self._room_manager.get_room(room_id)
         if not room:
             return self._error("room.update", f"room not found: {room_id}")
 
@@ -166,7 +164,7 @@ class _RoomEventHandler:
         if not updates:
             return self._error("room.update", "no fields to update")
 
-        self._provider.update_room(room_id, **updates)
+        self._room_manager.update_room(room_id, **updates)
 
         return ControlMessageEvent(
             timestamp=None,
@@ -182,11 +180,11 @@ class _RoomEventHandler:
         if not room_id:
             return self._error("room.delete", "room_id required")
 
-        room = self._provider.get_room(room_id)
+        room = self._room_manager.get_room(room_id)
         if not room:
             return self._error("room.delete", f"room not found: {room_id}")
 
-        self._provider.delete_room(room_id)
+        self._room_manager.delete_room(room_id)
 
         return ControlMessageEvent(
             timestamp=None,
@@ -202,11 +200,11 @@ class _RoomEventHandler:
         if not room_id:
             return self._error("room.members", "room_id required")
 
-        room = self._provider.get_room(room_id)
+        room = self._room_manager.get_room(room_id)
         if not room:
             return self._error("room.members", f"room not found: {room_id}")
 
-        members = self._provider.get_members(room_id)
+        members = self._room_manager.get_members(room_id)
         data = [m.to_dict() for m in members]
         return ControlMessageEvent(
             timestamp=None,
@@ -218,13 +216,12 @@ class _RoomEventHandler:
         )
 
     def _resolve_or_create_account(self, msg: ControlMessageEvent) -> Any:
-        """identity からアカウントを解決し、なければ作成する。"""
-        if not self._account_provider:
+        if not self._account_manager:
             return None
         provider, subject, display_name, metadata = self._parse_identity(msg.identity)
         if not provider or not subject:
             return None
-        return self._account_provider.resolve_or_create_identity(
+        return self._account_manager.resolve_or_create_identity(
             provider,
             subject,
             display_name=display_name or msg.nickname,

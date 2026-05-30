@@ -78,7 +78,7 @@ iris/                             ← アプリケーションコア
 │   ├── store.py                  ← AccountStore（JSONL永続化）
 │   ├── manager.py                ← AccountManager（コアサービス）
 │   ├── events.py                 ← AccountCreated/Updated/SessionBound/Unbound
-│   ├── handler.py                ← _AccountEventHandler（SystemMessage処理）
+│   ├── dispatcher.py             ← _AccountDispatcher（ControlMessage処理）
 │   └── hooks.py                  ← EventBus Hook登録
 ├── heartbeat/                    ← TimerTick heartbeat Plugin
 │   └── service.py                ← HeartbeatService

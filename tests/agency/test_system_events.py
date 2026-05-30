@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from iris.account.handler import _AccountEventHandler
+from iris.account.dispatcher import _AccountDispatcher
 from iris.account.manager import AccountManager
 from iris.account.store import AccountStore
 from iris.agency import LLMGateway
@@ -15,7 +15,7 @@ from iris.llm.prompt import Personality
 from iris.memory.handler import _MemoryEventHandler
 from iris.memory.manager import MemoryManager
 from iris.memory.models import system_event_block
-from iris.room.handler import _RoomEventHandler
+from iris.room.dispatcher import _RoomDispatcher
 from iris.room.manager import RoomManager
 from iris.room.store import RoomStore
 
@@ -38,20 +38,18 @@ def _make_handlers(event_bus: EventBus, memory_mgr: MemoryManager, tmp_path: Pat
     )
     room_provider = RoomManager(store=room_store, event_bus=event_bus, account_manager=account_provider)
 
-    account_handler = _AccountEventHandler(account_provider=account_provider)
-    room_handler = _RoomEventHandler(
-        room_provider=room_provider,
-        account_provider=account_provider,
-    )
+    account_dispatcher = _AccountDispatcher(account_manager=account_provider)
+    room_dispatcher = _RoomDispatcher(room_manager=room_provider, account_manager=account_provider)
+
     _MemoryEventHandler(
         event_bus,
         memory_mgr.sensory,
         None,
         short_term=memory_mgr.short_term,
-        account_handler=account_handler,
+        account_dispatcher=account_dispatcher,
         room_provider=room_provider,
     )
-    return account_handler, room_handler, account_provider, room_provider
+    return account_dispatcher, room_dispatcher, account_provider, room_provider
 
 
 def test_session_manager_disconnect_publishes_session_disconnect_event():

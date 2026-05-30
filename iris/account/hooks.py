@@ -7,17 +7,16 @@ if TYPE_CHECKING:
 
 
 def register_hooks(manager: PluginManager) -> None:
-    """Account Plugin のフック登録。"""
     hooks = manager.hook_registry
 
-    from iris.account.handler import _AccountEventHandler
+    from iris.account.dispatcher import _AccountDispatcher
 
-    handler = manager.resolve(_AccountEventHandler)
+    dispatcher = manager.resolve(_AccountDispatcher)
 
     def _on_dispatch(ctx: dict[str, Any]) -> dict[str, Any]:
         msg = ctx["msg"]
         if ctx["type"] == "control" and msg.action.startswith("account."):
-            ctx["response"] = handler.handle_control_message(msg, ctx["session_id"])
+            ctx["response"] = dispatcher.handle_control_message(msg, ctx["session_id"])
         return ctx
 
     hooks.register("io.dispatch", _on_dispatch, priority=100)

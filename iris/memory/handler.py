@@ -37,7 +37,7 @@ class _MemoryEventHandler:
         sensory: Any,
         proactive_config: Any,
         short_term: Any,
-        account_handler: Any = None,
+        account_dispatcher: Any = None,
         room_provider: Any = None,
     ) -> None:
 
@@ -45,7 +45,7 @@ class _MemoryEventHandler:
         self.sensory = sensory
         self.proactive_config = proactive_config
         self.short_term = short_term
-        self._account_handler = account_handler
+        self._account_dispatcher = account_dispatcher
         self._room_provider = room_provider
         self._pending_input: dict[tuple[str, str], list[tuple[str, str, str]]] = {}
         self._pending_lock = Lock()
@@ -107,8 +107,8 @@ class _MemoryEventHandler:
 
         context = event.context or {}
         user_id = event.user_id
-        if not user_id and self._account_handler is not None:
-            user_id, nickname = self._account_handler.identify_message_speaker(
+        if not user_id and self._account_dispatcher is not None:
+            user_id, nickname = self._account_dispatcher.identify_message_speaker(
                 event.session_id,
                 context.get("speaker"),
             )

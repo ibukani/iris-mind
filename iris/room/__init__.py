@@ -25,7 +25,7 @@ class RoomPlugin(PluginProtocol):
         manager.register_manifest(MANIFEST)
 
         from iris.event.event_bus import EventBus
-        from iris.room.handler import _RoomEventHandler
+        from iris.room.dispatcher import _RoomDispatcher
         from iris.room.manager import RoomManager
         from iris.room.store import RoomStore
 
@@ -41,14 +41,11 @@ class RoomPlugin(PluginProtocol):
         account_manager = manager.resolve_optional(AccountManagerCls)
         manager_inst = RoomManager(store=store, event_bus=event_bus, account_manager=account_manager)
 
-        self._handler = _RoomEventHandler(
-            room_provider=manager_inst,
-            account_provider=account_manager,
-        )
+        dispatcher = _RoomDispatcher(room_manager=manager_inst, account_manager=account_manager)
 
         manager.provide(RoomStore, store)
         manager.provide(RoomManager, manager_inst)
-        manager.provide(_RoomEventHandler, self._handler)
+        manager.provide(_RoomDispatcher, dispatcher)
 
         from iris.room.hooks import register_hooks
 

@@ -161,9 +161,9 @@ flowchart TD
 
 Iris に gRPC 接続して会話するクライアントを開発する場合:
 
-1. **[Client Guide](./docs/client-guide.md)** — 応答パターン・自発発話・コマンド・期待される動作
-2. **[IPC Protocol Spec](./docs/ipc-spec.md)** — ワイヤー形式・認証・メッセージ構造・実装例
-3. 実装例: [Python (生ソケット)](./docs/ipc-spec.md#91-最小クライアントpython--生ソケット版) / [C#](./docs/ipc-spec.md#93-c--net) / [Rust](./docs/ipc-spec.md#94-rust) / [Node.js](./docs/ipc-spec.md#95-nodejs)
+1. **[Client Guide](./docs/external/client-guide.md)** — 応答パターン・自発発話・コマンド・期待される動作
+2. **[IPC Protocol Spec](./docs/external/protocol-spec.md)** — ワイヤー形式・認証・メッセージ構造・実装例
+3. 実装例: [Python (生ソケット)](./docs/external/protocol-spec.md#91-最小クライアントpython--生ソケット版) / [C#](./docs/external/protocol-spec.md#93-c--net) / [Rust](./docs/external/protocol-spec.md#94-rust) / [Node.js](./docs/external/protocol-spec.md#95-nodejs)
 
 ```mermaid
 flowchart LR
@@ -217,8 +217,9 @@ iris-mind/
 │   ├── io-layer.md              # IO 層設計
 │   ├── kernel-layer.md          # Kernel 層設計
 │   ├── config.md                # Config 設定一覧
-│   ├── ipc-spec.md              # IPC プロトコル仕様
-│   └── client-guide.md          # クライアント開発ガイド
+│   └── external/                # 外部開発者向けドキュメント
+│       ├── protocol-spec.md          # IPC プロトコル仕様
+│       └── client-guide.md      # クライアント開発ガイド
 ├── iris/                        # アプリケーションコア
 │   ├── agency/                  # 前頭前野+基底核+運動野
 │   │   ├── planning/            # PFC: 意思決定・ProactiveScoring・Judge
@@ -271,13 +272,13 @@ uv run pytest tests/                  # 全テスト実行
 | [kernel-layer.md](./docs/kernel-layer.md) | Kernel 層 — プロセス管理・PluginManager |
 | [memory-layer.md](./docs/memory-layer.md) | Memory 層 — 感覚野+皮質記憶（3層） |
 | [config.md](./docs/config.md) | Config 設定一覧 |
-| [ipc-spec.md](./docs/ipc-spec.md) | IPC プロトコル仕様 (gRPC) |
-| [client-guide.md](./docs/client-guide.md) | クライアント開発ガイド |
+| [external/protocol-spec.md](./docs/external/protocol-spec.md) | IPC プロトコル仕様 (gRPC) |
+| [external/client-guide.md](./docs/external/client-guide.md) | クライアント開発ガイド |
 | [how-it-works/](./docs/how-it-works/) | 動作原理の詳細 — 計算式・条件分岐・Mermaid図を網羅（6ファイル） |
 
 ## API
 
-外部 Client は gRPC（127.0.0.1:9876）で Iris に接続する。プロトコル仕様は [IPC Protocol Spec](./docs/ipc-spec.md) を参照。
+外部 Client は gRPC（127.0.0.1:9876）で Iris に接続する。プロトコル仕様は [IPC Protocol Spec](./docs/external/protocol-spec.md) を参照。
 
 各層の内部インターフェースについては設計ドキュメントを参照。
 

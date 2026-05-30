@@ -140,6 +140,10 @@ service IrisService {
 | Server → Client | `BidirectionalStreamResponse.command` | コマンド応答（`CommandOutput` fast-path） |
 | Server → Client | `BidirectionalStreamResponse.control` | アカウント制御応答・presence通知 |
 
+**備考:**
+- `execute` / `execute_result`: 現在サーバーサイドで全ツール実行が完結。クライアントへの実行委譲は未実装。権限・msg_type は将来拡張用に確保。
+- `interrupt`: クライアント→サーバーの `msg_type=interrupt` 送信による生成キャンセルは現在非対応。内部割込み（新規入力到着時）のみ動作。
+
 ---
 
 ## 4. データ型定義
@@ -181,6 +185,55 @@ service IrisService {
 | `ack` | Server→Client | 受信確認（`metadata.ack_required` 時） |
 | `error` | Server→Client | エラー通知 |
 | `voice_indicator` | Client→Server | 音声録音状態通知（制御信号）。`content` が `"true"` で録音開始、`"false"` で録音終了。`direction:event` で送信 |
+
+### 4.4 Role（`source_role` / `target_role`）
+
+`Message.source_role` と `Message.target_role` は自由文字列。事前定義されたenumは存在せず、セッション配送ラベルとして機能する。
+
+**特殊値:**
+
+| 値 | フィールド | 意味 |
+|----|-----------|------|
+| `"mind"` | source_role（S→C）, target_role（C→S） | Iris 自身を示す。サーバー送信メッセージの source_role は常に `"mind"` |
+| `"*"` | target_role | 全セッションへのブロードキャスト。`target_role` のデフォルト値 |
+| `"external"` | source_role（C→S） | クライアント未指定時のデフォルト。認証メタデータの `role` も未指定時は `"external"` |
+
+**注意:**
+- クライアントが送信した `Message.source_role` はサーバーが認証済みセッションの role で上書きする。送信元詐称不可。
+- `target_role` が空文字の場合はサーバー側で `"*"` にフォールバックする。
+- ルーターは `target_role` が一致するセッションに配送する。`"*"` は全アクティブセッションにブロードキャスト。
+
+### 4.5 メッセージメタデータと補助フィールド
+
+#### 4.5.1 `content_type`
+
+`Message.content_type` は MIME type を示す文字列。
+
+| 値 | 説明 |
+|----|------|
+| `"text/plain"` | プレーンテキスト（デフォルト。現在唯一使用される値） |
+
+将来 `"text/markdown"` 等が追加される可能性がある。
+
+#### 4.5.2 `metadata` 標準キー
+
+`Message.metadata` は `map<string, string>`。以下の標準キーが定義されている:
+
+| キー | 方向 | 型 | 説明 |
+|------|------|-----|------|
+| `ack_required` | C→S | `"true"` / `"false"` | 文字列の真偽値。true 時サーバーが確認応答を返送（§5.4） |
+| `account_id` | S→C | string | 応答メッセージに対応するアカウントID |
+| `room_id` | S→C | string | 応答メッセージのルームID |
+
+クライアントは任意のキーを追加可能。gRPC 接続メタデータ（`access_token`, `role`, `permissions`, `session_tag`, `description`）とは別。
+
+#### 4.5.3 メッセージID（`Message.id` / `CommandInput.id` / `CommandOutput.id`）
+
+`id` フィールドは個々のメッセージを識別する。
+
+- クライアント送信時: **空文字でよい**。サーバー側で `uuid4().hex[:12]` 形式のIDが自動生成される。
+- クライアントが任意のIDを設定して送信することも可能。ACK の `correlation_id` に使用される。
+- サーバー→クライアントの応答には常にIDが設定される。
 
 ### 4.6 Identity
 
@@ -351,6 +404,29 @@ sequenceDiagram
     Note over GW: speaker は InputReady.context に伝搬される
 ```
 
+
+### 5.4 ACK確認応答フロー
+
+クライアントは `Message.metadata` に `ack_required=true` を含めると、サーバーが処理後に確認応答を返送する。
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server as Iris Server
+
+    Client->>Server: Message(id="msg_001", metadata={"ack_required":"true"}, content="hello")
+    activate Server
+    Note over Server: メッセージ処理
+    Server-->>Client: Message(msg_type="ack", content="ack:msg_001", correlation_id="msg_001")
+    deactivate Server
+```
+
+ACK メッセージの仕様:
+- `msg_type`: `"ack"`
+- `content`: `"ack:{元メッセージのid}"`
+- `correlation_id`: 元メッセージの `id`
+- サーバー→クライアントの単方向。クライアントは ACK に対して応答しない。
+
 ---
 
 ## 6. 実装例
@@ -489,3 +565,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | 内部エラー | gRPC ステータスコード `INTERNAL` (13) |
 | 権限不足 | BidirectionalStreamResponse 内で `error` メッセージを送信、または `PERMISSION_DENIED` (7) |
 | 接続断 | サーバーは当該セッション情報を削除。セッションを含む全ルームメンバーからセッションIDを除去し、セッションIDが空になったメンバーは自動退室。各ルームに `presence.left` を自動発行、自発発話の抑制を解除する |
+
+**補足:**
+- `msg_type=error` は permission マップに定義されているが、現在サーバーはこの型を生成しない。
+- 現状、エラーは通常の `chat` 応答パスで通知される（`state="done"` の内容にエラーメッセージが含まれる）。

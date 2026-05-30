@@ -71,7 +71,7 @@ class _IOGateway:
         if response is None:
             return
 
-        self._session_mgr.route_control_message(self._build_control_message(response), session_id)
+        self._session_mgr.router.route_control_message(self._build_control_message(response), session_id)
 
     def on_grpc_message(self, msg: Message) -> None:
         """通常メッセージを EventBus に publish する（send-only）。
@@ -85,7 +85,7 @@ class _IOGateway:
             return
 
         if msg.target_role != "mind":
-            self._session_mgr.route_message(msg)
+            self._session_mgr.router.route_message(msg)
             return
 
         truncated = msg.content[:200] + "..." if len(msg.content) > 200 else msg.content
@@ -122,7 +122,7 @@ class _IOGateway:
         if not content.startswith("/"):
             result = "Commands start with /"
             logger.debug("IOGateway: command missing slash session={}", msg.session_id)
-            self._session_mgr.route_command_output(
+            self._session_mgr.router.route_command_output(
                 msg.session_id,
                 CommandOutput(content=result, session_id=msg.session_id, correlation_id=msg.id),
             )
@@ -147,7 +147,7 @@ class _IOGateway:
         response = result.get("response") or f"No command handler: /{name}"
 
         logger.debug("IOGateway: command result session={} result={:.100}", msg.session_id, response)
-        self._session_mgr.route_command_output(
+        self._session_mgr.router.route_command_output(
             msg.session_id,
             CommandOutput(content=response, session_id=msg.session_id, correlation_id=msg.id),
         )

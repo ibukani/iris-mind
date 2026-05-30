@@ -74,7 +74,7 @@ class TestSessionManager:
             msg_type="chat",
             content="hello",
         )
-        manager.route_message(m)
+        manager.router.route_message(m)
         conn.send_bytes.assert_called_once()
 
     def test_route_message_broadcasts_to_all_active_sessions(self, manager: SessionManager) -> None:
@@ -93,7 +93,7 @@ class TestSessionManager:
             msg_type="chat",
             content="hello",
         )
-        manager.route_message(m)
+        manager.router.route_message(m)
 
         conn1.send_bytes.assert_called_once()
         conn2.send_bytes.assert_called_once()
@@ -111,7 +111,7 @@ class TestSessionManager:
             msg_type="chat",
             content="hello",
         )
-        manager.route_message(m)
+        manager.router.route_message(m)
         conn.send_bytes.assert_not_called()
 
     def test_broadcast_control_message_requires_receive_chat(self, manager: SessionManager) -> None:
@@ -120,7 +120,7 @@ class TestSessionManager:
         manager.authenticate(conn1, AuthMessage(role="cli", permissions=[Permission.PERMISSION_RECEIVE_CHAT]))
         manager.authenticate(conn2, AuthMessage(role="cli", permissions=[]))
 
-        manager.broadcast_control_message(ControlMessage(action="presence.joined", account_id="a1"))
+        manager.router.broadcast_control_message(ControlMessage(action="presence.joined", account_id="a1"))
 
         conn1.send_bytes.assert_called_once()
         conn2.send_bytes.assert_not_called()
@@ -165,7 +165,7 @@ class TestSessionManager:
             msg_type="chat",
             content="x",
         )
-        manager.route_message(m)
+        manager.router.route_message(m)
 
         info = manager.get_session_info(response.session_id)
         assert info is not None

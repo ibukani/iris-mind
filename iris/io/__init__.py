@@ -70,8 +70,13 @@ class IoPlugin(PluginProtocol):
         manager.provide(GrpcListener, grpc_listener)
 
         from iris.io.handler import _IOEventHandler
+        from iris.room.store import RoomStore
 
-        _IOEventHandler(event_bus=event_bus, session_manager=session_mgr, plugin_manager=manager)
+        _IOEventHandler(
+            event_bus=event_bus,
+            session_manager=session_mgr,
+            room_store=manager.resolve_optional(RoomStore),
+        )
 
         from .hooks import register_hooks
 

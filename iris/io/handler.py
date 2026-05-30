@@ -10,29 +10,21 @@ from iris.io.models import ControlMessage, Direction, Message
 if TYPE_CHECKING:
     from iris.event.event_bus import EventBus
     from iris.io.session.manager import SessionManager
-    from iris.kernel.manager import PluginManager
     from iris.room.store import RoomStore
 
 
 class _IOEventHandler:
     def __init__(
-        self, event_bus: EventBus, session_manager: SessionManager, plugin_manager: PluginManager | None = None
+        self,
+        event_bus: EventBus,
+        session_manager: SessionManager,
+        room_store: RoomStore | None = None,
     ) -> None:
         self._session_mgr = session_manager
-        self._plugin_manager = plugin_manager
-        self._room_store_resolved = False
-        self._room_store: RoomStore | None = None
+        self._room_store = room_store
         event_bus.subscribe(MessageEvent, self._on_message_event)
         event_bus.subscribe(RoomJoinedEvent, self._on_room_joined)
         event_bus.subscribe(RoomLeftEvent, self._on_room_left)
-
-    def _get_room_store(self) -> None:
-        if self._room_store_resolved or self._plugin_manager is None:
-            return
-        from iris.room.store import RoomStore
-
-        self._room_store = self._plugin_manager.resolve_optional(RoomStore)
-        self._room_store_resolved = True
 
     def _build_message(self, event: MessageEvent, target_role: str, direction: str) -> Message:
         msg = Message(
@@ -70,18 +62,18 @@ class _IOEventHandler:
             len(event.content) if event.content else 0,
         )
 
+        router = self._session_mgr.router
         if not event.room_id:
-            self._session_mgr.route_message(msg)
+            router.route_message(msg)
             return
 
-        self._get_room_store()
         if self._room_store is not None:
-            self._session_mgr.route_to_room(msg, event.room_id, self._room_store)
+            router.route_to_room(msg, event.room_id, self._room_store)
             return
-        self._session_mgr.route_message(msg)
+        router.route_message(msg)
 
     def _on_room_joined(self, event: RoomJoinedEvent) -> None:
-        self._session_mgr.broadcast_control_message(
+        self._session_mgr.router.broadcast_control_message(
             ControlMessage(
                 action="presence.joined",
                 account_id=event.account_id,
@@ -91,7 +83,7 @@ class _IOEventHandler:
         )
 
     def _on_room_left(self, event: RoomLeftEvent) -> None:
-        self._session_mgr.broadcast_control_message(
+        self._session_mgr.router.broadcast_control_message(
             ControlMessage(
                 action="presence.left",
                 account_id=event.account_id,

@@ -88,7 +88,7 @@ class Message(BaseModel):
     content_type: str = "text/plain"
     state: str | None = None
     metadata: dict = Field(default_factory=dict)
-    speaker: Identity | None = None
+    speaker: Identity | None = None  # Inbound では必須。Outbound（response/ack/error/stream）は None 可
     room_id: str = ""
 
 

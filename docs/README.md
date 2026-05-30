@@ -7,7 +7,7 @@
 | ファイル | 内容 |
 |---|---|---|
 | [`client-guide.md`](./external/client-guide.md) | **Iris Client Guide** — 応答パターン、自発発話、コマンド、クイックリファレンス |
-| [`protocol-spec.md`](./external/protocol-spec.md) | **IPCプロトコル仕様** — ワイヤー形式、メッセージ構造、認証、実装例 |
+| [`protocol-spec.md`](./external/protocol-spec.md) | **IPCプロトコル仕様** — ワイヤー形式、認証、プロトコル概要（データ型定義→[types](./external/protocol-types.md)、接続シーケンス→[flows](./external/protocol-flows.md)) |
 
 ### 内部設計（アーキテクチャ理解向け）
 

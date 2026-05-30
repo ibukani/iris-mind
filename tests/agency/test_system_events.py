@@ -33,10 +33,7 @@ def _make_handlers(event_bus: EventBus, memory_mgr: MemoryManager, tmp_path: Pat
     )
     account_provider = AccountManager(store=account_store, event_bus=event_bus)
 
-    room_store = RoomStore(
-        rooms_path=str(tmp_path / "rooms.jsonl"),
-        members_path=str(tmp_path / "members.jsonl"),
-    )
+    room_store = RoomStore()
     room_provider = RoomManager(store=room_store, event_bus=event_bus, account_manager=account_provider)
 
     account_dispatcher = _AccountDispatcher(account_manager=account_provider)

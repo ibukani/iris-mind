@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from dataclasses import fields as _fields
 from datetime import datetime
 from enum import StrEnum
@@ -79,6 +79,16 @@ class AgentAnomalyEvent(Event):
 
 
 @dataclass
+class Identity:
+    """発話者識別情報。"""
+
+    provider: str = ""
+    subject: str = ""
+    provider_name: str = ""
+    metadata: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass
 class MessageEvent(Event):
     session_id: str = ""
     source_role: str = ""
@@ -90,7 +100,7 @@ class MessageEvent(Event):
     state: str | None = None
     correlation_id: str | None = None
     room_id: str = ""
-    speaker: dict[str, Any] | None = None
+    speaker: Identity | None = None
 
 
 @dataclass
@@ -173,6 +183,7 @@ __all__ = [
     "ControlMessageEvent",
     "DebugSnapshotEvent",
     "Event",
+    "Identity",
     "InhibitionAction",
     "InhibitionEvent",
     "InputReady",

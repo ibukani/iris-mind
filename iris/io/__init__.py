@@ -55,6 +55,7 @@ class IoPlugin(PluginProtocol):
             session_manager=session_mgr,
             event_bus=event_bus,
             hook_registry=manager.hook_registry,
+            manager=manager,
         )
 
         from iris.io.manager import IOManager

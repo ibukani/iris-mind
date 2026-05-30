@@ -91,7 +91,7 @@ iris/                             ← アプリケーションコア
 ├── room/                         ← ルーム管理: ルームCRUD・メンバーシップ・アカウント連携
 │   ├── __init__.py               ← RoomPlugin (STORE phase)
 │   ├── models.py                 ← Room, RoomMember, RoomState
-│   ├── store.py                  ← RoomStore（JSONL永続化）
+│   ├── store.py                  ← RoomStore（インメモリ）
 │   ├── manager.py                ← RoomManager（コアサービス）
 │   ├── events.py                 ← RoomCreated/Updated/Deleted/Joined/Left
 │   ├── dispatcher.py             ← _RoomDispatcher（ControlMessage処理）

@@ -2,7 +2,7 @@
 
 このドキュメントは **Iris に gRPC で接続するクライアント開発者** 向けに、Iris の動作と正しい連携方法を説明する。
 
-ワイヤー形式・メッセージ構造などは [`protocol-spec.md`](./protocol-spec.md) を参照。
+ワイヤー形式・メッセージ構造などは [`protocol-spec.md`](./protocol-spec.md)（[データ型定義](./protocol-types.md)、[接続シーケンス](./protocol-flows.md)）を参照。
 
 ---
 
@@ -196,7 +196,30 @@ Client                         Iris Mind
 
 クライアントは外部世界のIDだけを保持する。Iris内部の `account_id` は永続保存しない。
 
+### room_id の扱い
+
+`room.create` を実行すると、サーバーは `uuid4().hex[:16]` による16文字のランダムID（例: `"a1b2c3d4e5f6g78"`）を自動生成する。クライアントはこのIDを保存し、メッセージ送信や `room.join` / `room.leave` で使用する。
+
+以下の例で登場する `"discord:guild_1:channel_1"` はクライアント側のルーティング用ラベルであり、room_id そのものではない。実装時の正しいフロー:
+
+```python
+# ① room.create でルーム作成 → UUID が自動生成される
+BidirectionalStreamRequest(
+    control=ControlMessage(action="room.create", text="discord-guild_1-channel_1"),
+)
+# → ControlMessage(action="room.created", room_id="a1b2c3d4e5f6g78", ...)
+
+# ② 返却された UUID room_id を保存し、以降の操作で使用する
+ROOM_ID = "a1b2c3d4e5f6g78"  # room.create で発行された値
+
+# ③ クライアントは自身のマッピングを管理する（例: discord:guild_1:channel_1 ↔ ROOM_ID）
+```
+
+> **注意**: `"discord:guild_1:channel_1"` のような colon 区切り文字列は room_id の形式ではない。room_id は `room.create` が返す16進文字列のみが有効。
+
 ### 5.1 Discordグループチャット送信
+
+ルーム作成済みの `ROOM_ID` に対してメッセージを送信する:
 
 ```python
 BidirectionalStreamRequest(
@@ -214,7 +237,7 @@ BidirectionalStreamRequest(
                 "channel_id": "channel_1",
             },
         ),
-        room_id="discord:guild_1:channel_1",
+        room_id=ROOM_ID,  # room.create で発行された UUID
     )
 )
 ```
@@ -231,10 +254,10 @@ BidirectionalStreamRequest(
     control=ControlMessage(
         action="room.join",
         account_id="abc123",
-        room_id="discord:guild_1:channel_1",
+        room_id=ROOM_ID,  # room.create で発行された UUID
     )
 )
-# → ControlMessage(action="room.joined", room_id="discord:guild_1:channel_1", text="Joined room: discord:guild_1:channel_1")
+# → ControlMessage(action="room.joined", room_id="a1b2c3d4e5f6g78", text="Joined room: a1b2c3d4e5f6g78")
 ```
 
 `account_id` 未指定時は `identity` からアカウントを自動解決/作成する:
@@ -244,10 +267,10 @@ BidirectionalStreamRequest(
     control=ControlMessage(
         action="room.join",
         identity=Identity(provider="discord", subject="1234567890", provider_name="Bob"),
-        room_id="discord:guild_1:channel_1",
+        room_id=ROOM_ID,  # room.create で発行された UUID
     )
 )
-# → ControlMessage(action="room.joined", account_id="abc123", room_id="discord:guild_1:channel_1", text="Joined room: discord:guild_1:channel_1")
+# → ControlMessage(action="room.joined", account_id="abc123", room_id="a1b2c3d4e5f6g78", text="Joined room: a1b2c3d4e5f6g78")
 ```
 
 明示入室は任意。最初の発話でも自動joinされる。
@@ -260,10 +283,10 @@ BidirectionalStreamRequest(
 BidirectionalStreamRequest(
     control=ControlMessage(
         action="room.leave",
-        room_id="discord:guild_1:channel_1",
+        room_id=ROOM_ID,  # room.create で発行された UUID
     )
 )
-# → ControlMessage(action="room.left", room_id="discord:guild_1:channel_1", text="Left room: discord:guild_1:channel_1")
+# → ControlMessage(action="room.left", room_id="a1b2c3d4e5f6g78", text="Left room: a1b2c3d4e5f6g78")
 ```
 
 `account_id` 未指定時は `identity` から自動解決する。
@@ -336,20 +359,23 @@ ControlMessage(
     action="presence.joined",
     account_id="abc123",
     display_name="Bob",
-    room_id="discord:guild_1:channel_1",
+    room_id="a1b2c3d4e5f6g78",  # room.create で発行された UUID
 )
 ```
 
 退室時は `action="presence.left"` になる。
 
+> `room_id` の値は `room.create` が返した16進UUID文字列である。`"discord:guild_1:channel_1"` のような colon 区切り文字列は room_id としては使用されない。
+
 ### Discord Botフロー
 
 ```
 1. Discord Bot がIrisへgRPC接続
-2. Discord channelの発話を Message(speaker, room_id, content) で送信
-3. Iris が speaker からアカウントを自動解決し、room.join を自動実行
-4. Iris の応答には room_id が含まれる
-5. Bot が room_id からDiscord channelへ返信
+2. room.create でルーム作成 → UUID room_id を取得し、Discord channelとのマッピングを保持
+3. Discord channelの発話を Message(speaker, room_id=UUID, content) で送信
+4. Iris が speaker からアカウントを自動解決し、room.join を自動実行
+5. Iris の応答には room_id（UUID）が含まれる
+6. Bot が UUID → Discord channel のマッピングを逆引きして返信
 ```
 
 ---
@@ -387,6 +413,8 @@ ControlMessage(
 |------|------|------|
 | 接続がすぐ閉じられる | 認証失敗 | メタデータの `access_token` が正しいか確認 |
 | 応答が返ってこない | セッションが無効 | メタデータを含めて再接続 |
+| `"room_id is required"` が返る | room_id が空 | 正しい room_id を指定 |
+| `"room not found: ..."` が返る | 存在しない room_id | `room.create` で発行された UUID を指定 |
 | メッセージが無視される | 不正な BidirectionalStreamRequest | `message` または `command` を適切に格納しているか確認 |
 
 ### 7.2 セッション管理
@@ -399,7 +427,7 @@ ControlMessage(
 - ACK メカニズム: `metadata.ack_required=true` でサーバーが `msg_type=ack`, `content="ack:{your_msg_id}"` を返送（IPC 仕様 §5.4）
 - クライアントが送信する `Message.source_role` は常に認証ロールで上書きされるため、設定しても無視される
 - **再接続**: 切断後は新しいセッションとして再接続する。古い session_id は無効。
-  - Account / Room / 感情・関係性は永続化されており、再接続後 `account.identify` + `room.join` で復旧可能
+  - Account / 感情・関係性は永続化されており、再接続後 `account.identify` で復旧可能。Room はインメモリのため再接続後に `room.create` + `room.join` を毎回実行する必要がある
   - 認証メタデータに同じ `session_tag` を設定すると、古いセッションを強制置換して再接続する
 
 ### 7.3 制限事項

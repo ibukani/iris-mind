@@ -29,10 +29,13 @@ class _IOGateway:
         session_manager: SessionManager,
         event_bus: Any,
         hook_registry: HookRegistry,
+        manager: Any | None = None,
     ) -> None:
         self._session_mgr = session_manager
         self._event_bus = event_bus
         self._hook_registry = hook_registry
+        self._manager = manager
+        self._room_store: Any = None
 
     def _build_control_message(self, response: Any) -> ControlMessage:
         identity = getattr(response, "identity", None)
@@ -45,6 +48,29 @@ class _IOGateway:
             identity=Identity(**identity) if isinstance(identity, dict) else identity,
             profile=getattr(response, "profile", None) or {},
             metadata=getattr(response, "metadata", None) or {},
+        )
+
+    def _get_room_store(self) -> Any:
+        if self._room_store is None and self._manager is not None:
+            from iris.room.store import RoomStore
+
+            self._room_store = self._manager.resolve_optional(RoomStore)
+        return self._room_store
+
+    def _send_error(self, orig: Message, text: str) -> None:
+        session_info = self._session_mgr.get_session_info(orig.session_id)
+        target_role = session_info.role if session_info else "*"
+        self._session_mgr.router.route_message(
+            Message(
+                msg_type="response",
+                content=text,
+                session_id=orig.session_id,
+                source_role="mind",
+                target_role=target_role,
+                direction=Direction.RESPONSE,
+                account_id=orig.account_id,
+                metadata={"error": "true"},
+            ),
         )
 
     def on_grpc_control(self, control_msg: ControlMessage, session_id: str, session_role: str) -> None:
@@ -81,11 +107,28 @@ class _IOGateway:
         memory 層が subscribe して処理する。
         """
         if msg.direction != Direction.REQUEST:
-            logger.warning("IOGateway: unexpected direction from client: {}", msg.direction)
+            self._send_error(msg, f"unexpected direction from client: {msg.direction}. use 'request'")
             return
 
         if msg.target_role != "mind":
             self._session_mgr.router.route_message(msg)
+            return
+
+        if msg.speaker is None:
+            self._send_error(msg, "speaker is required for inbound messages")
+            return
+
+        if msg.msg_type == "chat" and not msg.content:
+            self._send_error(msg, "content is required for chat messages")
+            return
+
+        if not msg.room_id:
+            self._send_error(msg, "room_id is required")
+            return
+
+        store = self._get_room_store()
+        if store is not None and not store.find_room_by_id(msg.room_id):
+            self._send_error(msg, f"room not found: {msg.room_id}")
             return
 
         truncated = msg.content[:200] + "..." if len(msg.content) > 200 else msg.content

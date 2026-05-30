@@ -6,6 +6,7 @@ from typing import Any
 from loguru import logger
 
 from iris.event.event_types import (
+    Identity,
     InhibitionAction,
     InhibitionEvent,
     InputReady,
@@ -105,6 +106,8 @@ class _MemoryEventHandler:
             return
 
         context = event.context or {}
+        raw_speaker = context.get("speaker")
+        speaker = Identity(**raw_speaker) if isinstance(raw_speaker, dict) else None
         self.event_bus.publish(
             MessageEvent(
                 timestamp=None,
@@ -117,7 +120,7 @@ class _MemoryEventHandler:
                 msg_type=context.get("msg_type", "chat"),
                 content=event.content,
                 room_id=event.room_id,
-                speaker=context.get("speaker"),
+                speaker=speaker,
             ),
         )
 

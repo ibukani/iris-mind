@@ -29,11 +29,7 @@ class RoomPlugin(PluginProtocol):
         from iris.room.manager import RoomManager
         from iris.room.store import RoomStore
 
-        cfg = manager.get_plugin_config("room")
-        rooms_path = str(cfg.get("rooms_path", ".iris/data/rooms.jsonl"))
-        members_path = str(cfg.get("members_path", ".iris/data/room_members.jsonl"))
-
-        store = RoomStore(rooms_path=rooms_path, members_path=members_path)
+        store = RoomStore()
         event_bus = manager.resolve(EventBus)
 
         from iris.account.manager import AccountManager as AccountManagerCls
@@ -49,7 +45,12 @@ class RoomPlugin(PluginProtocol):
 
         from iris.room.handler import _RoomEventHandler
 
-        event_handler = _RoomEventHandler(event_bus=event_bus, store=store, room_manager=manager_inst)
+        event_handler = _RoomEventHandler(
+            event_bus=event_bus,
+            store=store,
+            room_manager=manager_inst,
+            account_manager=account_manager,
+        )
         manager.provide(_RoomEventHandler, event_handler)
 
         from iris.room.hooks import register_hooks

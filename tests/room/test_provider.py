@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from iris.room.manager import RoomManager
@@ -10,11 +8,8 @@ from iris.room.store import RoomStore
 
 
 @pytest.fixture
-def tmp_provider(tmp_path: Path) -> RoomManager:
-    store = RoomStore(
-        rooms_path=str(tmp_path / "rooms.jsonl"),
-        members_path=str(tmp_path / "members.jsonl"),
-    )
+def tmp_provider() -> RoomManager:
+    store = RoomStore()
     return RoomManager(store=store)
 
 

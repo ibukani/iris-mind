@@ -162,8 +162,9 @@ flowchart TD
 Iris に gRPC 接続して会話するクライアントを開発する場合:
 
 1. **[Client Guide](./docs/external/client-guide.md)** — 応答パターン・自発発話・コマンド・期待される動作
-2. **[IPC Protocol Spec](./docs/external/protocol-spec.md)** — ワイヤー形式・認証・メッセージ構造・実装例
-3. 実装例: [Python (生ソケット)](./docs/external/protocol-spec.md#91-最小クライアントpython--生ソケット版) / [C#](./docs/external/protocol-spec.md#93-c--net) / [Rust](./docs/external/protocol-spec.md#94-rust) / [Node.js](./docs/external/protocol-spec.md#95-nodejs)
+2. **[IPC Protocol Spec](./docs/external/protocol-spec.md)** — ワイヤー形式・認証・プロトコル概要
+   - [データ型定義](./docs/external/protocol-types.md) — Permission, Direction, Message, Identity, ControlMessage
+   - [接続シーケンス・実装例](./docs/external/protocol-flows.md) — シーケンス図、Python/Rust実装例
 
 ```mermaid
 flowchart LR
@@ -218,7 +219,9 @@ iris-mind/
 │   ├── kernel-layer.md          # Kernel 層設計
 │   ├── config.md                # Config 設定一覧
 │   └── external/                # 外部開発者向けドキュメント
-│       ├── protocol-spec.md          # IPC プロトコル仕様
+│       ├── protocol-spec.md          # IPC プロトコル仕様 (概要・通信方式・エラー)
+│       ├── protocol-types.md         # IPC データ型定義
+│       ├── protocol-flows.md         # IPC 接続シーケンス・実装例
 │       └── client-guide.md      # クライアント開発ガイド
 ├── iris/                        # アプリケーションコア
 │   ├── agency/                  # 前頭前野+基底核+運動野

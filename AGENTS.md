@@ -252,6 +252,72 @@ iris/                             ← アプリケーションコア
 - コメントは「なぜ」ではなく「意図が不明瞭な箇所」のみ
 - f-string優先。`%` フォーマット禁止
 
+### プラグインファイル構成規約
+
+**ファイル命名**
+
+- `snake_case.py`。略語禁止（`di.py` → `service_container.py`）。単数形優先（複数エンティティのコンテナのみ複数形可。例: `protocols.py`, `stores.py`）
+- 数字接尾辞禁止（`handler2.py` ではなく責務名で分割）
+
+**クラス命名**
+
+- ファイル名とプレフィックスを一致させる: `manager.py` → `XxxManager`、`protocols.py` → `XxxProtocol`
+- 内部専用クラスは `_` プレフィックス（`_MemoryEventHandler`, `_JsonlStore`）
+
+**ファイル責務分離（1ファイル=1責務）**
+
+| ファイル | 責務 | クラス/関数パターン |
+|---|---|---|
+| `manager.py` | 中心オーケストレータ | `XxxManager` |
+| `handler.py` | EventBusイベント購読 | `_XxxEventHandler` (private) |
+| `builder.py` | コンポーネント組立 | `build_xxx(manager) -> dict` |
+| `dispatcher.py` | 操作振り分け | `build_xxx_handlers()` |
+| `models.py` | データ型定義 | `XxxData`, `XxxState` |
+| `protocol.py` / `protocols.py` | Protocol定義 | `XxxProtocol` |
+| `base.py` | 抽象基底クラス | `_XxxBase` (private) |
+| `scorer.py` | スコアリング | `XxxScorer` (Protocol) + 具象実装 |
+| `extractor.py` | 抽出/解析 | `XxxExtractor` (Protocol) + 具象実装 |
+| `renderer.py` | レンダリング | `render_xxx_context(...) -> str` |
+| `hooks.py` | HookPoint登録 | `register_hooks(manager)` |
+| `events.py` | プラグイン固有イベント型 | `XxxEvent(DataClass)` |
+| `config.py` | 設定読み込み | `XxxConfig` |
+| `utils.py` | ユーティリティ関数 | `xxx_yyy()` |
+
+**分割トリガー（必須）**
+
+- **EventBus subscribe が1つでもあれば handler.py へ強制分離**。manager から直接 subscribe してはならない。wiring は `__init__.py` の `init()` で行う
+- `__init__.py` の `init()` 本体が50行を超えたら `builder.py` に分割
+- ファイルが200行を超え、かつ責務が2つ以上ある場合は分割を検討
+
+**依存性注入（DI）**
+
+- `PluginManager` インスタンスをロジッククラス（`XxxManager` 等）のメンバ変数に保持させない。必要な依存はすべてコンストラクタで注入する
+- 純粋ロジック（scorer, extractor 等）とI/O（ファイル操作, EventBus publish）は分離する
+
+**インポート規約**
+
+- 同一プラグイン内: 相対インポート（`from .manager import XxxManager`）
+- 他プラグイン: 絶対インポート（`from iris.memory.manager import MemoryManager`）
+- `__init__.py` は公開APIのみ再エクスポート。内部モジュール直接アクセスは非推奨
+- 型ヒントのみで参照するクラスは `if TYPE_CHECKING:` ブロック内でインポートし循環参照を防ぐ
+
+**handler wiring 必須パターン**
+
+```python
+# handler.py: 購読はここでのみ行う
+class _XxxEventHandler:
+    def __init__(self, event_bus, dependency):
+        event_bus.subscribe(MessageEvent, self._on_event)
+
+# __init__.py init() 内: wiring
+_XxxEventHandler(
+    event_bus=manager.resolve(EventBus),
+    dependency=components["xxx"],
+)
+```
+
+handler が manager を呼び戻す必要がある場合は `Protocol` で疎結合にする。`controller` 引数に `Protocol` を要求し、manager がそれを満たす実装になっている前提で注入する。
+
 ## 5. アーキテクチャ要約
 
 ### 層構造（脳科学対応）
@@ -339,7 +405,7 @@ uv run pyright .
 - 新規プラグイン: `.agents/skills/iris-plugin-create/SKILL.md`
 - Hook追加: `.agents/skills/iris-plugin-hook/SKILL.md`
 - プロバイダ/サブプラグイン: `.agents/skills/iris-plugin-provider/SKILL.md`
-- 内部構造・コンポーネント命名: `.agents/skills/iris-plugin-structure/SKILL.md`
+- 内部構造・コンポーネント命名: 基本ルールは §4。実装パターン・コード例は `.agents/skills/iris-plugin-structure/SKILL.md`
 
 ## 9. Tool追加ルール
 

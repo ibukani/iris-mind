@@ -74,6 +74,9 @@ class RoomStore:
     def find_active_rooms(self) -> list[Room]:
         return [r for r in self._rooms if r.state == RoomState.ACTIVE]
 
+    def find_rooms_by_state(self, state: RoomState) -> list[Room]:
+        return [r for r in self._rooms if r.state == state]
+
     def find_member(self, room_id: str, account_id: str) -> RoomMember | None:
         for m in self._members:
             if m.room_id == room_id and m.account_id == account_id:
@@ -81,7 +84,7 @@ class RoomStore:
         return None
 
     def find_members_by_room(self, room_id: str) -> list[RoomMember]:
-        return [m for m in self._members if m.room_id == room_id]
+        return [m for m in self._members if m.room_id == room_id and m.is_active]
 
     def find_active_members_by_room(self, room_id: str) -> list[RoomMember]:
         return [m for m in self._members if m.room_id == room_id and m.is_active]
@@ -103,5 +106,5 @@ class RoomStore:
         return [m for m in self._members if m.room_id == room_id and m.is_active]
 
     def find_rooms_by_account(self, account_id: str) -> list[Room]:
-        member_room_ids = {m.room_id for m in self._members if m.account_id == account_id}
-        return [r for r in self._rooms if r.room_id in member_room_ids]
+        member_room_ids = {m.room_id for m in self._members if m.account_id == account_id and m.is_active}
+        return [r for r in self._rooms if r.room_id in member_room_ids and r.state == RoomState.ACTIVE]

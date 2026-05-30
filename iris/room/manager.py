@@ -58,21 +58,21 @@ class RoomManager:
 
     def list_rooms(self, state: RoomState = RoomState.ACTIVE) -> list[Room]:
         """ルーム一覧を取得する。"""
-        if state == RoomState.ACTIVE:
-            return self._store.find_active_rooms()
-        return self._store.load_rooms()
+        return self._store.find_rooms_by_state(state)
 
     def update_room(self, room_id: str, **fields: Any) -> None:
         """ルームフィールドを更新する。"""
         room = self.get_room(room_id)
         if not room:
             logger.warning("RoomManager: room not found: {}", room_id)
-            return
+            raise ValueError(f"room not found: {room_id}")
 
         for key, value in fields.items():
-            old = getattr(room, key, None)
-            setattr(room, key, value)
-            if self._event_bus and old != value:
+            old, new = self._coerce_update_field(room, key, value)
+            if old == new:
+                continue
+            setattr(room, key, new)
+            if self._event_bus and old != new:
                 self._event_bus.publish(
                     RoomUpdatedEvent(
                         timestamp=datetime.now(UTC),
@@ -80,7 +80,7 @@ class RoomManager:
                         room_id=room_id,
                         field_name=key,
                         old_value=old,
-                        new_value=value,
+                        new_value=new,
                     ),
                 )
 
@@ -107,12 +107,15 @@ class RoomManager:
 
         logger.info("RoomManager: deleted room_id={}", room_id)
 
-    def join_room(self, room_id: str, account_id: str, session_id: str = "", role: str = "member") -> None:
+    def join_room(self, room_id: str, account_id: str, session_id: str = "", role: str = "member") -> bool:
         """ルームに参加する。同一(room_id, account_id)の参加は重複防止。"""
         room = self.get_room(room_id)
         if not room:
             logger.warning("RoomManager: room not found: {}", room_id)
-            return
+            return False
+        if room.state != RoomState.ACTIVE:
+            logger.warning("RoomManager: room not active: {}", room_id)
+            return False
 
         existing = self._store.find_member(room_id, account_id)
         if existing and existing.is_active:
@@ -122,7 +125,7 @@ class RoomManager:
                 logger.debug("RoomManager: added session {} to existing member in room {}", session_id, room_id)
             else:
                 logger.debug("RoomManager: account {} already in room {}", account_id, room_id)
-            return
+            return True
 
         member = RoomMember(
             room_id=room_id, account_id=account_id, session_ids=[session_id] if session_id else [], role=role
@@ -149,13 +152,14 @@ class RoomManager:
             )
 
         logger.debug("RoomManager: account {} joined room {} (session={})", account_id, room_id, session_id)
+        return True
 
-    def leave_room(self, room_id: str, account_id: str, session_id: str = "") -> None:
+    def leave_room(self, room_id: str, account_id: str, session_id: str = "") -> bool:
         """ルームから退室する。session_id 指定時はそのセッションのみ解除。"""
         member = self._store.find_member(room_id, account_id)
         if not member or not member.is_active:
             logger.debug("RoomManager: no active member for account {} in room {}", account_id, room_id)
-            return
+            return False
 
         if session_id:
             if session_id in member.session_ids:
@@ -163,10 +167,10 @@ class RoomManager:
                 if member.session_ids:
                     self._store.update_member(member)
                     logger.debug("RoomManager: removed session {} from member (still has sessions)", session_id)
-                    return
+                    return True
             else:
                 logger.debug("RoomManager: session {} not found in member's sessions", session_id)
-                return
+                return False
 
         member.disconnected_at = datetime.now(UTC).isoformat()
         self._store.update_member(member)
@@ -183,6 +187,7 @@ class RoomManager:
             )
 
         logger.debug("RoomManager: account {} left room {} (session={})", account_id, room_id, session_id)
+        return True
 
     def get_members(self, room_id: str) -> list[RoomMember]:
         """ルームメンバー一覧を取得する。"""
@@ -204,6 +209,29 @@ class RoomManager:
             if account:
                 return str(account.display_name)
         return account_id
+
+    def _coerce_update_field(self, room: Room, key: str, value: Any) -> tuple[Any, Any]:
+        if key not in {"name", "description", "topic", "state", "created_by", "metadata"}:
+            raise ValueError(f"unknown room field: {key}")
+
+        if key == "state":
+            new_value: Any
+            if isinstance(value, RoomState):
+                new_value = value
+            elif isinstance(value, str):
+                new_value = RoomState(value)
+            else:
+                raise ValueError(f"invalid room state: {value!r}")
+        elif key == "metadata":
+            new_value = value
+            if not isinstance(value, dict):
+                raise ValueError("metadata must be an object")
+        else:
+            new_value = value
+            if not isinstance(value, str):
+                raise ValueError(f"{key} must be a string")
+
+        return getattr(room, key, None), new_value
 
     def get_default_room(self) -> Room | None:
         """デフォルトルーム（'default'という名前のルーム）を取得する。存在しない場合は作成する。"""

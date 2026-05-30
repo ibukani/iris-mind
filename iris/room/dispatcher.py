@@ -98,6 +98,10 @@ class _RoomDispatcher:
         if not room_id:
             return self._error("room.join", "room_id required")
 
+        room = self._room_manager.get_room(room_id)
+        if not room:
+            return self._error("room.join", f"room not found: {room_id}")
+
         account_id = msg.account_id
         if not account_id and self._account_manager:
             account = self._resolve_or_create_account(msg)
@@ -106,7 +110,8 @@ class _RoomDispatcher:
         if not account_id:
             return self._error("room.join", "account_id or identity required")
 
-        self._room_manager.join_room(room_id, account_id, session_id=session_id)
+        if not self._room_manager.join_room(room_id, account_id, session_id=session_id):
+            return self._error("room.join", f"room join failed: {room_id}")
 
         return ControlMessageEvent(
             timestamp=None,
@@ -122,6 +127,10 @@ class _RoomDispatcher:
         if not room_id:
             return self._error("room.leave", "room_id required")
 
+        room = self._room_manager.get_room(room_id)
+        if not room:
+            return self._error("room.leave", f"room not found: {room_id}")
+
         account_id = msg.account_id
         if not account_id and self._account_manager:
             account = self._resolve_or_create_account(msg)
@@ -130,7 +139,8 @@ class _RoomDispatcher:
         if not account_id:
             return self._error("room.leave", "account_id or identity required")
 
-        self._room_manager.leave_room(room_id, account_id, session_id=session_id)
+        if not self._room_manager.leave_room(room_id, account_id, session_id=session_id):
+            return self._error("room.leave", f"room leave failed: {room_id}")
 
         return ControlMessageEvent(
             timestamp=None,
@@ -162,7 +172,10 @@ class _RoomDispatcher:
         if not updates:
             return self._error("room.update", "no fields to update")
 
-        self._room_manager.update_room(room_id, **updates)
+        try:
+            self._room_manager.update_room(room_id, **updates)
+        except ValueError as exc:
+            return self._error("room.update", str(exc))
 
         return ControlMessageEvent(
             timestamp=None,

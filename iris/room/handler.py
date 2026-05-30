@@ -42,6 +42,9 @@ class _RoomEventHandler:
         if not account_id:
             return
 
+        if not event.account_id:
+            event.account_id = account_id
+
         self._room_manager.join_room(
             event.room_id,
             account_id,

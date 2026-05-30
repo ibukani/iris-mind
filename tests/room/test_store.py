@@ -48,6 +48,14 @@ class TestMemberStore:
         members = tmp_store.find_members_by_room("r1")
         assert len(members) == 2
 
+    def test_find_members_by_room_excludes_inactive(self, tmp_store: RoomStore) -> None:
+        active = RoomMember(room_id="r1", account_id="a1")
+        inactive = RoomMember(room_id="r1", account_id="a2", disconnected_at="2026-01-01T00:00:00+00:00")
+        tmp_store.add_member(active)
+        tmp_store.add_member(inactive)
+        members = tmp_store.find_members_by_room("r1")
+        assert [member.account_id for member in members] == ["a1"]
+
     def test_remove_member(self, tmp_store: RoomStore) -> None:
         tmp_store.add_member(RoomMember(room_id="r1", account_id="a1"))
         tmp_store.remove_member("r1", "a1")
@@ -56,7 +64,10 @@ class TestMemberStore:
     def test_find_rooms_by_account(self, tmp_store: RoomStore) -> None:
         tmp_store.add_room(Room(room_id="r1", name="room1"))
         tmp_store.add_room(Room(room_id="r2", name="room2"))
+        tmp_store.add_room(Room(room_id="r3", name="room3", state=RoomState.ARCHIVED))
         tmp_store.add_member(RoomMember(room_id="r1", account_id="a1"))
         tmp_store.add_member(RoomMember(room_id="r2", account_id="a1"))
+        tmp_store.add_member(RoomMember(room_id="r3", account_id="a1"))
         rooms = tmp_store.find_rooms_by_account("a1")
         assert len(rooms) == 2
+        assert {room.room_id for room in rooms} == {"r1", "r2"}

@@ -28,10 +28,21 @@ class TestRoomManager:
 
     def test_list_rooms(self, tmp_provider: RoomManager) -> None:
         tmp_provider.create_room("active")
-        tmp_provider.create_room("archived")
+        tmp_provider.create_room("active2")
+        tmp_provider.create_room("archived", state=RoomState.ARCHIVED)
         tmp_provider.archive_room(tmp_provider.create_room("old").room_id)
         active = tmp_provider.list_rooms()
         assert len(active) == 2
+
+    def test_list_rooms_by_state(self, tmp_provider: RoomManager) -> None:
+        active_room = tmp_provider.create_room("active")
+        archived_room = tmp_provider.create_room("archived", state=RoomState.ARCHIVED)
+
+        active = tmp_provider.list_rooms(RoomState.ACTIVE)
+        archived = tmp_provider.list_rooms(RoomState.ARCHIVED)
+
+        assert [room.room_id for room in active] == [active_room.room_id]
+        assert [room.room_id for room in archived] == [archived_room.room_id]
 
     def test_update_room(self, tmp_provider: RoomManager) -> None:
         room = tmp_provider.create_room("old_name")
@@ -39,6 +50,12 @@ class TestRoomManager:
         updated = tmp_provider.get_room(room.room_id)
         assert updated is not None
         assert updated.name == "new_name"
+
+    def test_update_room_rejects_invalid_state(self, tmp_provider: RoomManager) -> None:
+        room = tmp_provider.create_room("old_name")
+        with pytest.raises(ValueError, match="RoomState"):
+            tmp_provider.update_room(room.room_id, state="broken")
+        assert tmp_provider.get_room(room.room_id).state == RoomState.ACTIVE
 
     def test_archive_room(self, tmp_provider: RoomManager) -> None:
         room = tmp_provider.create_room("to_archive")
@@ -56,26 +73,33 @@ class TestRoomManager:
 class TestRoomMembership:
     def test_join_room(self, tmp_provider: RoomManager) -> None:
         room = tmp_provider.create_room("test")
-        tmp_provider.join_room(room.room_id, "user1", session_id="s1")
+        assert tmp_provider.join_room(room.room_id, "user1", session_id="s1")
         assert tmp_provider.is_member(room.room_id, "user1")
+
+    def test_join_rejects_archived_room(self, tmp_provider: RoomManager) -> None:
+        room = tmp_provider.create_room("test", state=RoomState.ARCHIVED)
+        assert not tmp_provider.join_room(room.room_id, "user1", session_id="s1")
+        assert not tmp_provider.is_member(room.room_id, "user1")
 
     def test_leave_room(self, tmp_provider: RoomManager) -> None:
         room = tmp_provider.create_room("test")
-        tmp_provider.join_room(room.room_id, "user1", session_id="s1")
-        tmp_provider.leave_room(room.room_id, "user1", session_id="s1")
+        assert tmp_provider.join_room(room.room_id, "user1", session_id="s1")
+        assert tmp_provider.leave_room(room.room_id, "user1", session_id="s1")
         assert not tmp_provider.is_member(room.room_id, "user1")
 
     def test_get_members(self, tmp_provider: RoomManager) -> None:
         room = tmp_provider.create_room("test")
-        tmp_provider.join_room(room.room_id, "user1", session_id="s1")
-        tmp_provider.join_room(room.room_id, "user2", session_id="s2")
+        assert tmp_provider.join_room(room.room_id, "user1", session_id="s1")
+        assert tmp_provider.join_room(room.room_id, "user2", session_id="s2")
         members = tmp_provider.get_members(room.room_id)
         assert len(members) == 2
 
     def test_get_rooms_by_account(self, tmp_provider: RoomManager) -> None:
         room1 = tmp_provider.create_room("room1")
         room2 = tmp_provider.create_room("room2")
-        tmp_provider.join_room(room1.room_id, "user1", session_id="s1")
-        tmp_provider.join_room(room2.room_id, "user1", session_id="s2")
+        archived = tmp_provider.create_room("room3", state=RoomState.ARCHIVED)
+        assert tmp_provider.join_room(room1.room_id, "user1", session_id="s1")
+        assert tmp_provider.join_room(room2.room_id, "user1", session_id="s2")
+        assert not tmp_provider.join_room(archived.room_id, "user1", session_id="s3")
         rooms = tmp_provider.get_rooms_by_account("user1")
         assert len(rooms) == 2

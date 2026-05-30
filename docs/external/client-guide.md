@@ -246,6 +246,7 @@ BidirectionalStreamRequest(
 - 未登録ならアカウントが自動作成される
 - `room_id` は返信先ルームとして応答メタデータへ伝搬される
 - Discord Bot 1接続で複数ユーザーの発話を送れる
+- `room.members` は退室済みメンバーを含まない
 
 ### 5.2 明示入室
 
@@ -275,6 +276,8 @@ BidirectionalStreamRequest(
 
 明示入室は任意。最初の発話でも自動joinされる。
 
+`room.join` / `room.leave` はアクティブな既存 room のみ受け付ける。
+
 ### 5.3 明示退室
 
 退室は `room.leave` で行う:
@@ -290,6 +293,8 @@ BidirectionalStreamRequest(
 ```
 
 `account_id` 未指定時は `identity` から自動解決する。
+
+`room.leave` も存在しない room では Error を返す。
 
 ### 5.4 アカウント更新
 

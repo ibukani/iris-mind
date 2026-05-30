@@ -101,7 +101,7 @@
 |-----------|-----|------|
 | `provider` | string | 外部ID提供元。例: `discord`, `local`。`subject` と組み合わせてユーザーの不変キーを形成する |
 | `subject` | string | provider内の安定ID。ユーザーを一意に識別する不変な値である必要がある（変更されると別Accountとして扱われる） |
-| `provider_name` | string | provider側表示名 |
+| `provider_name` | string | provider側のユーザーの表示名 |
 | `metadata` | map<string,string> | guild_id / channel_id等 |
 
 ### 1.7 ControlMessage (`BidirectionalStreamRequest.control` / `BidirectionalStreamResponse.control`)
@@ -130,11 +130,11 @@
 | `room.create` | C→S, S→C | ルーム作成 | `text` (ルーム名) |
 | `room.list` | C→S, S→C | ルーム一覧取得 | なし |
 | `room.info` | C→S, S→C | ルーム情報取得 | `room_id` |
-| `room.join` | C→S, S→C | ルーム参加（identityからaccount作成も可） | `room_id`, (`account_id` or `identity`) |
-| `room.leave` | C→S, S→C | ルーム退室 | `room_id`, (`account_id` or `identity`) |
-| `room.update` | C→S, S→C | ルーム情報更新 | `room_id`, `text` (JSON) |
+| `room.join` | C→S, S→C | ルーム参加（identityからaccount作成も可、アクティブな既存 room のみ対象） | `room_id`, (`account_id` or `identity`) |
+| `room.leave` | C→S, S→C | ルーム退室（アクティブな既存 room のみ対象） | `room_id`, (`account_id` or `identity`) |
+| `room.update` | C→S, S→C | ルーム情報更新（`state` は `active` / `archived`） | `room_id`, `text` (JSON) |
 | `room.delete` | C→S, S→C | ルーム削除 | `room_id` |
-| `room.members` | C→S, S→C | ルームメンバー一覧取得 | `room_id` |
+| `room.members` | C→S, S→C | ルームのアクティブメンバー一覧取得 | `room_id` |
 
 **応答 (Server→Client)**:
 
@@ -151,9 +151,11 @@
 | `room.left` | leave完了応答 |
 | `room.updated` | update完了応答 |
 | `room.deleted` | delete完了応答 |
-| `room.members` | members結果（`text` にJSON配列） |
+| `room.members` | members結果（`text` にJSON配列、退室済みは含まない） |
 
 **エラー応答**: エラー時は元のリクエストアクション名（例: `account.identify`）で応答し、`text` に `Error: <message>` を格納する。専用の `account.error` / `room.error` アクションは存在しない。
+
+- `room.join` / `room.leave` / `room.members` は存在するアクティブ room を前提とする。無効な `room_id` や archived room はエラー応答になる。
 
 **自動発行**:
 - ルーム入退室時、サーバーは `presence.joined` / `presence.left` を `ControlMessage` として配信する。

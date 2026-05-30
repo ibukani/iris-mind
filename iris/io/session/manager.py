@@ -100,49 +100,51 @@ class SessionManager:
             return f"{secs // 3600}時間{(secs % 3600) // 60}分間"
         return f"{secs // 86400}日間"
 
-    def route_message(self, msg: Message) -> None:
-        session: SessionInfo | None = None
-        targets: list[SessionInfo] = []
-        skipped: list[str] = []
-
+    def _resolve_route_targets(self, msg: Message) -> tuple[SessionInfo | None, list[SessionInfo]]:
         with self._lock:
             if msg.session_id:
                 s = self._sessions.get(msg.session_id)
                 if s is not None and s.state == SessionState.ACTIVE and s.conn is not None:
-                    session = s
-                elif s is None:
+                    return s, []
+                if s is None:
                     logger.debug("route_message: session {} not found", msg.session_id)
                 else:
                     logger.debug("route_message: session {} not active or no conn", msg.session_id)
-            elif msg.target_role == "*":
-                targets = [s for s in self._sessions.values() if s.state == SessionState.ACTIVE and s.conn is not None]
-            else:
-                targets = [
-                    s
-                    for s in self._sessions.values()
-                    if s.state == SessionState.ACTIVE and s.role == msg.target_role and s.conn is not None
+                return None, []
+            if msg.target_role == "*":
+                return None, [
+                    s for s in self._sessions.values() if s.state == SessionState.ACTIVE and s.conn is not None
                 ]
+            return None, [
+                s
+                for s in self._sessions.values()
+                if s.state == SessionState.ACTIVE and s.role == msg.target_role and s.conn is not None
+            ]
 
-        if session is not None:
-            send_bytes_to_session(session, msg)
-            return
-
+    def _send_to_targets(self, msg: Message, targets: list[SessionInfo], log_prefix: str) -> None:
         permission = _MSG_PERMISSION_MAP.get(msg.msg_type)
+        skipped: list[str] = []
         for s in targets:
             if permission is not None and permission not in s.permissions:
                 skipped.append(s.session_id)
                 continue
             send_bytes_to_session(s, msg)
-
         if skipped:
-            logger.debug("route_message: skipped {} session(s) due to permission: {}", len(skipped), skipped)
+            logger.debug("{}: skipped {} session(s) due to permission: {}", log_prefix, len(skipped), skipped)
         if not targets:
-            logger.debug("route_message: no active sessions to route msg_type={}", msg.msg_type)
+            logger.debug("{}: no active sessions to route msg_type={}", log_prefix, msg.msg_type)
+
+    def route_message(self, msg: Message) -> None:
+        session, targets = self._resolve_route_targets(msg)
+        if session is not None:
+            send_bytes_to_session(session, msg)
+            return
+        self._send_to_targets(msg, targets, "route_message")
 
     def route_to_room(self, msg: Message, room_id: str, room_store: RoomStore) -> None:
         session_ids = room_store.find_all_session_ids_for_room(room_id)
-        targets: list[SessionInfo] = []
         not_active: list[str] = []
+        targets: list[SessionInfo] = []
 
         with self._lock:
             for sid in session_ids:
@@ -152,20 +154,9 @@ class SessionManager:
                 else:
                     not_active.append(sid)
 
-        permission = _MSG_PERMISSION_MAP.get(msg.msg_type)
-        skipped: list[str] = []
-        for s in targets:
-            if permission is not None and permission not in s.permissions:
-                skipped.append(s.session_id)
-                continue
-            send_bytes_to_session(s, msg)
-
-        if skipped:
-            logger.debug("route_to_room: skipped {} session(s) due to permission: {}", len(skipped), skipped)
+        self._send_to_targets(msg, targets, "route_to_room")
         if not_active:
             logger.debug("route_to_room: {} session(s) not active in room {}", len(not_active), room_id)
-        if not targets:
-            logger.debug("route_to_room: no active sessions for room_id={}", room_id)
 
     def route_control_message(self, control_msg: ControlMessage, session_id: str) -> None:
         with self._lock:

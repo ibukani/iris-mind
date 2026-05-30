@@ -34,14 +34,7 @@ class _IOEventHandler:
         self._room_store = self._plugin_manager.resolve_optional(RoomStore)
         self._room_store_resolved = True
 
-    def _on_message_event(self, event: MessageEvent) -> None:
-        direction = event.direction or "response"
-        if direction not in ("response", "stream"):
-            return
-
-        session_info = self._session_mgr.get_session_info(event.session_id)
-        target_role = session_info.role if session_info else event.source_role or "*"
-
+    def _build_message(self, event: MessageEvent, target_role: str, direction: str) -> Message:
         msg = Message(
             msg_type=event.msg_type,
             content=event.content,
@@ -56,6 +49,18 @@ class _IOEventHandler:
         )
         if event.room_id:
             msg.metadata["room_id"] = event.room_id
+        return msg
+
+    def _on_message_event(self, event: MessageEvent) -> None:
+        direction = event.direction or "response"
+        if direction not in ("response", "stream"):
+            return
+
+        session_info = self._session_mgr.get_session_info(event.session_id)
+        target_role = session_info.role if session_info else event.source_role or "*"
+
+        msg = self._build_message(event, target_role, direction)
+
         logger.debug(
             "IOEventHandler: message event session={} type={} state={} target_role={} content_len={}",
             event.session_id,
@@ -64,11 +69,15 @@ class _IOEventHandler:
             target_role,
             len(event.content) if event.content else 0,
         )
-        if event.room_id:
-            self._get_room_store()
-            if self._room_store is not None:
-                self._session_mgr.route_to_room(msg, event.room_id, self._room_store)
-                return
+
+        if not event.room_id:
+            self._session_mgr.route_message(msg)
+            return
+
+        self._get_room_store()
+        if self._room_store is not None:
+            self._session_mgr.route_to_room(msg, event.room_id, self._room_store)
+            return
         self._session_mgr.route_message(msg)
 
     def _on_room_joined(self, event: RoomJoinedEvent) -> None:

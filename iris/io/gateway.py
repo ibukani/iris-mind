@@ -34,6 +34,19 @@ class _IOGateway:
         self._event_bus = event_bus
         self._hook_registry = hook_registry
 
+    def _build_control_message(self, response: Any) -> ControlMessage:
+        identity = getattr(response, "identity", None)
+        return ControlMessage(
+            action=getattr(response, "action", ""),
+            account_id=getattr(response, "account_id", ""),
+            room_id=getattr(response, "room_id", ""),
+            display_name=getattr(response, "display_name", ""),
+            text=getattr(response, "text", ""),
+            identity=Identity(**identity) if isinstance(identity, dict) else identity,
+            profile=getattr(response, "profile", None) or {},
+            metadata=getattr(response, "metadata", None) or {},
+        )
+
     def on_grpc_control(self, control_msg: ControlMessage, session_id: str, session_role: str) -> None:
         evt = ControlMessageEvent(
             timestamp=None,
@@ -58,20 +71,7 @@ class _IOGateway:
         if response is None:
             return
 
-        identity = getattr(response, "identity", None)
-        self._session_mgr.route_control_message(
-            ControlMessage(
-                action=getattr(response, "action", ""),
-                account_id=getattr(response, "account_id", ""),
-                room_id=getattr(response, "room_id", ""),
-                display_name=getattr(response, "display_name", ""),
-                text=getattr(response, "text", ""),
-                identity=Identity(**identity) if isinstance(identity, dict) else identity,
-                profile=getattr(response, "profile", None) or {},
-                metadata=getattr(response, "metadata", None) or {},
-            ),
-            session_id,
-        )
+        self._session_mgr.route_control_message(self._build_control_message(response), session_id)
 
     def on_grpc_message(self, msg: Message) -> None:
         """通常メッセージを EventBus に publish する（send-only）。

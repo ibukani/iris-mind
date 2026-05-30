@@ -31,7 +31,7 @@ def test_account_presence_event_broadcasts_system_message() -> None:
 
     conn.send_bytes.assert_called_once()
     raw = conn.send_bytes.call_args.args[0].decode("utf-8")
-    assert '"action":"presence.entered"' in raw
+    assert '"action":"presence.joined"' in raw
     assert '"account_id":"a1"' in raw
     assert '"provider":"discord"' in raw
     assert '"subject":"123"' in raw

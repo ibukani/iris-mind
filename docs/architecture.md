@@ -73,7 +73,7 @@ flowchart TD
     subgraph Account["account/ アカウント管理"]
         ACC_Provider["AccountProvider<br/>CRUD・外部ID連携"]
         ACC_Store["AccountStore<br/>JSONL永続化"]
-        ACC_Handler["_AccountEventHandler<br/>SystemMessage処理"]
+        ACC_Handler["_AccountEventHandler<br/>ControlMessage処理"]
     end
 
     EB ---|全層を結合| Kernel
@@ -191,7 +191,7 @@ iris/
 │   ├── store.py               AccountStore（JSONL永続化）
 │   ├── provider.py            AccountProvider（コアサービス）
 │   ├── events.py              AccountCreated/Updated/SessionBound/Unbound
-│   ├── handler.py             _AccountEventHandler（SystemMessage処理）
+│   ├── handler.py             _AccountEventHandler（ControlMessage処理）
 │   └── hooks.py               EventBus Hook登録
 │
 ├── heartbeat/                 # TimerTick heartbeat Plugin
@@ -370,7 +370,8 @@ class MessageEvent(Event):
     session_id: str = ""
     source_role: str = ""
     target_role: str = ""
-    user_identity: str = ""
+    user_id: str = ""
+    room_id: str = ""
     direction: str = ""      # "request" | "response" | "stream" | "event"
     msg_type: str = ""       # "chat" | "system" | "stream" | "response" | ...
     content: str = ""
@@ -381,7 +382,8 @@ class MessageEvent(Event):
 class InputReady(Event):
     session_id: str = ""
     content: str = ""
-    user_identity: str = ""
+    user_id: str = ""
+    room_id: str = ""
     context: dict | None = None
 
 @dataclass

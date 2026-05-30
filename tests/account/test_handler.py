@@ -7,7 +7,7 @@ import pytest
 from iris.account.handler import _AccountEventHandler
 from iris.account.provider import AccountProvider
 from iris.account.store import AccountStore
-from iris.event.event_types import SystemMessageEvent
+from iris.event.event_types import ControlMessageEvent
 
 
 @pytest.fixture
@@ -21,8 +21,8 @@ def handler_and_provider(tmp_path: Path) -> tuple[_AccountEventHandler, AccountP
     return _AccountEventHandler(account_provider=provider), provider
 
 
-def _msg(action: str, **kwargs: object) -> SystemMessageEvent:
-    return SystemMessageEvent(timestamp=None, source="test", action=action, **kwargs)
+def _msg(action: str, **kwargs: object) -> ControlMessageEvent:
+    return ControlMessageEvent(timestamp=None, source="test", action=action, **kwargs)
 
 
 class TestIdentify:
@@ -31,15 +31,15 @@ class TestIdentify:
         handler_and_provider: tuple[_AccountEventHandler, AccountProvider],
     ) -> None:
         h, p = handler_and_provider
-        result = h.handle_system_message(
+        result = h.handle_control_message(
             _msg(
-                "account.identify",
+                "account.join",
                 identity={"provider": "discord", "subject": "123", "display_name": "Alice"},
             ),
             "s1",
         )
         assert result is not None
-        assert result.action == "account.identify"
+        assert result.action == "account.joined"
         assert result.account_id != ""
         assert result.nickname == "Alice"
         assert p.get_account_by_session("s1") is not None
@@ -48,7 +48,7 @@ class TestIdentify:
         self, handler_and_provider: tuple[_AccountEventHandler, AccountProvider]
     ) -> None:
         h, _ = handler_and_provider
-        result = h.handle_system_message(_msg("account.identify"), "s1")
+        result = h.handle_control_message(_msg("account.join"), "s1")
         assert result is not None
         assert "Error" in (result.text or "")
 
@@ -58,7 +58,7 @@ class TestGet:
         h, p = handler_and_provider
         account = p.resolve_or_create_identity("discord", "123", display_name="Alice")
         p.bind_session("s1", account.account_id)
-        result = h.handle_system_message(_msg("account.get"), "s1")
+        result = h.handle_control_message(_msg("account.get"), "s1")
         assert result is not None
         assert result.account_id == account.account_id
         assert "identities" in (result.text or "")
@@ -72,7 +72,7 @@ class TestUpdate:
         h, p = handler_and_provider
         account = p.register("old")
         p.bind_session("s1", account.account_id)
-        result = h.handle_system_message(_msg("account.update", nickname="new", profile={"lang": "ja"}), "s1")
+        result = h.handle_control_message(_msg("account.update", nickname="new", profile={"lang": "ja"}), "s1")
         assert result is not None
         assert result.nickname == "new"
         updated = p.resolve(account.account_id)
@@ -86,7 +86,7 @@ class TestLinkIdentity:
         h, p = handler_and_provider
         account = p.register("u1")
         p.bind_session("s1", account.account_id)
-        result = h.handle_system_message(
+        result = h.handle_control_message(
             _msg(
                 "account.link_identity",
                 identity={"provider": "local", "subject": "local-user", "display_name": "Local"},
@@ -103,7 +103,7 @@ class TestLeave:
         h, p = handler_and_provider
         account = p.register("u1")
         p.bind_session("s1", account.account_id)
-        result = h.handle_system_message(_msg("account.leave"), "s1")
+        result = h.handle_control_message(_msg("account.leave"), "s1")
         assert result is not None
-        assert result.action == "account.leave"
+        assert result.action == "account.left"
         assert p.get_account_by_session("s1") is None

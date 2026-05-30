@@ -9,13 +9,13 @@ from uuid import uuid4
 from iris.io.auth.authenticator import Authenticator
 from iris.io.models import (
     AuthMessage,
+    AuthResult,
     CommandOutput,
     ControlMessage,
     Message,
     Permission,
     SessionInfo,
     SessionState,
-    SystemMessage,
 )
 
 if TYPE_CHECKING:
@@ -38,11 +38,11 @@ class SessionManager:
         self._event_bus = event_bus
         self._last_disconnect_times: dict[str, datetime] = {}
 
-    def authenticate(self, conn: Any, msg: AuthMessage) -> ControlMessage:
+    def authenticate(self, conn: Any, msg: AuthMessage) -> AuthResult:
         with self._lock:
             success, error = self._authenticator.authenticate(msg)
             if not success:
-                return ControlMessage(msg_type="auth_failure", error_message=error)
+                return AuthResult(msg_type="auth_failure", error_message=error)
 
             self._replace_duplicate_session(msg.identity)
 
@@ -52,7 +52,7 @@ class SessionManager:
 
             logger.info("Session created: {} (role={})", session_id, msg.role)
 
-        return ControlMessage(msg_type="auth_success", session_id=session_id)
+        return AuthResult(msg_type="auth_success", session_id=session_id)
 
     def _replace_duplicate_session(self, identity: str | None) -> None:
         if not identity:
@@ -139,18 +139,18 @@ class SessionManager:
         if not targets:
             logger.debug("route_message: no active sessions to route msg_type={}", msg.msg_type)
 
-    def route_system_message(self, sys_msg: SystemMessage, session_id: str) -> None:
+    def route_control_message(self, control_msg: ControlMessage, session_id: str) -> None:
         with self._lock:
             session = self._sessions.get(session_id)
         if session is None:
-            logger.warning("System message route for unknown session: {}", session_id)
+            logger.warning("Control message route for unknown session: {}", session_id)
             return
         if session.state != SessionState.ACTIVE or session.conn is None:
             return
-        raw = sys_msg.model_dump_json().encode("utf-8")
+        raw = control_msg.model_dump_json().encode("utf-8")
         session.conn.send_bytes(raw)
 
-    def broadcast_system_message(self, sys_msg: SystemMessage) -> None:
+    def broadcast_control_message(self, control_msg: ControlMessage) -> None:
         with self._lock:
             targets = [
                 s
@@ -161,7 +161,7 @@ class SessionManager:
             ]
 
         for session in targets:
-            send_bytes_to_session(session, sys_msg)
+            send_bytes_to_session(session, control_msg)
 
     def route_command_output(self, session_id: str, msg: CommandOutput) -> None:
         with self._lock:

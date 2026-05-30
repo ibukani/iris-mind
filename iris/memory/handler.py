@@ -6,13 +6,13 @@ from typing import Any
 from loguru import logger
 
 from iris.event.event_types import (
+    ControlMessageEvent,
     InhibitionAction,
     InhibitionEvent,
     InputReady,
     InterruptEvent,
     MessageEvent,
     SessionDisconnectEvent,
-    SystemMessageEvent,
     TimerTick,
 )
 from iris.memory.models import ContentBlock, system_event_block
@@ -23,12 +23,12 @@ class _MemoryEventHandler:
 
     責務:
     - EventBus 上のイベントを購読し、記憶系の処理を行う
-    - IO 層からの system メッセージを受信し、EventBus に publish してから処理を行う
-    - 処理結果を SystemMessage として返す（IO 層がクライアントに返送）
+    - IO 層からの control メッセージを受信し、EventBus に publish してから処理を行う
+    - 処理結果を ControlMessage として返す（IO 層がクライアントに返送）
 
     設計:
     - 通常メッセージ: Gateway → EventBus.publish(InputReady) → subscribe で受信
-    - system メッセージ: Gateway → handler コールバック（同期レスポンス必要）
+    - control メッセージ: Gateway → handler コールバック（同期レスポンス必要）
     - EventBus は memory 層が管理する。
     """
 
@@ -154,15 +154,15 @@ class _MemoryEventHandler:
                 ),
             )
 
-    def handle_system_message(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent | None:
-        """Gateway から呼ばれる system メッセージのエントリポイント。
+    def handle_control_message(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent | None:
+        """Gateway から呼ばれる control メッセージのエントリポイント。
 
-        受信した SystemMessage を EventBus に publish してから処理を行う。
-        これにより、proactive/agency 等の他のレイヤーも system メッセージを
+        受信した ControlMessage を EventBus に publish してから処理を行う。
+        これにより、proactive/agency 等の他のレイヤーも control メッセージを
         EventBus 経由で監視できる。
         """
         if self._account_handler is None:
-            logger.warning("MemoryManager: handle_system_message skipped, no account_handler")
+            logger.warning("MemoryManager: handle_control_message skipped, no account_handler")
             return None
 
         raw_identity = getattr(msg, "identity", None)
@@ -172,11 +172,10 @@ class _MemoryEventHandler:
             identity = raw_identity
         else:
             identity = None
-        internal_msg = SystemMessageEvent(
+        internal_msg = ControlMessageEvent(
             timestamp=None,
             source="memory",
             action=msg.action,
-            user_id=msg.user_id,
             account_id=msg.account_id,
             nickname=msg.nickname,
             text=msg.text,
@@ -184,35 +183,36 @@ class _MemoryEventHandler:
             identity=identity,
             profile=msg.profile,
             room_id=msg.room_id,
+            metadata=msg.metadata,
         )
         self.event_bus.publish(internal_msg)
 
-        result = self._account_handler.handle_system_message(internal_msg, session_id)
+        result = self._account_handler.handle_control_message(internal_msg, session_id)
 
-        if result and result.action in ("account.identify", "account.leave", "account.update"):
+        if result and result.action in ("account.joined", "account.left", "account.updated"):
             action = result.action
-            user_id = result.account_id or result.user_id
+            user_id = result.account_id
             nickname = result.nickname
 
-            if action == "account.identify":
+            if action == "account.joined":
                 if self.short_term:
                     self.short_term.add_user(user_id, nickname, session_id=session_id, room_id=result.room_id)
                 text = result.text or f"[system] {nickname} が入室しました"
-                block = system_event_block(text, event_type="account.identify", user_id=user_id, nickname=nickname)
+                block = system_event_block(text, event_type="account.joined", user_id=user_id, nickname=nickname)
                 self._store_and_flush_pending_block(block, user_id, session_id, result.room_id)
 
-            elif action == "account.leave":
+            elif action == "account.left":
                 if self.short_term:
                     self.short_term.remove_user(user_id, session_id=session_id, room_id=result.room_id)
                 text = result.text or f"[system] {nickname} が退室しました"
-                block = system_event_block(text, event_type="account.leave", user_id=user_id, nickname=nickname)
+                block = system_event_block(text, event_type="account.left", user_id=user_id, nickname=nickname)
                 self._store_and_flush_pending_block(block, user_id, session_id, result.room_id)
 
-            elif action == "account.update":
+            elif action == "account.updated":
                 if self.short_term:
                     self.short_term.add_user(user_id, nickname, session_id=session_id, room_id=result.room_id)
                 text = result.text or f"[system] {nickname} に改名しました"
-                block = system_event_block(text, event_type="account.update", user_id=user_id, nickname=nickname)
+                block = system_event_block(text, event_type="account.updated", user_id=user_id, nickname=nickname)
                 self._store_and_flush_pending_block(block, user_id, session_id, result.room_id)
 
         return result  # type: ignore[no-any-return]

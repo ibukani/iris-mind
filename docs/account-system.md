@@ -21,7 +21,7 @@ iris/account/
 ├── store.py          AccountStore (JSONL永続化)
 ├── provider.py       AccountProvider (コアサービス)
 ├── events.py         AccountCreated/Updated/IdentityLinked/Presence/SessionBound/Unbound
-├── handler.py        _AccountEventHandler (SystemMessage処理)
+├── handler.py        _AccountEventHandler (ControlMessage処理)
 └── hooks.py          EventBus Hook登録
 ```
 
@@ -102,27 +102,27 @@ class SessionBinding:
 | `.iris/data/account_identities.jsonl` | 外部ID紐付け情報 |
 | `.iris/data/account_bindings.jsonl` | セッション紐付け情報 |
 
-## システムメッセージ
+## ControlMessage
 
-`_AccountEventHandler` は `SystemMessageEvent` を処理し、以下のアクションに対応する:
+`_AccountEventHandler` は `ControlMessageEvent` を処理し、以下のアクションに対応する:
 
 | アクション | 処理 |
 |-----------|------|
-| `account.identify` | identity解決/作成 + セッション/ルーム紐付け |
+| `account.join` | identity解決/作成 + セッション/ルーム紐付け |
 | `account.leave` | セッション/ルーム解除 |
 | `account.get` | 現セッション/ルームのアカウント情報取得 |
 | `account.update` | ニックネーム・プロフィール更新 |
 | `account.link_identity` | 外部ID追加紐付け |
 
-通常チャットでは `Message.speaker` から自動的に `resolve_or_create_identity()` が実行され、`Message.room_id` と一緒に紐付けられる。Discordグループチャットでは明示的な `account.identify` は任意。
+通常チャットでは `Message.speaker` から自動的に `resolve_or_create_identity()` が実行され、`Message.room_id` と一緒に紐付けられる。Discordグループチャットでは明示的な `account.join` は任意。
 
 ## Presence通知
 
-`bind_session()` / `unbind_session()` は `AccountPresenceEvent` を発行する。IO層はこのEventBusイベントを購読し、接続中のクライアントへ `SystemMessage` を配信する。
+`bind_session()` / `unbind_session()` は `AccountPresenceEvent` を発行する。IO層はこのEventBusイベントを購読し、接続中のクライアントへ `ControlMessage` を配信する。
 
-| state | SystemMessage action |
+| state | ControlMessage action |
 |-------|----------------------|
-| `entered` | `presence.entered` |
+| `entered` | `presence.joined` |
 | `left` | `presence.left` |
 
 通知には `account_id`, `room_id`, `nickname`, `identity.provider`, `identity.subject` が含まれる。
@@ -139,10 +139,10 @@ account:
 ## 依存関係
 
 ```
-Memory層 ──→ AccountProvider (SystemMessage処理)
+Memory層 ──→ AccountProvider (ControlMessage処理)
 Agency層 ──→ AccountProvider (ニックネーム解決)
-IO層    ──→ EventBus (SystemMessageEvent発行)
-Kernel層 ──→ EventBus (SystemMessage変換)
+IO層    ──→ EventBus (ControlMessageEvent発行)
+Kernel層 ──→ EventBus (ControlMessage変換)
 ```
 
 ## テスト

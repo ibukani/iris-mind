@@ -6,7 +6,7 @@ from loguru import logger
 
 from iris.account.events import AccountPresenceEvent
 from iris.event.event_types import MessageEvent
-from iris.io.models import Direction, Identity, Message, SystemMessage
+from iris.io.models import ControlMessage, Direction, Identity, Message
 
 if TYPE_CHECKING:
     from iris.event.event_bus import EventBus
@@ -52,15 +52,14 @@ class _IOEventHandler:
         self._session_mgr.route_message(msg)
 
     def _on_account_presence(self, event: AccountPresenceEvent) -> None:
-        action = f"presence.{event.state}"
+        action = "presence.joined" if event.state == "entered" else f"presence.{event.state}"
         identity = None
         if event.provider and event.subject:
             identity = Identity(provider=event.provider, subject=event.subject)
-        self._session_mgr.broadcast_system_message(
-            SystemMessage(
+        self._session_mgr.broadcast_control_message(
+            ControlMessage(
                 action=action,
                 account_id=event.account_id,
-                user_id=event.account_id,
                 room_id=event.room_id,
                 nickname=event.nickname,
                 identity=identity,

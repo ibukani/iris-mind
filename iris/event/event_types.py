@@ -136,9 +136,8 @@ class SessionDisconnectEvent(Event):
 
 
 @dataclass
-class SystemMessageEvent(Event):
+class ControlMessageEvent(Event):
     action: str = ""
-    user_id: str = ""
     account_id: str = ""
     room_id: str = ""
     nickname: str = ""
@@ -146,6 +145,7 @@ class SystemMessageEvent(Event):
     session_id: str = ""
     identity: dict[str, Any] | None = None
     profile: dict[str, str] | None = None
+    metadata: dict[str, str] | None = None
 
 
 def new_trace_id() -> str:
@@ -155,6 +155,7 @@ def new_trace_id() -> str:
 __all__ = [
     "AgentAnomalyEvent",
     "AgentStateChangeEvent",
+    "ControlMessageEvent",
     "DebugSnapshotEvent",
     "Event",
     "InhibitionAction",
@@ -164,7 +165,6 @@ __all__ = [
     "MemoryUpdateEvent",
     "MessageEvent",
     "SessionDisconnectEvent",
-    "SystemMessageEvent",
     "TimerTick",
     "new_trace_id",
 ]

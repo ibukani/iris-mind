@@ -206,7 +206,7 @@ class PluginManager:
     def _wire_cross_layer_dependencies(self) -> None:
         """Plugin間の依存関係をkernelで配線する。
 
-        system メッセージは IO 層（Gateway）→ memory 層（Handler）への
+        control メッセージは IO 層（Gateway）→ memory 層（Handler）への
         直接コールバックで接続する（同期レスポンスが必要なため）。
         通常メッセージは EventBus 経由で接続する（Gateway → InputReady → Handler）。
         """
@@ -216,27 +216,38 @@ class PluginManager:
         io_mgr = self._di.resolve_optional(IOManager)
         handler = self._di.resolve_optional(_MemoryEventHandler)
         if io_mgr is not None and handler is not None:
-            from iris.event.event_types import SystemMessageEvent
-            from iris.io.models import SystemMessage as IOSysMsg
+            from iris.event.event_types import ControlMessageEvent
+            from iris.io.models import ControlMessage as IOControlMsg
 
-            def _adapt_system_message(msg: IOSysMsg, session_id: str) -> IOSysMsg | None:
-                evt = SystemMessageEvent(
+            def _adapt_control_message(msg: IOControlMsg, session_id: str) -> IOControlMsg | None:
+                evt = ControlMessageEvent(
                     timestamp=None,
                     source="io",
                     action=msg.action,
-                    user_id=msg.user_id,
+                    account_id=msg.account_id,
+                    room_id=msg.room_id,
                     nickname=msg.nickname,
                     text=msg.text,
                     session_id=session_id,
+                    identity=msg.identity.model_dump() if msg.identity else None,
+                    profile=msg.profile,
+                    metadata=msg.metadata,
                 )
-                result = handler.handle_system_message(evt, session_id)
+                result = handler.handle_control_message(evt, session_id)
                 if result is None:
                     return None
-                return IOSysMsg(
+                identity = result.identity
+                from iris.io.models import Identity
+
+                return IOControlMsg(
                     action=result.action,
-                    user_id=result.user_id,
+                    account_id=result.account_id,
+                    room_id=result.room_id,
                     nickname=result.nickname,
                     text=result.text,
+                    identity=Identity(**identity) if isinstance(identity, dict) else None,
+                    profile=result.profile or {},
+                    metadata=result.metadata or {},
                 )
 
-            io_mgr.set_system_handler(_adapt_system_message)
+            io_mgr.set_control_handler(_adapt_control_message)

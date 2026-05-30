@@ -7,7 +7,7 @@ from iris.account.provider import AccountProvider
 from iris.account.store import AccountStore
 from iris.agency import LLMGateway
 from iris.event.event_bus import EventBus
-from iris.io.models import AuthMessage, SystemMessage
+from iris.io.models import AuthMessage, ControlMessage
 from iris.io.session.manager import SessionManager
 from iris.kernel.config import SessionConfig
 from iris.llm.prompt import Personality
@@ -59,32 +59,32 @@ def test_session_manager_disconnect_publishes_session_disconnect_event():
     assert disconnect_events[0].identity == "test_user"
 
 
-def test_handle_system_account_identify(tmp_path):
+def test_handle_control_account_join(tmp_path):
     event_bus = EventBus()
     memory_mgr = MemoryManager()
     handler, provider = _make_handler(event_bus, memory_mgr, tmp_path)
 
-    sys_events = []
-    event_bus.subscribe("SystemMessageEvent", lambda ev: sys_events.append(ev))
+    control_events = []
+    event_bus.subscribe("ControlMessageEvent", lambda ev: control_events.append(ev))
 
-    resp = handler.handle_system_message(
-        SystemMessage(
-            action="account.identify",
+    resp = handler.handle_control_message(
+        ControlMessage(
+            action="account.join",
             identity={"provider": "discord", "subject": "123", "display_name": "John"},
         ),
         session_id="s1",
     )
 
     assert resp is not None
-    assert resp.action == "account.identify"
+    assert resp.action == "account.joined"
     assert len(resp.account_id) == 16
     assert resp.nickname == "John"
     account = provider.resolve(resp.account_id)
     assert account is not None
     assert account.nickname == "John"
 
-    assert len(sys_events) == 1
-    assert sys_events[0].action == "account.identify"
+    assert len(control_events) == 1
+    assert control_events[0].action == "account.join"
 
 
 def test_handle_system_account_get(tmp_path):
@@ -94,20 +94,20 @@ def test_handle_system_account_get(tmp_path):
     account = provider.resolve_or_create_identity("discord", "123", display_name="John")
     provider.bind_session("s1", account.account_id)
 
-    sys_events = []
-    event_bus.subscribe("SystemMessageEvent", lambda ev: sys_events.append(ev))
+    control_events = []
+    event_bus.subscribe("ControlMessageEvent", lambda ev: control_events.append(ev))
 
-    resp = handler.handle_system_message(
-        SystemMessage(action="account.get"),
+    resp = handler.handle_control_message(
+        ControlMessage(action="account.get"),
         session_id="s1",
     )
 
     assert resp is not None
-    assert resp.action == "account.get"
+    assert resp.action == "account.profile"
     assert resp.nickname == "John"
 
-    assert len(sys_events) == 1
-    assert sys_events[0].action == "account.get"
+    assert len(control_events) == 1
+    assert control_events[0].action == "account.get"
 
 
 def test_handle_system_user_left(tmp_path):
@@ -121,13 +121,13 @@ def test_handle_system_user_left(tmp_path):
     inputs_ready = []
     event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
 
-    resp = handler.handle_system_message(
-        SystemMessage(action="account.leave", account_id=user_id),
+    resp = handler.handle_control_message(
+        ControlMessage(action="account.leave", account_id=user_id),
         session_id="s1",
     )
 
     assert resp is not None
-    assert resp.action == "account.leave"
+    assert resp.action == "account.left"
     assert "Left" in resp.text
 
     assert len(inputs_ready) == 1
@@ -145,13 +145,13 @@ def test_handle_system_account_update(tmp_path):
     inputs_ready = []
     event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
 
-    resp = handler.handle_system_message(
-        SystemMessage(action="account.update", account_id=user_id, nickname="Jane"),
+    resp = handler.handle_control_message(
+        ControlMessage(action="account.update", account_id=user_id, nickname="Jane"),
         session_id="s1",
     )
 
     assert resp is not None
-    assert resp.action == "account.update"
+    assert resp.action == "account.updated"
     assert resp.nickname == "Jane"
     assert "Jane" in resp.text
 
@@ -210,7 +210,7 @@ def test_session_disconnect_no_users_no_error(tmp_path):
 def test_system_event_block_has_metadata():
     block = system_event_block(
         "[system] Bob が入室しました",
-        event_type="account.identify",
+        event_type="account.joined",
         user_id="u123",
         nickname="Bob",
     )
@@ -218,7 +218,7 @@ def test_system_event_block_has_metadata():
     assert block["text"] == "[system] Bob が入室しました"
     meta = block["metadata"]
     assert meta is not None
-    assert meta["event_type"] == "account.identify"
+    assert meta["event_type"] == "account.joined"
     assert meta["user_id"] == "u123"
     assert meta["nickname"] == "Bob"
 

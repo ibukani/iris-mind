@@ -9,7 +9,7 @@ import grpc
 from loguru import logger
 import orjson
 
-from iris.io.models import AuthMessage, CommandInput, Direction, Identity, Message, Permission, SystemMessage
+from iris.io.models import AuthMessage, CommandInput, ControlMessage, Direction, Identity, Message, Permission
 from iris.io.session.manager import SessionManager
 from iris.io.transport import grpc_service_pb2, grpc_service_pb2_grpc
 
@@ -39,12 +39,12 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
         session_manager: SessionManager,
         on_message: Callable[[Message], None] | None = None,
         on_command: Callable[[CommandInput], None] | None = None,
-        on_system_message: Callable[[SystemMessage, str, str], None] | None = None,
+        on_control_message: Callable[[ControlMessage, str, str], None] | None = None,
     ) -> None:
         self._session_manager = session_manager
         self._on_message = on_message or self._noop
         self._on_command = on_command
-        self._on_system_message = on_system_message
+        self._on_control_message = on_control_message
         self._server: grpc.aio.Server | None = None
 
     @staticmethod
@@ -57,8 +57,8 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
     def set_on_command(self, on_command: Callable[[CommandInput], None]) -> None:
         self._on_command = on_command
 
-    def set_on_system_message(self, on_system_message: Callable[[SystemMessage, str, str], None]) -> None:
-        self._on_system_message = on_system_message
+    def set_on_control_message(self, on_control_message: Callable[[ControlMessage, str, str], None]) -> None:
+        self._on_control_message = on_control_message
 
     async def start(self, host: str, port: int) -> None:
         self._server = grpc.aio.server()
@@ -165,24 +165,27 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
                 cmd_out = self._build_command_frame(data)
                 frame.command.CopyFrom(cmd_out)
             elif action:
-                sys_out = grpc_service_pb2.SystemMessage(  # type: ignore[attr-defined]
+                control_out = grpc_service_pb2.ControlMessage(  # type: ignore[attr-defined]
                     action=action,
-                    user_id=data.get("user_id", ""),
                     account_id=data.get("account_id", ""),
                     room_id=data.get("room_id", ""),
                     nickname=data.get("nickname", ""),
                 )
                 text = data.get("text")
                 if text:
-                    sys_out.text = text
+                    control_out.text = text
                 identity = data.get("identity")
                 if isinstance(identity, dict):
-                    sys_out.identity.CopyFrom(self._build_identity_frame(identity))
+                    control_out.identity.CopyFrom(self._build_identity_frame(identity))
                 profile = data.get("profile", {})
                 if isinstance(profile, dict):
                     for k, v in profile.items():
-                        sys_out.profile[str(k)] = str(v)
-                frame.system.CopyFrom(sys_out)
+                        control_out.profile[str(k)] = str(v)
+                metadata = data.get("metadata", {})
+                if isinstance(metadata, dict):
+                    for k, v in metadata.items():
+                        control_out.metadata[str(k)] = str(v)
+                frame.control.CopyFrom(control_out)
             else:
                 msg = self._build_message_frame(data)
                 frame.message.CopyFrom(msg)
@@ -257,8 +260,8 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
                     await self._dispatch_message(client_frame.message, session_id, session_role)
                 elif frame_type == "command":
                     await self._handle_command(client_frame.command, session_id, session_role)
-                elif frame_type == "system":
-                    await self._dispatch_system(client_frame.system, session_id, session_role)
+                elif frame_type == "control":
+                    await self._dispatch_control(client_frame.control, session_id, session_role)
                 else:
                     logger.warning("GrpcServer: unknown frame type received")
 
@@ -351,26 +354,26 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
         if self._on_command:
             await asyncio.to_thread(self._on_command, cmd)
 
-    async def _dispatch_system(self, sys_proto: Any, session_id: str, session_role: str) -> None:
-        if self._on_system_message is None:
-            logger.warning("GrpcServer: no system message handler for session {}", session_id)
+    async def _dispatch_control(self, control_proto: Any, session_id: str, session_role: str) -> None:
+        if self._on_control_message is None:
+            logger.warning("GrpcServer: no control message handler for session {}", session_id)
             return
         try:
-            sys_msg = SystemMessage(
-                action=sys_proto.action,
-                user_id=sys_proto.user_id,
-                account_id=sys_proto.account_id,
-                room_id=sys_proto.room_id,
-                nickname=sys_proto.nickname,
-                text=sys_proto.text,
-                identity=self._parse_identity(sys_proto.identity),
-                profile=dict(sys_proto.profile),
+            control_msg = ControlMessage(
+                action=control_proto.action,
+                account_id=control_proto.account_id,
+                room_id=control_proto.room_id,
+                nickname=control_proto.nickname,
+                text=control_proto.text,
+                identity=self._parse_identity(control_proto.identity),
+                profile=dict(control_proto.profile),
+                metadata=dict(control_proto.metadata),
             )
         except Exception:
-            logger.warning("GrpcServer: invalid system message parse failed")
+            logger.warning("GrpcServer: invalid control message parse failed")
             return
 
-        await asyncio.to_thread(self._on_system_message, sys_msg, session_id, session_role)
+        await asyncio.to_thread(self._on_control_message, control_msg, session_id, session_role)
 
     @staticmethod
     def _parse_identity(identity_proto: Any) -> Identity | None:

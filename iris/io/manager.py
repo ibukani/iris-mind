@@ -7,7 +7,7 @@ from iris.io.transport.grpc_listener import GrpcListener
 
 if TYPE_CHECKING:
     from iris.io.gateway import _IOGateway
-    from iris.io.models import SystemMessage
+    from iris.io.models import ControlMessage
     from iris.io.session.manager import SessionManager
 
 
@@ -26,19 +26,19 @@ class IOManager:
 
         self._grpc_listener.set_on_message(gateway.on_grpc_message)
         self._grpc_listener.set_on_command(gateway.on_grpc_command)
-        self._grpc_listener.set_on_system_message(gateway.on_grpc_system)
+        self._grpc_listener.set_on_control_message(gateway.on_grpc_control)
 
     def set_command_handler(self, handler: Callable[[str, str], str]) -> None:
         self._gateway.set_command_handler(handler)
 
-    def set_system_handler(self, handler: Callable[[SystemMessage, str], SystemMessage | None]) -> None:
-        """system メッセージハンドラを設定する。
+    def set_control_handler(self, handler: Callable[[ControlMessage, str], ControlMessage | None]) -> None:
+        """control メッセージハンドラを設定する。
 
-        handler は SystemMessage と session_id を受け取り、
-        レスポンスの SystemMessage または None を返す。
+        handler は ControlMessage と session_id を受け取り、
+        レスポンスの ControlMessage または None を返す。
         同期レスポンスが必要なため、コールバック pattern を維持する。
         """
-        self._gateway.set_system_handler(handler)
+        self._gateway.set_control_handler(handler)
 
     def start(self, host: str, port: int) -> None:
         self._host = host

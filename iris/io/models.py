@@ -51,7 +51,7 @@ class AuthMessage(BaseModel):
     user_id: str = ""
 
 
-class ControlMessage(BaseModel):
+class AuthResult(BaseModel):
     msg_type: str
     session_id: str | None = None
     error_message: str | None = None
@@ -89,15 +89,15 @@ class CommandInput(BaseModel):
     content: str
 
 
-class SystemMessage(BaseModel):
+class ControlMessage(BaseModel):
     action: str = ""
-    user_id: str = ""
     account_id: str = ""
     room_id: str = ""
     nickname: str = ""
     text: str = ""
     identity: Identity | None = None
     profile: dict[str, str] = Field(default_factory=dict)
+    metadata: dict[str, str] = Field(default_factory=dict)
 
 
 class CommandOutput(BaseModel):

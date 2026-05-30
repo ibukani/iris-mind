@@ -212,24 +212,24 @@ BidirectionalStreamRequest(
 
 ```python
 BidirectionalStreamRequest(
-    system=SystemMessage(
-        action="account.identify",
+    control=ControlMessage(
+        action="account.join",
         identity=Identity(provider="discord", subject="1234567890", display_name="Bob"),
         room_id="discord:guild_1:channel_1",
     )
 )
-# → SystemMessage(action="account.identify", account_id="...", room_id="discord:guild_1:channel_1", text="Identified: Bob")
+# → ControlMessage(action="account.joined", account_id="...", room_id="discord:guild_1:channel_1", text="Joined: Bob")
 ```
 
-明示入室は任意。最初の発話でも自動identifyされる。
+明示入室は任意。最初の発話でも自動joinされる。
 
 ### 5.3 明示退室
 
 ```python
 BidirectionalStreamRequest(
-    system=SystemMessage(action="account.leave", room_id="discord:guild_1:channel_1")
+    control=ControlMessage(action="account.leave", room_id="discord:guild_1:channel_1")
 )
-# → SystemMessage(action="account.leave", text="Left: Bob")
+# → ControlMessage(action="account.left", text="Left: Bob")
 ```
 
 同じgRPC session + room内なら `identity` は省略できる。
@@ -238,7 +238,7 @@ BidirectionalStreamRequest(
 
 ```python
 BidirectionalStreamRequest(
-    system=SystemMessage(
+    control=ControlMessage(
         action="account.update",
         nickname="Robert",
         profile={"lang": "ja"},
@@ -250,11 +250,11 @@ BidirectionalStreamRequest(
 
 ```python
 # 現セッションのアカウント取得
-BidirectionalStreamRequest(system=SystemMessage(action="account.get", room_id="discord:guild_1:channel_1"))
+BidirectionalStreamRequest(control=ControlMessage(action="account.get", room_id="discord:guild_1:channel_1"))
 
 # 別identityを紐付け
 BidirectionalStreamRequest(
-    system=SystemMessage(
+    control=ControlMessage(
         action="account.link_identity",
         identity=Identity(provider="local", subject="local-user"),
     )
@@ -265,7 +265,7 @@ BidirectionalStreamRequest(
 
 | アクション | 必須フィールド | 処理 |
 |-----------|---------------|------|
-| `account.identify` | `identity.provider`, `identity.subject` | アカウント解決/作成、セッション紐付け |
+| `account.join` | `identity.provider`, `identity.subject` | アカウント解決/作成、セッション紐付け |
 | `account.leave` | なし | 現セッションの紐付け解除 |
 | `account.get` | なし | 現セッションのアカウント情報返却 |
 | `account.update` | `nickname` または `profile` | ニックネーム・プロフィール更新 |
@@ -277,11 +277,11 @@ BidirectionalStreamRequest(
 
 ### Presence通知
 
-アカウントがセッションへ紐付くと、Irisは接続中クライアントへ `SystemMessage` を配信する。
+アカウントがセッションへ紐付くと、Irisは接続中クライアントへ `ControlMessage` を配信する。
 
 ```python
-SystemMessage(
-    action="presence.entered",
+ControlMessage(
+    action="presence.joined",
     account_id="abc123",
     nickname="Bob",
     identity=Identity(provider="discord", subject="1234567890"),

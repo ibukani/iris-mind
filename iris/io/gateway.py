@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from iris.event.event_types import InputReady
-from iris.io.models import CommandInput, CommandOutput, Direction, Identity, Message, SystemMessage
+from iris.io.models import CommandInput, CommandOutput, ControlMessage, Direction, Identity, Message
 
 if TYPE_CHECKING:
     from iris.io.session.manager import SessionManager
@@ -18,12 +18,12 @@ class _IOGateway:
     責務:
     - gRPC メッセージを内部表現に変換し、EventBus に publish する
     - command メッセージは直接コールバックで処理（同期レスポンス必要）
-    - system メッセージは直接コールバックで処理（同期レスポンス必要）
+    - control メッセージは直接コールバックで処理（同期レスポンス必要）
     - IO レベルのルーティング（target_role ≠ mind は直接セッションに転送）
 
     設計:
     - 通常メッセージ: EventBus.publish(InputReady) のみ（send-only）
-    - system メッセージ: 同期レスポンスが必要なためコールバック維持
+    - control メッセージ: 同期レスポンスが必要なためコールバック維持
     - command メッセージ: 同期レスポンスが必要なためコールバック維持
     """
 
@@ -36,39 +36,39 @@ class _IOGateway:
         self._session_mgr = session_manager
         self._event_bus = event_bus
         self._cmd_handler = command_handler
-        self._system_handler: Callable[[SystemMessage, str], SystemMessage | None] | None = None
+        self._control_handler: Callable[[ControlMessage, str], ControlMessage | None] | None = None
 
     def set_command_handler(self, handler: Callable[..., str]) -> None:
         self._cmd_handler = handler
 
-    def set_system_handler(self, handler: Callable[[SystemMessage, str], SystemMessage | None]) -> None:
-        """system メッセージのハンドラを設定する。
+    def set_control_handler(self, handler: Callable[[ControlMessage, str], ControlMessage | None]) -> None:
+        """control メッセージのハンドラを設定する。
 
-        handler は gRPC の SystemMessage と session_id を受け取り、
-        レスポンスの SystemMessage または None を返す。
+        handler は gRPC の ControlMessage と session_id を受け取り、
+        レスポンスの ControlMessage または None を返す。
         同期レスポンスが必要なため、コールバック pattern を維持する。
         """
-        self._system_handler = handler
+        self._control_handler = handler
 
-    def on_grpc_system(self, sys_msg: SystemMessage, session_id: str, session_role: str) -> None:
-        if not self._system_handler:
+    def on_grpc_control(self, control_msg: ControlMessage, session_id: str, session_role: str) -> None:
+        if not self._control_handler:
             return
-        result = self._system_handler(sys_msg, session_id)
+        result = self._control_handler(control_msg, session_id)
         if result is not None:
-            self._session_mgr.route_system_message(self._to_system_message(result), session_id)
+            self._session_mgr.route_control_message(self._to_control_message(result), session_id)
 
     @staticmethod
-    def _to_system_message(result: Any) -> SystemMessage:
+    def _to_control_message(result: Any) -> ControlMessage:
         identity = getattr(result, "identity", None)
-        return SystemMessage(
+        return ControlMessage(
             action=getattr(result, "action", ""),
-            user_id=getattr(result, "user_id", ""),
             account_id=getattr(result, "account_id", ""),
             room_id=getattr(result, "room_id", ""),
             nickname=getattr(result, "nickname", ""),
             text=getattr(result, "text", ""),
             identity=Identity(**identity) if isinstance(identity, dict) else identity,
             profile=getattr(result, "profile", None) or {},
+            metadata=getattr(result, "metadata", None) or {},
         )
 
     def on_grpc_message(self, msg: Message) -> None:

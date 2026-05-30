@@ -4,7 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from iris.io.models import AuthMessage, Direction, Message, Permission, SystemMessage
+from iris.io.models import AuthMessage, ControlMessage, Direction, Message, Permission
 from iris.io.session.config import SessionConfig
 from iris.io.session.manager import SessionManager
 
@@ -114,13 +114,13 @@ class TestSessionManager:
         manager.route_message(m)
         conn.send_bytes.assert_not_called()
 
-    def test_broadcast_system_message_requires_receive_chat(self, manager: SessionManager) -> None:
+    def test_broadcast_control_message_requires_receive_chat(self, manager: SessionManager) -> None:
         conn1 = MagicMock()
         conn2 = MagicMock()
         manager.authenticate(conn1, AuthMessage(role="cli", permissions=[Permission.PERMISSION_RECEIVE_CHAT]))
         manager.authenticate(conn2, AuthMessage(role="cli", permissions=[]))
 
-        manager.broadcast_system_message(SystemMessage(action="presence.entered", account_id="a1"))
+        manager.broadcast_control_message(ControlMessage(action="presence.joined", account_id="a1"))
 
         conn1.send_bytes.assert_called_once()
         conn2.send_bytes.assert_not_called()

@@ -87,41 +87,41 @@ message CommandOutput {
   string state = 6;
 }
 
-// A system message for account control protocol.
-message SystemMessage {
-  // Action type: "account.identify" / "account.leave" / "account.get" / "account.update" / "account.link_identity"
+// A control message for account and presence protocol.
+message ControlMessage {
+  // Action type: "account.join" / "account.leave" / "account.get" / "account.update" / "account.link_identity"
   string action = 1;
-  // Deprecated alias for account_id.
-  string user_id = 2;
   // Display nickname.
-  string nickname = 3;
+  string nickname = 2;
   // Human-readable response from server (server-to-client only).
-  string text = 4;
+  string text = 3;
   // Internal Iris account ID.
-  string account_id = 5;
+  string account_id = 4;
   // External identity.
-  Identity identity = 6;
+  Identity identity = 5;
   // Profile fields to update.
-  map<string, string> profile = 7;
+  map<string, string> profile = 6;
   // Conversation room for account presence/control.
-  string room_id = 8;
+  string room_id = 7;
+  // Action-specific metadata.
+  map<string, string> metadata = 8;
 }
 
-// Client-to-server frame wrapping either a Message, a CommandInput, or a SystemMessage.
+// Client-to-server frame wrapping either a Message, a CommandInput, or a ControlMessage.
 message BidirectionalStreamRequest {
   oneof frame {
     Message message = 1;
     CommandInput command = 2;
-    SystemMessage system = 3;
+    ControlMessage control = 3;
   }
 }
 
-// Server-to-client frame wrapping either a Message, a CommandOutput, or a SystemMessage.
+// Server-to-client frame wrapping either a Message, a CommandOutput, or a ControlMessage.
 message BidirectionalStreamResponse {
   oneof frame {
     Message message = 1;
     CommandOutput command = 2;
-    SystemMessage system = 3;
+    ControlMessage control = 3;
   }
 }
 

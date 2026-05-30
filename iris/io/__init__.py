@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from iris.event.event_bus import EventBus
 from iris.io.models import (
     AuthMessage,
+    AuthResult,
     CommandInput,
     CommandOutput,
     ControlMessage,
@@ -86,6 +87,7 @@ plugin: PluginProtocol = IoPlugin()
 
 __all__ = [
     "AuthMessage",
+    "AuthResult",
     "CommandInput",
     "CommandOutput",
     "ControlMessage",

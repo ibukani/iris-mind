@@ -7,7 +7,7 @@ import orjson
 
 from iris.account.models import Account
 from iris.account.provider import AccountProvider
-from iris.event.event_types import SystemMessageEvent
+from iris.event.event_types import ControlMessageEvent
 
 
 class _AccountEventHandler:
@@ -17,11 +17,11 @@ class _AccountEventHandler:
         self._provider = account_provider
         self._short_term = short_term
 
-    def handle_system_message(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent | None:
+    def handle_control_message(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent | None:
         action = msg.action
 
-        if action == "account.identify":
-            return self._handle_identify(msg, session_id)
+        if action == "account.join":
+            return self._handle_join(msg, session_id)
         if action == "account.leave":
             return self._handle_leave(msg, session_id)
         if action == "account.get":
@@ -60,11 +60,11 @@ class _AccountEventHandler:
             self._short_term.add_user(account.account_id, account.nickname, session_id=session_id, room_id=room_id)
         return account.account_id, account.nickname
 
-    def _handle_identify(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
+    def _handle_join(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent:
         room_id = msg.room_id
         provider, subject, display_name, metadata = self._parse_identity(msg.identity)
         if not provider or not subject:
-            return self._error("account.identify", "identity.provider and identity.subject required")
+            return self._error("account.join", "identity.provider and identity.subject required")
 
         account = self._provider.resolve_or_create_identity(
             provider,
@@ -76,19 +76,18 @@ class _AccountEventHandler:
         if self._short_term:
             self._short_term.add_user(account.account_id, account.nickname, session_id=session_id, room_id=room_id)
 
-        return SystemMessageEvent(
+        return ControlMessageEvent(
             timestamp=None,
             source="account",
-            action="account.identify",
-            user_id=account.account_id,
+            action="account.joined",
             account_id=account.account_id,
             room_id=room_id,
             nickname=account.nickname,
             identity=msg.identity,
-            text=f"Identified: {account.nickname}",
+            text=f"Joined: {account.nickname}",
         )
 
-    def _handle_leave(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
+    def _handle_leave(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent:
         account = self._resolve_target_account(msg, session_id)
         if account is None:
             return self._error("account.leave", "not identified")
@@ -97,11 +96,10 @@ class _AccountEventHandler:
         if self._short_term:
             self._short_term.remove_user(account.account_id, session_id=session_id, room_id=msg.room_id)
 
-        return SystemMessageEvent(
+        return ControlMessageEvent(
             timestamp=None,
             source="account",
-            action="account.leave",
-            user_id=account.account_id,
+            action="account.left",
             account_id=account.account_id,
             room_id=msg.room_id,
             nickname=account.nickname,
@@ -109,7 +107,7 @@ class _AccountEventHandler:
             text=f"Left: {account.nickname}",
         )
 
-    def _handle_get(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
+    def _handle_get(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent:
         account = self._provider.get_account_by_session(session_id, msg.room_id)
         if not account:
             return self._error("account.get", "not identified")
@@ -117,18 +115,17 @@ class _AccountEventHandler:
         identities = [i.to_dict() for i in self._provider.get_identities(account.account_id)]
         data = account.to_dict()
         data["identities"] = identities
-        return SystemMessageEvent(
+        return ControlMessageEvent(
             timestamp=None,
             source="account",
-            action="account.get",
-            user_id=account.account_id,
+            action="account.profile",
             account_id=account.account_id,
             room_id=msg.room_id,
             nickname=account.nickname,
             text=orjson.dumps(data).decode("utf-8"),
         )
 
-    def _handle_update(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
+    def _handle_update(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent:
         account = self._resolve_target_account(msg, session_id)
         if account is None:
             return self._error("account.update", "not identified")
@@ -141,18 +138,17 @@ class _AccountEventHandler:
         if self._short_term:
             self._short_term.add_user(account.account_id, account.nickname, session_id=session_id, room_id=msg.room_id)
 
-        return SystemMessageEvent(
+        return ControlMessageEvent(
             timestamp=None,
             source="account",
-            action="account.update",
-            user_id=account.account_id,
+            action="account.updated",
             account_id=account.account_id,
             room_id=msg.room_id,
             nickname=account.nickname,
             text=f"Updated: {account.nickname}",
         )
 
-    def _handle_link_identity(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
+    def _handle_link_identity(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent:
         account = self._resolve_target_account(msg, session_id)
         if account is None:
             return self._error("account.link_identity", "not identified")
@@ -170,11 +166,10 @@ class _AccountEventHandler:
         ):
             return self._error("account.link_identity", "identity already linked")
 
-        return SystemMessageEvent(
+        return ControlMessageEvent(
             timestamp=None,
             source="account",
-            action="account.link_identity",
-            user_id=account.account_id,
+            action="account.identity_linked",
             account_id=account.account_id,
             room_id=msg.room_id,
             nickname=account.nickname,
@@ -182,9 +177,9 @@ class _AccountEventHandler:
             text=f"Linked identity: {provider}:{subject}",
         )
 
-    def _resolve_target_account(self, msg: SystemMessageEvent, session_id: str) -> Account | None:
-        if msg.account_id or msg.user_id:
-            account = self._provider.resolve(msg.account_id or msg.user_id)
+    def _resolve_target_account(self, msg: ControlMessageEvent, session_id: str) -> Account | None:
+        if msg.account_id:
+            account = self._provider.resolve(msg.account_id)
             if account is not None:
                 return account
 
@@ -210,10 +205,11 @@ class _AccountEventHandler:
         )
 
     @staticmethod
-    def _error(action: str, message: str) -> SystemMessageEvent:
-        return SystemMessageEvent(
+    def _error(action: str, message: str) -> ControlMessageEvent:
+        return ControlMessageEvent(
             timestamp=None,
             source="account",
-            action=action,
+            action="account.error",
             text=f"Error: {message}",
+            metadata={"request_action": action, "code": message.replace(" ", "_")},
         )

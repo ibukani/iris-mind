@@ -79,10 +79,16 @@ class MemoryManager:
             logger.warning("MemoryManager: unknown stream={}", stream)
 
     def retrieve(self, stream: str, room_id: str = "", account_id: str = "", **filters: Any) -> list[dict[str, Any]]:
-        return dispatch_retrieve(stream, filters, self.sensory, self.short_term, self.long_term, room_id=room_id, account_id=account_id)
+        return dispatch_retrieve(
+            stream, filters, self.sensory, self.short_term, self.long_term, room_id=room_id, account_id=account_id
+        )
 
-    def search(self, query: str, stream: str | None = None, room_id: str = "", account_id: str = "", **kwargs: Any) -> list[dict[str, Any]]:
-        return dispatch_search(query, stream, kwargs, self.short_term, self.long_term, room_id=room_id, account_id=account_id)
+    def search(
+        self, query: str, stream: str | None = None, room_id: str = "", account_id: str = "", **kwargs: Any
+    ) -> list[dict[str, Any]]:
+        return dispatch_search(
+            query, stream, kwargs, self.short_term, self.long_term, room_id=room_id, account_id=account_id
+        )
 
     def clear(self, stream: str | None = None, room_id: str = "") -> None:
         dispatch_clear(stream, self.sensory, self.short_term, self.long_term)
@@ -114,23 +120,36 @@ class MemoryManager:
         logger.info("MemoryManager: flushed {} turns, {} topics", len(unconsolidated), len(topics))
 
     def get_user_preferences(self, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:
-        return self.long_term.search_semantic("ユーザーの好み 興味 趣味", max_results=2, room_id=room_id, account_id=account_id)  # type: ignore[no-any-return]
+        return self.long_term.search_semantic(
+            "ユーザーの好み 興味 趣味", max_results=2, room_id=room_id, account_id=account_id
+        )  # type: ignore[no-any-return]
 
-    def add_episodic(self, content: str, kind: str = "", room_id: str = "", account_id: str = "", _metadata: dict | None = None) -> None:
+    def add_episodic(
+        self, content: str, kind: str = "", room_id: str = "", account_id: str = "", _metadata: dict | None = None
+    ) -> None:
         self.store("episodic", {"content": content, "kind": kind}, room_id=room_id, account_id=account_id)
 
     def get_recent(self, n: int = 3, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:
         return self.long_term.get_episodic_recent(n, room_id=room_id, account_id=account_id)  # type: ignore[no-any-return]
 
-    def add_semantic(self, content: str, tags: list[str] | None = None, room_id: str = "", account_id: str = "") -> None:
+    def add_semantic(
+        self, content: str, tags: list[str] | None = None, room_id: str = "", account_id: str = ""
+    ) -> None:
         self.store("semantic", {"content": content, "tags": tags or []}, room_id=room_id, account_id=account_id)
 
     def add_semantic_by_type(
         self, entry_type: str, content: str, tags: list[str] | None = None, room_id: str = "", account_id: str = ""
     ) -> None:
-        self.store("semantic", {"content": content, "type": entry_type, "tags": tags or []}, room_id=room_id, account_id=account_id)
+        self.store(
+            "semantic",
+            {"content": content, "type": entry_type, "tags": tags or []},
+            room_id=room_id,
+            account_id=account_id,
+        )
 
-    def search_semantic(self, query: str, max_results: int = 3, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:
+    def search_semantic(
+        self, query: str, max_results: int = 3, room_id: str = "", account_id: str = ""
+    ) -> list[dict[str, Any]]:
         return self.long_term.search_semantic(query, max_results=max_results, room_id=room_id, account_id=account_id)  # type: ignore[no-any-return]
 
     def search_emotional(

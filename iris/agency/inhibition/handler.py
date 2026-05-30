@@ -30,15 +30,17 @@ class _InhibitionEventHandler:
 
     def _on_inhibition_event(self, event: InhibitionEvent) -> None:
         logger.debug(
-            "InhibitionEvent: action={} reason={} duration={}",
+            "InhibitionEvent: action={} reason={} duration={} room={}",
             event.action,
             event.reason,
             event.duration,
+            event.room_id,
         )
+        room_id = event.room_id or None
 
         if event.action == InhibitionAction.SUPPRESS:
-            self._inhibition.suppress(event.reason, event.duration)
+            self._inhibition.suppress(event.reason, event.duration, room_id=room_id)
         elif event.action == InhibitionAction.UNSUPPRESS:
-            self._inhibition.unsuppress(event.reason)
+            self._inhibition.unsuppress(event.reason, room_id=room_id)
         elif event.action == InhibitionAction.HYPERDIRECT:
             self._inhibition.suppress("hyperdirect", event.duration)

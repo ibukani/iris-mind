@@ -74,7 +74,12 @@ class EpisodicStore(_JsonlStore):
         logger.info("EpisodicStore: cleared")
 
     def add(self, summary: str, metadata: dict | None = None, room_id: str = "", account_id: str = "") -> None:
-        entry: dict[str, object] = {"summary": summary, "timestamp": datetime.now(UTC).isoformat(), "room_id": room_id, "account_id": account_id}
+        entry: dict[str, object] = {
+            "summary": summary,
+            "timestamp": datetime.now(UTC).isoformat(),
+            "room_id": room_id,
+            "account_id": account_id,
+        }
         if metadata:
             entry["metadata"] = metadata
         self._add_entry(entry, self.max_entries)

@@ -66,6 +66,7 @@ class _MemoryEventHandler:
                         source="memory",
                         action=InhibitionAction.SUPPRESS,
                         reason="voice_recording",
+                        room_id=event.room_id,
                     ),
                 )
             else:
@@ -75,6 +76,7 @@ class _MemoryEventHandler:
                         source="memory",
                         action=InhibitionAction.UNSUPPRESS,
                         reason="voice_recording",
+                        room_id=event.room_id,
                     ),
                 )
             return
@@ -129,7 +131,13 @@ class _MemoryEventHandler:
                 event.account_id, event.display_name, session_id=event.session_id, room_id=event.room_id
             )
         text = f"[system] {event.display_name} が入室しました"
-        block = system_event_block(text, event_type="room.joined", account_id=event.account_id, display_name=event.display_name, room_id=event.room_id)
+        block = system_event_block(
+            text,
+            event_type="room.joined",
+            account_id=event.account_id,
+            display_name=event.display_name,
+            room_id=event.room_id,
+        )
         self._store_and_flush_pending_block(block, event.account_id, event.session_id, event.room_id)
 
     def _on_room_left(self, event: RoomLeftEvent) -> None:
@@ -137,7 +145,13 @@ class _MemoryEventHandler:
         if self.short_term:
             self.short_term.remove_user(event.account_id, session_id=event.session_id, room_id=event.room_id)
         text = f"[system] {event.display_name} が退室しました"
-        block = system_event_block(text, event_type="room.left", account_id=event.account_id, display_name=event.display_name, room_id=event.room_id)
+        block = system_event_block(
+            text,
+            event_type="room.left",
+            account_id=event.account_id,
+            display_name=event.display_name,
+            room_id=event.room_id,
+        )
         self._store_and_flush_pending_block(block, event.account_id, event.session_id, event.room_id)
 
     def _on_session_disconnect(self, event: SessionDisconnectEvent) -> None:
@@ -185,15 +199,37 @@ class _MemoryEventHandler:
             return
         if self.proactive_config is None:
             return
+        room_id = self._select_proactive_room()
         self.event_bus.publish(
             InputReady(
                 timestamp=None,
                 source="memory",
                 session_id="",
+                room_id=room_id,
                 content="",
                 context={"from_timer": True},
             ),
         )
+
+    def _select_proactive_room(self) -> str:
+        if not self._room_provider:
+            return ""
+        rooms = self._room_provider.list_rooms()
+        if not rooms:
+            default = self._room_provider.get_default_room()
+            return default.room_id if default else ""
+        best_room = None
+        best_active = None
+        for room in rooms:
+            members = self._room_provider.get_members(room.room_id)
+            for m in members:
+                if m.is_active and (best_active is None or (m.last_active or "") > (best_active or "")):
+                    best_active = m.last_active
+                    best_room = room
+        if best_room:
+            return best_room.room_id
+        default = self._room_provider.get_default_room()
+        return default.room_id if default else ""
 
     def flush_pending(self) -> dict[tuple[str, str], list[tuple[str, str, str]]]:
         bus = self.event_bus

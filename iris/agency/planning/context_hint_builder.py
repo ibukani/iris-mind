@@ -32,7 +32,9 @@ class ContextHintBuilder:
             return ""
         return self._build_general_hint(scores, context, chaos_level=chaos_level, room_id=room_id)
 
-    def _build_general_hint(self, scores: dict[str, float], context: dict[str, Any], chaos_level: float = 0.0, room_id: str = "") -> str:
+    def _build_general_hint(
+        self, scores: dict[str, float], context: dict[str, Any], chaos_level: float = 0.0, room_id: str = ""
+    ) -> str:
         parts: list[str] = []
         trigger = max(scores, key=lambda k: scores[k])
         parts.append(f"時間帯: {build_time_label()}")

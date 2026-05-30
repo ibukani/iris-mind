@@ -12,12 +12,8 @@ if TYPE_CHECKING:
 from loguru import logger
 
 
-class _Gate:
-    """GPi/SNr analog: 実行権の排他制御 + cooldown管理。
-
-    DIRECT pathway (disinhibition) → 実行権付与
-    INDIRECT pathway (tonic inhibition) → cooldown
-    """
+class _RoomGate:
+    """Room-level gate: 実行権の排他制御 + cooldown管理。"""
 
     def __init__(self, config: InhibitionConfig) -> None:
         self._cfg = config
@@ -64,7 +60,7 @@ class _Gate:
             self._executing = False
             self._cooldown_until = time.monotonic() + self._cfg.post_execution_cooldown_sec
             logger.debug(
-                "Gate: execution released, cooldown {}s",
+                "RoomGate: execution released, cooldown {}s",
                 self._cfg.post_execution_cooldown_sec,
             )
 
@@ -77,4 +73,47 @@ class _Gate:
         return {
             "executing": self._executing,
             "cooldown_remaining": self.remaining_cooldown,
+        }
+
+
+class _Gate:
+    """GPi/SNr analog: ルーム別の実行権排他制御 + cooldown管理。"""
+
+    def __init__(self, config: InhibitionConfig) -> None:
+        self._cfg = config
+        self._gates: dict[str, _RoomGate] = {}
+        self._global_gate = _RoomGate(config)
+
+    def _get_gate(self, room_id: str = "") -> _RoomGate:
+        if not room_id:
+            return self._global_gate
+        return self._gates.setdefault(room_id, _RoomGate(self._cfg))
+
+    @property
+    def is_executing(self) -> bool:
+        return self._global_gate.is_executing or any(g.is_executing for g in self._gates.values())
+
+    @property
+    def is_on_cooldown(self) -> bool:
+        return self._global_gate.is_on_cooldown or any(g.is_on_cooldown for g in self._gates.values())
+
+    def acquire(self, room_id: str = "") -> GateDecision:
+        return self._get_gate(room_id).acquire()
+
+    def release(self, room_id: str = "") -> None:
+        self._get_gate(room_id).release()
+
+    def force_release(self, room_id: str = "") -> None:
+        self._get_gate(room_id).force_release()
+
+    def is_room_executing(self, room_id: str) -> bool:
+        return self._get_gate(room_id).is_executing
+
+    def is_room_on_cooldown(self, room_id: str) -> bool:
+        return self._get_gate(room_id).is_on_cooldown
+
+    def get_state(self) -> dict:
+        return {
+            "global": self._global_gate.get_state(),
+            "rooms": {rid: g.get_state() for rid, g in self._gates.items()},
         }

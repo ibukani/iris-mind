@@ -45,7 +45,7 @@ class _PlanningEventHandler:
         return bool(context.get("from_timer") or "system_event" in context or context.get("escalation"))
 
     def _on_proactive_event(self, event: InputReady, context: dict) -> None:
-        if self._inhibition and self._inhibition.should_suppress_proactive():
+        if self._inhibition and self._inhibition.should_suppress_proactive(room_id=event.room_id):
             logger.debug("Proactive suppressed by inhibition")
             return
         proactive_context = self._proactive_judge.decide(event, context)
@@ -58,7 +58,12 @@ class _PlanningEventHandler:
 
     def _on_user_input(self, event: InputReady) -> None:
         chaos_level = (event.context or {}).get("chaos_level", 0.0)
-        plan = self._response_strategy.build_response(event.content, chaos_level=chaos_level, room_id=event.room_id)
+        plan = self._response_strategy.build_response(
+            event.content,
+            chaos_level=chaos_level,
+            room_id=event.room_id,
+            account_id=event.account_id,
+        )
         self._publish(plan, event.session_id, event.account_id, event.room_id, from_timer=False)
 
     def _publish(self, plan: Plan, session_id: str, account_id: str, room_id: str, from_timer: bool) -> None:

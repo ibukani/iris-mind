@@ -47,7 +47,10 @@ class ProactiveJudge:
         chaos_level = context.get("chaos_level", 0.0)
         context_hint = (
             self._context_builder.build_proactive_context_hint(
-                context, scores, chaos_level=chaos_level, room_id=event.room_id,
+                context,
+                scores,
+                chaos_level=chaos_level,
+                room_id=event.room_id,
             )
             if self._context_builder
             else ""
@@ -61,6 +64,8 @@ class ProactiveJudge:
             "topic": "general",
             "is_silent_proactive": False,
             "chaos_level": chaos_level,
+            "room_id": event.room_id,
+            "account_id": event.account_id,
         }
 
     def _build_escalation_context(self, context: dict[str, Any]) -> dict[str, Any]:

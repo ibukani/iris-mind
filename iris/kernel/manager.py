@@ -199,9 +199,7 @@ class PluginManager:
 
         def _on_command_dispatch(ctx: dict) -> dict:
             if ctx["type"] == "command":
-                ctx["response"] = self._cmd_handler.handle(
-                    ctx["name"], ctx["args"], ctx["session_id"]
-                )
+                ctx["response"] = self._cmd_handler.handle(ctx["name"], ctx["args"], ctx["session_id"])
             return ctx
 
         self._hook_registry.register("io.dispatch", _on_command_dispatch, priority=50)

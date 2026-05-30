@@ -134,12 +134,14 @@ class LLMGateway:
         priority: int = 0,
         show_thinking: bool = False,
         modulation: ModulationState | None = None,
+        room_id: str = "",
     ) -> AIMessage:
         mod = modulation or ModulationState()
         if system_msgs is None:
             system_msgs = self.build_system_messages(
                 context_hint=context_hint,
                 chaos_level=mod.chaos_level,
+                room_id=room_id,
             )
         if show_thinking and messages and isinstance(messages[-1], HumanMessage):
             last_msg = messages[-1]

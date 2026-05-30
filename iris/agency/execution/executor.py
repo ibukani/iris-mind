@@ -66,8 +66,8 @@ class FlowExecutor(AsyncWorker):
     async def process(self, plan: Plan) -> None:  # type: ignore[override]
         if self._inhibition:
             if plan.reason == PlanReason.USER_INPUT:
-                self._inhibition.force_release_execution()
-            decision = self._inhibition.acquire_execution()
+                self._inhibition.force_release_execution(plan.room_id)
+            decision = self._inhibition.acquire_execution(plan.room_id)
             if not decision.allow:
                 logger.warning("FlowExecutor: execution denied by gate reason={}", decision.reason)
                 return
@@ -89,14 +89,16 @@ class FlowExecutor(AsyncWorker):
         finally:
             self._interrupt_token = None
             if self._inhibition:
-                self._inhibition.release_execution()
+                self._inhibition.release_execution(plan.room_id)
                 new_ai_content = "".join(
                     m.content
                     for m in self._messages[before:]
                     if getattr(m, "type", None) == "ai" and isinstance(m.content, str)
                 )
                 if new_ai_content:
-                    self._inhibition.suppress("speaking", len(new_ai_content) / self._tts_mora_per_sec)
+                    self._inhibition.suppress(
+                        "speaking", len(new_ai_content) / self._tts_mora_per_sec, room_id=plan.room_id
+                    )
 
     def shutdown(self, timeout: float = 5.0) -> None:
         if self._memory:

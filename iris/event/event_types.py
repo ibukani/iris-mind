@@ -127,6 +127,7 @@ class InhibitionEvent(Event):
     action: InhibitionAction = InhibitionAction.SUPPRESS
     reason: str = ""
     duration: float = 0.0
+    room_id: str = ""
 
 
 @dataclass

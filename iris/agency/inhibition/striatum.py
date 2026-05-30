@@ -23,6 +23,7 @@ class _Striatum:
 
     抑制要因は全て理由キー付きで _suppressed_reasons に一元管理。
     voice_recording, emotional_fatigue 等は全て同じ仕組み。
+    room_id=None の場合はグローバル抑制として扱う。
     """
 
     def __init__(
@@ -32,7 +33,10 @@ class _Striatum:
     ) -> None:
         self._gate = gate
         self._cfg = config
-        self._suppressed_reasons: dict[str, float] = {}
+        self._suppressed_reasons: dict[tuple[str | None, str], float] = {}
+
+    def _make_key(self, room_id: str | None, reason: str) -> tuple[str | None, str]:
+        return (room_id or None, reason)
 
     # ---- Generic suppression API ----
 
@@ -41,28 +45,32 @@ class _Striatum:
         now = time.monotonic()
         return any(expiry > now for expiry in self._suppressed_reasons.values())
 
-    def is_suppressed(self, reason: str) -> bool:
-        expiry = self._suppressed_reasons.get(reason)
+    def is_suppressed(self, reason: str, room_id: str | None = None) -> bool:
+        key = self._make_key(room_id, reason)
+        expiry = self._suppressed_reasons.get(key)
         if expiry is None:
             return False
         return time.monotonic() < expiry
 
-    def suppress(self, reason: str, duration: float = 0.0) -> None:
+    def suppress(self, reason: str, duration: float = 0.0, room_id: str | None = None) -> None:
+        key = self._make_key(room_id, reason)
         if duration > 0:
-            self._suppressed_reasons[reason] = time.monotonic() + duration
+            self._suppressed_reasons[key] = time.monotonic() + duration
         else:
-            self._suppressed_reasons[reason] = float("inf")
-        logger.debug("Striatum: suppress reason={} duration={}", reason, duration)
+            self._suppressed_reasons[key] = float("inf")
+        logger.debug("Striatum: suppress reason={} room={} duration={}", reason, room_id, duration)
 
-    def unsuppress(self, reason: str) -> None:
-        self._suppressed_reasons.pop(reason, None)
-        logger.debug("Striatum: unsuppress reason={}", reason)
+    def unsuppress(self, reason: str, room_id: str | None = None) -> None:
+        key = self._make_key(room_id, reason)
+        self._suppressed_reasons.pop(key, None)
+        logger.debug("Striatum: unsuppress reason={} room={}", reason, room_id)
 
     def evaluate(self, plan: Plan) -> GateDecision:
         now = time.monotonic()
 
         # HYPERDIRECT: 理由"hyperdirect"が設定されている場合、全Plan拒否
-        hyperdirect_expiry = self._suppressed_reasons.get("hyperdirect")
+        hyperdirect_key = self._make_key(None, "hyperdirect")
+        hyperdirect_expiry = self._suppressed_reasons.get(hyperdirect_key)
         if hyperdirect_expiry is not None and now < hyperdirect_expiry:
             return GateDecision(
                 allow=False,
@@ -70,7 +78,8 @@ class _Striatum:
                 reason="hyperdirect inhibition active",
             )
 
-        if self._gate.is_executing:
+        room_id = plan.room_id or None
+        if self._gate.is_room_executing(plan.room_id):
             if plan.reason == PlanReason.USER_INPUT:
                 return GateDecision(
                     allow=True,
@@ -83,7 +92,7 @@ class _Striatum:
                 reason="execution in progress",
             )
 
-        if self._gate.is_on_cooldown:
+        if self._gate.is_room_on_cooldown(plan.room_id):
             if plan.reason == PlanReason.USER_INPUT:
                 return GateDecision(
                     allow=True,
@@ -93,18 +102,19 @@ class _Striatum:
             return GateDecision(
                 allow=False,
                 pathway=Pathway.INDIRECT,
-                reason=f"cooldown {self._gate.remaining_cooldown:.1f}s remaining",
+                reason=f"cooldown remaining",
             )
 
-        for reason, expiry in list(self._suppressed_reasons.items()):
+        for (sup_room, reason), expiry in list(self._suppressed_reasons.items()):
             if reason == "hyperdirect":
                 continue
             if now < expiry and plan.reason != PlanReason.USER_INPUT:
-                return GateDecision(
-                    allow=False,
-                    pathway=Pathway.INDIRECT,
-                    reason=f"suppressed: {reason}",
-                )
+                if sup_room is None or sup_room == plan.room_id:
+                    return GateDecision(
+                        allow=False,
+                        pathway=Pathway.INDIRECT,
+                        reason=f"suppressed: {reason}",
+                    )
 
         return GateDecision(
             allow=True,
@@ -116,6 +126,7 @@ class _Striatum:
         now = time.monotonic()
         return {
             "suppressed_reasons": {
-                k: "permanent" if v == float("inf") else round(v - now, 1) for k, v in self._suppressed_reasons.items()
+                f"{room or 'global'}:{reason}": "permanent" if v == float("inf") else round(v - now, 1)
+                for (room, reason), v in self._suppressed_reasons.items()
             },
         }

@@ -24,8 +24,10 @@ class ProactivePlanStrategy:
         overrides: dict[str, Any] = {}
         chaos_level = context.get("chaos_level", 0.0)
         modulation = ModulationState(chaos_level=chaos_level)
+        room_id: str = context.get("room_id", "")
+        account_id: str = context.get("account_id", "")
 
-        plan_kwargs: dict[str, Any] = {"modulation": modulation}
+        plan_kwargs: dict[str, Any] = {"modulation": modulation, "room_id": room_id, "account_id": account_id}
 
         if context.get("is_silent_proactive", False):
             topic = context.get("topic", "general")

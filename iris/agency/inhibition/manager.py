@@ -35,45 +35,48 @@ class InhibitionManager:
     def evaluate(self, plan: Plan) -> GateDecision:
         return self._striatum.evaluate(plan)
 
-    def should_suppress_proactive(self) -> bool:
+    def should_suppress_proactive(self, room_id: str = "") -> bool:
+        gate = self._gate._get_gate(room_id)
         return (
-            (self._cfg.inhibit_proactive_during_execution and self._gate.is_executing)
-            or (self._cfg.inhibit_proactive_during_cooldown and self._gate.is_on_cooldown)
+            (self._cfg.inhibit_proactive_during_execution and gate.is_executing)
+            or (self._cfg.inhibit_proactive_during_cooldown and gate.is_on_cooldown)
             or self._striatum.has_active_suppression
             or (self._session_getter is not None and not self._session_getter())
         )
 
     # ---- Execution gate (Gate) ----
 
-    def acquire_execution(self) -> GateDecision:
-        return self._gate.acquire()
+    def acquire_execution(self, room_id: str = "") -> GateDecision:
+        return self._gate.acquire(room_id)
 
-    def release_execution(self) -> None:
-        self._gate.release()
+    def release_execution(self, room_id: str = "") -> None:
+        self._gate.release(room_id)
 
-    def force_release_execution(self) -> None:
-        self._gate.force_release()
+    def force_release_execution(self, room_id: str = "") -> None:
+        self._gate.force_release(room_id)
 
     # ---- Queries ----
 
-    @property
-    def is_executing(self) -> bool:
+    def is_executing(self, room_id: str = "") -> bool:
+        if room_id:
+            return self._gate.is_room_executing(room_id)
         return self._gate.is_executing
 
-    @property
-    def is_on_cooldown(self) -> bool:
+    def is_on_cooldown(self, room_id: str = "") -> bool:
+        if room_id:
+            return self._gate.is_room_on_cooldown(room_id)
         return self._gate.is_on_cooldown
 
-    def is_suppressed(self, reason: str) -> bool:
-        return self._striatum.is_suppressed(reason)
+    def is_suppressed(self, reason: str, room_id: str | None = None) -> bool:
+        return self._striatum.is_suppressed(reason, room_id)
 
     # ---- Generic suppression API ----
 
-    def suppress(self, reason: str, duration: float = 0.0) -> None:
-        self._striatum.suppress(reason, duration)
+    def suppress(self, reason: str, duration: float = 0.0, room_id: str | None = None) -> None:
+        self._striatum.suppress(reason, duration, room_id)
 
-    def unsuppress(self, reason: str) -> None:
-        self._striatum.unsuppress(reason)
+    def unsuppress(self, reason: str, room_id: str | None = None) -> None:
+        self._striatum.unsuppress(reason, room_id)
 
     # ---- Diagnostics ----
 

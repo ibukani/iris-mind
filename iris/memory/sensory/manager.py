@@ -25,8 +25,8 @@ class SensoryMemoryProtocol(Protocol):
     def flush(self) -> None: ...
     def clear(self) -> None: ...
     def close(self) -> None: ...
-    def store_raw(self, content: str) -> None: ...
-    def store_raw_block(self, block: ContentBlock) -> None: ...
+    def store_raw(self, content: str, room_id: str = "") -> None: ...
+    def store_raw_block(self, block: ContentBlock, room_id: str = "") -> None: ...
     def retrieve(self) -> dict[str, Any]: ...
     @property
     def has_pending_raw(self) -> bool: ...
@@ -53,8 +53,10 @@ class SensoryMemoryManager:
         session_id: str = "",
         timeout_ms: int = 800,
         max_fragments: int = 10,
+        room_id: str = "",
     ):
         self._session_id = session_id
+        self._room_id = room_id
         self._timeout_ms = timeout_ms
         self._max_fragments = max_fragments
         self._fragments: list[ContentBlock] = []
@@ -147,10 +149,12 @@ class SensoryMemoryManager:
 
     # ---- raw input mode ----
 
-    def store_raw(self, content: str) -> None:
-        self.store_raw_block(text_block(content))
+    def store_raw(self, content: str, room_id: str = "") -> None:
+        self.store_raw_block(text_block(content), room_id=room_id)
 
-    def store_raw_block(self, block: ContentBlock) -> None:
+    def store_raw_block(self, block: ContentBlock, room_id: str = "") -> None:
+        if room_id:
+            self._room_id = room_id
         self._raw_input = block
         logger.debug("SensoryMemory: stored raw block type={}", block.get("type", "text"))
 
@@ -164,6 +168,7 @@ class SensoryMemoryManager:
             result["raw"] = self._raw_input["text"] if self._raw_input.get("type") == "text" else ""
             result["raw_block"] = self._raw_input
             result["raw_timestamp"] = datetime.now(UTC).isoformat()
+        result["room_id"] = self._room_id
         return result
 
     @property

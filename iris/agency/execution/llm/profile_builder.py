@@ -31,9 +31,10 @@ class ProfileBuilder:
         response_style: str = "",
         session_roles_summary: str = "",
         current_nickname: str = "",
+        room_id: str = "",
     ) -> SystemMessage:
         agents_md = self._load_agents_md()
-        user_prefs = self._build_user_preferences_section()
+        user_prefs = self._build_user_preferences_section(room_id=room_id)
 
         base = self._personality.build_system_prompt(
             agents_md_content=agents_md,
@@ -54,8 +55,8 @@ class ProfileBuilder:
     def _load_agents_md(self) -> str:
         return self._agents_md_store.load() if self._agents_md_store else ""
 
-    def _build_user_preferences_section(self) -> str:
-        prefs_list = self._memory.get_user_preferences() if self._memory else []
+    def _build_user_preferences_section(self, room_id: str = "") -> str:
+        prefs_list = self._memory.get_user_preferences(room_id=room_id) if self._memory else []
         seen: set[str] = set()
         unique_prefs: list[str] = []
         for p in prefs_list:

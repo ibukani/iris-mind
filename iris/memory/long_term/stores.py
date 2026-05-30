@@ -73,15 +73,17 @@ class EpisodicStore(_JsonlStore):
             self.path.unlink()
         logger.info("EpisodicStore: cleared")
 
-    def add(self, summary: str, metadata: dict | None = None) -> None:
-        entry: dict[str, object] = {"summary": summary, "timestamp": datetime.now(UTC).isoformat()}
+    def add(self, summary: str, metadata: dict | None = None, room_id: str = "") -> None:
+        entry: dict[str, object] = {"summary": summary, "timestamp": datetime.now(UTC).isoformat(), "room_id": room_id}
         if metadata:
             entry["metadata"] = metadata
         self._add_entry(entry, self.max_entries)
         logger.info("EpisodicStore: added entry")
 
-    def get_recent(self, n: int = 5) -> list[dict]:
+    def get_recent(self, n: int = 5, room_id: str = "") -> list[dict]:
         entries = self.load_all()
+        if room_id:
+            entries = [e for e in entries if e.get("room_id") == room_id]
         return entries[-n:]
 
 
@@ -110,7 +112,7 @@ class SemanticStore(_JsonlStore):
             self._synced_count = len(entries)
             logger.info("SemanticStore: synced {} entries to vector store", unsynced)
 
-    def add(self, entry: dict) -> None:
+    def add(self, entry: dict, room_id: str = "") -> None:
         with self._lock:
             entries = self.load_all()
             if self._is_duplicate(entry.get("content", ""), entries):
@@ -119,6 +121,7 @@ class SemanticStore(_JsonlStore):
             entry.setdefault("timestamp", "")
             entry.setdefault("tags", [])
             entry.setdefault("type", "lesson")
+            entry["room_id"] = room_id
             entries.append(entry)
             if len(entries) > self.max_entries:
                 entries = entries[-self.max_entries :]

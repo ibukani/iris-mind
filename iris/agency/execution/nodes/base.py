@@ -95,6 +95,7 @@ class BaseLLMNode(ABC):
             context_hint=plan.context_hint,
             node_type=self.node_type_name,
             chaos_level=plan.modulation.chaos_level,
+            room_id=plan.room_id,
         )
 
     def _build_chat_params(

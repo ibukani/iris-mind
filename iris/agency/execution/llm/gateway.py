@@ -66,6 +66,7 @@ class LLMGateway:
         node_type: str = "general_task",
         include_profile: bool = True,
         chaos_level: float = 0.0,
+        room_id: str = "",
     ) -> list[BaseMessage]:
         return self._prompt_builder.build(
             node_type=node_type,
@@ -75,6 +76,7 @@ class LLMGateway:
             current_nickname=self._current_nickname,
             include_profile=include_profile,
             chaos_level=chaos_level,
+            room_id=room_id,
         )
 
     async def _call_llm(

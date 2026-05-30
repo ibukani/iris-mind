@@ -41,6 +41,7 @@ class SystemPromptBuilder:
         current_nickname: str = "",
         include_profile: bool = True,
         chaos_level: float = 0.0,
+        room_id: str = "",
     ) -> list[BaseMessage]:
         msgs: list[BaseMessage] = []
 
@@ -50,6 +51,7 @@ class SystemPromptBuilder:
                     response_style=response_style,
                     session_roles_summary=session_roles_summary,
                     current_nickname=current_nickname,
+                    room_id=room_id,
                 ),
             )
 

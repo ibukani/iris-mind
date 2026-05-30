@@ -40,12 +40,12 @@ class ShortTermMemoryProtocol(Protocol):
     モック化やテスト用の代替実装を容易にするため。
     """
 
-    def add_turn(self, role: str, blocks: list[ContentBlock], user_id: str = "") -> None: ...
-    def search(self, query: str, max_results: int = 5) -> list[SearchResult]: ...
+    def add_turn(self, role: str, blocks: list[ContentBlock], user_id: str = "", room_id: str = "") -> None: ...
+    def search(self, query: str, max_results: int = 5, room_id: str = "") -> list[SearchResult]: ...
     def search_entities(self, entity_name: str) -> list[TurnData]: ...
-    def render_context(self, max_chars: int = MAX_CONTEXT_CHARS, query: str | None = None) -> str: ...
-    def get_recent_turns(self, n: int = 4) -> list[TurnData]: ...
-    def get_unconsolidated_turns(self) -> list[TurnData]: ...
+    def render_context(self, max_chars: int = MAX_CONTEXT_CHARS, query: str | None = None, room_id: str = "") -> str: ...
+    def get_recent_turns(self, n: int = 4, room_id: str = "") -> list[TurnData]: ...
+    def get_unconsolidated_turns(self, room_id: str = "") -> list[TurnData]: ...
     def mark_consolidated(self, up_to_index: int | None = None) -> None: ...
     def clear(self) -> None: ...
     def should_consolidate(self) -> bool: ...
@@ -140,7 +140,7 @@ class ShortTermMemoryManager:
         uid_list = self._room_users.get(room_id, [])
         return [(uid, self._active_users.get(uid, uid)) for uid in uid_list if uid in self._active_users]
 
-    def add_turn(self, role: str, blocks: list[ContentBlock], user_id: str = "") -> None:
+    def add_turn(self, role: str, blocks: list[ContentBlock], user_id: str = "", room_id: str = "") -> None:
         if not blocks:
             return
         truncated_blocks = _truncate_blocks(blocks, MAX_TURN_LENGTH)
@@ -152,6 +152,7 @@ class ShortTermMemoryManager:
             "consolidated": False,
             "importance": self._importance_scorer.score(text),
             "user_id": user_id,
+            "room_id": room_id,
         }
         self._turns.append(entry)
         if len(self._turns) > self._max_turns:
@@ -187,19 +188,24 @@ class ShortTermMemoryManager:
         overlap = len(q_words & t_words)
         return overlap / len(q_words)
 
-    def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
+    def search(self, query: str, max_results: int = 5, room_id: str = "") -> list[SearchResult]:
         if not query:
             return []
 
+        turns = self._turns
+        if room_id:
+            turns = [t for t in self._turns if t.get("room_id") == room_id]
+
         scored: list[tuple[float, int, SearchResult]] = []
-        for i, turn in enumerate(self._turns):
+        for turn in turns:
+            orig_idx = self._turns.index(turn)
             relevance = self._compute_relevance(query, turn)
             text = self._turn_text(turn)
             if relevance == 0 and query.lower() not in text.lower():
                 continue
 
             actual_relevance = relevance if relevance > 0 else 0.01
-            turn_copy: SearchResult = {**turn, "relevance": actual_relevance, "index": i}
+            turn_copy: SearchResult = {**turn, "relevance": actual_relevance, "index": orig_idx}
             scored.append((actual_relevance, turn.get("importance", 0), turn_copy))
 
         scored.sort(key=lambda x: (-x[0], -x[1]))
@@ -210,9 +216,12 @@ class ShortTermMemoryManager:
         results: list[TurnData] = [turn for turn in self._turns if entity_lower in self._turn_text(turn).lower()]
         return results[-5:]
 
-    def render_context(self, max_chars: int = MAX_CONTEXT_CHARS, query: str | None = None) -> str:
+    def render_context(self, max_chars: int = MAX_CONTEXT_CHARS, query: str | None = None, room_id: str = "") -> str:
+        turns = self._turns
+        if room_id:
+            turns = [t for t in self._turns if t.get("room_id") == room_id]
         return render_short_term_context(
-            turns=self._turns,
+            turns=turns,
             active_references=self._active_references,
             search_fn=self.search,
             max_chars=max_chars,
@@ -220,13 +229,19 @@ class ShortTermMemoryManager:
             active_users=self.get_active_users(),
         )
 
-    def get_recent_turns(self, n: int = 4) -> list[TurnData]:
+    def get_recent_turns(self, n: int = 4, room_id: str = "") -> list[TurnData]:
         """直近のNターンを取得する。"""
-        return self._turns[-n:]
+        turns = self._turns
+        if room_id:
+            turns = [t for t in self._turns if t.get("room_id") == room_id]
+        return turns[-n:]
 
-    def get_unconsolidated_turns(self) -> list[TurnData]:
+    def get_unconsolidated_turns(self, room_id: str = "") -> list[TurnData]:
         """まだ圧縮（長期記憶化）されていないターンの一覧を取得する。"""
-        return [t for t in self._turns if not t.get("consolidated")]
+        turns = self._turns
+        if room_id:
+            turns = [t for t in self._turns if t.get("room_id") == room_id]
+        return [t for t in turns if not t.get("consolidated")]
 
     def mark_consolidated(self, up_to_index: int | None = None) -> None:
         """指定されたインデックス（または全て）のターンを圧縮済みにマークする。"""

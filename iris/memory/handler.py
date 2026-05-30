@@ -140,7 +140,7 @@ class _MemoryEventHandler:
                 event.account_id, event.nickname, session_id=event.session_id, room_id=event.room_id
             )
         text = f"[system] {event.nickname} が入室しました"
-        block = system_event_block(text, event_type="room.joined", user_id=event.account_id, nickname=event.nickname)
+        block = system_event_block(text, event_type="room.joined", user_id=event.account_id, nickname=event.nickname, room_id=event.room_id)
         self._store_and_flush_pending_block(block, event.account_id, event.session_id, event.room_id)
 
     def _on_room_left(self, event: RoomLeftEvent) -> None:
@@ -148,7 +148,7 @@ class _MemoryEventHandler:
         if self.short_term:
             self.short_term.remove_user(event.account_id, session_id=event.session_id, room_id=event.room_id)
         text = f"[system] {event.nickname} が退室しました"
-        block = system_event_block(text, event_type="room.left", user_id=event.account_id, nickname=event.nickname)
+        block = system_event_block(text, event_type="room.left", user_id=event.account_id, nickname=event.nickname, room_id=event.room_id)
         self._store_and_flush_pending_block(block, event.account_id, event.session_id, event.room_id)
 
     def _on_session_disconnect(self, event: SessionDisconnectEvent) -> None:

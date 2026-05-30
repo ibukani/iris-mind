@@ -13,10 +13,22 @@ class MemoryCommands:
     def set_memory(self, memory: MemoryManager) -> None:
         self._memory = memory
 
+    @staticmethod
+    def _extract_room_id(args: str) -> tuple[str, str]:
+        room_id = ""
+        rest = args
+        for token in args.split():
+            if token.startswith("room:"):
+                room_id = token[5:]
+                rest = rest.replace(token, "", 1)
+                break
+        return room_id, rest
+
     def handle(self, args: str) -> str:
         if not self._memory:
             return "Memory not available"
-        parts = args.strip().split(maxsplit=1)
+        room_id, rest = self._extract_room_id(args)
+        parts = rest.strip().split(maxsplit=1)
         sub = parts[0].lower() if parts else ""
         if sub == "recent":
             n_str = parts[1] if len(parts) > 1 else "5"
@@ -24,21 +36,21 @@ class MemoryCommands:
                 n = max(1, int(n_str))
             except ValueError:
                 n = 5
-            return self._recent(n)
+            return self._recent(n, room_id)
         if sub == "search":
             query = parts[1] if len(parts) > 1 else ""
             if not query:
                 return "Usage: /memory search <query>"
-            return self._search(query)
+            return self._search(query, room_id)
         if sub == "clear":
             stream = parts[1].lower() if len(parts) > 1 else ""
             return self._clear(stream)
         return self._stats()
 
-    def _recent(self, n: int) -> str:
+    def _recent(self, n: int, room_id: str = "") -> str:
         if not self._memory:
             return "Memory not available"
-        entries = self._memory.retrieve("episodic", n=n)
+        entries = self._memory.retrieve("episodic", n=n, room_id=room_id)
         if not entries:
             return "No episodic memories"
         lines = [f"Recent {len(entries)} episodic memories:"]
@@ -48,10 +60,10 @@ class MemoryCommands:
             lines.append(f"  {i}. [{ts}] {summary}")
         return "\n".join(lines)
 
-    def _search(self, query: str) -> str:
+    def _search(self, query: str, room_id: str = "") -> str:
         if not self._memory:
             return "Memory not available"
-        results = self._memory.search(query, stream="semantic", max_results=5)
+        results = self._memory.search(query, stream="semantic", max_results=5, room_id=room_id)
         if not results:
             return f"No results for: {query}"
         lines = [f"Search results for '{query}':"]

@@ -19,6 +19,7 @@ class ContextHintBuilder:
         context: dict[str, Any],
         scores: dict[str, float],
         chaos_level: float = 0.0,
+        room_id: str = "",
     ) -> str:
         if "system_event" in context:
             event_name = context.get("system_event")
@@ -29,15 +30,15 @@ class ContextHintBuilder:
                     return f"システムイベント: ロール {role} が {offline_duration} の切断期間を経て再接続しました。"
                 return f"システムイベント: ロール {role} が接続しました。"
             return ""
-        return self._build_general_hint(scores, context, chaos_level=chaos_level)
+        return self._build_general_hint(scores, context, chaos_level=chaos_level, room_id=room_id)
 
-    def _build_general_hint(self, scores: dict[str, float], context: dict[str, Any], chaos_level: float = 0.0) -> str:
+    def _build_general_hint(self, scores: dict[str, float], context: dict[str, Any], chaos_level: float = 0.0, room_id: str = "") -> str:
         parts: list[str] = []
         trigger = max(scores, key=lambda k: scores[k])
         parts.append(f"時間帯: {build_time_label()}")
         parts.append(f"トリガー: {trigger}")
 
-        wc = self._build_working_context()
+        wc = self._build_working_context(room_id=room_id)
         if wc:
             parts.append("ワーキングメモリ:\n" + wc)
 
@@ -52,20 +53,20 @@ class ContextHintBuilder:
 
         return " / ".join(parts)
 
-    def build_user_context_hint(self, content: str, chaos_level: float = 0.0) -> str:
+    def build_user_context_hint(self, content: str, chaos_level: float = 0.0, room_id: str = "") -> str:
         if not self._memory or not content:
             return ""
         parts: list[str] = []
         try:
-            wc = self._build_working_context(query=content)
+            wc = self._build_working_context(query=content, room_id=room_id)
             if wc:
                 parts.append(wc)
             else:
-                ep_hint = self._build_episodic_hint()
+                ep_hint = self._build_episodic_hint(room_id=room_id)
                 if ep_hint:
                     parts.append(ep_hint)
 
-            sem_hint = self._build_semantic_hint(content)
+            sem_hint = self._build_semantic_hint(content, room_id=room_id)
             if sem_hint:
                 parts.append(sem_hint)
 
@@ -92,14 +93,14 @@ class ContextHintBuilder:
         except Exception:
             return None
 
-    def _build_working_context(self, query: str | None = None) -> str:
+    def _build_working_context(self, query: str | None = None, room_id: str = "") -> str:
         if self._memory is None:
             return ""
         try:
-            wm = self._memory.short_term.render_context(query=query)
+            wm = self._memory.short_term.render_context(query=query, room_id=room_id)
             if wm:
                 return str(wm)
-            recent = self._memory.get_recent(3)
+            recent = self._memory.get_recent(3, room_id=room_id)
             topics = [
                 f"{e['summary'][:60]}（{self._format_age(e.get('timestamp', ''))}）" for e in recent if e.get("summary")
             ]
@@ -109,10 +110,10 @@ class ContextHintBuilder:
             logger.debug("Working context failed", exc_info=True)
         return ""
 
-    def _build_episodic_hint(self) -> str | None:
+    def _build_episodic_hint(self, room_id: str = "") -> str | None:
         if not self._memory:
             return None
-        recent = self._memory.get_recent(3)
+        recent = self._memory.get_recent(3, room_id=room_id)
         for e in reversed(recent):
             s = e.get("summary", "")
             if not s:
@@ -124,10 +125,10 @@ class ContextHintBuilder:
             return f"話題: {s[:60]}"
         return None
 
-    def _build_semantic_hint(self, content: str) -> str | None:
+    def _build_semantic_hint(self, content: str, room_id: str = "") -> str | None:
         if not self._memory:
             return None
-        results = self._memory.search_semantic(content, max_results=2)
+        results = self._memory.search_semantic(content, max_results=2, room_id=room_id)
         if not results:
             return None
         best = max(results, key=lambda r: r.get("score", 0))

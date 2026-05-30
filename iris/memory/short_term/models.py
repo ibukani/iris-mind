@@ -15,6 +15,7 @@ class TurnData(TypedDict, total=False):
     consolidated: bool
     importance: int
     user_id: str
+    room_id: str
 
 
 class SearchResult(TurnData, total=False):

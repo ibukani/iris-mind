@@ -16,8 +16,12 @@ def build_store_handlers(
     return {
         "sensory": lambda data: _store_sensory(sensory, data),
         "short_term": lambda data: _store_short_term(short_term, data),
-        "episodic": lambda data: _store_episodic(long_term, short_term, data),
-        "semantic": lambda data: _store_semantic(long_term, short_term, data),
+        "episodic": lambda data: _store_episodic(
+            long_term, short_term, data, data.get("room_id", "") if isinstance(data, dict) else ""
+        ),
+        "semantic": lambda data: _store_semantic(
+            long_term, short_term, data, data.get("room_id", "") if isinstance(data, dict) else ""
+        ),
     }
 
 
@@ -37,8 +41,8 @@ def _store_short_term(short_term: Any, data: Any) -> None:
         short_term.add_turn(role, [text_block(content)])
 
 
-def _store_episodic(long_term: Any, short_term: Any, data: Any) -> None:
-    long_term.store_episodic(data)
+def _store_episodic(long_term: Any, short_term: Any, data: Any, room_id: str = "") -> None:
+    long_term.store_episodic(data, room_id)
     if isinstance(data, dict):
         short_term.add_turn(
             "system",
@@ -46,8 +50,8 @@ def _store_episodic(long_term: Any, short_term: Any, data: Any) -> None:
         )
 
 
-def _store_semantic(long_term: Any, short_term: Any, data: Any) -> None:
-    long_term.store_semantic(data)
+def _store_semantic(long_term: Any, short_term: Any, data: Any, room_id: str = "") -> None:
+    long_term.store_semantic(data, room_id)
     if isinstance(data, dict):
         content = data.get("content", "")
         if content:
@@ -60,6 +64,7 @@ def dispatch_retrieve(
     sensory: Any,
     short_term: Any,
     long_term: Any,
+    room_id: str = "",
 ) -> list[dict[str, Any]]:
     if stream == "sensory":
         result = sensory.retrieve()
@@ -78,6 +83,7 @@ def dispatch_search(
     kwargs: dict[str, Any],
     short_term: Any,
     long_term: Any,
+    room_id: str = "",
 ) -> list[dict[str, Any]]:
     max_results = kwargs.get("max_results", 3) if isinstance(kwargs.get("max_results"), int) else 3
     if stream == "short_term":
@@ -92,6 +98,7 @@ def dispatch_clear(
     sensory: Any,
     short_term: Any,
     long_term: Any,
+    room_id: str = "",
 ) -> None:
     logger.info("MemoryManager: clear stream={}", stream or "all")
     if stream == "sensory" or stream is None:

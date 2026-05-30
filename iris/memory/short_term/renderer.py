@@ -28,9 +28,12 @@ def render_short_term_context(
     max_chars: int = 600,
     query: str | None = None,
     active_users: list[tuple[str, str]] | None = None,
+    room_id: str = "",
 ) -> str:
     if not turns:
         return ""
+    if room_id:
+        turns = [t for t in turns if t.get("room_id", "") == room_id]
     parts: list[str] = []
 
     chat_turns = [t for t in turns if t.get("role") not in ("system",)]

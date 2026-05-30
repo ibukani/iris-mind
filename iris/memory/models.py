@@ -21,6 +21,7 @@ def system_event_block(
     event_type: str,
     user_id: str = "",
     nickname: str = "",
+    room_id: str = "",
 ) -> ContentBlock:
     return {
         "type": "system_event",
@@ -29,6 +30,7 @@ def system_event_block(
             "event_type": event_type,
             "user_id": user_id,
             "nickname": nickname,
+            "room_id": room_id,
         },
     }
 

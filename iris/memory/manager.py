@@ -120,9 +120,9 @@ class MemoryManager:
         logger.info("MemoryManager: flushed {} turns, {} topics", len(unconsolidated), len(topics))
 
     def get_user_preferences(self, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:
-        return self.long_term.search_semantic(
+        return self.long_term.search_semantic(  # type: ignore[no-any-return]
             "ユーザーの好み 興味 趣味", max_results=2, room_id=room_id, account_id=account_id
-        )  # type: ignore[no-any-return]
+        )
 
     def add_episodic(
         self, content: str, kind: str = "", room_id: str = "", account_id: str = "", _metadata: dict | None = None

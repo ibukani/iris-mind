@@ -67,3 +67,67 @@ class TestRelationshipManager:
         assert "trust_level" in profile
         assert "familiarity" in profile
         assert "relationship_level" in profile
+
+
+class TestRelationshipManagerPerAccount:
+    def setup_method(self) -> None:
+        self.manager = RelationshipManager()
+
+    def _joy(self) -> CompanionEmotion:
+        return CompanionEmotion(
+            primary=PlutchikEmotion.JOY,
+            intensity=0.8,
+            valence=0.8,
+            arousal=0.6,
+            dominance=0.6,
+        )
+
+    def test_per_account_isolation(self) -> None:
+        self.manager.update(self._joy(), account_id="user_a")
+        self.manager.update(self._joy(), account_id="user_b")
+
+        state_a = self.manager.get_state(account_id="user_a")
+        state_b = self.manager.get_state(account_id="user_b")
+        assert state_a.trust == state_b.trust
+
+        self.manager.update(
+            CompanionEmotion(
+                primary=PlutchikEmotion.ANGER,
+                intensity=0.8,
+                valence=-0.7,
+                arousal=0.8,
+                dominance=0.5,
+            ),
+            account_id="user_a",
+        )
+        state_a_after = self.manager.get_state(account_id="user_a")
+        state_b_after = self.manager.get_state(account_id="user_b")
+        assert state_a_after.trust < state_b_after.trust
+
+    def test_per_account_profile(self) -> None:
+        self.manager.update(self._joy(), account_id="user_a")
+        profile = self.manager.get_profile(account_id="user_a")
+        assert profile["trust_level"] > 0.1
+
+        profile_default = self.manager.get_profile(account_id="nonexistent")
+        assert profile_default["trust_level"] == 0.1
+
+    def test_get_all_states(self) -> None:
+        self.manager.update(self._joy(), account_id="user_a")
+        self.manager.update(self._joy(), account_id="user_b")
+        all_states = self.manager.get_all_states()
+        assert "user_a" in all_states
+        assert "user_b" in all_states
+
+    def test_global_fallback(self) -> None:
+        self.manager.update(self._joy())
+        state = self.manager.get_state()
+        assert state.trust > 0.1
+
+    def test_per_account_level_upgrade(self) -> None:
+        for _ in range(20):
+            self.manager.update(self._joy(), account_id="user_a")
+        state_a = self.manager.get_state(account_id="user_a")
+        state_b = self.manager.get_state(account_id="user_b")
+        assert state_a.level >= RelationshipLevel.FAMILIAR
+        assert state_b.level == RelationshipLevel.ACQUAINTANCE

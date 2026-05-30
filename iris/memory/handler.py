@@ -227,7 +227,7 @@ class _MemoryEventHandler:
                     best_active = m.last_active
                     best_room = room
         if best_room:
-            return best_room.room_id
+            return str(best_room.room_id)
         default = self._room_provider.get_default_room()
         return default.room_id if default else ""
 

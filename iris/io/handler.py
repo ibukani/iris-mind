@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from iris.event.event_bus import EventBus
     from iris.io.session.manager import SessionManager
     from iris.kernel.manager import PluginManager
+    from iris.room.store import RoomStore
 
 
 class _IOEventHandler:
@@ -20,7 +21,7 @@ class _IOEventHandler:
         self._session_mgr = session_manager
         self._plugin_manager = plugin_manager
         self._room_store_resolved = False
-        self._room_store = None
+        self._room_store: RoomStore | None = None
         event_bus.subscribe(MessageEvent, self._on_message_event)
         event_bus.subscribe(RoomJoinedEvent, self._on_room_joined)
         event_bus.subscribe(RoomLeftEvent, self._on_room_left)

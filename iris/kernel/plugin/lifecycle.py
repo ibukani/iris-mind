@@ -275,7 +275,7 @@ class PluginLifecycle:
             phase_graph = {n: graph[n] for n in names}
             try:
                 ts: TopologicalSorter[str] = TopologicalSorter(phase_graph)
-                phase_order = list(ts.static_order())  # type: ignore[arg-type]
+                phase_order = list(ts.static_order())
             except Exception:
                 logger.exception("PluginLifecycle: cycle detected in phase {}", phase.name)
                 raise

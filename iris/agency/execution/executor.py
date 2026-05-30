@@ -63,7 +63,7 @@ class FlowExecutor(AsyncWorker):
             logger.info("FlowExecutor: cancelling current execution")
             self._interrupt_token.cancel()
 
-    async def process(self, plan: Plan) -> None:  # type: ignore[override]
+    async def process(self, plan: Plan) -> None:  # pyright: ignore[reportIncompatibleMethodOverride]
         if self._inhibition:
             if plan.reason == PlanReason.USER_INPUT:
                 self._inhibition.force_release_execution(plan.room_id)

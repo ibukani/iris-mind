@@ -136,7 +136,7 @@ def _shutdown_via_grpc(metadata: list) -> None:
         )
         req = pb2.BidirectionalStreamRequest(command=cmd)  # type: ignore[attr-defined]
         list(stub.BidirectionalStream(iter([req]), metadata=metadata, timeout=5))
-    except Exception:
+    except Exception:  # noqa: S110
         pass
 
 

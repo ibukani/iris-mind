@@ -10,6 +10,14 @@
 - LLM provider は Ollama / OpenRouter を設定で切り替える。
 - モデルは単一モデル構成と role ベースの複数モデル構成をサポートする。
 
+### 設計方針: Irisの個性とRoom
+
+- **Irisは個として1体のみ存在する**
+- Roomは会話場所を増やすためのシステム（Irisの複製ではない）
+- 感情（Limbic）はグローバル。Roomごとの個別管理はしない
+- 関係性（Relationship）はユーザー（Account）単位。Room単位ではない
+- 複数Roomで同一ユーザーと会話しても、親密度等は共通
+
 ## Boundaries
 
 - `iris/kernel/` はドメイン層。外部サービス実装を直接持ち込まない。

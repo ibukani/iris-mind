@@ -9,8 +9,18 @@ repos:
     rev: v2.1.0
     hooks:
       - id: mypy
-        args: [--ignore-missing-imports, iris/]
-        additional_dependencies: [types-PyYAML]
+        args: [iris/]
+        additional_dependencies:
+          - types-PyYAML
+          - loguru
+          - langchain-core
+          - langchain-ollama
+          - langchain-openai
+          - langchain-chroma
+          - pydantic
+          - httpx
+          - orjson
+          - tenacity
         pass_filenames: false
   - repo: local
     hooks:

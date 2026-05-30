@@ -78,7 +78,6 @@ class _Striatum:
                 reason="hyperdirect inhibition active",
             )
 
-        room_id = plan.room_id or None
         if self._gate.is_room_executing(plan.room_id):
             if plan.reason == PlanReason.USER_INPUT:
                 return GateDecision(
@@ -102,19 +101,18 @@ class _Striatum:
             return GateDecision(
                 allow=False,
                 pathway=Pathway.INDIRECT,
-                reason=f"cooldown remaining",
+                reason="cooldown remaining",
             )
 
         for (sup_room, reason), expiry in list(self._suppressed_reasons.items()):
             if reason == "hyperdirect":
                 continue
-            if now < expiry and plan.reason != PlanReason.USER_INPUT:
-                if sup_room is None or sup_room == plan.room_id:
-                    return GateDecision(
-                        allow=False,
-                        pathway=Pathway.INDIRECT,
-                        reason=f"suppressed: {reason}",
-                    )
+            if now < expiry and plan.reason != PlanReason.USER_INPUT and (sup_room is None or sup_room == plan.room_id):
+                return GateDecision(
+                    allow=False,
+                    pathway=Pathway.INDIRECT,
+                    reason=f"suppressed: {reason}",
+                )
 
         return GateDecision(
             allow=True,

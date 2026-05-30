@@ -21,6 +21,14 @@ Iris = Python製のAIコンパニオン・アシスタントKernel。Ollama/Open
 - **マルチモード**: modelsが2つ以上。`get_model(role)` で選択。未知roleは`models[0]`フォールバック
 - 設定は `config.yaml`。`model.provider` でプロバイダ切替
 
+### 設計方針: Irisの個性とRoom
+
+- **Irisは個として1体のみ存在する**
+- Roomは会話場所を増やすためのシステム（Irisの複製ではない）
+- 感情（Limbic）はグローバル。Roomごとの個別管理はしない
+- 関係性（Relationship）はユーザー（Account）単位。Room単位ではない
+- 複数Roomで同一ユーザーと会話しても、親密度等は共通
+
 ## 2. 用語区別
 
 - **Iris** → 製作対象のAI

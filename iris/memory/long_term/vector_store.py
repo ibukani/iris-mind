@@ -19,10 +19,10 @@ class _ONNXEmbeddings(Embeddings):
         self._ef = cast(ef.EmbeddingFunction, ef.ONNXMiniLM_L6_V2())
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return self._ef(texts)  # type: ignore[return-value,no-any-return]
+        return self._ef(texts)  # type: ignore[return-value]
 
     def embed_query(self, text: str) -> list[float]:
-        return self._ef([text])[0]  # type: ignore[return-value,no-any-return]
+        return self._ef([text])[0]  # type: ignore[return-value]
 
 
 class VectorStore:

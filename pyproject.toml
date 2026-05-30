@@ -51,13 +51,20 @@ line-length = 120
 exclude = ["*_pb2.py", "*_pb2_grpc.py"]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "UP", "RUF", "C4", "SIM", "RET", "PERF", "PIE", "FA", "ISC", "PT", "T10"]
+select = ["E", "F", "W", "I", "B", "UP", "RUF", "C4", "SIM", "RET", "PERF", "PIE", "FA", "ISC", "PT", "T10", "S"]
 ignore = [
     "E501",
     "B008",
     "RUF001",
     "RUF002",
     "RUF003",
+    "ISC001",
+    "S101",
+    "S105",
+    "S106",
+    "S311",
+    "S603",
+    "S607",
 ]
 
 [tool.ruff.lint.isort]
@@ -71,8 +78,9 @@ docstring-code-format = true
 
 [tool.mypy]
 python_version = "3.13"
-warn_unused_configs = false
+warn_unused_configs = true
 warn_redundant_casts = true
+warn_unused_ignores = true
 strict_equality = true
 warn_return_any = true
 warn_unreachable = true
@@ -80,13 +88,14 @@ check_untyped_defs = true
 disallow_incomplete_defs = true
 disallow_untyped_defs = true
 no_implicit_optional = true
+enable_error_code = ["ignore-without-code", "redundant-cast", "unused-awaitable"]
 
 [[tool.mypy.overrides]]
-module = ["chromadb.*", "rank_bm25"]
+module = ["chromadb.*", "rank_bm25", "grpc"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = ["ollama", "httpx", "tokenizers", "langgraph.*", "instructor.*"]
+module = ["ollama", "httpx", "tokenizers", "langgraph.*", "orjson", "tenacity"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
@@ -100,10 +109,6 @@ module = [
 ]
 ignore_errors = true
 
-[[tool.mypy.overrides]]
-module = ["grpc"]
-ignore_missing_imports = true
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
@@ -112,6 +117,10 @@ markers = [
   "unit: ユニットテスト",
   "integration: 統合テスト",
   "slow: 低速テスト",
+]
+filterwarnings = [
+  "ignore::DeprecationWarning:langchain.*",
+  "ignore::DeprecationWarning:chromadb.*",
 ]
 
 [tool.coverage.run]

@@ -43,65 +43,84 @@ _DISCLOSURE_PATTERNS: dict[str, float] = {
 
 
 class RelationshipManager:
-    """Bowlby attachment theory ベースの関係性管理"""
+    """Bowlby attachment theory ベースの関係性管理 (per-account)"""
+
+    _GLOBAL_KEY = "__global__"
 
     def __init__(self) -> None:
-        self._state = RelationshipState()
+        self._states: dict[str, RelationshipState] = {}
+
+    def _get_state(self, account_id: str) -> RelationshipState:
+        key = account_id or self._GLOBAL_KEY
+        if key not in self._states:
+            self._states[key] = RelationshipState()
+        return self._states[key]
 
     def update(
         self,
         emotion: CompanionEmotion,
+        account_id: str = "",
         context_type: str | None = None,
         user_profile: dict[str, Any] | None = None,
     ) -> RelationshipState:
-        """感情と文脈に基づいて関係性状態を更新"""
+        """感情と文脈に基づいて関係性状態を更新 (per-account)"""
+        state = self._get_state(account_id)
         impact = _EMOTION_RELATIONSHIP_IMPACT.get(emotion.primary, {})
-        self._state.trust = max(0.0, min(1.0, self._state.trust + impact.get("trust", 0.0)))
-        self._state.familiarity = max(0.0, min(1.0, self._state.familiarity + impact.get("familiarity", 0.0)))
+        state.trust = max(0.0, min(1.0, state.trust + impact.get("trust", 0.0)))
+        state.familiarity = max(0.0, min(1.0, state.familiarity + impact.get("familiarity", 0.0)))
 
         if context_type and context_type in _DISCLOSURE_PATTERNS:
             disclosure = _DISCLOSURE_PATTERNS[context_type]
-            self._state.disclosure_depth = max(0.0, min(1.0, self._state.disclosure_depth + disclosure))
+            state.disclosure_depth = max(0.0, min(1.0, state.disclosure_depth + disclosure))
 
-        self._state.interaction_count += 1
-        self._update_level()
-        self._update_attachment_style(user_profile)
+        state.interaction_count += 1
+        self._update_level(state)
+        self._update_attachment_style(state, user_profile)
 
         logger.debug(
-            "Relationship updated: level={} trust={:.2f} familiarity={:.2f}",
-            self._state.level.name,
-            self._state.trust,
-            self._state.familiarity,
+            "Relationship updated: account={} level={} trust={:.2f} familiarity={:.2f}",
+            account_id or "(global)",
+            state.level.name,
+            state.trust,
+            state.familiarity,
         )
 
-        return replace(self._state)
+        return replace(state)
 
-    def get_state(self) -> RelationshipState:
-        return replace(self._state)
+    def get_state(self, account_id: str = "") -> RelationshipState:
+        return replace(self._get_state(account_id))
 
-    def _update_level(self) -> None:
-        if self._state.trust >= _TRUST_THRESHOLDS[RelationshipLevel.FAMILIAR]:
-            if self._state.level < RelationshipLevel.BONDED:
-                self._state.level = RelationshipLevel.BONDED
+    def get_all_states(self) -> dict[str, RelationshipState]:
+        return {k: replace(v) for k, v in self._states.items()}
+
+    def _update_level(self, state: RelationshipState) -> None:
+        if state.trust >= _TRUST_THRESHOLDS[RelationshipLevel.FAMILIAR]:
+            if state.level < RelationshipLevel.BONDED:
+                state.level = RelationshipLevel.BONDED
                 logger.info("Relationship level: → BONDED")
         elif (
-            self._state.trust >= _TRUST_THRESHOLDS[RelationshipLevel.ACQUAINTANCE]
-            and self._state.level < RelationshipLevel.FAMILIAR
+            state.trust >= _TRUST_THRESHOLDS[RelationshipLevel.ACQUAINTANCE]
+            and state.level < RelationshipLevel.FAMILIAR
         ):
-            self._state.level = RelationshipLevel.FAMILIAR
+            state.level = RelationshipLevel.FAMILIAR
             logger.info("Relationship level: → FAMILIAR")
 
-    def _update_attachment_style(self, user_profile: dict[str, Any] | None = None) -> None:
+    def _update_attachment_style(
+        self,
+        state: RelationshipState,
+        user_profile: dict[str, Any] | None = None,
+    ) -> None:
         if user_profile and "attachment_style" in user_profile:
             with contextlib.suppress(ValueError):
-                self._state.attachment_style = AttachmentStyle(user_profile["attachment_style"])
+                state.attachment_style = AttachmentStyle(user_profile["attachment_style"])
 
-    def get_profile(self) -> dict[str, Any]:
-        """Appraisal用のユーザープロフィールを返す"""
+    def get_profile(self, account_id: str = "") -> dict[str, Any]:
+        """Appraisal用のユーザープロフィールを返す (per-account)"""
+        state = self._get_state(account_id)
         return {
-            "trust_level": self._state.trust,
-            "familiarity": self._state.familiarity,
-            "relationship_level": self._state.level.value,
-            "attachment_style": self._state.attachment_style.value,
-            "disclosure_depth": self._state.disclosure_depth,
+            "trust_level": state.trust,
+            "familiarity": state.familiarity,
+            "relationship_level": state.level.value,
+            "attachment_style": state.attachment_style.value,
+            "disclosure_depth": state.disclosure_depth,
         }

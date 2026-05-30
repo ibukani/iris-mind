@@ -165,7 +165,7 @@ class SensoryMemoryManager:
                 result["fragments"] = list(self._fragments)
                 result["fragment"] = blocks_text(self._fragments)
         if self._raw_input is not None:
-            result["raw"] = self._raw_input["text"] if self._raw_input.get("type") == "text" else ""
+            result["raw"] = self._raw_input.get("text", "") if self._raw_input.get("type") == "text" else ""
             result["raw_block"] = self._raw_input
             result["raw_timestamp"] = datetime.now(UTC).isoformat()
         result["room_id"] = self._room_id

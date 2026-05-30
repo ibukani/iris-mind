@@ -191,6 +191,14 @@ flowchart LR
 - **シングル / マルチモデルモード** — 設定したモデル数・ロールに応じて自動切替（low/medium/highロール別ルーティング）
 - **LangGraph 実行パイプライン** — ExecutionOrchestrator によるLLM+ツールループの状態機械制御
 - **抑制制御 (Inhibition)** — Striatum+Gate による実行権管理・クールダウン・プロアクティブ抑制
+- **Room/Account** — ルーム（会話場所）とアカウント（ユーザー識別）の分離。複数Roomで同一ユーザーと会話可能
+
+## Design Principles
+
+- **Irisは個として1体のみ存在する** — 複数Roomがあっても、Irisは1つの人格・感情を持つ
+- **Roomは会話場所を増やすためのシステム** — Irisの複製ではなく、会話の文脈を分けるための仕組み
+- **感情（Limbic）はグローバル** — Roomごとの個別管理はしない。どのRoomでも同一の感情状態を共有
+- **関係性（Relationship）はユーザー単位** — Room単位ではなく、Account単位で親密度・信頼度を管理
 
 ## Project Structure
 

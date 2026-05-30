@@ -20,24 +20,23 @@ class _AccountDispatcher:
     def __init__(self, account_manager: Any) -> None:
         self._account_manager = account_manager
 
-    def handle_control_message(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent | None:
+    def handle_control_message(self, msg: ControlMessageEvent) -> ControlMessageEvent | None:
         action = msg.action
 
         if action == "account.identify":
-            return self._handle_identify(msg, session_id)
+            return self._handle_identify(msg)
         if action == "account.profile":
-            return self._handle_profile(msg, session_id)
+            return self._handle_profile(msg)
         if action == "account.update":
-            return self._handle_update(msg, session_id)
+            return self._handle_update(msg)
         if action == "account.link":
-            return self._handle_link(msg, session_id)
+            return self._handle_link(msg)
 
         logger.debug("AccountDispatcher: unhandled action={}", action)
         return None
 
     def identify_message_speaker(
         self,
-        session_id: str,
         identity: dict[str, Any] | None,
     ) -> tuple[str, str]:
         provider, subject, provider_name, metadata = self._parse_identity(identity)
@@ -52,7 +51,7 @@ class _AccountDispatcher:
         )
         return account.account_id, account.display_name
 
-    def _handle_identify(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent:
+    def _handle_identify(self, msg: ControlMessageEvent) -> ControlMessageEvent:
         provider, subject, provider_name, metadata = self._parse_identity(msg.identity)
         if not provider or not subject:
             return self._error("account.identify", "identity.provider and identity.subject required")
@@ -74,8 +73,8 @@ class _AccountDispatcher:
             text=f"Identified: {account.display_name}",
         )
 
-    def _handle_profile(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent:
-        account = self._resolve_target_account(msg, session_id)
+    def _handle_profile(self, msg: ControlMessageEvent) -> ControlMessageEvent:
+        account = self._resolve_target_account(msg)
         if account is None:
             return self._error("account.profile", "not identified")
 
@@ -91,8 +90,8 @@ class _AccountDispatcher:
             text=orjson.dumps(data).decode("utf-8"),
         )
 
-    def _handle_update(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent:
-        account = self._resolve_target_account(msg, session_id)
+    def _handle_update(self, msg: ControlMessageEvent) -> ControlMessageEvent:
+        account = self._resolve_target_account(msg)
         if account is None:
             return self._error("account.update", "not identified")
 
@@ -111,8 +110,8 @@ class _AccountDispatcher:
             text=f"Updated: {account.display_name}",
         )
 
-    def _handle_link(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent:
-        account = self._resolve_target_account(msg, session_id)
+    def _handle_link(self, msg: ControlMessageEvent) -> ControlMessageEvent:
+        account = self._resolve_target_account(msg)
         if account is None:
             return self._error("account.link", "not identified")
 
@@ -139,7 +138,7 @@ class _AccountDispatcher:
             text=f"Linked identity: {provider}:{subject}",
         )
 
-    def _resolve_target_account(self, msg: ControlMessageEvent, session_id: str) -> Any:
+    def _resolve_target_account(self, msg: ControlMessageEvent) -> Any:
         if msg.account_id:
             account = self._account_manager.resolve(msg.account_id)
             if account is not None:

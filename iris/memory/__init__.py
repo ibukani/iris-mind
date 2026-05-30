@@ -29,7 +29,7 @@ MANIFEST = PluginManifest(
     version="0.1.0",
     category=PluginCategory.LAYER,
     phase=PluginPhase.LAYER,
-    dependencies={"EventBus", "Account", "room"},
+    dependencies={"EventBus", "account", "room"},
     provides=["MemoryManager", "SensoryMemoryManager", "ShortTermMemoryManager", "LongTermMemoryManager"],
     description="記憶系（感覚野+海馬+皮質）",
 )

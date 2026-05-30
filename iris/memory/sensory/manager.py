@@ -50,12 +50,10 @@ class SensoryMemoryManager:
 
     def __init__(
         self,
-        session_id: str = "",
         timeout_ms: int = 800,
         max_fragments: int = 10,
         room_id: str = "",
     ):
-        self._session_id = session_id
         self._room_id = room_id
         self._timeout_ms = timeout_ms
         self._max_fragments = max_fragments
@@ -108,7 +106,7 @@ class SensoryMemoryManager:
         blocks = list(self._fragments)
         self._fragments.clear()
         if self._flush_callback:
-            self._flush_callback(self._session_id, blocks)
+            self._flush_callback("", blocks)
 
     def _reset_timer(self) -> None:
         with self._lock:

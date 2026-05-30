@@ -84,7 +84,6 @@ def test_handle_account_identify(tmp_path):
             source="test",
             timestamp=None,
         ),
-        session_id="s1",
     )
 
     assert resp is not None
@@ -110,7 +109,6 @@ def test_handle_account_profile(tmp_path):
             source="test",
             timestamp=None,
         ),
-        session_id="s1",
     )
 
     assert resp is not None
@@ -192,7 +190,6 @@ def test_account_update(tmp_path):
             source="test",
             timestamp=None,
         ),
-        session_id="s1",
     )
 
     assert resp is not None

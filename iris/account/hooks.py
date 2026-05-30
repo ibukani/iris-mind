@@ -16,7 +16,7 @@ def register_hooks(manager: PluginManager) -> None:
     def _on_dispatch(ctx: dict[str, Any]) -> dict[str, Any]:
         msg = ctx["msg"]
         if ctx["type"] == "control" and msg.action.startswith("account."):
-            ctx["response"] = dispatcher.handle_control_message(msg, ctx["session_id"])
+            ctx["response"] = dispatcher.handle_control_message(msg)
         return ctx
 
     hooks.register("io.dispatch", _on_dispatch, priority=100)

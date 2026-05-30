@@ -34,7 +34,6 @@ def subscribe_events(
             return
         try:
             context: dict[str, Any] = {
-                "session_id": event.session_id,
                 "account_id": event.account_id,
                 "room_id": event.room_id,
             }

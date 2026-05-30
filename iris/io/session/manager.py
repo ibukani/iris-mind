@@ -140,7 +140,7 @@ class SessionManager:
             logger.debug("route_message: no active sessions to route msg_type={}", msg.msg_type)
 
     def route_to_room(self, msg: Message, room_id: str, room_store: RoomStore) -> None:
-        session_ids = room_store.find_active_session_ids_by_room(room_id)
+        session_ids = room_store.find_all_session_ids_for_room(room_id)
         targets: list[SessionInfo] = []
         not_active: list[str] = []
 

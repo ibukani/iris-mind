@@ -113,7 +113,7 @@ class DebugSnapshotEvent(Event):
 
 @dataclass
 class InterruptEvent(Event):
-    session_id: str = ""
+    room_id: str = ""
 
 
 class InhibitionAction(StrEnum):
@@ -153,7 +153,6 @@ class ControlMessageEvent(Event):
 class RoomJoinedEvent(Event):
     room_id: str = ""
     account_id: str = ""
-    session_id: str = ""
     display_name: str = ""
 
 
@@ -161,7 +160,6 @@ class RoomJoinedEvent(Event):
 class RoomLeftEvent(Event):
     room_id: str = ""
     account_id: str = ""
-    session_id: str = ""
     display_name: str = ""
 
 

@@ -41,6 +41,13 @@ def _make_handlers(event_bus: EventBus, memory_mgr: MemoryManager, tmp_path: Pat
     account_dispatcher = _AccountDispatcher(account_manager=account_provider)
     room_dispatcher = _RoomDispatcher(room_manager=room_provider, account_manager=account_provider)
 
+    from iris.event.event_types import SessionDisconnectEvent
+
+    event_bus.subscribe(
+        SessionDisconnectEvent,
+        lambda ev: room_dispatcher.handle_session_disconnect(ev.session_id),
+    )
+
     _MemoryEventHandler(
         event_bus,
         memory_mgr.sensory,
@@ -212,9 +219,7 @@ def test_session_disconnect_triggers_auto_user_left(tmp_path):
     room_provider.join_room(room.room_id, account_id, session_id="sess1")
 
     inputs_ready = []
-    inhibition_events = []
     event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
-    event_bus.subscribe("InhibitionEvent", lambda ev: inhibition_events.append(ev))
 
     from iris.event.event_types import SessionDisconnectEvent
 
@@ -226,8 +231,6 @@ def test_session_disconnect_triggers_auto_user_left(tmp_path):
     text = inputs_ready[0].content
     assert "退室" in text
     assert "Alice" in text
-    unsuppress = [e for e in inhibition_events if e.action.value == "unsuppress"]
-    assert len(unsuppress) >= 1
 
 
 def test_session_disconnect_no_users_no_error(tmp_path):
@@ -263,20 +266,20 @@ def test_system_event_block_has_metadata():
     assert meta["display_name"] == "Bob"
 
 
-def test_short_term_session_user_mapping():
+def test_short_term_room_user_mapping():
     memory_mgr = MemoryManager()
-    memory_mgr.short_term.add_user("u1", "Alice", session_id="s1")
-    memory_mgr.short_term.add_user("u2", "Bob", session_id="s1")
-    memory_mgr.short_term.add_user("u3", "Carol", session_id="s2")
+    memory_mgr.short_term.add_user("u1", "Alice", room_id="room-a")
+    memory_mgr.short_term.add_user("u2", "Bob", room_id="room-a")
+    memory_mgr.short_term.add_user("u3", "Carol", room_id="room-b")
 
-    assert len(memory_mgr.short_term.get_users_by_session("s1")) == 2
-    assert len(memory_mgr.short_term.get_users_by_session("s2")) == 1
-    assert len(memory_mgr.short_term.get_users_by_session("s3")) == 0
+    assert len(memory_mgr.short_term.get_users_by_room("room-a")) == 2
+    assert len(memory_mgr.short_term.get_users_by_room("room-b")) == 1
+    assert len(memory_mgr.short_term.get_users_by_room("room-c")) == 0
 
-    memory_mgr.short_term.remove_user("u1")
-    s1_users = memory_mgr.short_term.get_users_by_session("s1")
-    assert len(s1_users) == 1
-    assert s1_users[0][0] == "u2"
+    memory_mgr.short_term.remove_user("u1", room_id="room-a")
+    room_a_users = memory_mgr.short_term.get_users_by_room("room-a")
+    assert len(room_a_users) == 1
+    assert room_a_users[0][0] == "u2"
 
 
 def test_pipeline_injects_datetime():

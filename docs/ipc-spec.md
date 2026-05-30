@@ -246,7 +246,7 @@ service IrisService {
 
 **自動発行**:
 - ルーム入退室時、サーバーは `presence.joined` / `presence.left` を `ControlMessage` として配信する。
-- セッション切断時、サーバーは同一セッション配下の全ルームから自動退室させ、各ルームに `presence.left` を配信する。
+- セッション切断時、サーバーは当該セッションを含む全ルームメンバーからセッションIDを除去し、セッションIDが空になったメンバーを自動退室させる。退室時に各ルームに `presence.left` を配信する。
 
 ---
 
@@ -488,4 +488,4 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 | 不正なリクエスト引数 | gRPC ステータスコード `INVALID_ARGUMENT` (3) |
 | 内部エラー | gRPC ステータスコード `INTERNAL` (13) |
 | 権限不足 | BidirectionalStreamResponse 内で `error` メッセージを送信、または `PERMISSION_DENIED` (7) |
-| 接続断 | サーバーは当該セッション情報を削除。同一セッションに紐づく全ルームから自動退室し、各ルームに `presence.left` を自動発行、自発発話の抑制を解除する |
+| 接続断 | サーバーは当該セッション情報を削除。セッションを含む全ルームメンバーからセッションIDを除去し、セッションIDが空になったメンバーは自動退室。各ルームに `presence.left` を自動発行、自発発話の抑制を解除する |

@@ -114,17 +114,15 @@ class RoomStore:
     def find_active_members_by_room(self, room_id: str) -> list[RoomMember]:
         return [m for m in self.load_members() if m.room_id == room_id and m.is_active]
 
-    def find_active_member_by_session(self, session_id: str) -> RoomMember | None:
+    def find_active_members_containing_session(self, session_id: str) -> list[RoomMember]:
+        return [m for m in self.load_members() if session_id in m.session_ids and m.is_active]
+
+    def find_all_session_ids_for_room(self, room_id: str) -> list[str]:
+        session_ids: list[str] = []
         for m in self.load_members():
-            if m.session_id == session_id and m.is_active:
-                return m
-        return None
-
-    def find_active_session_ids_by_room(self, room_id: str) -> list[str]:
-        return [m.session_id for m in self.load_members() if m.room_id == room_id and m.is_active and m.session_id]
-
-    def find_active_members_by_session(self, session_id: str) -> list[RoomMember]:
-        return [m for m in self.load_members() if m.session_id == session_id and m.is_active]
+            if m.room_id == room_id and m.is_active:
+                session_ids.extend(m.session_ids)
+        return session_ids
 
     def find_active_members_by_account(self, account_id: str) -> list[RoomMember]:
         return [m for m in self.load_members() if m.account_id == account_id and m.is_active]

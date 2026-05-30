@@ -12,7 +12,7 @@ from iris.memory.short_term.manager import ShortTermMemoryManager
 from iris.room.events import RoomJoinedEvent, RoomLeftEvent
 
 
-def _message_event(session_id: str = "", content: str = "") -> MessageEvent:
+def _message_event(session_id: str = "", content: str = "", account_id: str = "", room_id: str = "") -> MessageEvent:
     return MessageEvent(
         timestamp=None,
         source="test",
@@ -22,6 +22,8 @@ def _message_event(session_id: str = "", content: str = "") -> MessageEvent:
         direction="request",
         msg_type="chat",
         content=content,
+        account_id=account_id,
+        room_id=room_id,
     )
 
 
@@ -92,10 +94,10 @@ class TestMemoryManagerInputPending:
         _memory_with_handler(event_bus)
 
         event_bus.publish(
-            _message_event(session_id="s1", content="hello"),
+            _message_event(account_id="a1", content="hello"),
         )
         event_bus.publish(
-            _message_event(session_id="s2", content="world"),
+            _message_event(account_id="a2", content="world"),
         )
 
         ready_events: list[InputReady] = []
@@ -114,7 +116,7 @@ class TestMemoryManagerInputPending:
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
 
         event_bus.publish(
-            _message_event(session_id="s1", content="こんにちは"),
+            _message_event(account_id="a1", content="こんにちは"),
         )
         event_bus.publish(
             TimerTick(timestamp=None, source="kernel", tick_count=0),
@@ -122,7 +124,7 @@ class TestMemoryManagerInputPending:
 
         assert len(ready_events) == 1
         assert ready_events[0].content == "こんにちは"
-        assert ready_events[0].session_id == "s1"
+        assert ready_events[0].account_id == "a1"
         assert ready_events[0].context == {}
 
     def test_timer_without_pending_produces_proactive(self, event_bus: EventBus, memory: MemoryManager) -> None:
@@ -143,7 +145,7 @@ class TestMemoryManagerInputPending:
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
 
         event_bus.publish(
-            _message_event(session_id="s1", content="hello"),
+            _message_event(account_id="a1", content="hello"),
         )
         event_bus.publish(
             TimerTick(timestamp=None, source="kernel", tick_count=0),
@@ -162,10 +164,10 @@ class TestMemoryManagerInputPending:
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
 
         event_bus.publish(
-            _message_event(session_id="s1", content="first"),
+            _message_event(account_id="a1", content="first"),
         )
         event_bus.publish(
-            _message_event(session_id="s2", content="second"),
+            _message_event(account_id="a2", content="second"),
         )
 
         event_bus.publish(
@@ -187,10 +189,10 @@ class TestMemoryManagerInputPending:
         event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
 
         event_bus.publish(
-            _message_event(session_id="s1", content="old"),
+            _message_event(account_id="a1", content="old"),
         )
         event_bus.publish(
-            _message_event(session_id="s1", content="new"),
+            _message_event(account_id="a1", content="new"),
         )
 
         event_bus.publish(
@@ -327,10 +329,10 @@ class TestRoomId:
         _memory_with_handler(event_bus)
 
         event_bus.publish(
-            _message_event(session_id="s1", content="hello"),
+            _message_event(account_id="a1", content="hello"),
         )
         event_bus.publish(
-            _message_event(session_id="s2", content="world"),
+            _message_event(account_id="a2", content="world"),
         )
 
         ready_events: list[InputReady] = []
@@ -583,7 +585,6 @@ class TestRoomId:
                 source="room",
                 account_id="user1",
                 display_name="Alice",
-                session_id="s1",
                 room_id="room1",
             ),
         )
@@ -607,7 +608,6 @@ class TestRoomId:
                 source="room",
                 account_id="user1",
                 display_name="Alice",
-                session_id="s1",
                 room_id="room1",
             ),
         )
@@ -623,7 +623,6 @@ class TestRoomId:
                 source="room",
                 account_id="user1",
                 display_name="Alice",
-                session_id="s1",
                 room_id="room1",
             ),
         )
@@ -639,26 +638,26 @@ class TestRoomId:
         handler, _ = _memory_with_handler_pair(event_bus)
 
         event_bus.publish(
-            _message_event(session_id="s1", content="hello"),
+            _message_event(account_id="a1", content="hello"),
         )
 
         with handler._pending_lock:
-            assert ("s1", "") in handler._pending_input
+            assert ("a1", "") in handler._pending_input
 
     def test_pending_input_room_id_keyed(self, event_bus: EventBus) -> None:
         handler, _ = _memory_with_handler_pair(event_bus)
 
         event_bus.publish(
-            _message_event(session_id="s1", content="msg1"),
+            _message_event(account_id="a1", content="msg1"),
         )
         event_bus.publish(
-            _message_event(session_id="s2", content="msg2"),
+            _message_event(account_id="a2", content="msg2"),
         )
 
         with handler._pending_lock:
             keys = set(handler._pending_input.keys())
-            assert ("s1", "") in keys
-            assert ("s2", "") in keys
+            assert ("a1", "") in keys
+            assert ("a2", "") in keys
 
     def test_handler_user_tracking_add_room(self, event_bus: EventBus) -> None:
         st = ShortTermMemoryManager()
@@ -670,7 +669,6 @@ class TestRoomId:
                 source="room",
                 account_id="user1",
                 display_name="Alice",
-                session_id="s1",
                 room_id="room1",
             ),
         )
@@ -689,7 +687,6 @@ class TestRoomId:
                 source="room",
                 account_id="user1",
                 display_name="Alice",
-                session_id="s1",
                 room_id="room1",
             ),
         )
@@ -700,7 +697,6 @@ class TestRoomId:
                 source="room",
                 account_id="user1",
                 display_name="Alice",
-                session_id="s1",
                 room_id="room1",
             ),
         )

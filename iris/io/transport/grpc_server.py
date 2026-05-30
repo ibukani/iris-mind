@@ -305,8 +305,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
     async def _dispatch_message(self, msg_proto: Any, session_id: str, session_role: str) -> None:
         metadata = self._parse_message_metadata(msg_proto.metadata)
 
-        session_info = self._session_manager.get_session_info(session_id)
-        account_id = session_info.account_id if session_info else ""
+        account_id = metadata.get("account_id", "") or ""
 
         try:
             msg = Message(

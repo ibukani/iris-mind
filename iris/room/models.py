@@ -78,7 +78,7 @@ class RoomMember:
 
     room_id: str
     account_id: str
-    session_id: str = ""
+    session_ids: list[str] = field(default_factory=list)
     role: str = "member"
     joined_at: str = ""
     last_active: str | None = None
@@ -96,7 +96,7 @@ class RoomMember:
         return {
             "room_id": self.room_id,
             "account_id": self.account_id,
-            "session_id": self.session_id,
+            "session_ids": self.session_ids,
             "role": self.role,
             "joined_at": self.joined_at,
             "last_active": self.last_active,
@@ -111,10 +111,16 @@ class RoomMember:
         disconnected_at: str | None = None
         if isinstance(data.get("disconnected_at"), str):
             disconnected_at = cast(str, data["disconnected_at"])
+        raw_session_ids = data.get("session_ids", [])
+        session_ids: list[str] = []
+        if isinstance(raw_session_ids, list):
+            session_ids = [str(s) for s in raw_session_ids]
+        elif isinstance(data.get("session_id"), str) and data["session_id"]:
+            session_ids = [str(data["session_id"])]
         return cls(
             room_id=str(data.get("room_id", "")),
             account_id=str(data.get("account_id", "")),
-            session_id=str(data.get("session_id", "")),
+            session_ids=session_ids,
             role=str(data.get("role", "member")),
             joined_at=str(data.get("joined_at", "")),
             last_active=last_active,

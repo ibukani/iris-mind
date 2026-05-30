@@ -11,7 +11,6 @@ from iris.event.event_types import (
     InputReady,
     InterruptEvent,
     MessageEvent,
-    SessionDisconnectEvent,
     TimerTick,
 )
 from iris.memory.models import ContentBlock, system_event_block
@@ -53,7 +52,6 @@ class _MemoryEventHandler:
         event_bus.subscribe(InputReady, self._on_input_ready)
         event_bus.subscribe(MessageEvent, self._on_message_event)
         event_bus.subscribe(TimerTick, self._on_timer_tick)
-        event_bus.subscribe(SessionDisconnectEvent, self._on_session_disconnect)
         event_bus.subscribe(RoomJoinedEvent, self._on_room_joined)
         event_bus.subscribe(RoomLeftEvent, self._on_room_left)
 
@@ -87,12 +85,11 @@ class _MemoryEventHandler:
             return
         self.sensory.store_raw(event.content)
         with self._pending_lock:
-            self._pending_input[(event.session_id, event.room_id)] = [(event.content, event.account_id, event.room_id)]
+            self._pending_input[(event.account_id, event.room_id)] = [(event.content, event.account_id, event.room_id)]
         logger.debug(
-            "MemoryManager: input pending session={} content={:.80} identity={}",
-            event.session_id,
-            event.content,
+            "MemoryManager: input pending account={} content={:.80}",
             event.account_id,
+            event.content,
         )
 
     def _on_input_ready(self, event: InputReady) -> None:
@@ -127,9 +124,7 @@ class _MemoryEventHandler:
     def _on_room_joined(self, event: RoomJoinedEvent) -> None:
         """Room参加時にユーザーを追跡し、system_event_blockを生成する。"""
         if self.short_term:
-            self.short_term.add_user(
-                event.account_id, event.display_name, session_id=event.session_id, room_id=event.room_id
-            )
+            self.short_term.add_user(event.account_id, event.display_name, room_id=event.room_id)
         text = f"[system] {event.display_name} が入室しました"
         block = system_event_block(
             text,
@@ -138,12 +133,12 @@ class _MemoryEventHandler:
             display_name=event.display_name,
             room_id=event.room_id,
         )
-        self._store_and_flush_pending_block(block, event.account_id, event.session_id, event.room_id)
+        self._store_and_flush_pending_block(block, event.account_id, event.room_id)
 
     def _on_room_left(self, event: RoomLeftEvent) -> None:
         """Room退室時にユーザー追跡を解除する。"""
         if self.short_term:
-            self.short_term.remove_user(event.account_id, session_id=event.session_id, room_id=event.room_id)
+            self.short_term.remove_user(event.account_id, room_id=event.room_id)
         text = f"[system] {event.display_name} が退室しました"
         block = system_event_block(
             text,
@@ -152,43 +147,19 @@ class _MemoryEventHandler:
             display_name=event.display_name,
             room_id=event.room_id,
         )
-        self._store_and_flush_pending_block(block, event.account_id, event.session_id, event.room_id)
-
-    def _on_session_disconnect(self, event: SessionDisconnectEvent) -> None:
-        if not self.short_term:
-            return
-        users = self.short_term.get_users_by_session(event.session_id)
-        for account_id, display_name in users:
-            self.short_term.remove_user(account_id, session_id=event.session_id)
-            block = system_event_block(
-                text=f"[system] {display_name} が退室しました",
-                event_type="user_left",
-                account_id=account_id,
-                display_name=display_name,
-            )
-            self._store_and_flush_pending_block(block, account_id, event.session_id)
-        if self.event_bus:
-            self.event_bus.publish(
-                InhibitionEvent(
-                    timestamp=None,
-                    source="memory",
-                    action=InhibitionAction.UNSUPPRESS,
-                    reason="voice_recording",
-                ),
-            )
+        self._store_and_flush_pending_block(block, event.account_id, event.room_id)
 
     def _store_and_flush_pending_block(
         self,
         block: ContentBlock,
         account_id: str,
-        session_id: str,
         room_id: str = "",
     ) -> None:
         if not self.sensory:
             return
         self.sensory.store_raw_block(block)
         with self._pending_lock:
-            self._pending_input[(session_id or "", room_id)] = [(block.get("text", ""), account_id, room_id)]
+            self._pending_input[(account_id, room_id)] = [(block.get("text", ""), account_id, room_id)]
         self.flush_pending()
 
     def _on_timer_tick(self, event: TimerTick) -> None:
@@ -240,20 +211,19 @@ class _MemoryEventHandler:
             self._pending_input.clear()
         if not pending:
             return {}
-        for (session_id, _room_id), entries in pending.items():
+        for entries in pending.values():
             for content, account_id, room_id in entries:
                 bus.publish(
                     InterruptEvent(
                         timestamp=None,
                         source="memory",
-                        session_id=session_id,
+                        room_id=room_id,
                     ),
                 )
                 bus.publish(
                     InputReady(
                         timestamp=None,
                         source="memory",
-                        session_id=session_id,
                         content=content,
                         account_id=account_id,
                         room_id=room_id,

@@ -175,18 +175,26 @@ class TestGetRecentTurns:
 
 class TestActiveUsers:
     def test_users_are_scoped_by_room(self, stm: ShortTermMemoryManager) -> None:
-        stm.add_user("u1", "Alice", session_id="s1", room_id="room-a")
-        stm.add_user("u2", "Bob", session_id="s1", room_id="room-b")
+        stm.add_user("u1", "Alice", room_id="room-a")
+        stm.add_user("u2", "Bob", room_id="room-b")
 
         assert stm.get_users_by_room("room-a") == [("u1", "Alice")]
         assert stm.get_users_by_room("room-b") == [("u2", "Bob")]
-        assert len(stm.get_users_by_session("s1")) == 2
 
-    def test_remove_user_from_session_removes_session_rooms(self, stm: ShortTermMemoryManager) -> None:
-        stm.add_user("u1", "Alice", session_id="s1", room_id="room-a")
-        stm.add_user("u1", "Alice", session_id="s1", room_id="room-b")
+    def test_remove_user_from_room(self, stm: ShortTermMemoryManager) -> None:
+        stm.add_user("u1", "Alice", room_id="room-a")
+        stm.add_user("u1", "Alice", room_id="room-b")
 
-        stm.remove_user("u1", session_id="s1")
+        stm.remove_user("u1", room_id="room-a")
+
+        assert stm.get_users_by_room("room-a") == []
+        assert stm.get_users_by_room("room-b") == [("u1", "Alice")]
+
+    def test_remove_user_all_rooms(self, stm: ShortTermMemoryManager) -> None:
+        stm.add_user("u1", "Alice", room_id="room-a")
+        stm.add_user("u1", "Alice", room_id="room-b")
+
+        stm.remove_user("u1")
 
         assert stm.get_users_by_room("room-a") == []
         assert stm.get_users_by_room("room-b") == []

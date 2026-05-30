@@ -123,7 +123,6 @@ class SessionInfo(BaseModel):
     permissions: list[Permission] = []
     session_tag: str = ""
     description: str = ""
-    account_id: str = ""
     conn: Any | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
     last_activity: datetime = Field(default_factory=lambda: datetime.now(UTC))

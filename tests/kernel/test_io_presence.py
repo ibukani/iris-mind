@@ -22,7 +22,6 @@ def test_room_joined_event_broadcasts_presence() -> None:
             source="room",
             room_id="room1",
             account_id="a1",
-            session_id="s1",
             display_name="Alice",
         ),
     )
@@ -47,7 +46,6 @@ def test_room_left_event_broadcasts_presence() -> None:
             source="room",
             room_id="room1",
             account_id="a1",
-            session_id="s1",
             display_name="Alice",
         ),
     )

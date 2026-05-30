@@ -1,27 +1,26 @@
 # Iris Account システム
 
-**脳科学対応**: なし（社会的認知基盤）
-
 ## 概要
 
-Account システムはユーザーの永続的識別・外部ID連携・セッション/ルーム紐付けを管理する。
+Account システムはユーザーの永続的識別・外部ID連携を管理する。
 旧 UserStore（user_id ↔ nickname のみ）を置き換え、以下の機能を提供する。
 
 - アカウント CRUD（nickname, profile）
 - 外部ID（provider + subject）とのマッピング
-- セッション/ルーム ↔ アカウントの紐付け
 - EventBus による状態変化通知
+
+**Account 層はルーム管理を行わない。** セッション/ルーム紐付けは Room 層（`iris/room/`）が担当する。
 
 ## ディレクトリ構成
 
 ```
 iris/account/
 ├── __init__.py       AccountPlugin (STORE phase)
-├── models.py         Account, AccountIdentity, SessionBinding
+├── models.py         Account, AccountIdentity
 ├── store.py          AccountStore (JSONL永続化)
 ├── provider.py       AccountProvider (コアサービス)
-├── events.py         AccountCreated/Updated/IdentityLinked/Presence/SessionBound/Unbound
-├── handler.py        _AccountEventHandler (ControlMessage処理)
+├── events.py         AccountCreated/Updated/IdentityLinked
+├── handler.py        _AccountEventHandler (account.* ControlMessage処理)
 └── hooks.py          EventBus Hook登録
 ```
 
@@ -32,7 +31,7 @@ iris/account/
 | name | `account` |
 | category | `LAYER` |
 | phase | `STORE(15)` |
-| provides | `AccountProvider`, `AccountStore` |
+| provides | `AccountProvider`, `AccountStore`, `_AccountEventHandler` |
 | dependencies | `EventBus` |
 
 ## モデル
@@ -63,35 +62,17 @@ class AccountIdentity:
     metadata: dict           # guild_id / channel_id等
 ```
 
-### SessionBinding
-
-```python
-@dataclass
-class SessionBinding:
-    session_id: str          # セッションUUID
-    account_id: str          # 紐付けアカウントID
-    room_id: str             # 会話ルームID（未指定時は空文字）
-    connected_at: str        # 接続時刻 (ISO 8601)
-    disconnected_at: str | None  # 切断時刻
-```
-
 ## AccountProvider API
 
 | メソッド | 説明 |
 |---------|------|
 | `register(nickname)` | 新規アカウント作成 |
 | `resolve(account_id)` | IDからアカウント取得 |
-| `resolve_nickname(account_id)` | ニックネーム取得（未発見時はID返却） |
 | `get_account_by_identity(provider, subject)` | 外部IDからアカウント取得 |
 | `resolve_or_create_identity(provider, subject, display_name="", metadata=None)` | 外部IDから解決、なければ作成 |
 | `link_identity(account_id, provider, subject, display_name="", metadata=None)` | 外部ID紐付け |
 | `update_nickname(account_id, nickname)` | ニックネーム更新 |
 | `update_profile(account_id, **fields)` | プロフィール更新 |
-| `bind_session(session_id, account_id, room_id="")` | セッション/ルーム紐付け |
-| `unbind_session(session_id, account_id=None, room_id="")` | セッション/ルーム解除 → account_id返却 |
-| `unbind_all_for_session(session_id)` | セッション配下の全ルーム紐付け解除 |
-| `get_account_by_session(session_id, room_id="")` | セッション/ルームからアカウント取得 |
-| `get_active_accounts(room_id=None)` | アクティブアカウント一覧 |
 | `get_identities(account_id)` | アカウントに紐づく外部ID一覧 |
 
 ## 永続化
@@ -100,32 +81,31 @@ class SessionBinding:
 |---------|------|
 | `.iris/data/accounts.jsonl` | アカウント情報 |
 | `.iris/data/account_identities.jsonl` | 外部ID紐付け情報 |
-| `.iris/data/account_bindings.jsonl` | セッション紐付け情報 |
 
 ## ControlMessage
 
 `_AccountEventHandler` は `ControlMessageEvent` を処理し、以下のアクションに対応する:
 
-| アクション | 処理 |
-|-----------|------|
-| `account.join` | identity解決/作成 + セッション/ルーム紐付け |
-| `account.leave` | セッション/ルーム解除 |
-| `account.get` | 現セッション/ルームのアカウント情報取得 |
-| `account.update` | ニックネーム・プロフィール更新 |
-| `account.link_identity` | 外部ID追加紐付け |
+| アクション | 処理 | 備考 |
+|-----------|------|------|
+| `account.identify` | identity解決/作成、アカウント情報返却 | 旧 `account.join` |
+| `account.profile` | 現セッションのアカウント情報取得 | 旧 `account.get` |
+| `account.update` | ニックネーム・プロフィール更新 | 同左 |
+| `account.link` | 外部ID追加紐付け | 旧 `account.link_identity` |
 
-通常チャットでは `Message.speaker` から自動的に `resolve_or_create_identity()` が実行され、`Message.room_id` と一緒に紐付けられる。Discordグループチャットでは明示的な `account.join` は任意。
+通常チャットでは `Message.speaker` から自動的に `resolve_or_create_identity()` が実行される。
+Discordグループチャットでは明示的な `account.identify` は任意。
+
+**Room 参加/退室は `room.join` / `room.leave` を使用する。**
 
 ## Presence通知
 
-`bind_session()` / `unbind_session()` は `AccountPresenceEvent` を発行する。IO層はこのEventBusイベントを購読し、接続中のクライアントへ `ControlMessage` を配信する。
+`RoomJoinedEvent` / `RoomLeftEvent` は Room 層から発行される。IO層（`iris/io/handler.py`）がこれらの EventBus イベントを購読し、接続中のクライアントへ `ControlMessage` を配信する。
 
-| state | ControlMessage action |
-|-------|----------------------|
-| `entered` | `presence.joined` |
-| `left` | `presence.left` |
-
-通知には `account_id`, `room_id`, `nickname`, `identity.provider`, `identity.subject` が含まれる。
+| EventBus イベント | ControlMessage action |
+|------------------|----------------------|
+| `RoomJoinedEvent` | `presence.joined` |
+| `RoomLeftEvent` | `presence.left` |
 
 ## 設定 (config.yaml)
 
@@ -133,16 +113,16 @@ class SessionBinding:
 account:
     accounts_path: .iris/data/accounts.jsonl
     identities_path: .iris/data/account_identities.jsonl
-    bindings_path: .iris/data/account_bindings.jsonl
 ```
 
 ## 依存関係
 
 ```
-Memory層 ──→ AccountProvider (ControlMessage処理)
-Agency層 ──→ AccountProvider (ニックネーム解決)
-IO層    ──→ EventBus (ControlMessageEvent発行)
-Kernel層 ──→ EventBus (ControlMessage変換)
+Account層 ──→ EventBus
+Room層    ──→ AccountProvider (room.join時のaccount作成フォールバック)
+Kernel層  ──→ AccountHandler (account.* ルーティング)
+Memory層  ──→ AccountHandler (identify_message_speaker呼出)
+IO層      ──→ EventBus (RoomJoinedEvent/RoomLeftEvent購読 → presence通知)
 ```
 
 ## テスト

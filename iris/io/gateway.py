@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
@@ -18,14 +17,11 @@ class _IOGateway:
 
     責務:
     - gRPC メッセージを内部表現に変換し、EventBus に publish する
-    - command メッセージは直接コールバックで処理（同期レスポンス必要）
-    - control メッセージは io.dispatch Hook 経由でルーティング
-    - IO レベルのルーティング（target_role ≠ mind は直接セッションに転送）
+    - command / control メッセージは io.dispatch Hook 経由でルーティング
 
     設計:
     - 通常メッセージ: EventBus.publish(InputReady) のみ（send-only）
-    - control メッセージ: io.dispatch Hook で同期ルーティング
-    - command メッセージ: 同期レスポンスが必要なためコールバック維持
+    - command / control メッセージ: io.dispatch Hook で同期ルーティング
     """
 
     def __init__(
@@ -33,15 +29,10 @@ class _IOGateway:
         session_manager: SessionManager,
         event_bus: Any,
         hook_registry: HookRegistry,
-        command_handler: Callable[..., str] | None = None,
     ) -> None:
         self._session_mgr = session_manager
         self._event_bus = event_bus
         self._hook_registry = hook_registry
-        self._cmd_handler = command_handler
-
-    def set_command_handler(self, handler: Callable[..., str]) -> None:
-        self._cmd_handler = handler
 
     def on_grpc_control(self, control_msg: ControlMessage, session_id: str, session_role: str) -> None:
         evt = ControlMessageEvent(
@@ -143,10 +134,20 @@ class _IOGateway:
 
         logger.debug("IOGateway: command session={} cmd=/{} args={:.100}", msg.session_id, name, args)
 
-        result = self._cmd_handler(name, args, msg.session_id) if self._cmd_handler else f"No command handler: /{name}"
+        ctx: dict[str, Any] = {
+            "msg": msg,
+            "type": "command",
+            "name": name,
+            "args": args,
+            "session_id": msg.session_id,
+            "response": None,
+        }
+        result = self._hook_registry.execute_sync("io.dispatch", ctx)
 
-        logger.debug("IOGateway: command result session={} result={:.100}", msg.session_id, result)
+        response = result.get("response") or f"No command handler: /{name}"
+
+        logger.debug("IOGateway: command result session={} result={:.100}", msg.session_id, response)
         self._session_mgr.route_command_output(
             msg.session_id,
-            CommandOutput(content=result, session_id=msg.session_id, correlation_id=msg.id),
+            CommandOutput(content=response, session_id=msg.session_id, correlation_id=msg.id),
         )

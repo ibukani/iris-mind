@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from iris.io.transport.grpc_listener import GrpcListener
@@ -26,9 +25,6 @@ class IOManager:
         self._grpc_listener.set_on_message(gateway.on_grpc_message)
         self._grpc_listener.set_on_command(gateway.on_grpc_command)
         self._grpc_listener.set_on_control_message(gateway.on_grpc_control)
-
-    def set_command_handler(self, handler: Callable[[str, str], str]) -> None:
-        self._gateway.set_command_handler(handler)
 
     def start(self, host: str, port: int) -> None:
         self._host = host

@@ -66,9 +66,9 @@ class PluginManager:
         self._lifecycle.load(manifests, self._config.plugins.disabled)
         self._lifecycle.init_all(self)
         self._lifecycle.notify_config_loaded(self)
+        self._init_builtin()
         self._hook_registry.freeze()
         self._di.freeze()
-        self._init_builtin()
 
     def start_all(self) -> None:
         self._lifecycle.start_all(self)
@@ -166,7 +166,6 @@ class PluginManager:
 
     def _create_command_handler(self) -> None:
         from iris.agency.manager import AgencyManager
-        from iris.io.manager import IOManager
         from iris.io.session.manager import SessionManager
         from iris.kernel.commands.handler import CommandHandler
         from iris.kernel.debug_capture import DebugCapture
@@ -198,6 +197,11 @@ class PluginManager:
             diagnostics=self._diagnostics,
         )
 
-        io_mgr = self._di.resolve_optional(IOManager)
-        if io_mgr is not None:
-            io_mgr.set_command_handler(self._cmd_handler.handle)
+        def _on_command_dispatch(ctx: dict) -> dict:
+            if ctx["type"] == "command":
+                ctx["response"] = self._cmd_handler.handle(
+                    ctx["name"], ctx["args"], ctx["session_id"]
+                )
+            return ctx
+
+        self._hook_registry.register("io.dispatch", _on_command_dispatch, priority=50)

@@ -148,28 +148,44 @@ message BidirectionalStreamResponse {
 | `error` | Server→Client | エラー通知 |
 | `voice_indicator` | Client→Server | 音声録音状態通知（制御信号）。`content` が `"true"` で録音開始、`"false"` で録音終了。`direction:event` で送信 |
 
-### 4.6 SystemMessage (`BidirectionalStreamRequest.system` / `BidirectionalStreamResponse.system`)
+### 4.6 Identity
 
-ユーザー管理プロトコル。クライアントがユーザーの入退室・登録・改名を通知し、サーバーが応答する。
+グループチャットの発話者やアカウント操作対象を表す外部ID。
+
+| フィールド | 型 | 説明 |
+|-----------|-----|------|
+| `provider` | string | 外部ID提供元。例: `discord`, `local` |
+| `subject` | string | provider内の安定ID |
+| `display_name` | string | provider側表示名 |
+| `metadata` | map<string,string> | guild_id / channel_id等 |
+
+### 4.7 SystemMessage (`BidirectionalStreamRequest.system` / `BidirectionalStreamResponse.system`)
+
+アカウント制御プロトコル。通常の発話では `Message.speaker` から自動identifyされるため、明示SystemMessageは任意。
 
 | フィールド | 型 | 説明 |
 |-----------|-----|------|
 | `action` | string | アクション種別（下記参照） |
-| `user_id` | string | サーバー割当のユーザーID（登録時は空文字、サーバーが返す） |
+| `user_id` | string | `account_id` の互換別名 |
+| `account_id` | string | Iris内部アカウントID |
 | `nickname` | string | 表示用ニックネーム |
 | `text` | string | サーバーからの応答メッセージ（サーバー→クライアントのみ） |
+| `identity` | Identity | 外部ID |
+| `profile` | map<string,string> | 更新するプロフィール |
 
 **action 定義**:
 
 | action | 方向 | 説明 | 必須フィールド |
 |--------|------|------|---------------|
-| `user_register` | C→S, S→C | 新規ユーザー登録。サーバーが user_id を割り当てる | `nickname`（任意） |
-| `user_entered` | C→S, S→C | ユーザー入室通知。接続時に送信 | `user_id` |
-| `user_left` | C→S, S→C | ユーザー退室通知。切断前に送信 | `user_id` |
-| `nickname_update` | C→S, S→C | ニックネーム変更 | `user_id`, `nickname` |
+| `account.identify` | C→S, S→C | identity解決/作成、セッション紐付け | `identity.provider`, `identity.subject` |
+| `account.leave` | C→S, S→C | 現セッションの紐付け解除 | なし |
+| `account.get` | C→S, S→C | 現セッションのアカウント情報取得 | なし |
+| `account.update` | C→S, S→C | ニックネーム・プロフィール更新 | `nickname` または `profile` |
+| `account.link_identity` | C→S, S→C | 外部ID追加紐付け | `identity.provider`, `identity.subject` |
 
 **自動発行**:
-- セッション切断時、サーバーは同一セッションに紐づく全ユーザーの `user_left` を自動発行する（クライアントからの明示的な送信がなくても退室処理が行われる）
+- セッション切断時、サーバーは同一セッションの短期参加者を退室扱いにする。
+- アカウントのセッション紐付け/解除時、サーバーは `presence.entered` / `presence.left` を `SystemMessage` として配信する。
 
 ---
 
@@ -224,7 +240,7 @@ sequenceDiagram
     deactivate Server
 ```
 
-### 5.3 ユーザー管理フロー (SystemMessage)
+### 5.3 アカウント制御フロー (SystemMessage)
 
 ```mermaid
 sequenceDiagram
@@ -233,27 +249,23 @@ sequenceDiagram
     participant GW as Gateway
     participant Handler as MemoryHandler
 
-    Note over Client,Handler: ユーザー登録
-    Client->>Server: BidirectionalStreamRequest(SystemMessage: action="user_register", nickname="Bob")
+    Note over Client,Handler: 明示identify
+    Client->>Server: BidirectionalStreamRequest(SystemMessage: action="account.identify", identity=discord:123)
     Server->>GW: on_grpc_system(sys_msg, session_id)
     GW->>Handler: handle_system_message(msg, session_id)
     Handler->>Handler: publish(SystemMessageEvent) to EventBus
-    Handler->>Handler: AccountProvider.register(nickname)
-    Handler-->>GW: SystemMessage(action="user_register", user_id="abc123", text="Your user ID: abc123")
+    Handler->>Handler: AccountProvider.resolve_or_create_identity(provider, subject)
+    Handler->>Handler: AccountProvider.bind_session(session_id, account_id)
+    Handler-->>GW: SystemMessage(action="account.identify", account_id="abc123", text="Identified: Bob")
     GW-->>Server: route_system_message
-    Server-->>Client: BidirectionalStreamResponse(SystemMessage: action="user_register", user_id="abc123", text="Your user ID: abc123")
+    Server-->>Client: BidirectionalStreamResponse(SystemMessage: action="account.identify", account_id="abc123")
 
-    Note over Client,Handler: ユーザー入室
-    Client->>Server: BidirectionalStreamRequest(SystemMessage: action="user_entered", user_id="abc123")
-    Server->>GW: on_grpc_system(sys_msg, session_id)
-    GW->>Handler: handle_system_message(msg, session_id)
-    Handler->>Handler: publish(SystemMessageEvent) to EventBus
-    Handler->>Handler: ShortTerm.add_user(user_id, nickname, session_id)
-    Handler->>Handler: Sensory.store_raw("[system] Bob が入室しました")
-    Handler->>Handler: flush_pending → InputReady
-    Handler-->>GW: SystemMessage(action="user_entered", text="Welcome, Bob")
-    GW-->>Server: route_system_message
-    Server-->>Client: BidirectionalStreamResponse(SystemMessage: action="user_entered", text="Welcome, Bob")
+    Note over Client,Handler: 発話時の自動identify
+    Client->>Server: BidirectionalStreamRequest(Message: speaker=discord:123, room_id="discord:g:c")
+    Server->>GW: on_grpc_message(msg)
+    GW->>Handler: publish(InputReady speaker, room_id)
+    Handler->>Handler: AccountProvider.resolve_or_create_identity(provider, subject)
+    Handler->>Handler: publish(MessageEvent account_id, room_id)
 ```
 
 ---

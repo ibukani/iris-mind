@@ -176,90 +176,127 @@ Client                         Iris Mind
 
 ---
 
-## 5. ユーザー管理（SystemMessage）
+## 5. アカウント管理とグループチャット
 
-ユーザーの登録・入退室・改名・外部ID連携を `BidirectionalStreamRequest.system` で行う。
-通常のチャットメッセージ（`message`）とは別経路の制御メッセージである。
+クライアントは外部世界のIDだけを保持する。Iris内部の `account_id` は永続保存しない。
 
-### 5.1 ユーザー登録
+### 5.1 Discordグループチャット送信
+
+```python
+BidirectionalStreamRequest(
+    message=Message(
+        msg_type="chat",
+        direction="request",
+        target_role="mind",
+        content="こんにちは",
+        speaker=Identity(
+            provider="discord",
+            subject="1234567890",
+            display_name="Bob",
+            metadata={
+                "guild_id": "guild_1",
+                "channel_id": "channel_1",
+            },
+        ),
+        room_id="discord:guild_1:channel_1",
+    )
+)
+```
+
+- `speaker.provider + speaker.subject` でアカウントが自動解決される
+- 未登録ならアカウントが自動作成される
+- `room_id` は返信先ルームとして応答メタデータへ伝搬される
+- Discord Bot 1接続で複数ユーザーの発話を送れる
+
+### 5.2 明示入室
 
 ```python
 BidirectionalStreamRequest(
     system=SystemMessage(
-        action="user_register",
-        nickname="Bob",           # 任意（未指定時は "anonymous"）
-        text="discord_123456",    # 任意: Discord user ID
+        action="account.identify",
+        identity=Identity(provider="discord", subject="1234567890", display_name="Bob"),
     )
 )
-# → サーバー応答: SystemMessage(action="user_register", user_id="abc123", text="Your user ID: abc123")
+# → SystemMessage(action="account.identify", account_id="...", text="Identified: Bob")
 ```
 
-- `text` に Discord ID を指定すると、アカウントに紐付けられる
-- 同じ Discord ID で再登録すると既存アカウントが返される
+明示入室は任意。最初の発話でも自動identifyされる。
 
-### 5.2 ユーザー入室
+### 5.3 明示退室
 
 ```python
 BidirectionalStreamRequest(
-    system=SystemMessage(action="user_entered", user_id="abc123")
+    system=SystemMessage(action="account.leave")
 )
-# → サーバー応答: SystemMessage(action="user_entered", text="Welcome, Bob")
+# → SystemMessage(action="account.leave", text="Left: Bob")
 ```
 
-### 5.3 ユーザー退室
+同じgRPC session内なら `identity` は省略できる。
+
+### 5.4 アカウント更新
 
 ```python
 BidirectionalStreamRequest(
-    system=SystemMessage(action="user_left", user_id="abc123")
-)
-# → サーバー応答: SystemMessage(action="user_left", text="Goodbye, Bob")
-```
-
-### 5.4 ニックネーム変更
-
-```python
-BidirectionalStreamRequest(
-    system=SystemMessage(action="nickname_update", user_id="abc123", nickname="Robert")
+    system=SystemMessage(
+        action="account.update",
+        nickname="Robert",
+        profile={"lang": "ja"},
+    )
 )
 ```
 
 ### 5.5 アカウント操作
 
 ```python
-# アカウントID確認
-BidirectionalStreamRequest(system=SystemMessage(action="account.get_id"))
+# 現セッションのアカウント取得
+BidirectionalStreamRequest(system=SystemMessage(action="account.get"))
 
-# プロフィール取得
-BidirectionalStreamRequest(system=SystemMessage(action="account.get_profile"))
-
-# Discord ID 紐付け
-BidirectionalStreamRequest(system=SystemMessage(action="account.link", text="discord_123456"))
+# 別identityを紐付け
+BidirectionalStreamRequest(
+    system=SystemMessage(
+        action="account.link_identity",
+        identity=Identity(provider="local", subject="local-user"),
+    )
+)
 ```
 
 ### 動作仕様
 
 | アクション | 必須フィールド | 処理 |
 |-----------|---------------|------|
-| `user_register` | `nickname`（任意） | アカウント作成、user_id 返却 |
-| `user_entered` | `user_id` | セッション紐付け、参加者リストに追加 |
-| `user_left` | `user_id` | セッション解除、参加者リストから削除 |
-| `nickname_update` | `user_id`, `nickname` | ニックネーム更新 |
-| `account.get_id` | なし | セッションに紐づくアカウントID返却 |
-| `account.get_profile` | なし | アカウントプロフィール返却 |
-| `account.link` | `text`(discord_id) | Discord ID 紐付け |
+| `account.identify` | `identity.provider`, `identity.subject` | アカウント解決/作成、セッション紐付け |
+| `account.leave` | なし | 現セッションの紐付け解除 |
+| `account.get` | なし | 現セッションのアカウント情報返却 |
+| `account.update` | `nickname` または `profile` | ニックネーム・プロフィール更新 |
+| `account.link_identity` | `identity.provider`, `identity.subject` | 現アカウントへ外部ID追加 |
 
 ### セッション切断時の自動処理
 
-クライアントが `user_left` を送信せずに切断しても、サーバーは同一セッションの全ユーザーの退室処理を自動で行う。明示的な `user_left` は推奨されるが必須ではない。
+クライアントが `account.leave` を送信せずに切断しても、サーバーは同一セッションの短期参加者を退室扱いにする。
 
-### Discord ID 連携フロー
+### Presence通知
+
+アカウントがセッションへ紐付くと、Irisは接続中クライアントへ `SystemMessage` を配信する。
+
+```python
+SystemMessage(
+    action="presence.entered",
+    account_id="abc123",
+    nickname="Bob",
+    identity=Identity(provider="discord", subject="1234567890"),
+)
+```
+
+退室時は `action="presence.left"` になる。
+
+### Discord Botフロー
 
 ```
-1. ユーザーがDiscord botに参加
-2. bot が Iris に user_register(discord_id="123456") を送信
-3. Iris がアカウント作成 + Discord ID 紐付け
-4. 以後、同一ユーザーは discord_id で識別される
-5. 別セッションから user_entered(discord_id="123456") で再入室可能
+1. Discord Bot がIrisへgRPC接続
+2. Discord channelの発話を Message(speaker, room_id, content) で送信
+3. Iris が speaker からアカウントを自動解決/作成
+4. Iris の応答には room_id が含まれる
+5. Bot が room_id からDiscord channelへ返信
 ```
 
 ---

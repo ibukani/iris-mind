@@ -16,6 +16,18 @@ enum Permission {
 }
 
 // A message exchanged between roles in the Iris system.
+message Identity {
+  // External identity provider, e.g. "discord".
+  string provider = 1;
+  // Stable user ID within the provider.
+  string subject = 2;
+  // Display name from the provider.
+  string display_name = 3;
+  // Provider-specific metadata.
+  map<string, string> metadata = 4;
+}
+
+// A message exchanged between roles in the Iris system.
 message Message {
   // Unique identifier for the message.
   string id = 1;
@@ -39,6 +51,10 @@ message Message {
   string state = 10;
   // Arbitrary key-value metadata.
   map<string, string> metadata = 11;
+  // Speaker identity for group chat transports.
+  Identity speaker = 12;
+  // Conversation room, e.g. "discord:<guild_id>:<channel_id>".
+  string room_id = 13;
 }
 
 // A command input received from a client.
@@ -71,17 +87,22 @@ message CommandOutput {
   string state = 6;
 }
 
-// A system message for user management protocol.
-// Used for user_register, user_entered, user_left, nickname_update.
+// A system message for account control protocol.
 message SystemMessage {
-  // Action type: "user_register" / "user_entered" / "user_left" / "nickname_update"
+  // Action type: "account.identify" / "account.leave" / "account.get" / "account.update" / "account.link_identity"
   string action = 1;
-  // Server-assigned user ID (empty for new registration, UUID for reconnect/update)
+  // Deprecated alias for account_id.
   string user_id = 2;
-  // Display nickname
+  // Display nickname.
   string nickname = 3;
-  // Human-readable response from server (server-to-client only)
+  // Human-readable response from server (server-to-client only).
   string text = 4;
+  // Internal Iris account ID.
+  string account_id = 5;
+  // External identity.
+  Identity identity = 6;
+  // Profile fields to update.
+  map<string, string> profile = 7;
 }
 
 // Client-to-server frame wrapping either a Message, a CommandInput, or a SystemMessage.

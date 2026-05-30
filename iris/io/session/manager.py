@@ -150,6 +150,19 @@ class SessionManager:
         raw = sys_msg.model_dump_json().encode("utf-8")
         session.conn.send_bytes(raw)
 
+    def broadcast_system_message(self, sys_msg: SystemMessage) -> None:
+        with self._lock:
+            targets = [
+                s
+                for s in self._sessions.values()
+                if s.state == SessionState.ACTIVE
+                and s.conn is not None
+                and Permission.PERMISSION_RECEIVE_CHAT in s.permissions
+            ]
+
+        for session in targets:
+            send_bytes_to_session(session, sys_msg)
+
     def route_command_output(self, session_id: str, msg: CommandOutput) -> None:
         with self._lock:
             session = self._sessions.get(session_id)

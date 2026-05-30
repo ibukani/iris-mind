@@ -4,7 +4,7 @@ from datetime import datetime
 
 from loguru import logger
 
-from iris.io.models import CommandOutput, Message, Permission, SessionInfo
+from iris.io.models import CommandOutput, Message, Permission, SessionInfo, SystemMessage
 
 _MSG_PERMISSION_MAP: dict[str, Permission] = {
     "chat": Permission.PERMISSION_RECEIVE_CHAT,
@@ -27,7 +27,7 @@ _INPUT_PERMISSION_MAP: dict[str, Permission] = {
 }
 
 
-def send_bytes_to_session(session: SessionInfo, msg: Message | CommandOutput) -> None:
+def send_bytes_to_session(session: SessionInfo, msg: Message | CommandOutput | SystemMessage) -> None:
     conn = session.conn
     if conn is None:
         return

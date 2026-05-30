@@ -41,6 +41,7 @@ class SetupNode:
         content = plan.content
         show_thinking = TASK_LEVELS[plan.task_level].show_thinking
 
+        self._dynamic.current_plan = plan
         self._set_on_token_callback()
 
         if content:
@@ -58,10 +59,12 @@ class SetupNode:
                 MessageEvent(
                     timestamp=None,
                     source="execution",
+                    session_id=plan.session_id,
                     msg_type="chat",
                     content="",
                     state=StreamState.THINKING.value,
                     direction="stream",
+                    room_id=plan.room_id,
                 ),
             )
 
@@ -76,14 +79,17 @@ class SetupNode:
             return
 
         def _on_token(delta: str) -> None:
+            plan = self._dynamic.current_plan
             event_bus.publish(
                 MessageEvent(
                     timestamp=None,
                     source="execution",
+                    session_id=plan.session_id if plan else "",
                     msg_type="chat",
                     content=delta,
                     state=StreamState.SPEAKING.value,
                     direction="stream",
+                    room_id=plan.room_id if plan else "",
                 ),
             )
 

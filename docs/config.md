@@ -125,6 +125,7 @@ trigger_weights:
 | フィールド | 型 | デフォルト | 説明 |
 |-----------|-----|-----------|------|
 | accounts_path | str | ".iris/data/accounts.jsonl" | アカウント情報ファイル |
+| identities_path | str | ".iris/data/account_identities.jsonl" | 外部ID紐付け情報ファイル |
 | bindings_path | str | ".iris/data/account_bindings.jsonl" | セッション紐付けファイル |
 
 ## InhibitionConfig
@@ -231,6 +232,7 @@ memory:
 
 account:
   accounts_path: .iris/data/accounts.jsonl
+  identities_path: .iris/data/account_identities.jsonl
   bindings_path: .iris/data/account_bindings.jsonl
 
 proactive:

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from iris.event.event_types import InputReady
-from iris.io.models import CommandInput, CommandOutput, Direction, Message, SystemMessage
+from iris.io.models import CommandInput, CommandOutput, Direction, Identity, Message, SystemMessage
 
 if TYPE_CHECKING:
     from iris.io.session.manager import SessionManager
@@ -55,7 +55,20 @@ class _IOGateway:
             return
         result = self._system_handler(sys_msg, session_id)
         if result is not None:
-            self._session_mgr.route_system_message(result, session_id)
+            self._session_mgr.route_system_message(self._to_system_message(result), session_id)
+
+    @staticmethod
+    def _to_system_message(result: Any) -> SystemMessage:
+        identity = getattr(result, "identity", None)
+        return SystemMessage(
+            action=getattr(result, "action", ""),
+            user_id=getattr(result, "user_id", ""),
+            account_id=getattr(result, "account_id", ""),
+            nickname=getattr(result, "nickname", ""),
+            text=getattr(result, "text", ""),
+            identity=Identity(**identity) if isinstance(identity, dict) else identity,
+            profile=getattr(result, "profile", None) or {},
+        )
 
     def on_grpc_message(self, msg: Message) -> None:
         """通常メッセージを EventBus に publish する（send-only）。
@@ -90,10 +103,13 @@ class _IOGateway:
                 session_id=msg.session_id,
                 content=msg.content,
                 user_id=msg.user_id,
+                room_id=msg.room_id,
                 context={
                     "source_role": msg.source_role,
                     "target_role": msg.target_role,
                     "msg_type": msg.msg_type,
+                    "speaker": msg.speaker.model_dump() if msg.speaker else None,
+                    "room_id": msg.room_id,
                 },
             ),
         )

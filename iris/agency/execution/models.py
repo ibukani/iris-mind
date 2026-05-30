@@ -29,3 +29,4 @@ class ExecutionState(TypedDict):
 class DynamicState:
     on_token: Callable[[str], None] | None = None
     interrupt_token: InterruptToken | None = None
+    current_plan: Plan | None = None

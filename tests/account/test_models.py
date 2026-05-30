@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from iris.account.models import Account, SessionBinding
+from iris.account.models import Account, AccountIdentity, SessionBinding
 
 
 class TestAccountModel:
@@ -9,22 +9,30 @@ class TestAccountModel:
         assert len(a.account_id) == 16
         assert a.nickname == "test"
 
-    def test_auto_created_at(self) -> None:
-        a = Account(nickname="x")
-        assert a.created_at != ""
-
     def test_to_dict_roundtrip(self) -> None:
-        a = Account(nickname="alice", discord_id="12345", profile={"lang": "ja"})
+        a = Account(nickname="alice", profile={"lang": "ja"})
         d = a.to_dict()
         b = Account.from_dict(d)
         assert b.account_id == a.account_id
         assert b.nickname == "alice"
-        assert b.discord_id == "12345"
         assert b.profile == {"lang": "ja"}
 
-    def test_from_dict_none_discord_id(self) -> None:
-        b = Account.from_dict({"account_id": "x", "nickname": "y", "discord_id": None})
-        assert b.discord_id is None
+
+class TestAccountIdentity:
+    def test_to_dict_roundtrip(self) -> None:
+        identity = AccountIdentity(
+            provider="discord",
+            subject="12345",
+            account_id="a1",
+            display_name="Alice",
+            metadata={"guild_id": "g1"},
+        )
+        restored = AccountIdentity.from_dict(identity.to_dict())
+        assert restored.provider == "discord"
+        assert restored.subject == "12345"
+        assert restored.account_id == "a1"
+        assert restored.display_name == "Alice"
+        assert restored.metadata == {"guild_id": "g1"}
 
 
 class TestSessionBinding:
@@ -35,8 +43,7 @@ class TestSessionBinding:
 
     def test_to_dict_roundtrip(self) -> None:
         b = SessionBinding(session_id="s1", account_id="a1", disconnected_at="2025-01-01T00:00:00")
-        d = b.to_dict()
-        c = SessionBinding.from_dict(d)
+        c = SessionBinding.from_dict(b.to_dict())
         assert c.session_id == "s1"
         assert c.account_id == "a1"
         assert c.disconnected_at == "2025-01-01T00:00:00"

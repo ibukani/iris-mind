@@ -89,6 +89,8 @@ class MessageEvent(Event):
     content: str = ""
     state: str | None = None
     correlation_id: str | None = None
+    room_id: str = ""
+    speaker: dict[str, Any] | None = None
 
 
 @dataclass
@@ -98,6 +100,7 @@ class InputReady(Event):
     session_id: str = ""
     content: str = ""
     user_id: str = ""
+    room_id: str = ""
     context: dict | None = None
 
 
@@ -136,9 +139,12 @@ class SessionDisconnectEvent(Event):
 class SystemMessageEvent(Event):
     action: str = ""
     user_id: str = ""
+    account_id: str = ""
     nickname: str = ""
     text: str = ""
     session_id: str = ""
+    identity: dict[str, Any] | None = None
+    profile: dict[str, str] | None = None
 
 
 def new_trace_id() -> str:

@@ -24,6 +24,7 @@ class DummyConnection:
 def _make_handler(event_bus: EventBus, memory_mgr: MemoryManager, tmp_path: Path):
     store = AccountStore(
         accounts_path=str(tmp_path / "accounts.jsonl"),
+        identities_path=str(tmp_path / "identities.jsonl"),
         bindings_path=str(tmp_path / "bindings.jsonl"),
     )
     provider = AccountProvider(store=store, event_bus=event_bus)
@@ -58,7 +59,7 @@ def test_session_manager_disconnect_publishes_session_disconnect_event():
     assert disconnect_events[0].identity == "test_user"
 
 
-def test_handle_system_user_register(tmp_path):
+def test_handle_system_account_identify(tmp_path):
     event_bus = EventBus()
     memory_mgr = MemoryManager()
     handler, provider = _make_handler(event_bus, memory_mgr, tmp_path)
@@ -67,51 +68,46 @@ def test_handle_system_user_register(tmp_path):
     event_bus.subscribe("SystemMessageEvent", lambda ev: sys_events.append(ev))
 
     resp = handler.handle_system_message(
-        SystemMessage(action="user_register", nickname="John"),
+        SystemMessage(
+            action="account.identify",
+            identity={"provider": "discord", "subject": "123", "display_name": "John"},
+        ),
         session_id="s1",
     )
 
     assert resp is not None
-    assert resp.action == "user_register"
-    assert len(resp.user_id) == 16
+    assert resp.action == "account.identify"
+    assert len(resp.account_id) == 16
     assert resp.nickname == "John"
-    assert resp.text.startswith("Your user ID: ")
-    account = provider.resolve(resp.user_id)
+    account = provider.resolve(resp.account_id)
     assert account is not None
     assert account.nickname == "John"
 
     assert len(sys_events) == 1
-    assert sys_events[0].action == "user_register"
+    assert sys_events[0].action == "account.identify"
 
 
-def test_handle_system_user_entered(tmp_path):
+def test_handle_system_account_get(tmp_path):
     event_bus = EventBus()
     memory_mgr = MemoryManager()
     handler, provider = _make_handler(event_bus, memory_mgr, tmp_path)
-    account = provider.register("John")
-    user_id = account.account_id
+    account = provider.resolve_or_create_identity("discord", "123", display_name="John")
+    provider.bind_session("s1", account.account_id)
 
-    inputs_ready = []
     sys_events = []
-    event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
     event_bus.subscribe("SystemMessageEvent", lambda ev: sys_events.append(ev))
 
     resp = handler.handle_system_message(
-        SystemMessage(action="user_entered", user_id=user_id),
+        SystemMessage(action="account.get"),
         session_id="s1",
     )
 
     assert resp is not None
-    assert resp.action == "user_entered"
+    assert resp.action == "account.get"
     assert resp.nickname == "John"
-    assert "Welcome" in resp.text
-
-    assert len(inputs_ready) == 1
-    assert "John" in inputs_ready[0].content
-    assert "入室" in inputs_ready[0].content or "Welcome" in inputs_ready[0].content
 
     assert len(sys_events) == 1
-    assert sys_events[0].action == "user_entered"
+    assert sys_events[0].action == "account.get"
 
 
 def test_handle_system_user_left(tmp_path):
@@ -126,19 +122,19 @@ def test_handle_system_user_left(tmp_path):
     event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
 
     resp = handler.handle_system_message(
-        SystemMessage(action="user_left", user_id=user_id),
+        SystemMessage(action="account.leave", account_id=user_id),
         session_id="s1",
     )
 
     assert resp is not None
-    assert resp.action == "user_left"
-    assert "Goodbye" in resp.text
+    assert resp.action == "account.leave"
+    assert "Left" in resp.text
 
     assert len(inputs_ready) == 1
-    assert "退室" in inputs_ready[0].content or "Goodbye" in inputs_ready[0].content
+    assert "退室" in inputs_ready[0].content or "Left" in inputs_ready[0].content
 
 
-def test_handle_system_nickname_update(tmp_path):
+def test_handle_system_account_update(tmp_path):
     event_bus = EventBus()
     memory_mgr = MemoryManager()
     handler, provider = _make_handler(event_bus, memory_mgr, tmp_path)
@@ -150,12 +146,12 @@ def test_handle_system_nickname_update(tmp_path):
     event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
 
     resp = handler.handle_system_message(
-        SystemMessage(action="nickname_update", user_id=user_id, nickname="Jane"),
+        SystemMessage(action="account.update", account_id=user_id, nickname="Jane"),
         session_id="s1",
     )
 
     assert resp is not None
-    assert resp.action == "nickname_update"
+    assert resp.action == "account.update"
     assert resp.nickname == "Jane"
     assert "Jane" in resp.text
 
@@ -214,7 +210,7 @@ def test_session_disconnect_no_users_no_error(tmp_path):
 def test_system_event_block_has_metadata():
     block = system_event_block(
         "[system] Bob が入室しました",
-        event_type="user_entered",
+        event_type="account.identify",
         user_id="u123",
         nickname="Bob",
     )
@@ -222,7 +218,7 @@ def test_system_event_block_has_metadata():
     assert block["text"] == "[system] Bob が入室しました"
     meta = block["metadata"]
     assert meta is not None
-    assert meta["event_type"] == "user_entered"
+    assert meta["event_type"] == "account.identify"
     assert meta["user_id"] == "u123"
     assert meta["nickname"] == "Bob"
 

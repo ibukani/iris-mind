@@ -4,8 +4,9 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from iris.account.events import AccountPresenceEvent
 from iris.event.event_types import MessageEvent
-from iris.io.models import Direction, Message
+from iris.io.models import Direction, Identity, Message, SystemMessage
 
 if TYPE_CHECKING:
     from iris.event.event_bus import EventBus
@@ -16,6 +17,7 @@ class _IOEventHandler:
     def __init__(self, event_bus: EventBus, session_manager: SessionManager) -> None:
         self._session_mgr = session_manager
         event_bus.subscribe(MessageEvent, self._on_message_event)
+        event_bus.subscribe(AccountPresenceEvent, self._on_account_presence)
 
     def _on_message_event(self, event: MessageEvent) -> None:
         direction = event.direction or "response"
@@ -35,7 +37,10 @@ class _IOEventHandler:
             session_id=event.session_id,
             user_id=event.user_id,
             direction=Direction(direction),
+            room_id=event.room_id,
         )
+        if event.room_id:
+            msg.metadata["room_id"] = event.room_id
         logger.debug(
             "IOEventHandler: message event session={} type={} state={} target_role={} content_len={}",
             event.session_id,
@@ -45,3 +50,18 @@ class _IOEventHandler:
             len(event.content) if event.content else 0,
         )
         self._session_mgr.route_message(msg)
+
+    def _on_account_presence(self, event: AccountPresenceEvent) -> None:
+        action = f"presence.{event.state}"
+        identity = None
+        if event.provider and event.subject:
+            identity = Identity(provider=event.provider, subject=event.subject)
+        self._session_mgr.broadcast_system_message(
+            SystemMessage(
+                action=action,
+                account_id=event.account_id,
+                user_id=event.account_id,
+                nickname=event.nickname,
+                identity=identity,
+            ),
+        )

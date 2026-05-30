@@ -57,6 +57,13 @@ class ControlMessage(BaseModel):
     error_message: str | None = None
 
 
+class Identity(BaseModel):
+    provider: str = ""
+    subject: str = ""
+    display_name: str = ""
+    metadata: dict[str, str] = Field(default_factory=dict)
+
+
 class Message(BaseModel):
     id: str = Field(default_factory=lambda: uuid4().hex[:12])
     correlation_id: str | None = None
@@ -70,6 +77,8 @@ class Message(BaseModel):
     content_type: str = "text/plain"
     state: str | None = None
     metadata: dict = Field(default_factory=dict)
+    speaker: Identity | None = None
+    room_id: str = ""
 
 
 class CommandInput(BaseModel):
@@ -83,8 +92,11 @@ class CommandInput(BaseModel):
 class SystemMessage(BaseModel):
     action: str = ""
     user_id: str = ""
+    account_id: str = ""
     nickname: str = ""
     text: str = ""
+    identity: Identity | None = None
+    profile: dict[str, str] = Field(default_factory=dict)
 
 
 class CommandOutput(BaseModel):

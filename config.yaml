@@ -18,6 +18,7 @@ memory:
 # アカウント管理 — ユーザー識別・外部ID連携
 account:
     accounts_path: .iris/data/accounts.jsonl
+    identities_path: .iris/data/account_identities.jsonl
     bindings_path: .iris/data/account_bindings.jsonl
 
 # 自発発話 — プロアクティブな割り込みの重み・閾値

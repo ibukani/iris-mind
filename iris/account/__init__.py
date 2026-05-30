@@ -31,9 +31,10 @@ class AccountPlugin(PluginProtocol):
 
         cfg = manager.get_plugin_config("account")
         accounts_path = str(cfg.get("accounts_path", ".iris/data/accounts.jsonl"))
+        identities_path = str(cfg.get("identities_path", ".iris/data/account_identities.jsonl"))
         bindings_path = str(cfg.get("bindings_path", ".iris/data/account_bindings.jsonl"))
 
-        store = AccountStore(accounts_path=accounts_path, bindings_path=bindings_path)
+        store = AccountStore(accounts_path=accounts_path, identities_path=identities_path, bindings_path=bindings_path)
         event_bus = manager.resolve(EventBus)
         provider = AccountProvider(store=store, event_bus=event_bus)
 

@@ -10,7 +10,6 @@ from iris.event.event_types import Event
 class AccountCreatedEvent(Event):
     account_id: str = ""
     nickname: str = ""
-    discord_id: str | None = None
 
 
 @dataclass
@@ -31,3 +30,21 @@ class AccountSessionBoundEvent(Event):
 class AccountSessionUnboundEvent(Event):
     session_id: str = ""
     account_id: str = ""
+
+
+@dataclass
+class AccountIdentityLinkedEvent(Event):
+    account_id: str = ""
+    provider: str = ""
+    subject: str = ""
+    display_name: str = ""
+
+
+@dataclass
+class AccountPresenceEvent(Event):
+    session_id: str = ""
+    account_id: str = ""
+    nickname: str = ""
+    state: str = ""
+    provider: str = ""
+    subject: str = ""

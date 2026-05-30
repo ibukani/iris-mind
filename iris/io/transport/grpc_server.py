@@ -9,7 +9,7 @@ import grpc
 from loguru import logger
 import orjson
 
-from iris.io.models import AuthMessage, CommandInput, Direction, Message, Permission, SystemMessage
+from iris.io.models import AuthMessage, CommandInput, Direction, Identity, Message, Permission, SystemMessage
 from iris.io.session.manager import SessionManager
 from iris.io.transport import grpc_service_pb2, grpc_service_pb2_grpc
 
@@ -168,11 +168,19 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
                 sys_out = grpc_service_pb2.SystemMessage(  # type: ignore[attr-defined]
                     action=action,
                     user_id=data.get("user_id", ""),
+                    account_id=data.get("account_id", ""),
                     nickname=data.get("nickname", ""),
                 )
                 text = data.get("text")
                 if text:
                     sys_out.text = text
+                identity = data.get("identity")
+                if isinstance(identity, dict):
+                    sys_out.identity.CopyFrom(self._build_identity_frame(identity))
+                profile = data.get("profile", {})
+                if isinstance(profile, dict):
+                    for k, v in profile.items():
+                        sys_out.profile[str(k)] = str(v)
                 frame.system.CopyFrom(sys_out)
             else:
                 msg = self._build_message_frame(data)
@@ -209,9 +217,28 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
         uid = data.get("user_id", "")
         if uid:
             meta["user_id"] = uid
+        room_id = data.get("room_id", "")
+        if room_id:
+            msg.room_id = room_id
         for k, v in meta.items():
             msg.metadata[k] = str(v)
+        speaker = data.get("speaker")
+        if isinstance(speaker, dict):
+            msg.speaker.CopyFrom(GrpcServer._build_identity_frame(speaker))
         return msg
+
+    @staticmethod
+    def _build_identity_frame(data: dict[str, Any]) -> Any:
+        identity = grpc_service_pb2.Identity(  # type: ignore[attr-defined]
+            provider=str(data.get("provider", "")),
+            subject=str(data.get("subject", "")),
+            display_name=str(data.get("display_name", "")),
+        )
+        metadata = data.get("metadata", {})
+        if isinstance(metadata, dict):
+            for k, v in metadata.items():
+                identity.metadata[str(k)] = str(v)
+        return identity
 
     async def _receive_loop(
         self,
@@ -289,6 +316,8 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
                 content_type=msg_proto.content_type or "text/plain",
                 state=msg_proto.state or None,
                 metadata=metadata,
+                speaker=self._parse_identity(msg_proto.speaker),
+                room_id=msg_proto.room_id,
             )
         except Exception:
             logger.warning("GrpcServer: invalid message parse failed")
@@ -329,10 +358,25 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             sys_msg = SystemMessage(
                 action=sys_proto.action,
                 user_id=sys_proto.user_id,
+                account_id=sys_proto.account_id,
                 nickname=sys_proto.nickname,
+                text=sys_proto.text,
+                identity=self._parse_identity(sys_proto.identity),
+                profile=dict(sys_proto.profile),
             )
         except Exception:
             logger.warning("GrpcServer: invalid system message parse failed")
             return
 
         await asyncio.to_thread(self._on_system_message, sys_msg, session_id, session_role)
+
+    @staticmethod
+    def _parse_identity(identity_proto: Any) -> Identity | None:
+        if not identity_proto.provider and not identity_proto.subject:
+            return None
+        return Identity(
+            provider=identity_proto.provider,
+            subject=identity_proto.subject,
+            display_name=identity_proto.display_name,
+            metadata=dict(identity_proto.metadata),
+        )

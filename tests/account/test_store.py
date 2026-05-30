@@ -4,15 +4,17 @@ from pathlib import Path
 
 import pytest
 
-from iris.account.models import Account, SessionBinding
+from iris.account.models import Account, AccountIdentity, SessionBinding
 from iris.account.store import AccountStore
 
 
 @pytest.fixture
 def tmp_store(tmp_path: Path) -> AccountStore:
-    accounts = tmp_path / "accounts.jsonl"
-    bindings = tmp_path / "bindings.jsonl"
-    return AccountStore(accounts_path=str(accounts), bindings_path=str(bindings))
+    return AccountStore(
+        accounts_path=str(tmp_path / "accounts.jsonl"),
+        identities_path=str(tmp_path / "identities.jsonl"),
+        bindings_path=str(tmp_path / "bindings.jsonl"),
+    )
 
 
 class TestAccountStore:
@@ -22,17 +24,6 @@ class TestAccountStore:
         found = tmp_store.find_account_by_id(a.account_id)
         assert found is not None
         assert found.nickname == "alice"
-
-    def test_find_by_discord_id(self, tmp_store: AccountStore) -> None:
-        a = Account(nickname="bob", discord_id="999")
-        tmp_store.add_account(a)
-        found = tmp_store.find_account_by_discord_id("999")
-        assert found is not None
-        assert found.nickname == "bob"
-
-    def test_find_nonexistent_returns_none(self, tmp_store: AccountStore) -> None:
-        assert tmp_store.find_account_by_id("nope") is None
-        assert tmp_store.find_account_by_discord_id("nope") is None
 
     def test_update_account(self, tmp_store: AccountStore) -> None:
         a = Account(nickname="old")
@@ -45,6 +36,24 @@ class TestAccountStore:
 
     def test_load_accounts_empty(self, tmp_store: AccountStore) -> None:
         assert tmp_store.load_accounts() == []
+
+
+class TestIdentityStore:
+    def test_add_and_find_identity(self, tmp_store: AccountStore) -> None:
+        identity = AccountIdentity(provider="discord", subject="999", account_id="a1")
+        tmp_store.add_identity(identity)
+        found = tmp_store.find_identity("discord", "999")
+        assert found is not None
+        assert found.account_id == "a1"
+
+    def test_find_identities_by_account(self, tmp_store: AccountStore) -> None:
+        tmp_store.add_identity(AccountIdentity(provider="discord", subject="1", account_id="a1"))
+        tmp_store.add_identity(AccountIdentity(provider="local", subject="2", account_id="a1"))
+        assert len(tmp_store.find_identities_by_account("a1")) == 2
+
+    def test_find_nonexistent_returns_none(self, tmp_store: AccountStore) -> None:
+        assert tmp_store.find_account_by_id("nope") is None
+        assert tmp_store.find_identity("discord", "nope") is None
 
 
 class TestBindingStore:

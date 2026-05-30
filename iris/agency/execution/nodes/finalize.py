@@ -30,17 +30,17 @@ class FinalizeNode:
             return {"completed": True}
 
         if not response_text:
-            self._publish_done(session_id)
+            self._publish_done(session_id, plan.room_id)
             state["completed"] = True
             return {"completed": True}
 
         logger.info("ExecutionGraph: response session={} len={}", session_id, len(response_text))
 
-        self._publish_done(session_id)
+        self._publish_done(session_id, plan.room_id)
         state["completed"] = True
         return {"completed": True}
 
-    def _publish_done(self, session_id: str) -> None:
+    def _publish_done(self, session_id: str, room_id: str) -> None:
         if not self._event_bus:
             return
         self._event_bus.publish(
@@ -52,5 +52,6 @@ class FinalizeNode:
                 content="",
                 state=StreamState.DONE.value,
                 direction="stream",
+                room_id=room_id,
             ),
         )

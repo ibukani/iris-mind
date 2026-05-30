@@ -3,234 +3,206 @@ from __future__ import annotations
 from typing import Any
 
 from loguru import logger
+import orjson
 
+from iris.account.models import Account
+from iris.account.provider import AccountProvider
 from iris.event.event_types import SystemMessageEvent
 
 
 class _AccountEventHandler:
-    """Account 層のシステムメッセージハンドラ。
+    """Account 層のシステムメッセージハンドラ。"""
 
-    責務:
-    - SystemMessageEvent を受け取り、AccountProvider を使ってアカウント操作を行う
-    - 処理結果を SystemMessageEvent として返す
-    """
-
-    def __init__(self, account_provider: Any, short_term: Any = None, sensory: Any = None) -> None:
+    def __init__(self, account_provider: AccountProvider, short_term: Any = None) -> None:
         self._provider = account_provider
         self._short_term = short_term
-        self._sensory = sensory
 
     def handle_system_message(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent | None:
-        """システムメッセージを処理する。"""
         action = msg.action
 
-        if action == "user_register":
-            return self._handle_register(msg, session_id)
-
-        if action == "user_entered":
-            return self._handle_entered(msg, session_id)
-
-        if action == "user_left":
-            return self._handle_left(msg, session_id)
-
-        if action == "nickname_update":
-            return self._handle_nickname_update(msg, session_id)
-
-        if action == "account.get_id":
-            return self._handle_get_id(msg, session_id)
-
-        if action == "account.get_profile":
-            return self._handle_get_profile(msg, session_id)
-
-        if action == "account.link":
-            return self._handle_link(msg, session_id)
+        if action == "account.identify":
+            return self._handle_identify(msg, session_id)
+        if action == "account.leave":
+            return self._handle_leave(msg, session_id)
+        if action == "account.get":
+            return self._handle_get(msg, session_id)
+        if action == "account.update":
+            return self._handle_update(msg, session_id)
+        if action == "account.link_identity":
+            return self._handle_link_identity(msg, session_id)
 
         logger.debug("AccountHandler: unhandled action={}", action)
         return None
 
-    def _handle_register(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
-        """新規アカウント登録。"""
-        nickname = msg.nickname or "anonymous"
-        discord_id = msg.text if msg.text else None
-        account = self._provider.register(nickname, discord_id=discord_id)
+    def identify_message_speaker(
+        self,
+        session_id: str,
+        identity: dict[str, Any] | None,
+    ) -> tuple[str, str]:
+        """発話者identityをaccount_idへ解決する。"""
+        provider, subject, display_name, metadata = self._parse_identity(identity)
+        if not provider or not subject:
+            return "", ""
+
+        account = self._provider.resolve_or_create_identity(
+            provider,
+            subject,
+            display_name=display_name,
+            metadata=metadata,
+        )
         self._provider.bind_session(session_id, account.account_id)
-        logger.info("AccountHandler: registered account_id={} nickname={}", account.account_id, account.nickname)
+        if self._short_term:
+            self._short_term.add_user(account.account_id, account.nickname, session_id=session_id)
+        return account.account_id, account.nickname
+
+    def _handle_identify(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
+        provider, subject, display_name, metadata = self._parse_identity(msg.identity)
+        if not provider or not subject:
+            return self._error("account.identify", "identity.provider and identity.subject required")
+
+        account = self._provider.resolve_or_create_identity(
+            provider,
+            subject,
+            display_name=display_name or msg.nickname,
+            metadata=metadata,
+        )
+        self._provider.bind_session(session_id, account.account_id)
+        if self._short_term:
+            self._short_term.add_user(account.account_id, account.nickname, session_id=session_id)
+
         return SystemMessageEvent(
             timestamp=None,
             source="account",
-            action="user_register",
+            action="account.identify",
             user_id=account.account_id,
+            account_id=account.account_id,
             nickname=account.nickname,
-            text=f"Your user ID: {account.account_id}",
+            identity=msg.identity,
+            text=f"Identified: {account.nickname}",
         )
 
-    def _handle_entered(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
-        """ユーザー入室。"""
-        user_id = msg.user_id
-        if not user_id:
-            return SystemMessageEvent(
-                timestamp=None,
-                source="account",
-                action="user_entered",
-                text="Error: user_id required",
-            )
+    def _handle_leave(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
+        account = self._resolve_target_account(msg, session_id)
+        if account is None:
+            return self._error("account.leave", "not identified")
 
-        account = self._provider.resolve(user_id)
-        if not account:
-            return SystemMessageEvent(
-                timestamp=None,
-                source="account",
-                action="user_entered",
-                text=f"Error: unknown account_id={user_id}",
-            )
-
-        nickname = account.nickname
-        self._provider.bind_session(session_id, user_id)
-        self._provider.update_last_seen(user_id)
-
+        self._provider.unbind_session(session_id, account.account_id)
         if self._short_term:
-            self._short_term.add_user(user_id, nickname, session_id=session_id)
+            self._short_term.remove_user(account.account_id)
 
         return SystemMessageEvent(
             timestamp=None,
             source="account",
-            action="user_entered",
-            user_id=user_id,
-            nickname=nickname,
-            text=f"Welcome, {nickname}",
+            action="account.leave",
+            user_id=account.account_id,
+            account_id=account.account_id,
+            nickname=account.nickname,
+            identity=msg.identity,
+            text=f"Left: {account.nickname}",
         )
 
-    def _handle_left(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
-        """ユーザー退室。"""
-        user_id = msg.user_id
-        if not user_id:
-            return SystemMessageEvent(
-                timestamp=None,
-                source="account",
-                action="user_left",
-                text="Error: user_id required",
-            )
-
-        account = self._provider.resolve(user_id)
-        nickname = account.nickname if account else user_id
-
-        self._provider.unbind_session(session_id)
-
-        if self._short_term:
-            self._short_term.remove_user(user_id)
-
-        return SystemMessageEvent(
-            timestamp=None,
-            source="account",
-            action="user_left",
-            user_id=user_id,
-            nickname=nickname,
-            text=f"Goodbye, {nickname}",
-        )
-
-    def _handle_nickname_update(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
-        """ニックネーム変更。"""
-        user_id = msg.user_id
-        nickname = msg.nickname
-        if not user_id or not nickname:
-            return SystemMessageEvent(
-                timestamp=None,
-                source="account",
-                action="nickname_update",
-                text="Error: user_id and nickname required",
-            )
-
-        account = self._provider.resolve(user_id)
-        if not account:
-            return SystemMessageEvent(
-                timestamp=None,
-                source="account",
-                action="nickname_update",
-                text=f"Error: unknown account_id={user_id}",
-            )
-
-        self._provider.update_nickname(user_id, nickname)
-
-        if self._short_term:
-            self._short_term.add_user(user_id, nickname, session_id=session_id)
-
-        return SystemMessageEvent(
-            timestamp=None,
-            source="account",
-            action="nickname_update",
-            user_id=user_id,
-            nickname=nickname,
-            text=f"Nickname changed to '{nickname}'",
-        )
-
-    def _handle_get_id(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
-        """自分のアカウントIDを確認する。"""
+    def _handle_get(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
         account = self._provider.get_account_by_session(session_id)
         if not account:
-            return SystemMessageEvent(
-                timestamp=None,
-                source="account",
-                action="account.get_id",
-                text="Error: not logged in",
-            )
+            return self._error("account.get", "not identified")
+
+        identities = [i.to_dict() for i in self._provider.get_identities(account.account_id)]
+        data = account.to_dict()
+        data["identities"] = identities
         return SystemMessageEvent(
             timestamp=None,
             source="account",
-            action="account.get_id",
+            action="account.get",
             user_id=account.account_id,
+            account_id=account.account_id,
             nickname=account.nickname,
-            text=f"Your account ID: {account.account_id}",
+            text=orjson.dumps(data).decode("utf-8"),
         )
 
-    def _handle_get_profile(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
-        """アカウントプロフィールを取得する。"""
-        account = self._provider.get_account_by_session(session_id)
-        if not account:
-            return SystemMessageEvent(
-                timestamp=None,
-                source="account",
-                action="account.get_profile",
-                text="Error: not logged in",
-            )
+    def _handle_update(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
+        account = self._resolve_target_account(msg, session_id)
+        if account is None:
+            return self._error("account.update", "not identified")
 
-        import orjson
+        if msg.nickname:
+            self._provider.update_nickname(account.account_id, msg.nickname)
+            account.nickname = msg.nickname
+        if msg.profile:
+            self._provider.update_profile(account.account_id, **msg.profile)
+        if self._short_term:
+            self._short_term.add_user(account.account_id, account.nickname, session_id=session_id)
 
-        profile_data = account.to_dict()
         return SystemMessageEvent(
             timestamp=None,
             source="account",
-            action="account.get_profile",
+            action="account.update",
             user_id=account.account_id,
+            account_id=account.account_id,
             nickname=account.nickname,
-            text=orjson.dumps(profile_data).decode("utf-8"),
+            text=f"Updated: {account.nickname}",
         )
 
-    def _handle_link(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
-        """外部IDを紐付ける。"""
-        account = self._provider.get_account_by_session(session_id)
-        if not account:
-            return SystemMessageEvent(
-                timestamp=None,
-                source="account",
-                action="account.link",
-                text="Error: not logged in",
-            )
+    def _handle_link_identity(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
+        account = self._resolve_target_account(msg, session_id)
+        if account is None:
+            return self._error("account.link_identity", "not identified")
 
-        discord_id = msg.text
-        if not discord_id:
-            return SystemMessageEvent(
-                timestamp=None,
-                source="account",
-                action="account.link",
-                text="Error: discord_id required",
-            )
+        provider, subject, display_name, metadata = self._parse_identity(msg.identity)
+        if not provider or not subject:
+            return self._error("account.link_identity", "identity.provider and identity.subject required")
 
-        self._provider.link_discord(account.account_id, discord_id)
+        if not self._provider.link_identity(
+            account.account_id,
+            provider,
+            subject,
+            display_name=display_name,
+            metadata=metadata,
+        ):
+            return self._error("account.link_identity", "identity already linked")
+
         return SystemMessageEvent(
             timestamp=None,
             source="account",
-            action="account.link",
+            action="account.link_identity",
             user_id=account.account_id,
+            account_id=account.account_id,
             nickname=account.nickname,
-            text=f"Linked Discord ID: {discord_id}",
+            identity=msg.identity,
+            text=f"Linked identity: {provider}:{subject}",
+        )
+
+    def _resolve_target_account(self, msg: SystemMessageEvent, session_id: str) -> Account | None:
+        if msg.account_id or msg.user_id:
+            account = self._provider.resolve(msg.account_id or msg.user_id)
+            if account is not None:
+                return account
+
+        provider, subject, _display_name, _metadata = self._parse_identity(msg.identity)
+        if provider and subject:
+            account = self._provider.get_account_by_identity(provider, subject)
+            if account is not None:
+                return account
+
+        return self._provider.get_account_by_session(session_id)
+
+    @staticmethod
+    def _parse_identity(identity: dict[str, Any] | None) -> tuple[str, str, str, dict[str, object]]:
+        if not identity:
+            return "", "", "", {}
+        raw_metadata = identity.get("metadata", {})
+        metadata: dict[str, object] = raw_metadata if isinstance(raw_metadata, dict) else {}
+        return (
+            str(identity.get("provider", "")),
+            str(identity.get("subject", "")),
+            str(identity.get("display_name", "")),
+            metadata,
+        )
+
+    @staticmethod
+    def _error(action: str, message: str) -> SystemMessageEvent:
+        return SystemMessageEvent(
+            timestamp=None,
+            source="account",
+            action=action,
+            text=f"Error: {message}",
         )

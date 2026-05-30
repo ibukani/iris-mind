@@ -10,14 +10,28 @@ from iris.io.models import ControlMessage, Direction, Message
 if TYPE_CHECKING:
     from iris.event.event_bus import EventBus
     from iris.io.session.manager import SessionManager
+    from iris.kernel.manager import PluginManager
 
 
 class _IOEventHandler:
-    def __init__(self, event_bus: EventBus, session_manager: SessionManager) -> None:
+    def __init__(
+        self, event_bus: EventBus, session_manager: SessionManager, plugin_manager: PluginManager | None = None
+    ) -> None:
         self._session_mgr = session_manager
+        self._plugin_manager = plugin_manager
+        self._room_store_resolved = False
+        self._room_store = None
         event_bus.subscribe(MessageEvent, self._on_message_event)
         event_bus.subscribe(RoomJoinedEvent, self._on_room_joined)
         event_bus.subscribe(RoomLeftEvent, self._on_room_left)
+
+    def _get_room_store(self) -> None:
+        if self._room_store_resolved or self._plugin_manager is None:
+            return
+        from iris.room.store import RoomStore
+
+        self._room_store = self._plugin_manager.resolve_optional(RoomStore)
+        self._room_store_resolved = True
 
     def _on_message_event(self, event: MessageEvent) -> None:
         direction = event.direction or "response"
@@ -49,6 +63,11 @@ class _IOEventHandler:
             target_role,
             len(event.content) if event.content else 0,
         )
+        if event.room_id:
+            self._get_room_store()
+            if self._room_store is not None:
+                self._session_mgr.route_to_room(msg, event.room_id, self._room_store)
+                return
         self._session_mgr.route_message(msg)
 
     def _on_room_joined(self, event: RoomJoinedEvent) -> None:

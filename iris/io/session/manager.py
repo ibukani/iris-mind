@@ -20,6 +20,7 @@ from iris.io.models import (
 
 if TYPE_CHECKING:
     from iris.event.event_bus import EventBus
+    from iris.room.store import RoomStore
 
 
 from loguru import logger
@@ -137,6 +138,34 @@ class SessionManager:
             logger.debug("route_message: skipped {} session(s) due to permission: {}", len(skipped), skipped)
         if not targets:
             logger.debug("route_message: no active sessions to route msg_type={}", msg.msg_type)
+
+    def route_to_room(self, msg: Message, room_id: str, room_store: RoomStore) -> None:
+        session_ids = room_store.find_active_session_ids_by_room(room_id)
+        targets: list[SessionInfo] = []
+        not_active: list[str] = []
+
+        with self._lock:
+            for sid in session_ids:
+                s = self._sessions.get(sid)
+                if s is not None and s.state == SessionState.ACTIVE and s.conn is not None:
+                    targets.append(s)
+                else:
+                    not_active.append(sid)
+
+        permission = _MSG_PERMISSION_MAP.get(msg.msg_type)
+        skipped: list[str] = []
+        for s in targets:
+            if permission is not None and permission not in s.permissions:
+                skipped.append(s.session_id)
+                continue
+            send_bytes_to_session(s, msg)
+
+        if skipped:
+            logger.debug("route_to_room: skipped {} session(s) due to permission: {}", len(skipped), skipped)
+        if not_active:
+            logger.debug("route_to_room: {} session(s) not active in room {}", len(not_active), room_id)
+        if not targets:
+            logger.debug("route_to_room: no active sessions for room_id={}", room_id)
 
     def route_control_message(self, control_msg: ControlMessage, session_id: str) -> None:
         with self._lock:

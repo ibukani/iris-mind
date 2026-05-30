@@ -120,6 +120,9 @@ class RoomStore:
                 return m
         return None
 
+    def find_active_session_ids_by_room(self, room_id: str) -> list[str]:
+        return [m.session_id for m in self.load_members() if m.room_id == room_id and m.is_active and m.session_id]
+
     def find_active_members_by_session(self, session_id: str) -> list[RoomMember]:
         return [m for m in self.load_members() if m.session_id == session_id and m.is_active]
 

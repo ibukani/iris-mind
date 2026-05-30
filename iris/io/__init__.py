@@ -71,7 +71,7 @@ class IoPlugin(PluginProtocol):
 
         from iris.io.handler import _IOEventHandler
 
-        _IOEventHandler(event_bus=event_bus, session_manager=session_mgr)
+        _IOEventHandler(event_bus=event_bus, session_manager=session_mgr, plugin_manager=manager)
 
         from .hooks import register_hooks
 

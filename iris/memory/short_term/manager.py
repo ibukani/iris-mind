@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import re
-from typing import Protocol
 
 from loguru import logger
 
 from iris.memory.models import ContentBlock, blocks_text
 from iris.memory.short_term.extractor import EntityExtractor, RegexEntityExtractor
 from iris.memory.short_term.models import MAX_CONTEXT_CHARS, MAX_TURN_LENGTH, SearchResult, TurnData
+from iris.memory.short_term.protocol import ShortTermMemoryProtocol
 from iris.memory.short_term.renderer import render_short_term_context
 from iris.memory.short_term.scorer import DefaultImportanceScorer, ImportanceScorer
 
@@ -32,38 +32,7 @@ def _truncate_blocks(blocks: list[ContentBlock], max_chars: int) -> list[Content
     return result
 
 
-class ShortTermMemoryProtocol(Protocol):
-    """短期記憶マネージャーのインターフェース。
-
-    なぜこの設計にしたか:
-    他のレイヤーが具象クラスである ShortTermMemoryManager に直接依存するのを防ぎ、
-    モック化やテスト用の代替実装を容易にするため。
-    """
-
-    def add_turn(self, role: str, blocks: list[ContentBlock], account_id: str = "", room_id: str = "") -> None: ...
-    def search(
-        self, query: str, max_results: int = 5, room_id: str = "", account_id: str = ""
-    ) -> list[SearchResult]: ...
-    def search_entities(self, entity_name: str) -> list[TurnData]: ...
-    def render_context(
-        self, max_chars: int = MAX_CONTEXT_CHARS, query: str | None = None, room_id: str = "", account_id: str = ""
-    ) -> str: ...
-    def get_recent_turns(self, n: int = 4, room_id: str = "", account_id: str = "") -> list[TurnData]: ...
-    def get_unconsolidated_turns(self, room_id: str = "", account_id: str = "") -> list[TurnData]: ...
-    def mark_consolidated(self, up_to_index: int | None = None) -> None: ...
-    def clear(self) -> None: ...
-    def should_consolidate(self) -> bool: ...
-    def add_user(self, account_id: str, display_name: str, room_id: str = "") -> None: ...
-    def remove_user(self, account_id: str, room_id: str = "") -> None: ...
-    def get_active_users(self) -> list[tuple[str, str]]: ...
-    def get_users_by_room(self, room_id: str) -> list[tuple[str, str]]: ...
-    @property
-    def current_topics(self) -> list[str]: ...
-    @property
-    def turn_count(self) -> int: ...
-
-
-class ShortTermMemoryManager:
+class ShortTermMemoryManager(ShortTermMemoryProtocol):
     """短期記憶（ワーキングメモリ）の管理を行うクラス。
 
     直近の会話履歴（ターン数制限あり）、現在の話題、参照されたエンティティを保持する。
@@ -90,15 +59,11 @@ class ShortTermMemoryManager:
     def add_user(self, account_id: str, display_name: str, room_id: str = "") -> None:
         self._active_users[account_id] = display_name
         if room_id:
-            uid_list = self._room_users.setdefault(room_id, [])
-            if account_id not in uid_list:
-                uid_list.append(account_id)
+            self._add_room_user(room_id, account_id)
 
     def remove_user(self, account_id: str, room_id: str = "") -> None:
         if room_id:
-            uid_list = self._room_users.get(room_id, [])
-            if account_id in uid_list:
-                uid_list.remove(account_id)
+            self._remove_room_user(room_id, account_id)
         else:
             for uid_list in self._room_users.values():
                 while account_id in uid_list:
@@ -114,6 +79,24 @@ class ShortTermMemoryManager:
     def get_users_by_room(self, room_id: str) -> list[tuple[str, str]]:
         uid_list = self._room_users.get(room_id, [])
         return [(uid, self._active_users.get(uid, uid)) for uid in uid_list if uid in self._active_users]
+
+    def _add_room_user(self, room_id: str, account_id: str) -> None:
+        uid_list = self._room_users.setdefault(room_id, [])
+        if account_id not in uid_list:
+            uid_list.append(account_id)
+
+    def _remove_room_user(self, room_id: str, account_id: str) -> None:
+        uid_list = self._room_users.get(room_id, [])
+        if account_id in uid_list:
+            uid_list.remove(account_id)
+
+    def _scope_turns(self, room_id: str = "", account_id: str = "") -> list[TurnData]:
+        turns = self._turns
+        if account_id:
+            turns = [t for t in turns if t.get("account_id") == account_id]
+        if room_id:
+            turns = [t for t in turns if t.get("room_id") == room_id]
+        return turns
 
     def add_turn(self, role: str, blocks: list[ContentBlock], account_id: str = "", room_id: str = "") -> None:
         if not blocks:
@@ -167,11 +150,7 @@ class ShortTermMemoryManager:
         if not query:
             return []
 
-        turns = self._turns
-        if account_id:
-            turns = [t for t in self._turns if t.get("account_id") == account_id]
-        if room_id:
-            turns = [t for t in turns if t.get("room_id") == room_id]
+        turns = self._scope_turns(room_id=room_id, account_id=account_id)
 
         scored: list[tuple[float, int, SearchResult]] = []
         for turn in turns:
@@ -196,11 +175,7 @@ class ShortTermMemoryManager:
     def render_context(
         self, max_chars: int = MAX_CONTEXT_CHARS, query: str | None = None, room_id: str = "", account_id: str = ""
     ) -> str:
-        turns = self._turns
-        if account_id:
-            turns = [t for t in self._turns if t.get("account_id") == account_id]
-        if room_id:
-            turns = [t for t in turns if t.get("room_id") == room_id]
+        turns = self._scope_turns(room_id=room_id, account_id=account_id)
         return render_short_term_context(
             turns=turns,
             active_references=self._active_references,
@@ -212,20 +187,12 @@ class ShortTermMemoryManager:
 
     def get_recent_turns(self, n: int = 4, room_id: str = "", account_id: str = "") -> list[TurnData]:
         """直近のNターンを取得する。"""
-        turns = self._turns
-        if account_id:
-            turns = [t for t in self._turns if t.get("account_id") == account_id]
-        if room_id:
-            turns = [t for t in turns if t.get("room_id") == room_id]
+        turns = self._scope_turns(room_id=room_id, account_id=account_id)
         return turns[-n:]
 
     def get_unconsolidated_turns(self, room_id: str = "", account_id: str = "") -> list[TurnData]:
         """まだ圧縮（長期記憶化）されていないターンの一覧を取得する。"""
-        turns = self._turns
-        if account_id:
-            turns = [t for t in self._turns if t.get("account_id") == account_id]
-        if room_id:
-            turns = [t for t in turns if t.get("room_id") == room_id]
+        turns = self._scope_turns(room_id=room_id, account_id=account_id)
         return [t for t in turns if not t.get("consolidated")]
 
     def mark_consolidated(self, up_to_index: int | None = None) -> None:
@@ -265,3 +232,6 @@ class ShortTermMemoryManager:
     def turn_count(self) -> int:
         """現在のターン数を取得する。"""
         return len(self._turns)
+
+
+__all__ = ["SearchResult", "ShortTermMemoryManager", "ShortTermMemoryProtocol", "TurnData"]

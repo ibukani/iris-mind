@@ -1,3 +1,3 @@
-from iris.memory.sensory.manager import SensoryMemoryManager
+from iris.memory.sensory.manager import SensoryMemoryManager, SensoryMemoryProtocol
 
-__all__ = ["SensoryMemoryManager"]
+__all__ = ["SensoryMemoryManager", "SensoryMemoryProtocol"]

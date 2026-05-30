@@ -28,7 +28,7 @@ class _ONNXEmbeddings(Embeddings):
 class VectorStore:
     """ChromaDB + BM25 ハイブリッド検索エンジン (LangChain統合)"""
 
-    def __init__(self, path: str = ".iris/data/chroma_db"):
+    def __init__(self, path: str = ".iris/data/chroma_db") -> None:
         self._embedding = _ONNXEmbeddings()
         self._lock = threading.Lock()
         self._db = Chroma(

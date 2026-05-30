@@ -31,12 +31,9 @@ class MemoryManagerProtocol(Protocol):
         self, current_emotion: Any | None = None, max_results: int = 5, room_id: str = ""
     ) -> list[dict[str, Any]]: ...
 
-    @property
-    def short_term(self) -> Any: ...
-    @property
-    def long_term(self) -> Any: ...
-    @property
-    def goals(self) -> Any: ...
+    short_term: Any
+    long_term: Any
+    goals: Any
 
 
 def safe_count(store: Any | None) -> int:

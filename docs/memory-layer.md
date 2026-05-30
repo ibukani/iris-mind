@@ -67,11 +67,10 @@ class SensoryMemoryManager:
     def set_readiness_evaluator(self, evaluator) -> None
     @property
     def has_pending_raw(self) -> bool
-    @property
-    def last_raw_input(self) -> str
 ```
 
 `store_raw()` は `MemoryManager._on_input_received()` から呼ばれる。確定した入力を保持し、ProactiveScoringの sensory 因子として利用される。
+`raw_timestamp` は `store_raw()` 実行時に記録され、`retrieve()` で同じ値を返す。
 
 ### short_term/ — 短期記憶（ワーキングメモリ）
 
@@ -235,4 +234,3 @@ ContextWindow 圧縮は LLMContextWindowManager（iris/llm/context.py の `LLMCo
 |----------|-----------|-----------|
 | `InputReady` | 入力確定時 / TimerTick / 再接続時 | content, session_id, account_id, context |
 | `InterruptEvent` | 入力確定時 | session_id |
-

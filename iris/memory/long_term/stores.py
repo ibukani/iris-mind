@@ -12,7 +12,7 @@ from iris.memory.long_term.vector_store import VectorStore
 class AgentsMdStore:
     """構造記憶。.iris/config/iris_profile.mdの読み込み（書き込み禁止）。"""
 
-    def __init__(self, path: str = ".iris/config/iris_profile.md", max_bytes: int = 2048):
+    def __init__(self, path: str = ".iris/config/iris_profile.md", max_bytes: int = 2048) -> None:
         self.path = Path(path)
         self.max_bytes = max_bytes
         self._cache: str | None = None
@@ -64,7 +64,7 @@ class AgentsMdStore:
 class EpisodicStore(_JsonlStore):
     """エピソード記憶。上限到達時は古いものを削除。"""
 
-    def __init__(self, path: str = ".iris/data/episodes.jsonl", max_entries: int = 30):
+    def __init__(self, path: str = ".iris/data/episodes.jsonl", max_entries: int = 30) -> None:
         super().__init__(path)
         self.max_entries = max_entries
 
@@ -102,7 +102,7 @@ class SemanticStore(_JsonlStore):
         path: str = ".iris/data/semantic.jsonl",
         max_entries: int = 100,
         vector_db_path: str = ".iris/data/chroma_db",
-    ):
+    ) -> None:
         super().__init__(path)
         self.max_entries = max_entries
         self.vector = VectorStore(path=vector_db_path)

@@ -8,6 +8,16 @@ from loguru import logger
 from iris.memory.models import text_block
 
 
+def _extract_scope(data: Any) -> tuple[str, str]:
+    if not isinstance(data, dict):
+        return "", ""
+    return data.get("room_id", ""), data.get("account_id", "")
+
+
+def _extract_int(value: Any, default: int) -> int:
+    return value if isinstance(value, int) else default
+
+
 def build_store_handlers(
     sensory: Any,
     short_term: Any,
@@ -15,26 +25,9 @@ def build_store_handlers(
 ) -> dict[str, Callable[[Any], None]]:
     return {
         "sensory": lambda data: _store_sensory(sensory, data),
-        "short_term": lambda data: _store_short_term(
-            short_term,
-            data,
-            data.get("room_id", "") if isinstance(data, dict) else "",
-            data.get("account_id", "") if isinstance(data, dict) else "",
-        ),
-        "episodic": lambda data: _store_episodic(
-            long_term,
-            short_term,
-            data,
-            data.get("room_id", "") if isinstance(data, dict) else "",
-            data.get("account_id", "") if isinstance(data, dict) else "",
-        ),
-        "semantic": lambda data: _store_semantic(
-            long_term,
-            short_term,
-            data,
-            data.get("room_id", "") if isinstance(data, dict) else "",
-            data.get("account_id", "") if isinstance(data, dict) else "",
-        ),
+        "short_term": lambda data: _store_short_term(short_term, data, *_extract_scope(data)),
+        "episodic": lambda data: _store_episodic(long_term, short_term, data, *_extract_scope(data)),
+        "semantic": lambda data: _store_semantic(long_term, short_term, data, *_extract_scope(data)),
     }
 
 
@@ -84,7 +77,7 @@ def dispatch_retrieve(
     if stream == "sensory":
         result = sensory.retrieve()
         return [result] if result else []
-    n = filters.get("n", 5) if isinstance(filters.get("n"), int) else 5
+    n = _extract_int(filters.get("n"), 5)
     if stream == "short_term":
         return short_term.get_recent_turns(n, room_id=room_id, account_id=account_id)  # type: ignore[no-any-return]
     if stream == "episodic":
@@ -101,7 +94,7 @@ def dispatch_search(
     room_id: str = "",
     account_id: str = "",
 ) -> list[dict[str, Any]]:
-    max_results = kwargs.get("max_results", 3) if isinstance(kwargs.get("max_results"), int) else 3
+    max_results = _extract_int(kwargs.get("max_results"), 3)
     if stream == "short_term":
         return short_term.search(query, max_results=max_results, room_id=room_id, account_id=account_id)  # type: ignore[no-any-return]
     if stream == "semantic" or stream is None:

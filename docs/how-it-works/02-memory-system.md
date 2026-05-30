@@ -56,7 +56,6 @@ flush 時は `flush_callback(session_id, content)` が呼ばれる。
 `store_raw(content)` で完全な入力を保持。`retrieve()` で取得可能。
 
 - `has_pending_raw`: 未処理の raw 入力有無
-- `last_raw_input`: 最新の raw 入力内容
 - MemoryManager の TimerTick 処理で pop され、`InputReady` として再 publish
 
 ### 状態管理
@@ -66,7 +65,8 @@ flush 時は `flush_callback(session_id, content)` が呼ばれる。
 | `fragment_count` | int | 蓄積中の断片数 |
 | `accumulated_text` | str | 未 flush の全断片連結 |
 | `has_pending_raw` | bool | 未処理 raw 入力あり |
-| `last_raw_input` | str | 最新 raw 入力 |
+| `raw` / `raw_block` | str / dict | 最新 raw 入力とブロック本体 |
+| `raw_timestamp` | str | `store_raw()` 時点の記録時刻 |
 
 ## 短期記憶 (ShortTermMemoryManager)
 

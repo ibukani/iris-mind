@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
 
+from iris.memory.long_term.protocol import LongTermMemoryProtocol
 from iris.memory.long_term.protocols import EpisodicStoreProtocol, SemanticStoreProtocol
 from iris.memory.long_term.vector_store import VectorStore
 
@@ -29,38 +30,7 @@ def _format_search_result(results: list[dict[str, Any]]) -> list[dict[str, Any]]
     ]
 
 
-class LongTermMemoryProtocol(Protocol):
-    """長期記憶のインターフェース。
-
-    なぜこの設計にしたか:
-    他のレイヤーが具象クラスである LongTermMemoryManager に直接依存するのを防ぎ、
-    モック化やテスト用の代替実装を容易にするため。
-    """
-
-    @property
-    def episodic(self) -> EpisodicStoreProtocol | None: ...
-
-    @property
-    def semantic(self) -> SemanticStoreProtocol | None: ...
-
-    def store_episodic(self, data: Any, kind: str = "", room_id: str = "", account_id: str = "") -> None: ...
-    def get_episodic_recent(self, n: int = 5, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]: ...
-    def clear_episodic(self) -> None: ...
-    def store_semantic(self, data: Any, room_id: str = "", account_id: str = "") -> None: ...
-    def search_semantic(
-        self, query: str, max_results: int = 3, room_id: str = "", account_id: str = ""
-    ) -> list[dict[str, Any]]: ...
-    def clear_semantic(self) -> None: ...
-    def search_vector(self, query: str, max_results: int = 3) -> list[dict[str, Any]]: ...
-    def search_emotional(
-        self,
-        current_emotion: Any | None = None,
-        max_results: int = 5,
-        room_id: str = "",
-    ) -> list[dict[str, Any]]: ...
-
-
-class LongTermMemoryManager:
+class LongTermMemoryManager(LongTermMemoryProtocol):
     """長期記憶 (Long-Term Memory)。
     エピソード記憶 (EpisodicStore) + 意味記憶 (SemanticStore) を統合管理する。
 
@@ -76,7 +46,7 @@ class LongTermMemoryManager:
         episodic: EpisodicStoreProtocol | None = None,
         semantic: SemanticStoreProtocol | None = None,
         vector_store: VectorStore | None = None,
-    ):
+    ) -> None:
         self._episodic = episodic
         self._semantic = semantic
         self._vector_store = vector_store
@@ -189,6 +159,9 @@ class LongTermMemoryManager:
     @property
     def semantic(self) -> SemanticStoreProtocol | None:
         return self._semantic
+
+
+__all__ = ["LongTermMemoryManager", "LongTermMemoryProtocol"]
 
 
 def _pad_distance(

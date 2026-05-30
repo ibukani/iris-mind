@@ -1,30 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-import time
-import uuid
 
 from loguru import logger
 import orjson
-from pydantic import BaseModel, Field
 
-
-class LongTermGoal(BaseModel):
-    """エージェントの持続的な目標（LongTermGoal）。
-
-    Agency層が意思決定や思考を行う際の指針となる。
-    重要度（weight）を持ち、時間経過やReflexion処理で減衰・忘却される。
-    """
-
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    description: str = ""
-    weight: float = 1.0  # 0.0 ~ 1.0
-    created_at: float = Field(default_factory=time.time)
-    updated_at: float = Field(default_factory=time.time)
-
-    def decay(self, amount: float) -> None:
-        self.weight = max(0.0, self.weight - amount)
-        self.updated_at = time.time()
+from iris.memory.long_term.models import LongTermGoal
 
 
 class GoalStore:

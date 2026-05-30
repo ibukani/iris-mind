@@ -80,10 +80,10 @@ class MemoryPlugin(PluginProtocol):
         manager.provide(_MemoryEventHandler, event_handler)
 
     def start(self, manager: PluginManager) -> None:
-        pass
+        return None
 
     def stop(self, manager: PluginManager) -> None:
-        pass
+        return None
 
 
 plugin: PluginProtocol = MemoryPlugin()

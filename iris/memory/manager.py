@@ -12,10 +12,14 @@ from iris.memory.dispatcher import (
     dispatch_search,
 )
 from iris.memory.long_term.goal_store import GoalStore
+from iris.memory.long_term.protocol import LongTermMemoryProtocol
 from iris.memory.models import blocks_text
+from iris.memory.protocol import MemoryManagerProtocol
+from iris.memory.sensory.protocol import SensoryMemoryProtocol
+from iris.memory.short_term.protocol import ShortTermMemoryProtocol
 
 
-class MemoryManager:
+class MemoryManager(MemoryManagerProtocol):
     """記憶マネージャー — 各記憶種別の管理クラスへのディスパッチャ。
 
     脳科学に基づく3層構造:
@@ -32,17 +36,17 @@ class MemoryManager:
     def __init__(
         self,
         *,
-        sensory: Any | None = None,
-        short_term: Any | None = None,
-        long_term: Any | None = None,
+        sensory: SensoryMemoryProtocol | None = None,
+        short_term: ShortTermMemoryProtocol | None = None,
+        long_term: LongTermMemoryProtocol | None = None,
     ) -> None:
         from iris.memory.long_term.manager import LongTermMemoryManager
         from iris.memory.sensory.manager import SensoryMemoryManager
         from iris.memory.short_term.manager import ShortTermMemoryManager
 
-        self.sensory: Any = sensory or SensoryMemoryManager()
-        self.short_term: Any = short_term or ShortTermMemoryManager()
-        self.long_term: Any = long_term or LongTermMemoryManager()
+        self.sensory: SensoryMemoryProtocol = sensory or SensoryMemoryManager()
+        self.short_term: ShortTermMemoryProtocol = short_term or ShortTermMemoryManager()
+        self.long_term: LongTermMemoryProtocol = long_term or LongTermMemoryManager()
         self.goals: GoalStore = GoalStore()
 
         self._store_handlers: dict[str, Callable[[Any], None]] = build_store_handlers(
@@ -120,17 +124,17 @@ class MemoryManager:
         logger.info("MemoryManager: flushed {} turns, {} topics", len(unconsolidated), len(topics))
 
     def get_user_preferences(self, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:
-        return self.long_term.search_semantic(  # type: ignore[no-any-return]
+        return self.long_term.search_semantic(
             "ユーザーの好み 興味 趣味", max_results=2, room_id=room_id, account_id=account_id
         )
 
     def add_episodic(
-        self, content: str, kind: str = "", room_id: str = "", account_id: str = "", _metadata: dict | None = None
+        self, content: str, kind: str = "", _metadata: dict | None = None, room_id: str = "", account_id: str = ""
     ) -> None:
         self.store("episodic", {"content": content, "kind": kind}, room_id=room_id, account_id=account_id)
 
     def get_recent(self, n: int = 3, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:
-        return self.long_term.get_episodic_recent(n, room_id=room_id, account_id=account_id)  # type: ignore[no-any-return]
+        return self.long_term.get_episodic_recent(n, room_id=room_id, account_id=account_id)
 
     def add_semantic(
         self, content: str, tags: list[str] | None = None, room_id: str = "", account_id: str = ""
@@ -150,14 +154,14 @@ class MemoryManager:
     def search_semantic(
         self, query: str, max_results: int = 3, room_id: str = "", account_id: str = ""
     ) -> list[dict[str, Any]]:
-        return self.long_term.search_semantic(query, max_results=max_results, room_id=room_id, account_id=account_id)  # type: ignore[no-any-return]
+        return self.long_term.search_semantic(query, max_results=max_results, room_id=room_id, account_id=account_id)
 
     def search_emotional(
         self,
         current_emotion: Any | None = None,
         max_results: int = 5,
+        room_id: str = "",
     ) -> list[dict[str, Any]]:
-        return self.long_term.search_emotional(  # type: ignore[no-any-return]
-            current_emotion=current_emotion,
-            max_results=max_results,
+        return self.long_term.search_emotional(
+            current_emotion=current_emotion, max_results=max_results, room_id=room_id
         )

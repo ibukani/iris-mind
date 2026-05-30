@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import re
+from typing import Protocol
 
 from langchain_core.messages import HumanMessage
 from loguru import logger
 
-from iris.llm.bridge import LLMBridge
-
 _QUESTION_RE = re.compile(r"[？?]$")
+
+
+class _LLMChatProtocol(Protocol):
+    async def chat(self, **kwargs: object) -> object: ...
 
 
 class ReadinessEvaluator:
@@ -17,7 +20,7 @@ class ReadinessEvaluator:
         min_fragments: int = 2,
         question_detect: bool = True,
         confidence_threshold: float = 0.6,
-        llm: LLMBridge | None = None,
+        llm: _LLMChatProtocol | None = None,
         llm_model_role: str = "low",
     ) -> None:
         self._min_fragments = min_fragments
@@ -55,13 +58,7 @@ class ReadinessEvaluator:
     def _tier2_check(self, fragments: list[str]) -> bool:
         if self._llm is None:
             return False
-        text = " ".join(fragments)
-        prompt = (
-            "You are evaluating a conversation fragment.\n"
-            f"User said: {text}\n\n"
-            "Can you respond meaningfully right now? Answer Yes or No.\n"
-            "If the user's input is a question, complete thought, or continuation of conversation, answer Yes."
-        )
+        prompt = self._build_tier2_prompt(fragments)
         try:
             resp = asyncio.run(
                 self._llm.chat(
@@ -71,8 +68,20 @@ class ReadinessEvaluator:
                     max_tokens=10,
                 ),
             )
-            content = str(resp.content).strip().lower()
-            return content.startswith("yes")
+            return self._is_yes_response(resp)
         except Exception:
             logger.exception("Tier2 readiness evaluation failed")
             return False
+
+    def _build_tier2_prompt(self, fragments: list[str]) -> str:
+        text = " ".join(fragments)
+        return (
+            "You are evaluating a conversation fragment.\n"
+            f"User said: {text}\n\n"
+            "Can you respond meaningfully right now? Answer Yes or No.\n"
+            "If the user's input is a question, complete thought, or continuation of conversation, answer Yes."
+        )
+
+    def _is_yes_response(self, response: object) -> bool:
+        content = getattr(response, "content", "")
+        return str(content).strip().lower().startswith("yes")

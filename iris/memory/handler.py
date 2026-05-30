@@ -58,26 +58,7 @@ class _MemoryEventHandler:
 
     def _on_message_event(self, event: MessageEvent) -> None:
         if event.msg_type == "voice_indicator":
-            if event.content == "true":
-                self.event_bus.publish(
-                    InhibitionEvent(
-                        timestamp=None,
-                        source="memory",
-                        action=InhibitionAction.SUPPRESS,
-                        reason="voice_recording",
-                        room_id=event.room_id,
-                    ),
-                )
-            else:
-                self.event_bus.publish(
-                    InhibitionEvent(
-                        timestamp=None,
-                        source="memory",
-                        action=InhibitionAction.UNSUPPRESS,
-                        reason="voice_recording",
-                        room_id=event.room_id,
-                    ),
-                )
+            self._publish_voice_inhibition(event)
             return
 
         if not event.content:
@@ -91,6 +72,18 @@ class _MemoryEventHandler:
             "MemoryManager: input pending account={} content={:.80}",
             event.account_id,
             event.content,
+        )
+
+    def _publish_voice_inhibition(self, event: MessageEvent) -> None:
+        action = InhibitionAction.SUPPRESS if event.content == "true" else InhibitionAction.UNSUPPRESS
+        self.event_bus.publish(
+            InhibitionEvent(
+                timestamp=None,
+                source="memory",
+                action=action,
+                reason="voice_recording",
+                room_id=event.room_id,
+            ),
         )
 
     def _on_input_ready(self, event: InputReady) -> None:
@@ -126,31 +119,50 @@ class _MemoryEventHandler:
 
     def _on_room_joined(self, event: RoomJoinedEvent) -> None:
         """Room参加時にユーザーを追跡し、system_event_blockを生成する。"""
-        if self.short_term:
-            self.short_term.add_user(event.account_id, event.display_name, room_id=event.room_id)
-        text = f"[system] {event.display_name} が入室しました"
-        block = system_event_block(
-            text,
-            event_type="room.joined",
-            account_id=event.account_id,
-            display_name=event.display_name,
-            room_id=event.room_id,
+        self._sync_room_membership(event.account_id, event.display_name, event.room_id, joined=True)
+        self._store_room_event_block(
+            "room.joined",
+            f"[system] {event.display_name} が入室しました",
+            event.account_id,
+            event.display_name,
+            event.room_id,
         )
-        self._store_and_flush_pending_block(block, event.account_id, event.room_id)
 
     def _on_room_left(self, event: RoomLeftEvent) -> None:
         """Room退室時にユーザー追跡を解除する。"""
-        if self.short_term:
-            self.short_term.remove_user(event.account_id, room_id=event.room_id)
-        text = f"[system] {event.display_name} が退室しました"
+        self._sync_room_membership(event.account_id, event.display_name, event.room_id, joined=False)
+        self._store_room_event_block(
+            "room.left",
+            f"[system] {event.display_name} が退室しました",
+            event.account_id,
+            event.display_name,
+            event.room_id,
+        )
+
+    def _sync_room_membership(self, account_id: str, display_name: str, room_id: str, *, joined: bool) -> None:
+        if not self.short_term:
+            return
+        if joined:
+            self.short_term.add_user(account_id, display_name, room_id=room_id)
+        else:
+            self.short_term.remove_user(account_id, room_id=room_id)
+
+    def _store_room_event_block(
+        self,
+        event_type: str,
+        text: str,
+        account_id: str,
+        display_name: str,
+        room_id: str,
+    ) -> None:
         block = system_event_block(
             text,
-            event_type="room.left",
-            account_id=event.account_id,
-            display_name=event.display_name,
-            room_id=event.room_id,
+            event_type=event_type,
+            account_id=account_id,
+            display_name=display_name,
+            room_id=room_id,
         )
-        self._store_and_flush_pending_block(block, event.account_id, event.room_id)
+        self._store_and_flush_pending_block(block, account_id, room_id)
 
     def _store_and_flush_pending_block(
         self,
@@ -173,6 +185,9 @@ class _MemoryEventHandler:
             return
         if self.proactive_config is None:
             return
+        self._publish_proactive_input_ready()
+
+    def _publish_proactive_input_ready(self) -> None:
         room_id = self._select_proactive_room()
         self.event_bus.publish(
             InputReady(

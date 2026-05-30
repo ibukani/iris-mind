@@ -11,11 +11,11 @@
 ```
 iris/account/
 ├── __init__.py       AccountPlugin (STORE phase)
-├── models.py         Account, AccountIdentity, SessionBinding
+├── models.py         Account, AccountIdentity
 ├── store.py          AccountStore (JSONL永続化)
 ├── manager.py        AccountManager (コアサービス)
 ├── dispatcher.py     _AccountDispatcher (ControlMessage処理)
-├── events.py         AccountCreated/Updated/IdentityLinked/Presence/SessionBound/Unbound
+├── events.py         AccountCreated/Updated/IdentityLinked/Presence
 └── hooks.py          EventBus Hook登録
 ```
 

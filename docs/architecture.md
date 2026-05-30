@@ -71,9 +71,15 @@ flowchart TD
     end
 
     subgraph Account["account/ アカウント管理"]
-        ACC_Provider["AccountManager<br/>CRUD・外部ID連携"]
+        ACC_Manager["AccountManager<br/>CRUD・外部ID連携"]
         ACC_Store["AccountStore<br/>JSONL永続化"]
         ACC_Handler["_AccountDispatcher<br/>ControlMessage処理"]
+    end
+
+    subgraph Room["room/ ルーム管理"]
+        R_Manager["RoomManager<br/>CRUD・メンバーシップ"]
+        R_Store["RoomStore<br/>JSONL永続化"]
+        R_Handler["_RoomDispatcher<br/>ControlMessage処理"]
     end
 
     EB ---|全層を結合| Kernel
@@ -83,6 +89,7 @@ flowchart TD
     EB --- Limbic
     EB --- Infra
     EB --- Account
+    EB --- Room
 
     A_Bus --- Planning
     A_Bus --- Execution
@@ -187,11 +194,20 @@ iris/
 │
 ├── account/                   # アカウント管理: ユーザー識別・外部ID連携
 │   ├── __init__.py            AccountPlugin (STORE phase)
-│   ├── models.py              Account, SessionBinding
+│   ├── models.py              Account, AccountIdentity
 │   ├── store.py               AccountStore（JSONL永続化）
 │   ├── manager.py             AccountManager（コアサービス）
-│   ├── events.py              AccountCreated/Updated/SessionBound/Unbound
+│   ├── events.py              AccountCreated/Updated/IdentityLinked/Presence
 │   ├── dispatcher.py          _AccountDispatcher（ControlMessage処理）
+│   └── hooks.py               EventBus Hook登録
+│
+├── room/                      # ルーム管理: ルームCRUD・メンバーシップ・アカウント連携
+│   ├── __init__.py            RoomPlugin (STORE phase)
+│   ├── models.py              Room, RoomMember, RoomState
+│   ├── store.py               RoomStore（JSONL永続化）
+│   ├── manager.py             RoomManager（コアサービス）
+│   ├── events.py              RoomCreated/Updated/Deleted/Joined/Left
+│   ├── dispatcher.py          _RoomDispatcher（ControlMessage処理）
 │   └── hooks.py               EventBus Hook登録
 │
 ├── heartbeat/                 # TimerTick heartbeat Plugin

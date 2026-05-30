@@ -74,11 +74,19 @@ iris/                             ← アプリケーションコア
 │   └── tracer.py                 ← EventTracer（デバッグトレース）
 ├── account/                      ← アカウント管理: ユーザー識別・外部ID連携
 │   ├── __init__.py               ← AccountPlugin (STORE phase)
-│   ├── models.py                 ← Account, SessionBinding
+│   ├── models.py                 ← Account, AccountIdentity
 │   ├── store.py                  ← AccountStore（JSONL永続化）
 │   ├── manager.py                ← AccountManager（コアサービス）
-│   ├── events.py                 ← AccountCreated/Updated/SessionBound/Unbound
+│   ├── events.py                 ← AccountCreated/Updated/IdentityLinked/Presence
 │   ├── dispatcher.py             ← _AccountDispatcher（ControlMessage処理）
+│   └── hooks.py                  ← EventBus Hook登録
+├── room/                         ← ルーム管理: ルームCRUD・メンバーシップ・アカウント連携
+│   ├── __init__.py               ← RoomPlugin (STORE phase)
+│   ├── models.py                 ← Room, RoomMember, RoomState
+│   ├── store.py                  ← RoomStore（JSONL永続化）
+│   ├── manager.py                ← RoomManager（コアサービス）
+│   ├── events.py                 ← RoomCreated/Updated/Deleted/Joined/Left
+│   ├── dispatcher.py             ← _RoomDispatcher（ControlMessage処理）
 │   └── hooks.py                  ← EventBus Hook登録
 ├── heartbeat/                    ← TimerTick heartbeat Plugin
 │   └── service.py                ← HeartbeatService
@@ -247,6 +255,7 @@ iris/                             ← アプリケーションコア
 | `event/` | グローバルEventBus（全層間通信） |
 | `heartbeat/` | TimerTick heartbeat Plugin |
 | `account/` | ユーザー識別・外部ID連携・セッション紐付け |
+| `room/` | ルームCRUD・メンバーシップ管理・アカウント連携 |
 | `memory/` | 感覚→短期→長期記憶、人格 |
 | `limbic/` | 感情・関係性（Appraisal理論） |
 | `agency/` | 意思決定（planning）と実行（execution） |

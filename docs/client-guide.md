@@ -69,6 +69,8 @@ Iris から届くメッセージは **5種類** がある。
 
 `thinking` → `speaking` → `done` のストリームを **逐次ストリーミング表示** することが期待される。
 
+**StreamState の全値**: `thinking`, `speaking`, `done`, `interrupted`（中断時）
+
 ### 2.2 短縮応答（response のみ）
 
 Iris が抑制状態（直近で応答した直後等）の場合、**stream を省略** して即座に短い応答を返す:
@@ -109,17 +111,27 @@ stream を経らず1メッセージで完了。
 Iris は以下の条件が揃うと、ユーザー入力なしで `proactive` メッセージを送信する:
 
 ### 発話条件
-1. **前回のやり取りから一定時間経過**（30秒〜300秒の間でスコアリング）
-2. **記憶との関連性がある**（直近の話題に関連する長期記憶がある）
-3. **抑制条件が_NONE**（下記の抑制状態がない）
+
+5つの独立したスコア要素を加重合成し、閾値（`speak_threshold`）を超えると発話する:
+
+| 要素 | 説明 | 重み |
+|------|------|------|
+| `memory_score` | 意味記憶との関連性（セマンティック検索） | 0.55 |
+| `context_score` | 直近の会話サマリの類似性（bigram Jaccard） | 0.30 |
+| `sensory_score` | 生の感覚入力の有無（ブースト） | — |
+| `stm_score` | 短期記憶のターン数 | — |
+| `urgency_score` | 緊急度検出（質問、キーワード、長さ等） | — |
+
+- `sensory_score` と `urgency_score` は正のとき加重合成に加わり、スコアをブーストする
+- `stm_score` は `context_score` と大きい方を採用する
+- `system_event == "connected"` 時は閾値を自動超える
+- 重みは `config.trigger_weights` で変更可能
 
 ### 抑制条件（発話しない条件）
 
 | 状態 | 原因 | 解除方法 |
 |------|------|----------|
-| クールダウン | 直近で発話した | 300秒経過 |
-| スリープ | `/sleep` 実行 | `/wakeup` 実行 |
-| 確認モード | 2回連続で無視された | ユーザーが次に応答する |
+| クールダウン | 直近で応答した | 5秒経過（`post_execution_cooldown_sec`） |
 | 音声録音中 | `voice_indicator:true` 受信 | 録音終了で自動解除 |
 
 ### 設定による制御
@@ -140,7 +152,7 @@ proactive:
 ### 必要なPermission
 
 ```
-("permissions", "send_chat,receive_chat,send_voice_indicator")
+("permissions", "send_chat,receive_chat,send_command,receive_command,receive_log,interrupt,execute_action,send_voice_indicator")
 ```
 
 ### プロトコル
@@ -192,7 +204,7 @@ BidirectionalStreamRequest(
         speaker=Identity(
             provider="discord",
             subject="1234567890",
-            display_name="Bob",
+            provider_name="Bob",
             metadata={
                 "guild_id": "guild_1",
                 "channel_id": "channel_1",
@@ -227,7 +239,7 @@ BidirectionalStreamRequest(
 BidirectionalStreamRequest(
     control=ControlMessage(
         action="room.join",
-        identity=Identity(provider="discord", subject="1234567890", display_name="Bob"),
+        identity=Identity(provider="discord", subject="1234567890", provider_name="Bob"),
         room_id="discord:guild_1:channel_1",
     )
 )
@@ -320,7 +332,7 @@ ControlMessage(
     action="presence.joined",
     account_id="abc123",
     display_name="Bob",
-    identity=Identity(provider="discord", subject="1234567890"),
+    room_id="discord:guild_1:channel_1",
 )
 ```
 
@@ -344,7 +356,7 @@ ControlMessage(
 
 | コマンド | 説明 | 応答例 |
 |----------|------|--------|
-| `/status` | Iris の状態確認 | `Provider: ollama Model: qwen3.5:4b State: IDLE` |
+| `/status` | Iris の状態確認 | `Models: ['qwen3.5:4b']` / `Session: 127.0.0.1:9876` / `Memory: episodic=30, semantic=100` |
 | `/shutdown` | グレースフルシャットダウン | `Shutting down...` |
 | `/help` | コマンド一覧 | `Available commands: /status, /shutdown, /help, ...` |
 | `/compact` | 会話履歴を強制圧縮 | `Compacted: 240 chars summary, kept last 6 messages` |
@@ -354,7 +366,12 @@ ControlMessage(
 | `/sessions` | アクティブセッション一覧 | `Active sessions: ...` |
 | `/ping` | LLM死活確認 | `LLM: OK` |
 | `/tools` | 登録ツール一覧 | `Registered tools (3): ...` |
-| `/llm` | LLM設定情報 | `Provider: ollama\nModel: qwen3.5:4b\nStatus: available` |
+| `/llm` | LLM設定情報 | `Default model: qwen3.5:4b` / `[ollama:localhost:11434] ctx=8192` / `Status: available` |
+| `/state [<path>]` | システム状態確認 | システム内部状態をJSONで返す |
+| `/events [n]` | 直近のイベント履歴 | n件の最近のイベントを表示 |
+| `/health` | ヘルスチェック | システムの健全性を確認 |
+| `/report` | デバッグレポート | 詳細なデバッグ情報を出力 |
+| `/debug` | デバッグサブシステム | `/debug help` でサブコマンド一覧 |
 
 ---
 

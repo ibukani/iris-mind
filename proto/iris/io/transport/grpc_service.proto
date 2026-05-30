@@ -89,7 +89,7 @@ message CommandOutput {
 
 // A control message for account and presence protocol.
 message ControlMessage {
-  // Action type: "account.join" / "account.leave" / "account.get" / "account.update" / "account.link_identity"
+  // Action type: "account.identify" / "account.profile" / "account.update" / "account.link" / "room.create" / "room.join" / etc.
   string action = 1;
   // Display name.
   string display_name = 2;

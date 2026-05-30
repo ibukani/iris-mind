@@ -206,48 +206,64 @@ class PluginManager:
     def _wire_cross_layer_dependencies(self) -> None:
         """Plugin間の依存関係をkernelで配線する。
 
-        control メッセージは IO 層（Gateway）→ memory 層（Handler）への
-        直接コールバックで接続する（同期レスポンスが必要なため）。
+        control メッセージは action prefix でルーティングする:
+        - account.* → _AccountEventHandler (直接、Memory層非依存)
+        - room.*    → _RoomEventHandler (直接)
+
         通常メッセージは EventBus 経由で接続する（Gateway → InputReady → Handler）。
+        Room 参加/退室の副作用 (add_user, system_event_block) は
+        Memory 層が RoomJoinedEvent/RoomLeftEvent を購読して処理する。
         """
         from iris.io.manager import IOManager
-        from iris.memory.handler import _MemoryEventHandler
 
         io_mgr = self._di.resolve_optional(IOManager)
-        handler = self._di.resolve_optional(_MemoryEventHandler)
-        if io_mgr is not None and handler is not None:
-            from iris.event.event_types import ControlMessageEvent
-            from iris.io.models import ControlMessage as IOControlMsg
+        if io_mgr is None:
+            return
 
-            def _adapt_control_message(msg: IOControlMsg, session_id: str) -> IOControlMsg | None:
-                evt = ControlMessageEvent(
-                    timestamp=None,
-                    source="io",
-                    action=msg.action,
-                    account_id=msg.account_id,
-                    room_id=msg.room_id,
-                    nickname=msg.nickname,
-                    text=msg.text,
-                    session_id=session_id,
-                    identity=msg.identity.model_dump() if msg.identity else None,
-                    profile=msg.profile,
-                    metadata=msg.metadata,
-                )
-                result = handler.handle_control_message(evt, session_id)
-                if result is None:
-                    return None
-                identity = result.identity
-                from iris.io.models import Identity
+        from iris.account.handler import _AccountEventHandler as AccountHandlerCls
+        from iris.event.event_types import ControlMessageEvent
+        from iris.io.models import ControlMessage as IOControlMsg
+        from iris.room.handler import _RoomEventHandler as RoomHandlerCls
 
-                return IOControlMsg(
-                    action=result.action,
-                    account_id=result.account_id,
-                    room_id=result.room_id,
-                    nickname=result.nickname,
-                    text=result.text,
-                    identity=Identity(**identity) if isinstance(identity, dict) else None,
-                    profile=result.profile or {},
-                    metadata=result.metadata or {},
-                )
+        account_handler = self._di.resolve_optional(AccountHandlerCls)
+        room_handler = self._di.resolve_optional(RoomHandlerCls)
 
-            io_mgr.set_control_handler(_adapt_control_message)
+        def _adapt_control_message(msg: IOControlMsg, session_id: str) -> IOControlMsg | None:
+            evt = ControlMessageEvent(
+                timestamp=None,
+                source="io",
+                action=msg.action,
+                account_id=msg.account_id,
+                room_id=msg.room_id,
+                nickname=msg.nickname,
+                text=msg.text,
+                session_id=session_id,
+                identity=msg.identity.model_dump() if msg.identity else None,
+                profile=msg.profile,
+                metadata=msg.metadata,
+            )
+
+            if evt.action.startswith("account."):
+                handler_result = account_handler.handle_control_message(evt, session_id) if account_handler else None
+            else:
+                handler_result = room_handler.handle_control_message(evt, session_id) if room_handler else None
+
+            self._event_bus.publish(evt)
+
+            if handler_result is None:
+                return None
+            identity = handler_result.identity
+            from iris.io.models import Identity
+
+            return IOControlMsg(
+                action=handler_result.action,
+                account_id=handler_result.account_id,
+                room_id=handler_result.room_id,
+                nickname=handler_result.nickname,
+                text=handler_result.text,
+                identity=Identity(**identity) if isinstance(identity, dict) else None,
+                profile=handler_result.profile or {},
+                metadata=handler_result.metadata or {},
+            )
+
+        io_mgr.set_control_handler(_adapt_control_message)

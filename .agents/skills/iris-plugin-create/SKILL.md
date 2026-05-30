@@ -217,4 +217,56 @@ stop_all():
 
 ## Plugin 内部ファイル分割規則
 
-プラグイン内部のファイル分割・コンポーネント命名規則の詳細は `.agents/skills/iris-plugin-structure/SKILL.md` を参照。
+新規作成時に遵守すべきstructure規則を以下にまとめる。詳細は `.agents/skills/iris-plugin-structure/SKILL.md` を参照。
+
+### ファイル名規約
+
+- `snake_case.py`。略語禁止（`di.py` → `service_container.py`）
+- 単数形優先。コンテナのみ複数形可（`protocols.py`, `stores.py`）
+- 数字接尾辞禁止（`handler2.py` ではなく責務名で分割）
+
+### クラス名規約
+
+- `PascalCase`。ファイル名とプレフィックスを一致させる
+  - `manager.py` → `XxxManager`
+  - `handler.py` → `_XxxEventHandler`（`_` プレフィックス必須）
+- Protocol は `XxxProtocol` 命名推奨
+
+### 関数名規約
+
+- モジュールレベル: `動詞_目的語`（`build_agency`, `route_after_llm`, `render_short_term_context`）
+- ハンドラ（EventBus購読）: **`_on_xxx_event`**（`_on_message`, `_on_tick`）
+- Hook ハンドラ: **`_xxx_hook`**（`_my_hook`）
+- プライベート: `_prefix`
+
+> ⚠️ handler.py 内の関数名は `_handle_xxx` ではなく `_on_xxx_event` とする
+
+### handler.py 分離ルール
+
+- EventBus subscribe は manager で直接行わず、必ず `handler.py` に分離
+- `__init__.py` の `init()` で wiring する
+- handler が manager のメソッドを呼び戻す場合は `Protocol` を介して疎結合にする
+
+### 分割トリガー（新規作成時の判断基準）
+
+| 条件 | 抽出先 |
+|---|---|
+| `__init__.py` の `init()` 本体 > 50行 | `builder.py` |
+| EventBus subscribe が1つでもある | `handler.py`（必須分離） |
+| Protocol クラスが3以上 | `protocols.py` |
+| static method が2以上 | `utils.py` |
+| コンポーネント生成が複雑（> 10行） | `builder.py` |
+
+### インポート規約
+
+- **同一プラグイン内**: 相対インポート推奨（`from .manager import XxxManager`）
+- **他プラグイン**: 絶対インポート（`from iris.memory.manager import MemoryManager`）
+- 循環参照の回避: 型ヒントのみの参照は `if TYPE_CHECKING:` ブロック内でインポート
+
+### その他の重要ルール
+
+- `PluginManager` をロジッククラスのメンバ変数に保持させない。コンストラクタで具象依存を注入する
+- 1ファイル200行を目安に、超えたら責務分割を検討
+- 分割トリガーに達する前の過剰分割は禁止。必要になるまで単一ファイルで良い。EventBus subscribe の分離のみ例外
+- `__init__.py` は公開APIのみ再エクスポート。内部モジュールへの直接アクセスは非推奨
+- `models.py` はデータ保持用ピュアクラスのみ。シリアライズ/変換は `formatter.py` / `renderer.py` で行う

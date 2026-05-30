@@ -6,7 +6,6 @@ from typing import Any
 from loguru import logger
 
 from iris.event.event_types import (
-    ControlMessageEvent,
     InhibitionAction,
     InhibitionEvent,
     InputReady,
@@ -16,6 +15,7 @@ from iris.event.event_types import (
     TimerTick,
 )
 from iris.memory.models import ContentBlock, system_event_block
+from iris.room.events import RoomJoinedEvent, RoomLeftEvent
 
 
 class _MemoryEventHandler:
@@ -23,13 +23,12 @@ class _MemoryEventHandler:
 
     責務:
     - EventBus 上のイベントを購読し、記憶系の処理を行う
-    - IO 層からの control メッセージを受信し、EventBus に publish してから処理を行う
-    - 処理結果を ControlMessage として返す（IO 層がクライアントに返送）
+    - 通常メッセージ: Gateway → EventBus.publish(InputReady) → subscribe で受信
+    - Room 参加/退室: RoomJoinedEvent/RoomLeftEvent → ユーザー追跡 + system_event_block
 
     設計:
-    - 通常メッセージ: Gateway → EventBus.publish(InputReady) → subscribe で受信
-    - control メッセージ: Gateway → handler コールバック（同期レスポンス必要）
-    - EventBus は memory 層が管理する。
+    - control メッセージは KernelManager で room.* と account.* に分岐し、
+      Memory 層には届かない。Memory 層は Room イベント経由で間接的に処理する。
     """
 
     def __init__(
@@ -39,6 +38,7 @@ class _MemoryEventHandler:
         proactive_config: Any,
         short_term: Any,
         account_handler: Any = None,
+        room_provider: Any = None,
     ) -> None:
 
         self.event_bus = event_bus
@@ -46,6 +46,7 @@ class _MemoryEventHandler:
         self.proactive_config = proactive_config
         self.short_term = short_term
         self._account_handler = account_handler
+        self._room_provider = room_provider
         self._pending_input: dict[tuple[str, str], list[tuple[str, str, str]]] = {}
         self._pending_lock = Lock()
 
@@ -53,6 +54,8 @@ class _MemoryEventHandler:
         event_bus.subscribe(MessageEvent, self._on_message_event)
         event_bus.subscribe(TimerTick, self._on_timer_tick)
         event_bus.subscribe(SessionDisconnectEvent, self._on_session_disconnect)
+        event_bus.subscribe(RoomJoinedEvent, self._on_room_joined)
+        event_bus.subscribe(RoomLeftEvent, self._on_room_left)
 
     def _on_message_event(self, event: MessageEvent) -> None:
         if event.msg_type == "voice_indicator":
@@ -108,11 +111,12 @@ class _MemoryEventHandler:
             user_id, nickname = self._account_handler.identify_message_speaker(
                 event.session_id,
                 context.get("speaker"),
-                event.room_id,
             )
             if user_id:
                 context["identity"] = user_id
                 context["nickname"] = nickname
+                if event.room_id and self._room_provider:
+                    self._room_provider.join_room(event.room_id, user_id, session_id=event.session_id)
         self.event_bus.publish(
             MessageEvent(
                 timestamp=None,
@@ -129,9 +133,25 @@ class _MemoryEventHandler:
             ),
         )
 
+    def _on_room_joined(self, event: RoomJoinedEvent) -> None:
+        """Room参加時にユーザーを追跡し、system_event_blockを生成する。"""
+        if self.short_term:
+            self.short_term.add_user(
+                event.account_id, event.nickname, session_id=event.session_id, room_id=event.room_id
+            )
+        text = f"[system] {event.nickname} が入室しました"
+        block = system_event_block(text, event_type="room.joined", user_id=event.account_id, nickname=event.nickname)
+        self._store_and_flush_pending_block(block, event.account_id, event.session_id, event.room_id)
+
+    def _on_room_left(self, event: RoomLeftEvent) -> None:
+        """Room退室時にユーザー追跡を解除する。"""
+        if self.short_term:
+            self.short_term.remove_user(event.account_id, session_id=event.session_id, room_id=event.room_id)
+        text = f"[system] {event.nickname} が退室しました"
+        block = system_event_block(text, event_type="room.left", user_id=event.account_id, nickname=event.nickname)
+        self._store_and_flush_pending_block(block, event.account_id, event.session_id, event.room_id)
+
     def _on_session_disconnect(self, event: SessionDisconnectEvent) -> None:
-        if self._account_handler is not None:
-            self._account_handler.handle_session_disconnect(event.session_id)
         if not self.short_term:
             return
         users = self.short_term.get_users_by_session(event.session_id)
@@ -153,69 +173,6 @@ class _MemoryEventHandler:
                     reason="voice_recording",
                 ),
             )
-
-    def handle_control_message(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent | None:
-        """Gateway から呼ばれる control メッセージのエントリポイント。
-
-        受信した ControlMessage を EventBus に publish してから処理を行う。
-        これにより、proactive/agency 等の他のレイヤーも control メッセージを
-        EventBus 経由で監視できる。
-        """
-        if self._account_handler is None:
-            logger.warning("MemoryManager: handle_control_message skipped, no account_handler")
-            return None
-
-        raw_identity = getattr(msg, "identity", None)
-        if raw_identity is not None and hasattr(raw_identity, "model_dump"):
-            identity = raw_identity.model_dump()
-        elif isinstance(raw_identity, dict):
-            identity = raw_identity
-        else:
-            identity = None
-        internal_msg = ControlMessageEvent(
-            timestamp=None,
-            source="memory",
-            action=msg.action,
-            account_id=msg.account_id,
-            nickname=msg.nickname,
-            text=msg.text,
-            session_id=session_id,
-            identity=identity,
-            profile=msg.profile,
-            room_id=msg.room_id,
-            metadata=msg.metadata,
-        )
-        self.event_bus.publish(internal_msg)
-
-        result = self._account_handler.handle_control_message(internal_msg, session_id)
-
-        if result and result.action in ("account.joined", "account.left", "account.updated"):
-            action = result.action
-            user_id = result.account_id
-            nickname = result.nickname
-
-            if action == "account.joined":
-                if self.short_term:
-                    self.short_term.add_user(user_id, nickname, session_id=session_id, room_id=result.room_id)
-                text = result.text or f"[system] {nickname} が入室しました"
-                block = system_event_block(text, event_type="account.joined", user_id=user_id, nickname=nickname)
-                self._store_and_flush_pending_block(block, user_id, session_id, result.room_id)
-
-            elif action == "account.left":
-                if self.short_term:
-                    self.short_term.remove_user(user_id, session_id=session_id, room_id=result.room_id)
-                text = result.text or f"[system] {nickname} が退室しました"
-                block = system_event_block(text, event_type="account.left", user_id=user_id, nickname=nickname)
-                self._store_and_flush_pending_block(block, user_id, session_id, result.room_id)
-
-            elif action == "account.updated":
-                if self.short_term:
-                    self.short_term.add_user(user_id, nickname, session_id=session_id, room_id=result.room_id)
-                text = result.text or f"[system] {nickname} に改名しました"
-                block = system_event_block(text, event_type="account.updated", user_id=user_id, nickname=nickname)
-                self._store_and_flush_pending_block(block, user_id, session_id, result.room_id)
-
-        return result  # type: ignore[no-any-return]
 
     def _store_and_flush_pending_block(
         self,

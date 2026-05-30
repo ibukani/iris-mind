@@ -21,6 +21,11 @@ account:
     identities_path: .iris/data/account_identities.jsonl
     bindings_path: .iris/data/account_bindings.jsonl
 
+# ルーム管理 — ルームCRUD・メンバーシップ管理
+room:
+    rooms_path: .iris/data/rooms.jsonl
+    members_path: .iris/data/room_members.jsonl
+
 # 自発発話 — プロアクティブな割り込みの重み・閾値
 proactive:
     check_interval_sec: 5.0

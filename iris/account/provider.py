@@ -8,12 +8,9 @@ from loguru import logger
 from iris.account.events import (
     AccountCreatedEvent,
     AccountIdentityLinkedEvent,
-    AccountPresenceEvent,
-    AccountSessionBoundEvent,
-    AccountSessionUnboundEvent,
     AccountUpdatedEvent,
 )
-from iris.account.models import Account, AccountIdentity, SessionBinding
+from iris.account.models import Account, AccountIdentity
 from iris.account.store import AccountStore
 
 
@@ -23,7 +20,6 @@ class AccountProvider:
     責務:
     - アカウントのCRUD
     - 外部ID（provider + subject）との連携
-    - セッション/ルーム ↔ アカウントの紐付け
     - EventBus へのイベント発行
     """
 
@@ -208,113 +204,6 @@ class AccountProvider:
         logger.info("AccountProvider: linked identity={}:{} account_id={}", provider, subject, account_id)
         return True
 
-    def bind_session(self, session_id: str, account_id: str, room_id: str = "") -> None:
-        """セッション/ルームとアカウントを紐付ける。"""
-        existing = self._store.find_active_binding_for_account(session_id, account_id, room_id)
-        if existing is not None and existing.account_id == account_id:
-            return
-        binding = SessionBinding(session_id=session_id, account_id=account_id, room_id=room_id)
-        self._store.add_binding(binding)
-
-        if self._event_bus:
-            self._event_bus.publish(
-                AccountSessionBoundEvent(
-                    timestamp=datetime.now(UTC),
-                    source="account",
-                    session_id=session_id,
-                    account_id=account_id,
-                    room_id=room_id,
-                ),
-            )
-            account = self.resolve(account_id)
-            provider, subject = self._presence_identity(account_id)
-            self._event_bus.publish(
-                AccountPresenceEvent(
-                    timestamp=datetime.now(UTC),
-                    source="account",
-                    session_id=session_id,
-                    account_id=account_id,
-                    room_id=room_id,
-                    nickname=account.nickname if account else account_id,
-                    state="entered",
-                    provider=provider,
-                    subject=subject,
-                ),
-            )
-
-        logger.debug("AccountProvider: bound session={} room={} to account={}", session_id, room_id, account_id)
-
-    def unbind_session(self, session_id: str, account_id: str | None = None, room_id: str = "") -> str | None:
-        """セッション/ルームの紐付けを解除し、account_id を返す。"""
-        binding = (
-            self._store.find_active_binding_for_account(session_id, account_id, room_id)
-            if account_id
-            else self._store.find_active_binding(session_id, room_id)
-        )
-        if not binding:
-            return None
-
-        binding.disconnected_at = datetime.now(UTC).isoformat()
-        self._store.update_binding(binding)
-
-        if self._event_bus:
-            self._event_bus.publish(
-                AccountSessionUnboundEvent(
-                    timestamp=datetime.now(UTC),
-                    source="account",
-                    session_id=session_id,
-                    account_id=binding.account_id,
-                    room_id=binding.room_id,
-                ),
-            )
-            account = self.resolve(binding.account_id)
-            provider, subject = self._presence_identity(binding.account_id)
-            self._event_bus.publish(
-                AccountPresenceEvent(
-                    timestamp=datetime.now(UTC),
-                    source="account",
-                    session_id=session_id,
-                    account_id=binding.account_id,
-                    room_id=binding.room_id,
-                    nickname=account.nickname if account else binding.account_id,
-                    state="left",
-                    provider=provider,
-                    subject=subject,
-                ),
-            )
-
-        logger.debug("AccountProvider: unbound session={} room={}", session_id, binding.room_id)
-        return binding.account_id
-
-    def unbind_all_for_session(self, session_id: str) -> list[str]:
-        """セッション配下の全ルーム紐付けを解除し、account_id 一覧を返す。"""
-        account_ids: list[str] = []
-        for binding in self._store.find_active_bindings_by_session(session_id):
-            account_id = self.unbind_session(session_id, binding.account_id, binding.room_id)
-            if account_id:
-                account_ids.append(account_id)
-        return account_ids
-
-    def get_account_by_session(self, session_id: str, room_id: str = "") -> Account | None:
-        """セッション/ルームからアカウントを取得する。"""
-        binding = self._store.find_active_binding(session_id, room_id)
-        if not binding:
-            return None
-        return self.resolve(binding.account_id)
-
-    def get_active_accounts(self, room_id: str | None = None) -> list[Account]:
-        """アクティブなアカウント一覧を取得する。"""
-        bindings = [b for b in self._store.load_bindings() if b.disconnected_at is None]
-        if room_id is not None:
-            bindings = [b for b in bindings if b.room_id == room_id]
-        account_ids = {b.account_id for b in bindings}
-        accounts = []
-        for aid in account_ids:
-            a = self.resolve(aid)
-            if a:
-                accounts.append(a)
-        return accounts
-
     def list_accounts(self) -> list[Account]:
         """全アカウント一覧を取得する。"""
         return self._store.load_accounts()
@@ -322,10 +211,3 @@ class AccountProvider:
     def get_identities(self, account_id: str) -> list[AccountIdentity]:
         """アカウントに紐づく外部ID一覧を取得する。"""
         return self._store.find_identities_by_account(account_id)
-
-    def _presence_identity(self, account_id: str) -> tuple[str, str]:
-        identities = self._store.find_identities_by_account(account_id)
-        if not identities:
-            return "", ""
-        identity = identities[0]
-        return identity.provider, identity.subject

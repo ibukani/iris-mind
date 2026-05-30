@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from iris.account.models import Account, AccountIdentity, SessionBinding
+from iris.account.models import Account, AccountIdentity
 
 
 class TestAccountModel:
@@ -33,23 +33,3 @@ class TestAccountIdentity:
         assert restored.account_id == "a1"
         assert restored.display_name == "Alice"
         assert restored.metadata == {"guild_id": "g1"}
-
-
-class TestSessionBinding:
-    def test_auto_connected_at(self) -> None:
-        b = SessionBinding(session_id="s1", account_id="a1")
-        assert b.connected_at != ""
-        assert b.disconnected_at is None
-
-    def test_to_dict_roundtrip(self) -> None:
-        b = SessionBinding(
-            session_id="s1",
-            account_id="a1",
-            room_id="discord:g:c",
-            disconnected_at="2025-01-01T00:00:00",
-        )
-        c = SessionBinding.from_dict(b.to_dict())
-        assert c.session_id == "s1"
-        assert c.account_id == "a1"
-        assert c.room_id == "discord:g:c"
-        assert c.disconnected_at == "2025-01-01T00:00:00"

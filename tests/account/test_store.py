@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from iris.account.models import Account, AccountIdentity, SessionBinding
+from iris.account.models import Account, AccountIdentity
 from iris.account.store import AccountStore
 
 
@@ -13,7 +13,6 @@ def tmp_store(tmp_path: Path) -> AccountStore:
     return AccountStore(
         accounts_path=str(tmp_path / "accounts.jsonl"),
         identities_path=str(tmp_path / "identities.jsonl"),
-        bindings_path=str(tmp_path / "bindings.jsonl"),
     )
 
 
@@ -54,35 +53,3 @@ class TestIdentityStore:
     def test_find_nonexistent_returns_none(self, tmp_store: AccountStore) -> None:
         assert tmp_store.find_account_by_id("nope") is None
         assert tmp_store.find_identity("discord", "nope") is None
-
-
-class TestBindingStore:
-    def test_add_and_find_active(self, tmp_store: AccountStore) -> None:
-        b = SessionBinding(session_id="s1", account_id="a1")
-        tmp_store.add_binding(b)
-        found = tmp_store.find_active_binding("s1")
-        assert found is not None
-        assert found.account_id == "a1"
-
-    def test_update_binding_disconnect(self, tmp_store: AccountStore) -> None:
-        b = SessionBinding(session_id="s1", account_id="a1")
-        tmp_store.add_binding(b)
-        b.disconnected_at = "2025-01-01T00:00:00"
-        tmp_store.update_binding(b)
-        assert tmp_store.find_active_binding("s1") is None
-
-    def test_find_bindings_by_account(self, tmp_store: AccountStore) -> None:
-        tmp_store.add_binding(SessionBinding(session_id="s1", account_id="a1"))
-        tmp_store.add_binding(SessionBinding(session_id="s2", account_id="a1"))
-        tmp_store.add_binding(SessionBinding(session_id="s3", account_id="a2"))
-        bindings = tmp_store.find_bindings_by_account("a1")
-        assert len(bindings) == 2
-
-    def test_find_active_binding_scoped_by_room(self, tmp_store: AccountStore) -> None:
-        tmp_store.add_binding(SessionBinding(session_id="s1", account_id="a1", room_id="room-a"))
-        tmp_store.add_binding(SessionBinding(session_id="s1", account_id="a2", room_id="room-b"))
-
-        found = tmp_store.find_active_binding("s1", "room-b")
-
-        assert found is not None
-        assert found.account_id == "a2"

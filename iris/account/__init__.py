@@ -13,8 +13,8 @@ MANIFEST = PluginManifest(
     category=PluginCategory.LAYER,
     phase=PluginPhase.STORE,
     dependencies={"EventBus"},
-    provides=["AccountProvider", "AccountStore"],
-    description="アカウント管理（ユーザー識別・外部ID連携・セッション紐付け）",
+    provides=["AccountProvider", "AccountStore", "_AccountEventHandler"],
+    description="アカウント管理（ユーザー識別・外部ID連携）",
 )
 
 
@@ -32,17 +32,16 @@ class AccountPlugin(PluginProtocol):
         cfg = manager.get_plugin_config("account")
         accounts_path = str(cfg.get("accounts_path", ".iris/data/accounts.jsonl"))
         identities_path = str(cfg.get("identities_path", ".iris/data/account_identities.jsonl"))
-        bindings_path = str(cfg.get("bindings_path", ".iris/data/account_bindings.jsonl"))
 
-        store = AccountStore(accounts_path=accounts_path, identities_path=identities_path, bindings_path=bindings_path)
+        store = AccountStore(accounts_path=accounts_path, identities_path=identities_path)
         event_bus = manager.resolve(EventBus)
         provider = AccountProvider(store=store, event_bus=event_bus)
 
-        handler = _AccountEventHandler(account_provider=provider)
+        account_handler = _AccountEventHandler(account_provider=provider)
 
         manager.provide(AccountStore, store)
         manager.provide(AccountProvider, provider)
-        manager.provide(_AccountEventHandler, handler)
+        manager.provide(_AccountEventHandler, account_handler)
 
         from iris.account.hooks import register_hooks
 

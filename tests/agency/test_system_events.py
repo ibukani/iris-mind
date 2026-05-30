@@ -7,13 +7,17 @@ from iris.account.provider import AccountProvider
 from iris.account.store import AccountStore
 from iris.agency import LLMGateway
 from iris.event.event_bus import EventBus
-from iris.io.models import AuthMessage, ControlMessage
+from iris.event.event_types import ControlMessageEvent
+from iris.io.models import AuthMessage
 from iris.io.session.manager import SessionManager
 from iris.kernel.config import SessionConfig
 from iris.llm.prompt import Personality
 from iris.memory.handler import _MemoryEventHandler
 from iris.memory.manager import MemoryManager
 from iris.memory.models import system_event_block
+from iris.room.handler import _RoomEventHandler
+from iris.room.provider import RoomProvider
+from iris.room.store import RoomStore
 
 
 class DummyConnection:
@@ -21,22 +25,33 @@ class DummyConnection:
         pass
 
 
-def _make_handler(event_bus: EventBus, memory_mgr: MemoryManager, tmp_path: Path):
-    store = AccountStore(
+def _make_handlers(event_bus: EventBus, memory_mgr: MemoryManager, tmp_path: Path):
+    account_store = AccountStore(
         accounts_path=str(tmp_path / "accounts.jsonl"),
         identities_path=str(tmp_path / "identities.jsonl"),
-        bindings_path=str(tmp_path / "bindings.jsonl"),
     )
-    provider = AccountProvider(store=store, event_bus=event_bus)
-    account_handler = _AccountEventHandler(account_provider=provider, short_term=memory_mgr.short_term)
-    handler = _MemoryEventHandler(
+    account_provider = AccountProvider(store=account_store, event_bus=event_bus)
+
+    room_store = RoomStore(
+        rooms_path=str(tmp_path / "rooms.jsonl"),
+        members_path=str(tmp_path / "members.jsonl"),
+    )
+    room_provider = RoomProvider(store=room_store, event_bus=event_bus, account_provider=account_provider)
+
+    account_handler = _AccountEventHandler(account_provider=account_provider)
+    room_handler = _RoomEventHandler(
+        room_provider=room_provider,
+        account_provider=account_provider,
+    )
+    _MemoryEventHandler(
         event_bus,
         memory_mgr.sensory,
         None,
         short_term=memory_mgr.short_term,
         account_handler=account_handler,
+        room_provider=room_provider,
     )
-    return handler, provider
+    return account_handler, room_handler, account_provider, room_provider
 
 
 def test_session_manager_disconnect_publishes_session_disconnect_event():
@@ -59,46 +74,44 @@ def test_session_manager_disconnect_publishes_session_disconnect_event():
     assert disconnect_events[0].identity == "test_user"
 
 
-def test_handle_control_account_join(tmp_path):
+def test_handle_account_identify(tmp_path):
     event_bus = EventBus()
     memory_mgr = MemoryManager()
-    handler, provider = _make_handler(event_bus, memory_mgr, tmp_path)
+    account_handler, _, account_provider, _ = _make_handlers(event_bus, memory_mgr, tmp_path)
 
-    control_events = []
-    event_bus.subscribe("ControlMessageEvent", lambda ev: control_events.append(ev))
-
-    resp = handler.handle_control_message(
-        ControlMessage(
-            action="account.join",
+    resp = account_handler.handle_control_message(
+        ControlMessageEvent(
+            action="account.identify",
             identity={"provider": "discord", "subject": "123", "display_name": "John"},
+            source="test",
+            timestamp=None,
         ),
         session_id="s1",
     )
 
     assert resp is not None
-    assert resp.action == "account.joined"
+    assert resp.action == "account.identified"
     assert len(resp.account_id) == 16
     assert resp.nickname == "John"
-    account = provider.resolve(resp.account_id)
+    account = account_provider.resolve(resp.account_id)
     assert account is not None
     assert account.nickname == "John"
 
-    assert len(control_events) == 1
-    assert control_events[0].action == "account.join"
 
-
-def test_handle_system_account_get(tmp_path):
+def test_handle_account_profile(tmp_path):
     event_bus = EventBus()
     memory_mgr = MemoryManager()
-    handler, provider = _make_handler(event_bus, memory_mgr, tmp_path)
-    account = provider.resolve_or_create_identity("discord", "123", display_name="John")
-    provider.bind_session("s1", account.account_id)
+    account_handler, _, account_provider, _ = _make_handlers(event_bus, memory_mgr, tmp_path)
 
-    control_events = []
-    event_bus.subscribe("ControlMessageEvent", lambda ev: control_events.append(ev))
+    account = account_provider.resolve_or_create_identity("discord", "123", display_name="John")
 
-    resp = handler.handle_control_message(
-        ControlMessage(action="account.get"),
+    resp = account_handler.handle_control_message(
+        ControlMessageEvent(
+            action="account.profile",
+            account_id=account.account_id,
+            source="test",
+            timestamp=None,
+        ),
         session_id="s1",
     )
 
@@ -106,69 +119,102 @@ def test_handle_system_account_get(tmp_path):
     assert resp.action == "account.profile"
     assert resp.nickname == "John"
 
-    assert len(control_events) == 1
-    assert control_events[0].action == "account.get"
 
-
-def test_handle_system_user_left(tmp_path):
+def test_room_join_creates_system_event(tmp_path):
     event_bus = EventBus()
     memory_mgr = MemoryManager()
-    handler, provider = _make_handler(event_bus, memory_mgr, tmp_path)
-    account = provider.register("John")
-    user_id = account.account_id
-    memory_mgr.short_term.add_user(user_id, "John")
+    _, room_handler, account_provider, room_provider = _make_handlers(event_bus, memory_mgr, tmp_path)
+
+    room = room_provider.create_room("test")
+    account = account_provider.resolve_or_create_identity("discord", "123", display_name="John")
 
     inputs_ready = []
     event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
 
-    resp = handler.handle_control_message(
-        ControlMessage(action="account.leave", account_id=user_id),
+    resp = room_handler.handle_control_message(
+        ControlMessageEvent(
+            action="room.join",
+            room_id=room.room_id,
+            account_id=account.account_id,
+            source="test",
+            timestamp=None,
+        ),
         session_id="s1",
     )
 
     assert resp is not None
-    assert resp.action == "account.left"
-    assert "Left" in resp.text
+    assert resp.action == "room.joined"
+
+    assert len(inputs_ready) == 1
+    assert "入室" in inputs_ready[0].content or "Joined" in inputs_ready[0].content
+
+
+def test_room_leave_creates_system_event(tmp_path):
+    event_bus = EventBus()
+    memory_mgr = MemoryManager()
+    _, room_handler, account_provider, room_provider = _make_handlers(event_bus, memory_mgr, tmp_path)
+
+    room = room_provider.create_room("test")
+    account = account_provider.resolve_or_create_identity("discord", "123", display_name="John")
+    room_provider.join_room(room.room_id, account.account_id, session_id="s1")
+
+    inputs_ready = []
+    event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
+
+    resp = room_handler.handle_control_message(
+        ControlMessageEvent(
+            action="room.leave",
+            room_id=room.room_id,
+            account_id=account.account_id,
+            source="test",
+            timestamp=None,
+        ),
+        session_id="s1",
+    )
+
+    assert resp is not None
+    assert resp.action == "room.left"
 
     assert len(inputs_ready) == 1
     assert "退室" in inputs_ready[0].content or "Left" in inputs_ready[0].content
 
 
-def test_handle_system_account_update(tmp_path):
+def test_account_update(tmp_path):
     event_bus = EventBus()
     memory_mgr = MemoryManager()
-    handler, provider = _make_handler(event_bus, memory_mgr, tmp_path)
-    account = provider.register("John")
-    user_id = account.account_id
-    memory_mgr.short_term.add_user(user_id, "John")
+    account_handler, _, account_provider, _ = _make_handlers(event_bus, memory_mgr, tmp_path)
 
-    inputs_ready = []
-    event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
+    account = account_provider.register("John")
 
-    resp = handler.handle_control_message(
-        ControlMessage(action="account.update", account_id=user_id, nickname="Jane"),
+    resp = account_handler.handle_control_message(
+        ControlMessageEvent(
+            action="account.update",
+            account_id=account.account_id,
+            nickname="Jane",
+            source="test",
+            timestamp=None,
+        ),
         session_id="s1",
     )
 
     assert resp is not None
     assert resp.action == "account.updated"
     assert resp.nickname == "Jane"
-    assert "Jane" in resp.text
 
-    updated = provider.resolve(user_id)
+    updated = account_provider.resolve(account.account_id)
     assert updated is not None
     assert updated.nickname == "Jane"
-    assert len(inputs_ready) == 1
-    assert "改名" in inputs_ready[0].content or "Jane" in inputs_ready[0].content
 
 
 def test_session_disconnect_triggers_auto_user_left(tmp_path):
     event_bus = EventBus()
     memory_mgr = MemoryManager()
-    _, provider = _make_handler(event_bus, memory_mgr, tmp_path)
-    account = provider.register("Alice")
+    _, _, account_provider, room_provider = _make_handlers(event_bus, memory_mgr, tmp_path)
+
+    room = room_provider.create_room("test")
+    account = account_provider.register("Alice")
     user_id = account.account_id
-    memory_mgr.short_term.add_user(user_id, "Alice", session_id="sess1")
+    room_provider.join_room(room.room_id, user_id, session_id="sess1")
 
     inputs_ready = []
     inhibition_events = []
@@ -185,7 +231,6 @@ def test_session_disconnect_triggers_auto_user_left(tmp_path):
     text = inputs_ready[0].content
     assert "退室" in text
     assert "Alice" in text
-    assert memory_mgr.short_term.get_active_users() == []
     unsuppress = [e for e in inhibition_events if e.action.value == "unsuppress"]
     assert len(unsuppress) >= 1
 
@@ -193,7 +238,7 @@ def test_session_disconnect_triggers_auto_user_left(tmp_path):
 def test_session_disconnect_no_users_no_error(tmp_path):
     event_bus = EventBus()
     memory_mgr = MemoryManager()
-    _make_handler(event_bus, memory_mgr, tmp_path)
+    _make_handlers(event_bus, memory_mgr, tmp_path)
 
     inputs_ready = []
     event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
@@ -210,7 +255,7 @@ def test_session_disconnect_no_users_no_error(tmp_path):
 def test_system_event_block_has_metadata():
     block = system_event_block(
         "[system] Bob が入室しました",
-        event_type="account.joined",
+        event_type="room.joined",
         user_id="u123",
         nickname="Bob",
     )
@@ -218,7 +263,7 @@ def test_system_event_block_has_metadata():
     assert block["text"] == "[system] Bob が入室しました"
     meta = block["metadata"]
     assert meta is not None
-    assert meta["event_type"] == "account.joined"
+    assert meta["event_type"] == "room.joined"
     assert meta["user_id"] == "u123"
     assert meta["nickname"] == "Bob"
 

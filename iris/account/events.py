@@ -21,33 +21,8 @@ class AccountUpdatedEvent(Event):
 
 
 @dataclass
-class AccountSessionBoundEvent(Event):
-    session_id: str = ""
-    account_id: str = ""
-    room_id: str = ""
-
-
-@dataclass
-class AccountSessionUnboundEvent(Event):
-    session_id: str = ""
-    account_id: str = ""
-    room_id: str = ""
-
-
-@dataclass
 class AccountIdentityLinkedEvent(Event):
     account_id: str = ""
     provider: str = ""
     subject: str = ""
     display_name: str = ""
-
-
-@dataclass
-class AccountPresenceEvent(Event):
-    session_id: str = ""
-    account_id: str = ""
-    room_id: str = ""
-    nickname: str = ""
-    state: str = ""
-    provider: str = ""
-    subject: str = ""

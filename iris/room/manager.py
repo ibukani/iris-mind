@@ -187,7 +187,22 @@ class RoomManager:
             )
 
         logger.debug("RoomManager: account {} left room {} (session={})", account_id, room_id, session_id)
+
+        self._maybe_delete_empty_room(room_id)
         return True
+
+    def _maybe_delete_empty_room(self, room_id: str) -> None:
+        remaining = self._store.find_members_by_room(room_id)
+        if remaining:
+            return
+        room = self.get_room(room_id)
+        if room is None:
+            return
+        if room.name == "default" or room.created_by == "system":
+            logger.debug("RoomManager: room {} is protected, skipping auto-delete", room_id)
+            return
+        logger.info("RoomManager: auto-deleting empty room {} (name={})", room_id, room.name)
+        self.delete_room(room_id)
 
     def get_members(self, room_id: str) -> list[RoomMember]:
         """ルームメンバー一覧を取得する。"""

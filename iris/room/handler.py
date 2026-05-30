@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
 from iris.account.models import Provider
-from iris.event.event_types import MessageEvent, SessionDisconnectEvent
-from iris.room.events import RoomLeftEvent
+from iris.event.event_types import MessageEvent, SessionDisconnectEvent, TimerTick
 
 if TYPE_CHECKING:
     from iris.event.event_bus import EventBus
@@ -29,6 +27,8 @@ class _RoomEventHandler:
         self._account_manager = account_manager
         event_bus.subscribe(SessionDisconnectEvent, self._on_session_disconnect)
         event_bus.subscribe(MessageEvent, self._on_message_event)
+        event_bus.subscribe(TimerTick, self._on_timer_tick)
+        self._cleanup_counter = 0
 
     def _on_message_event(self, event: MessageEvent) -> None:
         if event.direction not in ("request", "event"):
@@ -77,35 +77,21 @@ class _RoomEventHandler:
         logger.debug("RoomEventHandler: session disconnect session_id={}", session_id)
         members = self._store.find_active_members_containing_session(session_id)
         for member in members:
-            if session_id in member.session_ids:
-                member.session_ids.remove(session_id)
-
-            if not member.session_ids:
-                member.disconnected_at = datetime.now(UTC).isoformat()
-                self._store.update_member(member)
-                if self._event_bus:
-                    self._event_bus.publish(
-                        RoomLeftEvent(
-                            timestamp=datetime.now(UTC),
-                            source="room",
-                            room_id=member.room_id,
-                            account_id=member.account_id,
-                            display_name=self._room_manager._resolve_display_name(member.account_id),
-                        ),
-                    )
-                logger.debug(
-                    "RoomEventHandler: account {} disconnected from room {} (no remaining sessions)",
-                    member.account_id,
-                    member.room_id,
-                )
-            else:
-                self._store.update_member(member)
-                logger.debug(
-                    "RoomEventHandler: removed session {} from account {} ({} sessions remain)",
-                    session_id,
-                    member.account_id,
-                    len(member.session_ids),
-                )
+            self._room_manager.leave_room(member.room_id, member.account_id, session_id)
 
         if members:
             logger.debug("RoomEventHandler: processed session disconnect for session={}", session_id)
+
+    def _on_timer_tick(self, event: TimerTick) -> None:
+        self._cleanup_counter += 1
+        if self._cleanup_counter % 12 != 0:
+            return
+
+        for room in list(self._store.find_active_rooms()):
+            members = self._store.find_members_by_room(room.room_id)
+            if members:
+                continue
+            if room.name == "default" or room.created_by == "system":
+                continue
+            logger.info("RoomEventHandler: periodic cleanup deleting empty room {} (name={})", room.room_id, room.name)
+            self._room_manager.delete_room(room.room_id)

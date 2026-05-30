@@ -59,17 +59,17 @@ model:
     # モデル定義（接続情報は providers に集約）
     # roles: モデルが担当する役割（low/medium/high）。fallbackとしてdefaultも使用可。
     models:
-        # - name: qwen3.5:4b
-        #   roles: [default]
-        #   provider: ollama
-        #   max_tokens: 1024
-        #   reasoning: false
-        #   tokenizer_repo_id: Qwen/Qwen3.5-4B
-        - name: gemini-3.1-flash-lite
+        - name: qwen3.5:9b
           roles: [default]
-          provider: google
-          max_tokens: 4096
-          tokenizer_repo_id: Qwen/Qwen3.5-4B
+          provider: ollama
+          max_tokens: 1024
+          reasoning: false
+          tokenizer_repo_id: Qwen/Qwen3.5-9B
+        # - name: gemini-3.1-flash-lite
+        #   roles: [default]
+        #   provider: google
+        #   max_tokens: 4096
+        #   tokenizer_repo_id: Qwen/Qwen3.5-4B
 
 # TCP サーバー — 外部クライアント接続の listen 設定
 session:

@@ -63,10 +63,10 @@ class MemoryPlugin(PluginProtocol):
         from iris.account.handler import _AccountEventHandler as AccountHandlerCls
         from iris.event.event_bus import EventBus
         from iris.memory.handler import _MemoryEventHandler
-        from iris.room.provider import RoomProvider as RoomProviderCls
+        from iris.room.manager import RoomManager as RoomManagerCls
 
         account_handler = manager.resolve_optional(AccountHandlerCls)
-        room_provider = manager.resolve_optional(RoomProviderCls)
+        room_provider = manager.resolve_optional(RoomManagerCls)
 
         event_handler = _MemoryEventHandler(
             event_bus=manager.resolve(EventBus),

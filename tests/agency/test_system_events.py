@@ -3,7 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from iris.account.handler import _AccountEventHandler
-from iris.account.provider import AccountProvider
+from iris.account.manager import AccountManager
 from iris.account.store import AccountStore
 from iris.agency import LLMGateway
 from iris.event.event_bus import EventBus
@@ -16,7 +16,7 @@ from iris.memory.handler import _MemoryEventHandler
 from iris.memory.manager import MemoryManager
 from iris.memory.models import system_event_block
 from iris.room.handler import _RoomEventHandler
-from iris.room.provider import RoomProvider
+from iris.room.manager import RoomManager
 from iris.room.store import RoomStore
 
 
@@ -30,13 +30,13 @@ def _make_handlers(event_bus: EventBus, memory_mgr: MemoryManager, tmp_path: Pat
         accounts_path=str(tmp_path / "accounts.jsonl"),
         identities_path=str(tmp_path / "identities.jsonl"),
     )
-    account_provider = AccountProvider(store=account_store, event_bus=event_bus)
+    account_provider = AccountManager(store=account_store, event_bus=event_bus)
 
     room_store = RoomStore(
         rooms_path=str(tmp_path / "rooms.jsonl"),
         members_path=str(tmp_path / "members.jsonl"),
     )
-    room_provider = RoomProvider(store=room_store, event_bus=event_bus, account_provider=account_provider)
+    room_provider = RoomManager(store=room_store, event_bus=event_bus, account_manager=account_provider)
 
     account_handler = _AccountEventHandler(account_provider=account_provider)
     room_handler = _RoomEventHandler(

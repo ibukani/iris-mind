@@ -15,7 +15,7 @@ class _RoomEventHandler:
     - room.create/list/info/join/leave/update/delete/members
     - handle_session_disconnect
 
-    room.join 時にアカウントが存在しなければ AccountProvider で作成する。
+    room.join 時にアカウントが存在しなければ AccountManager で作成する。
     """
 
     def __init__(self, room_provider: Any, account_provider: Any = None) -> None:

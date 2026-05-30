@@ -76,7 +76,7 @@ iris/                             ← アプリケーションコア
 │   ├── __init__.py               ← AccountPlugin (STORE phase)
 │   ├── models.py                 ← Account, SessionBinding
 │   ├── store.py                  ← AccountStore（JSONL永続化）
-│   ├── provider.py               ← AccountProvider（コアサービス）
+│   ├── manager.py                ← AccountManager（コアサービス）
 │   ├── events.py                 ← AccountCreated/Updated/SessionBound/Unbound
 │   ├── handler.py                ← _AccountEventHandler（SystemMessage処理）
 │   └── hooks.py                  ← EventBus Hook登録

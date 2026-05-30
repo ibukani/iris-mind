@@ -82,9 +82,9 @@ def build_agency(manager: PluginManager) -> AgencyComponents:
 
     agents_md_store = AgentsMdStore(path=config.memory.agents_md_path, max_bytes=config.memory.agents_md_max_bytes)
 
-    from iris.account.provider import AccountProvider
+    from iris.account.manager import AccountManager
 
-    account_provider = manager.resolve_optional(AccountProvider)
+    account_provider = manager.resolve_optional(AccountManager)
 
     pipeline = LLMGateway(
         llm=llm,

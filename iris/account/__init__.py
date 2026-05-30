@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
-from iris.kernel.plugin.hooks import hook
 
 if TYPE_CHECKING:
     from iris.kernel.manager import PluginManager
@@ -14,7 +13,7 @@ MANIFEST = PluginManifest(
     category=PluginCategory.LAYER,
     phase=PluginPhase.STORE,
     dependencies={"EventBus"},
-    provides=["AccountProvider", "AccountStore", "_AccountEventHandler"],
+    provides=["AccountManager", "AccountStore", "_AccountEventHandler"],
     description="アカウント管理（ユーザー識別・外部ID連携）",
 )
 
@@ -26,7 +25,7 @@ class AccountPlugin(PluginProtocol):
         manager.register_manifest(MANIFEST)
 
         from iris.account.handler import _AccountEventHandler
-        from iris.account.provider import AccountProvider
+        from iris.account.manager import AccountManager
         from iris.account.store import AccountStore
         from iris.event.event_bus import EventBus
 
@@ -36,26 +35,17 @@ class AccountPlugin(PluginProtocol):
 
         store = AccountStore(accounts_path=accounts_path, identities_path=identities_path)
         event_bus = manager.resolve(EventBus)
-        provider = AccountProvider(store=store, event_bus=event_bus)
+        manager_inst = AccountManager(store=store, event_bus=event_bus)
 
-        self._handler = _AccountEventHandler(account_provider=provider)
+        self._handler = _AccountEventHandler(account_provider=manager_inst)
 
         manager.provide(AccountStore, store)
-        manager.provide(AccountProvider, provider)
+        manager.provide(AccountManager, manager_inst)
         manager.provide(_AccountEventHandler, self._handler)
-
-        manager.hook_registry.register_decorated(self)
 
         from iris.account.hooks import register_hooks
 
         register_hooks(manager)
-
-    @hook("io.dispatch", priority=100)
-    def _on_dispatch(self, ctx: dict[str, Any]) -> dict[str, Any]:
-        msg = ctx["msg"]
-        if ctx["type"] == "control" and msg.action.startswith("account."):
-            ctx["response"] = self._handler.handle_control_message(msg, ctx["session_id"])
-        return ctx
 
     def start(self, manager: PluginManager) -> None:
         pass

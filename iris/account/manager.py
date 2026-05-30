@@ -14,7 +14,7 @@ from iris.account.models import Account, AccountIdentity
 from iris.account.store import AccountStore
 
 
-class AccountProvider:
+class AccountManager:
     """アカウント管理の核心サービス。
 
     責務:
@@ -91,7 +91,7 @@ class AccountProvider:
         """ニックネームを更新する。"""
         account = self.resolve(account_id)
         if not account:
-            logger.warning("AccountProvider: account not found: {}", account_id)
+            logger.warning("AccountManager: account not found: {}", account_id)
             return
 
         old = account.nickname
@@ -111,7 +111,7 @@ class AccountProvider:
                 ),
             )
 
-        logger.info("AccountProvider: updated account_id={} nickname={}", account_id, nickname)
+        logger.info("AccountManager: updated account_id={} nickname={}", account_id, nickname)
 
     def update_last_seen(self, account_id: str) -> None:
         """last_seen を更新する。"""
@@ -125,7 +125,7 @@ class AccountProvider:
         """プロフィールフィールドを更新する。"""
         account = self.resolve(account_id)
         if not account:
-            logger.warning("AccountProvider: account not found: {}", account_id)
+            logger.warning("AccountManager: account not found: {}", account_id)
             return
 
         for key, value in fields.items():
@@ -145,7 +145,7 @@ class AccountProvider:
 
         account.last_seen = datetime.now(UTC).isoformat()
         self._store.update_account(account)
-        logger.info("AccountProvider: updated profile for account_id={}", account_id)
+        logger.info("AccountManager: updated profile for account_id={}", account_id)
 
     def link_identity(
         self,
@@ -159,7 +159,7 @@ class AccountProvider:
         existing = self._store.find_identity(provider, subject)
         if existing and existing.account_id != account_id:
             logger.warning(
-                "AccountProvider: identity {}:{} already linked to account {}",
+                "AccountManager: identity {}:{} already linked to account {}",
                 provider,
                 subject,
                 existing.account_id,
@@ -168,7 +168,7 @@ class AccountProvider:
 
         account = self.resolve(account_id)
         if not account:
-            logger.warning("AccountProvider: account not found: {}", account_id)
+            logger.warning("AccountManager: account not found: {}", account_id)
             return False
 
         now = datetime.now(UTC).isoformat()
@@ -201,7 +201,7 @@ class AccountProvider:
                 ),
             )
 
-        logger.info("AccountProvider: linked identity={}:{} account_id={}", provider, subject, account_id)
+        logger.info("AccountManager: linked identity={}:{} account_id={}", provider, subject, account_id)
         return True
 
     def list_accounts(self) -> list[Account]:

@@ -71,7 +71,7 @@ flowchart TD
     end
 
     subgraph Account["account/ アカウント管理"]
-        ACC_Provider["AccountProvider<br/>CRUD・外部ID連携"]
+        ACC_Provider["AccountManager<br/>CRUD・外部ID連携"]
         ACC_Store["AccountStore<br/>JSONL永続化"]
         ACC_Handler["_AccountEventHandler<br/>ControlMessage処理"]
     end
@@ -189,7 +189,7 @@ iris/
 │   ├── __init__.py            AccountPlugin (STORE phase)
 │   ├── models.py              Account, SessionBinding
 │   ├── store.py               AccountStore（JSONL永続化）
-│   ├── provider.py            AccountProvider（コアサービス）
+│   ├── manager.py             AccountManager（コアサービス）
 │   ├── events.py              AccountCreated/Updated/SessionBound/Unbound
 │   ├── handler.py             _AccountEventHandler（ControlMessage処理）
 │   └── hooks.py               EventBus Hook登録

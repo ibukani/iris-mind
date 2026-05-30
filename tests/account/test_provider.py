@@ -74,6 +74,32 @@ class TestResolve:
         assert provider.resolve_display_name("unknown") == "unknown"
 
 
+class TestMissingAccountRecovery:
+    """identity が存在するが紐づく account が消失した場合のリカバリ。"""
+
+    def test_resolve_or_create_relinks_missing_account(self, provider: AccountManager) -> None:
+        a1 = provider.resolve_or_create_identity(Provider.DISCORD, "777", provider_name="Lucky")
+        provider._store.save_accounts([a for a in provider._store.load_accounts() if a.account_id != a1.account_id])
+        assert provider.resolve(a1.account_id) is None
+
+        a2 = provider.resolve_or_create_identity(Provider.DISCORD, "777", provider_name="Lucky")
+
+        assert a2.account_id != a1.account_id
+        found = provider.get_account_by_identity(Provider.DISCORD, "777")
+        assert found is not None
+        assert found.account_id == a2.account_id
+
+    def test_resolve_or_create_no_duplicates_on_repeated_calls(self, provider: AccountManager) -> None:
+        a1 = provider.resolve_or_create_identity(Provider.DISCORD, "888", provider_name="Eight")
+        provider._store.save_accounts([a for a in provider._store.load_accounts() if a.account_id != a1.account_id])
+
+        a2 = provider.resolve_or_create_identity(Provider.DISCORD, "888", provider_name="Eight")
+        a3 = provider.resolve_or_create_identity(Provider.DISCORD, "888", provider_name="Eight")
+
+        assert a2.account_id == a3.account_id
+        assert a1.account_id != a2.account_id
+
+
 class TestUpdate:
     def test_update_display_name(self, provider: AccountManager) -> None:
         a = provider.register("old")

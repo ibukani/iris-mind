@@ -82,9 +82,26 @@ class AccountManager:
                     account.display_name = provider_name
                 self._store.update_account(account)
                 return account
+            logger.warning(
+                "AccountManager: identity {}:{} linked to missing account {}, creating replacement",
+                provider.value,
+                subject,
+                identity.account_id,
+            )
 
         account = self.register(provider_name or f"{provider.value}:{subject}")
-        self.link_identity(account.account_id, provider, subject, provider_name=provider_name, metadata=metadata)
+        if identity is not None:
+            identity.account_id = account.account_id
+            identity.last_seen = now
+            self._store.update_identity(identity)
+            logger.info(
+                "AccountManager: relinked identity {}:{} to new account {}",
+                provider.value,
+                subject,
+                account.account_id,
+            )
+        else:
+            self.link_identity(account.account_id, provider, subject, provider_name=provider_name, metadata=metadata)
         return account
 
     def update_display_name(self, account_id: str, display_name: str) -> None:

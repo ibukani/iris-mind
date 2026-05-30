@@ -103,6 +103,8 @@ message SystemMessage {
   Identity identity = 6;
   // Profile fields to update.
   map<string, string> profile = 7;
+  // Conversation room for account presence/control.
+  string room_id = 8;
 }
 
 // Client-to-server frame wrapping either a Message, a CommandInput, or a SystemMessage.

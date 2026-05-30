@@ -173,6 +173,26 @@ class TestGetRecentTurns:
         assert blocks_text(recent[-1].get("blocks", [])) == "turn 4"
 
 
+class TestActiveUsers:
+    def test_users_are_scoped_by_room(self, stm: ShortTermMemoryManager) -> None:
+        stm.add_user("u1", "Alice", session_id="s1", room_id="room-a")
+        stm.add_user("u2", "Bob", session_id="s1", room_id="room-b")
+
+        assert stm.get_users_by_room("room-a") == [("u1", "Alice")]
+        assert stm.get_users_by_room("room-b") == [("u2", "Bob")]
+        assert len(stm.get_users_by_session("s1")) == 2
+
+    def test_remove_user_from_session_removes_session_rooms(self, stm: ShortTermMemoryManager) -> None:
+        stm.add_user("u1", "Alice", session_id="s1", room_id="room-a")
+        stm.add_user("u1", "Alice", session_id="s1", room_id="room-b")
+
+        stm.remove_user("u1", session_id="s1")
+
+        assert stm.get_users_by_room("room-a") == []
+        assert stm.get_users_by_room("room-b") == []
+        assert stm.get_active_users() == []
+
+
 class TestConsolidation:
     def test_mark_consolidated_all(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("a"))

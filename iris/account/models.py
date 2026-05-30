@@ -102,10 +102,11 @@ class AccountIdentity:
 
 @dataclass
 class SessionBinding:
-    """セッション ↔ アカウントの紐付け。"""
+    """セッション/ルーム ↔ アカウントの紐付け。"""
 
     session_id: str
     account_id: str
+    room_id: str = ""
     connected_at: str = ""
     disconnected_at: str | None = None
 
@@ -117,6 +118,7 @@ class SessionBinding:
         return {
             "session_id": self.session_id,
             "account_id": self.account_id,
+            "room_id": self.room_id,
             "connected_at": self.connected_at,
             "disconnected_at": self.disconnected_at,
         }
@@ -129,6 +131,7 @@ class SessionBinding:
         return cls(
             session_id=str(data.get("session_id", "")),
             account_id=str(data.get("account_id", "")),
+            room_id=str(data.get("room_id", "")),
             connected_at=str(data.get("connected_at", "")),
             disconnected_at=disconnected_at,
         )

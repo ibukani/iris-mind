@@ -94,13 +94,23 @@ class AccountStore:
             bindings = self.load_bindings()
             bindings.append(binding)
             self.save_bindings(bindings)
-            logger.debug("AccountStore: bound session={} to account={}", binding.session_id, binding.account_id)
+            logger.debug(
+                "AccountStore: bound session={} room={} to account={}",
+                binding.session_id,
+                binding.room_id,
+                binding.account_id,
+            )
 
     def update_binding(self, binding: SessionBinding) -> None:
         with self._lock:
             bindings = self.load_bindings()
             for i, b in enumerate(bindings):
-                if b.session_id == binding.session_id and b.account_id == binding.account_id:
+                if (
+                    b.session_id == binding.session_id
+                    and b.account_id == binding.account_id
+                    and b.room_id == binding.room_id
+                    and b.connected_at == binding.connected_at
+                ):
                     bindings[i] = binding
                     break
             self.save_bindings(bindings)
@@ -120,17 +130,45 @@ class AccountStore:
     def find_identities_by_account(self, account_id: str) -> list[AccountIdentity]:
         return [i for i in self.load_identities() if i.account_id == account_id]
 
-    def find_active_binding(self, session_id: str) -> SessionBinding | None:
+    def find_active_binding(self, session_id: str, room_id: str = "") -> SessionBinding | None:
+        fallback: SessionBinding | None = None
         for b in self.load_bindings():
-            if b.session_id == session_id and b.disconnected_at is None:
+            if b.session_id == session_id and b.room_id == room_id and b.disconnected_at is None:
                 return b
-        return None
+            if not room_id and b.session_id == session_id and b.disconnected_at is None and fallback is None:
+                fallback = b
+        return fallback
 
-    def find_active_binding_for_account(self, session_id: str, account_id: str) -> SessionBinding | None:
+    def find_active_binding_for_account(
+        self,
+        session_id: str,
+        account_id: str,
+        room_id: str = "",
+    ) -> SessionBinding | None:
+        fallback: SessionBinding | None = None
         for b in self.load_bindings():
-            if b.session_id == session_id and b.account_id == account_id and b.disconnected_at is None:
+            if (
+                b.session_id == session_id
+                and b.account_id == account_id
+                and b.room_id == room_id
+                and b.disconnected_at is None
+            ):
                 return b
-        return None
+            if (
+                not room_id
+                and b.session_id == session_id
+                and b.account_id == account_id
+                and b.disconnected_at is None
+                and fallback is None
+            ):
+                fallback = b
+        return fallback
+
+    def find_active_bindings_by_session(self, session_id: str) -> list[SessionBinding]:
+        return [b for b in self.load_bindings() if b.session_id == session_id and b.disconnected_at is None]
+
+    def find_active_bindings_by_room(self, room_id: str) -> list[SessionBinding]:
+        return [b for b in self.load_bindings() if b.room_id == room_id and b.disconnected_at is None]
 
     def find_bindings_by_account(self, account_id: str) -> list[SessionBinding]:
         return [b for b in self.load_bindings() if b.account_id == account_id]

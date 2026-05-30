@@ -111,6 +111,32 @@ class TestSessionBinding:
         provider.bind_session("s2", a2.account_id)
         assert len(provider.get_active_accounts()) == 2
 
+    def test_multiple_rooms_on_same_session(self, provider: AccountProvider) -> None:
+        a1 = provider.register("u1")
+        a2 = provider.register("u2")
+        provider.bind_session("s1", a1.account_id, room_id="room-a")
+        provider.bind_session("s1", a2.account_id, room_id="room-b")
+
+        found_a = provider.get_account_by_session("s1", "room-a")
+        found_b = provider.get_account_by_session("s1", "room-b")
+
+        assert found_a is not None
+        assert found_a.account_id == a1.account_id
+        assert found_b is not None
+        assert found_b.account_id == a2.account_id
+
+    def test_unbind_all_for_session_unbinds_all_rooms(self, provider: AccountProvider) -> None:
+        a1 = provider.register("u1")
+        a2 = provider.register("u2")
+        provider.bind_session("s1", a1.account_id, room_id="room-a")
+        provider.bind_session("s1", a2.account_id, room_id="room-b")
+
+        account_ids = provider.unbind_all_for_session("s1")
+
+        assert set(account_ids) == {a1.account_id, a2.account_id}
+        assert provider.get_account_by_session("s1", "room-a") is None
+        assert provider.get_account_by_session("s1", "room-b") is None
+
     def test_presence_event_includes_identity(
         self,
         provider_and_bus: tuple[AccountProvider, EventBus],
@@ -119,7 +145,8 @@ class TestSessionBinding:
         events = []
         bus.subscribe("AccountPresenceEvent", lambda ev: events.append(ev))
         account = provider.resolve_or_create_identity("discord", "123", display_name="u1")
-        provider.bind_session("s1", account.account_id)
+        provider.bind_session("s1", account.account_id, room_id="room-a")
 
         assert events[-1].provider == "discord"
         assert events[-1].subject == "123"
+        assert events[-1].room_id == "room-a"

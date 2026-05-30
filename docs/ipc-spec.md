@@ -168,6 +168,7 @@ message BidirectionalStreamResponse {
 | `action` | string | アクション種別（下記参照） |
 | `user_id` | string | `account_id` の互換別名 |
 | `account_id` | string | Iris内部アカウントID |
+| `room_id` | string | 会話ルームID。アカウント制御とpresenceの対象ルーム |
 | `nickname` | string | 表示用ニックネーム |
 | `text` | string | サーバーからの応答メッセージ（サーバー→クライアントのみ） |
 | `identity` | Identity | 外部ID |
@@ -177,15 +178,15 @@ message BidirectionalStreamResponse {
 
 | action | 方向 | 説明 | 必須フィールド |
 |--------|------|------|---------------|
-| `account.identify` | C→S, S→C | identity解決/作成、セッション紐付け | `identity.provider`, `identity.subject` |
-| `account.leave` | C→S, S→C | 現セッションの紐付け解除 | なし |
-| `account.get` | C→S, S→C | 現セッションのアカウント情報取得 | なし |
+| `account.identify` | C→S, S→C | identity解決/作成、セッション/ルーム紐付け | `identity.provider`, `identity.subject` |
+| `account.leave` | C→S, S→C | 現セッション/ルームの紐付け解除 | なし |
+| `account.get` | C→S, S→C | 現セッション/ルームのアカウント情報取得 | なし |
 | `account.update` | C→S, S→C | ニックネーム・プロフィール更新 | `nickname` または `profile` |
 | `account.link_identity` | C→S, S→C | 外部ID追加紐付け | `identity.provider`, `identity.subject` |
 
 **自動発行**:
-- セッション切断時、サーバーは同一セッションの短期参加者を退室扱いにする。
-- アカウントのセッション紐付け/解除時、サーバーは `presence.entered` / `presence.left` を `SystemMessage` として配信する。
+- セッション切断時、サーバーは同一セッション配下の全ルーム参加者を退室扱いにする。
+- アカウントのセッション/ルーム紐付け/解除時、サーバーは `presence.entered` / `presence.left` を `SystemMessage` として配信する。
 
 ---
 
@@ -255,10 +256,10 @@ sequenceDiagram
     GW->>Handler: handle_system_message(msg, session_id)
     Handler->>Handler: publish(SystemMessageEvent) to EventBus
     Handler->>Handler: AccountProvider.resolve_or_create_identity(provider, subject)
-    Handler->>Handler: AccountProvider.bind_session(session_id, account_id)
-    Handler-->>GW: SystemMessage(action="account.identify", account_id="abc123", text="Identified: Bob")
+    Handler->>Handler: AccountProvider.bind_session(session_id, account_id, room_id)
+    Handler-->>GW: SystemMessage(action="account.identify", account_id="abc123", room_id, text="Identified: Bob")
     GW-->>Server: route_system_message
-    Server-->>Client: BidirectionalStreamResponse(SystemMessage: action="account.identify", account_id="abc123")
+    Server-->>Client: BidirectionalStreamResponse(SystemMessage: action="account.identify", account_id="abc123", room_id)
 
     Note over Client,Handler: 発話時の自動identify
     Client->>Server: BidirectionalStreamRequest(Message: speaker=discord:123, room_id="discord:g:c")

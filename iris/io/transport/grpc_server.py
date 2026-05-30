@@ -169,6 +169,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
                     action=action,
                     user_id=data.get("user_id", ""),
                     account_id=data.get("account_id", ""),
+                    room_id=data.get("room_id", ""),
                     nickname=data.get("nickname", ""),
                 )
                 text = data.get("text")
@@ -359,6 +360,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
                 action=sys_proto.action,
                 user_id=sys_proto.user_id,
                 account_id=sys_proto.account_id,
+                room_id=sys_proto.room_id,
                 nickname=sys_proto.nickname,
                 text=sys_proto.text,
                 identity=self._parse_identity(sys_proto.identity),

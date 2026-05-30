@@ -61,6 +61,7 @@ class _IOEventHandler:
                 action=action,
                 account_id=event.account_id,
                 user_id=event.account_id,
+                room_id=event.room_id,
                 nickname=event.nickname,
                 identity=identity,
             ),

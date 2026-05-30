@@ -49,10 +49,11 @@ class ShortTermMemoryProtocol(Protocol):
     def mark_consolidated(self, up_to_index: int | None = None) -> None: ...
     def clear(self) -> None: ...
     def should_consolidate(self) -> bool: ...
-    def add_user(self, user_id: str, nickname: str, session_id: str = "") -> None: ...
-    def remove_user(self, user_id: str) -> None: ...
+    def add_user(self, user_id: str, nickname: str, session_id: str = "", room_id: str = "") -> None: ...
+    def remove_user(self, user_id: str, session_id: str = "", room_id: str = "") -> None: ...
     def get_active_users(self) -> list[tuple[str, str]]: ...
     def get_users_by_session(self, session_id: str) -> list[tuple[str, str]]: ...
+    def get_users_by_room(self, room_id: str) -> list[tuple[str, str]]: ...
     @property
     def current_topics(self) -> list[str]: ...
     @property
@@ -82,26 +83,61 @@ class ShortTermMemoryManager:
         self._entity_extractor = entity_extractor or RegexEntityExtractor()
         self._active_users: dict[str, str] = {}
         self._session_users: dict[str, list[str]] = {}
+        self._room_users: dict[str, list[str]] = {}
+        self._session_rooms: dict[str, set[str]] = {}
 
-    def add_user(self, user_id: str, nickname: str, session_id: str = "") -> None:
+    def add_user(self, user_id: str, nickname: str, session_id: str = "", room_id: str = "") -> None:
         self._active_users[user_id] = nickname
         if session_id:
             uid_list = self._session_users.setdefault(session_id, [])
             if user_id not in uid_list:
                 uid_list.append(user_id)
+        if room_id:
+            uid_list = self._room_users.setdefault(room_id, [])
+            if user_id not in uid_list:
+                uid_list.append(user_id)
+            if session_id:
+                self._session_rooms.setdefault(session_id, set()).add(room_id)
 
-    def remove_user(self, user_id: str) -> None:
-        self._active_users.pop(user_id, None)
-        for uid_list in self._session_users.values():
+    def remove_user(self, user_id: str, session_id: str = "", room_id: str = "") -> None:
+        if session_id:
+            uid_list = self._session_users.get(session_id, [])
             if user_id in uid_list:
                 uid_list.remove(user_id)
-                break
+        else:
+            for uid_list in self._session_users.values():
+                while user_id in uid_list:
+                    uid_list.remove(user_id)
+
+        if room_id:
+            uid_list = self._room_users.get(room_id, [])
+            if user_id in uid_list:
+                uid_list.remove(user_id)
+        elif session_id:
+            for current_room_id in self._session_rooms.get(session_id, set()):
+                uid_list = self._room_users.get(current_room_id, [])
+                while user_id in uid_list:
+                    uid_list.remove(user_id)
+        else:
+            for uid_list in self._room_users.values():
+                while user_id in uid_list:
+                    uid_list.remove(user_id)
+
+        still_present = any(user_id in users for users in self._session_users.values()) or any(
+            user_id in users for users in self._room_users.values()
+        )
+        if not still_present:
+            self._active_users.pop(user_id, None)
 
     def get_active_users(self) -> list[tuple[str, str]]:
         return list(self._active_users.items())
 
     def get_users_by_session(self, session_id: str) -> list[tuple[str, str]]:
         uid_list = self._session_users.get(session_id, [])
+        return [(uid, self._active_users.get(uid, uid)) for uid in uid_list if uid in self._active_users]
+
+    def get_users_by_room(self, room_id: str) -> list[tuple[str, str]]:
+        uid_list = self._room_users.get(room_id, [])
         return [(uid, self._active_users.get(uid, uid)) for uid in uid_list if uid in self._active_users]
 
     def add_turn(self, role: str, blocks: list[ContentBlock], user_id: str = "") -> None:
@@ -208,6 +244,8 @@ class ShortTermMemoryManager:
         self._active_references.clear()
         self._active_users.clear()
         self._session_users.clear()
+        self._room_users.clear()
+        self._session_rooms.clear()
 
     def should_consolidate(self) -> bool:
         """メモリの圧縮（要約化）が必要かどうかを判定する。

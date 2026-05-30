@@ -77,3 +77,12 @@ class TestBindingStore:
         tmp_store.add_binding(SessionBinding(session_id="s3", account_id="a2"))
         bindings = tmp_store.find_bindings_by_account("a1")
         assert len(bindings) == 2
+
+    def test_find_active_binding_scoped_by_room(self, tmp_store: AccountStore) -> None:
+        tmp_store.add_binding(SessionBinding(session_id="s1", account_id="a1", room_id="room-a"))
+        tmp_store.add_binding(SessionBinding(session_id="s1", account_id="a2", room_id="room-b"))
+
+        found = tmp_store.find_active_binding("s1", "room-b")
+
+        assert found is not None
+        assert found.account_id == "a2"

@@ -34,10 +34,15 @@ class _AccountEventHandler:
         logger.debug("AccountHandler: unhandled action={}", action)
         return None
 
+    def handle_session_disconnect(self, session_id: str) -> None:
+        """セッション配下の全ルームから退室させる。"""
+        self._provider.unbind_all_for_session(session_id)
+
     def identify_message_speaker(
         self,
         session_id: str,
         identity: dict[str, Any] | None,
+        room_id: str = "",
     ) -> tuple[str, str]:
         """発話者identityをaccount_idへ解決する。"""
         provider, subject, display_name, metadata = self._parse_identity(identity)
@@ -50,12 +55,13 @@ class _AccountEventHandler:
             display_name=display_name,
             metadata=metadata,
         )
-        self._provider.bind_session(session_id, account.account_id)
+        self._provider.bind_session(session_id, account.account_id, room_id=room_id)
         if self._short_term:
-            self._short_term.add_user(account.account_id, account.nickname, session_id=session_id)
+            self._short_term.add_user(account.account_id, account.nickname, session_id=session_id, room_id=room_id)
         return account.account_id, account.nickname
 
     def _handle_identify(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
+        room_id = msg.room_id
         provider, subject, display_name, metadata = self._parse_identity(msg.identity)
         if not provider or not subject:
             return self._error("account.identify", "identity.provider and identity.subject required")
@@ -66,9 +72,9 @@ class _AccountEventHandler:
             display_name=display_name or msg.nickname,
             metadata=metadata,
         )
-        self._provider.bind_session(session_id, account.account_id)
+        self._provider.bind_session(session_id, account.account_id, room_id=room_id)
         if self._short_term:
-            self._short_term.add_user(account.account_id, account.nickname, session_id=session_id)
+            self._short_term.add_user(account.account_id, account.nickname, session_id=session_id, room_id=room_id)
 
         return SystemMessageEvent(
             timestamp=None,
@@ -76,6 +82,7 @@ class _AccountEventHandler:
             action="account.identify",
             user_id=account.account_id,
             account_id=account.account_id,
+            room_id=room_id,
             nickname=account.nickname,
             identity=msg.identity,
             text=f"Identified: {account.nickname}",
@@ -86,9 +93,9 @@ class _AccountEventHandler:
         if account is None:
             return self._error("account.leave", "not identified")
 
-        self._provider.unbind_session(session_id, account.account_id)
+        self._provider.unbind_session(session_id, account.account_id, msg.room_id)
         if self._short_term:
-            self._short_term.remove_user(account.account_id)
+            self._short_term.remove_user(account.account_id, session_id=session_id, room_id=msg.room_id)
 
         return SystemMessageEvent(
             timestamp=None,
@@ -96,13 +103,14 @@ class _AccountEventHandler:
             action="account.leave",
             user_id=account.account_id,
             account_id=account.account_id,
+            room_id=msg.room_id,
             nickname=account.nickname,
             identity=msg.identity,
             text=f"Left: {account.nickname}",
         )
 
     def _handle_get(self, msg: SystemMessageEvent, session_id: str) -> SystemMessageEvent:
-        account = self._provider.get_account_by_session(session_id)
+        account = self._provider.get_account_by_session(session_id, msg.room_id)
         if not account:
             return self._error("account.get", "not identified")
 
@@ -115,6 +123,7 @@ class _AccountEventHandler:
             action="account.get",
             user_id=account.account_id,
             account_id=account.account_id,
+            room_id=msg.room_id,
             nickname=account.nickname,
             text=orjson.dumps(data).decode("utf-8"),
         )
@@ -130,7 +139,7 @@ class _AccountEventHandler:
         if msg.profile:
             self._provider.update_profile(account.account_id, **msg.profile)
         if self._short_term:
-            self._short_term.add_user(account.account_id, account.nickname, session_id=session_id)
+            self._short_term.add_user(account.account_id, account.nickname, session_id=session_id, room_id=msg.room_id)
 
         return SystemMessageEvent(
             timestamp=None,
@@ -138,6 +147,7 @@ class _AccountEventHandler:
             action="account.update",
             user_id=account.account_id,
             account_id=account.account_id,
+            room_id=msg.room_id,
             nickname=account.nickname,
             text=f"Updated: {account.nickname}",
         )
@@ -166,6 +176,7 @@ class _AccountEventHandler:
             action="account.link_identity",
             user_id=account.account_id,
             account_id=account.account_id,
+            room_id=msg.room_id,
             nickname=account.nickname,
             identity=msg.identity,
             text=f"Linked identity: {provider}:{subject}",
@@ -183,7 +194,7 @@ class _AccountEventHandler:
             if account is not None:
                 return account
 
-        return self._provider.get_account_by_session(session_id)
+        return self._provider.get_account_by_session(session_id, msg.room_id)
 
     @staticmethod
     def _parse_identity(identity: dict[str, Any] | None) -> tuple[str, str, str, dict[str, object]]:

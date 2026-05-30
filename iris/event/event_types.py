@@ -140,6 +140,7 @@ class SystemMessageEvent(Event):
     action: str = ""
     user_id: str = ""
     account_id: str = ""
+    room_id: str = ""
     nickname: str = ""
     text: str = ""
     session_id: str = ""

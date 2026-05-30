@@ -24,12 +24,14 @@ class AccountUpdatedEvent(Event):
 class AccountSessionBoundEvent(Event):
     session_id: str = ""
     account_id: str = ""
+    room_id: str = ""
 
 
 @dataclass
 class AccountSessionUnboundEvent(Event):
     session_id: str = ""
     account_id: str = ""
+    room_id: str = ""
 
 
 @dataclass
@@ -44,6 +46,7 @@ class AccountIdentityLinkedEvent(Event):
 class AccountPresenceEvent(Event):
     session_id: str = ""
     account_id: str = ""
+    room_id: str = ""
     nickname: str = ""
     state: str = ""
     provider: str = ""

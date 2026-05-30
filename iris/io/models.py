@@ -93,6 +93,7 @@ class SystemMessage(BaseModel):
     action: str = ""
     user_id: str = ""
     account_id: str = ""
+    room_id: str = ""
     nickname: str = ""
     text: str = ""
     identity: Identity | None = None

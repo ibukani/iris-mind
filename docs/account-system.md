@@ -4,12 +4,12 @@
 
 ## 概要
 
-Account システムはユーザーの永続的識別・外部ID連携・セッション紐付けを管理する。
+Account システムはユーザーの永続的識別・外部ID連携・セッション/ルーム紐付けを管理する。
 旧 UserStore（user_id ↔ nickname のみ）を置き換え、以下の機能を提供する。
 
 - アカウント CRUD（nickname, profile）
 - 外部ID（provider + subject）とのマッピング
-- セッション ↔ アカウントの紐付け
+- セッション/ルーム ↔ アカウントの紐付け
 - EventBus による状態変化通知
 
 ## ディレクトリ構成
@@ -70,6 +70,7 @@ class AccountIdentity:
 class SessionBinding:
     session_id: str          # セッションUUID
     account_id: str          # 紐付けアカウントID
+    room_id: str             # 会話ルームID（未指定時は空文字）
     connected_at: str        # 接続時刻 (ISO 8601)
     disconnected_at: str | None  # 切断時刻
 ```
@@ -86,10 +87,11 @@ class SessionBinding:
 | `link_identity(account_id, provider, subject, display_name="", metadata=None)` | 外部ID紐付け |
 | `update_nickname(account_id, nickname)` | ニックネーム更新 |
 | `update_profile(account_id, **fields)` | プロフィール更新 |
-| `bind_session(session_id, account_id)` | セッション紐付け |
-| `unbind_session(session_id)` | セッション解除 → account_id返却 |
-| `get_account_by_session(session_id)` | セッションからアカウント取得 |
-| `get_active_accounts()` | アクティブアカウント一覧 |
+| `bind_session(session_id, account_id, room_id="")` | セッション/ルーム紐付け |
+| `unbind_session(session_id, account_id=None, room_id="")` | セッション/ルーム解除 → account_id返却 |
+| `unbind_all_for_session(session_id)` | セッション配下の全ルーム紐付け解除 |
+| `get_account_by_session(session_id, room_id="")` | セッション/ルームからアカウント取得 |
+| `get_active_accounts(room_id=None)` | アクティブアカウント一覧 |
 | `get_identities(account_id)` | アカウントに紐づく外部ID一覧 |
 
 ## 永続化
@@ -106,13 +108,13 @@ class SessionBinding:
 
 | アクション | 処理 |
 |-----------|------|
-| `account.identify` | identity解決/作成 + セッション紐付け |
-| `account.leave` | セッション解除 |
-| `account.get` | 現セッションのアカウント情報取得 |
+| `account.identify` | identity解決/作成 + セッション/ルーム紐付け |
+| `account.leave` | セッション/ルーム解除 |
+| `account.get` | 現セッション/ルームのアカウント情報取得 |
 | `account.update` | ニックネーム・プロフィール更新 |
 | `account.link_identity` | 外部ID追加紐付け |
 
-通常チャットでは `Message.speaker` から自動的に `resolve_or_create_identity()` が実行される。Discordグループチャットでは明示的な `account.identify` は任意。
+通常チャットでは `Message.speaker` から自動的に `resolve_or_create_identity()` が実行され、`Message.room_id` と一緒に紐付けられる。Discordグループチャットでは明示的な `account.identify` は任意。
 
 ## Presence通知
 
@@ -123,7 +125,7 @@ class SessionBinding:
 | `entered` | `presence.entered` |
 | `left` | `presence.left` |
 
-通知には `account_id`, `nickname`, `identity.provider`, `identity.subject` が含まれる。
+通知には `account_id`, `room_id`, `nickname`, `identity.provider`, `identity.subject` が含まれる。
 
 ## 設定 (config.yaml)
 

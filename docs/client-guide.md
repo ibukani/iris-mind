@@ -215,9 +215,10 @@ BidirectionalStreamRequest(
     system=SystemMessage(
         action="account.identify",
         identity=Identity(provider="discord", subject="1234567890", display_name="Bob"),
+        room_id="discord:guild_1:channel_1",
     )
 )
-# → SystemMessage(action="account.identify", account_id="...", text="Identified: Bob")
+# → SystemMessage(action="account.identify", account_id="...", room_id="discord:guild_1:channel_1", text="Identified: Bob")
 ```
 
 明示入室は任意。最初の発話でも自動identifyされる。
@@ -226,12 +227,12 @@ BidirectionalStreamRequest(
 
 ```python
 BidirectionalStreamRequest(
-    system=SystemMessage(action="account.leave")
+    system=SystemMessage(action="account.leave", room_id="discord:guild_1:channel_1")
 )
 # → SystemMessage(action="account.leave", text="Left: Bob")
 ```
 
-同じgRPC session内なら `identity` は省略できる。
+同じgRPC session + room内なら `identity` は省略できる。
 
 ### 5.4 アカウント更新
 
@@ -249,7 +250,7 @@ BidirectionalStreamRequest(
 
 ```python
 # 現セッションのアカウント取得
-BidirectionalStreamRequest(system=SystemMessage(action="account.get"))
+BidirectionalStreamRequest(system=SystemMessage(action="account.get", room_id="discord:guild_1:channel_1"))
 
 # 別identityを紐付け
 BidirectionalStreamRequest(

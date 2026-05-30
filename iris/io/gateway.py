@@ -64,6 +64,7 @@ class _IOGateway:
             action=getattr(result, "action", ""),
             user_id=getattr(result, "user_id", ""),
             account_id=getattr(result, "account_id", ""),
+            room_id=getattr(result, "room_id", ""),
             nickname=getattr(result, "nickname", ""),
             text=getattr(result, "text", ""),
             identity=Identity(**identity) if isinstance(identity, dict) else identity,

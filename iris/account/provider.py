@@ -23,7 +23,7 @@ class AccountProvider:
     責務:
     - アカウントのCRUD
     - 外部ID（provider + subject）との連携
-    - セッション ↔ アカウントの紐付け
+    - セッション/ルーム ↔ アカウントの紐付け
     - EventBus へのイベント発行
     """
 
@@ -208,12 +208,12 @@ class AccountProvider:
         logger.info("AccountProvider: linked identity={}:{} account_id={}", provider, subject, account_id)
         return True
 
-    def bind_session(self, session_id: str, account_id: str) -> None:
-        """セッションとアカウントを紐付ける。"""
-        existing = self._store.find_active_binding(session_id)
+    def bind_session(self, session_id: str, account_id: str, room_id: str = "") -> None:
+        """セッション/ルームとアカウントを紐付ける。"""
+        existing = self._store.find_active_binding_for_account(session_id, account_id, room_id)
         if existing is not None and existing.account_id == account_id:
             return
-        binding = SessionBinding(session_id=session_id, account_id=account_id)
+        binding = SessionBinding(session_id=session_id, account_id=account_id, room_id=room_id)
         self._store.add_binding(binding)
 
         if self._event_bus:
@@ -223,6 +223,7 @@ class AccountProvider:
                     source="account",
                     session_id=session_id,
                     account_id=account_id,
+                    room_id=room_id,
                 ),
             )
             account = self.resolve(account_id)
@@ -233,6 +234,7 @@ class AccountProvider:
                     source="account",
                     session_id=session_id,
                     account_id=account_id,
+                    room_id=room_id,
                     nickname=account.nickname if account else account_id,
                     state="entered",
                     provider=provider,
@@ -240,14 +242,14 @@ class AccountProvider:
                 ),
             )
 
-        logger.debug("AccountProvider: bound session={} to account={}", session_id, account_id)
+        logger.debug("AccountProvider: bound session={} room={} to account={}", session_id, room_id, account_id)
 
-    def unbind_session(self, session_id: str, account_id: str | None = None) -> str | None:
-        """セッションの紐付けを解除し、account_id を返す。"""
+    def unbind_session(self, session_id: str, account_id: str | None = None, room_id: str = "") -> str | None:
+        """セッション/ルームの紐付けを解除し、account_id を返す。"""
         binding = (
-            self._store.find_active_binding_for_account(session_id, account_id)
+            self._store.find_active_binding_for_account(session_id, account_id, room_id)
             if account_id
-            else self._store.find_active_binding(session_id)
+            else self._store.find_active_binding(session_id, room_id)
         )
         if not binding:
             return None
@@ -262,6 +264,7 @@ class AccountProvider:
                     source="account",
                     session_id=session_id,
                     account_id=binding.account_id,
+                    room_id=binding.room_id,
                 ),
             )
             account = self.resolve(binding.account_id)
@@ -272,6 +275,7 @@ class AccountProvider:
                     source="account",
                     session_id=session_id,
                     account_id=binding.account_id,
+                    room_id=binding.room_id,
                     nickname=account.nickname if account else binding.account_id,
                     state="left",
                     provider=provider,
@@ -279,19 +283,30 @@ class AccountProvider:
                 ),
             )
 
-        logger.debug("AccountProvider: unbound session={}", session_id)
+        logger.debug("AccountProvider: unbound session={} room={}", session_id, binding.room_id)
         return binding.account_id
 
-    def get_account_by_session(self, session_id: str) -> Account | None:
-        """セッションからアカウントを取得する。"""
-        binding = self._store.find_active_binding(session_id)
+    def unbind_all_for_session(self, session_id: str) -> list[str]:
+        """セッション配下の全ルーム紐付けを解除し、account_id 一覧を返す。"""
+        account_ids: list[str] = []
+        for binding in self._store.find_active_bindings_by_session(session_id):
+            account_id = self.unbind_session(session_id, binding.account_id, binding.room_id)
+            if account_id:
+                account_ids.append(account_id)
+        return account_ids
+
+    def get_account_by_session(self, session_id: str, room_id: str = "") -> Account | None:
+        """セッション/ルームからアカウントを取得する。"""
+        binding = self._store.find_active_binding(session_id, room_id)
         if not binding:
             return None
         return self.resolve(binding.account_id)
 
-    def get_active_accounts(self) -> list[Account]:
+    def get_active_accounts(self, room_id: str | None = None) -> list[Account]:
         """アクティブなアカウント一覧を取得する。"""
         bindings = [b for b in self._store.load_bindings() if b.disconnected_at is None]
+        if room_id is not None:
+            bindings = [b for b in bindings if b.room_id == room_id]
         account_ids = {b.account_id for b in bindings}
         accounts = []
         for aid in account_ids:

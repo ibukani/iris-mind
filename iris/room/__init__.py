@@ -47,6 +47,11 @@ class RoomPlugin(PluginProtocol):
         manager.provide(RoomManager, manager_inst)
         manager.provide(_RoomDispatcher, dispatcher)
 
+        from iris.room.handler import _RoomEventHandler
+
+        event_handler = _RoomEventHandler(event_bus=event_bus, store=store, room_manager=manager_inst)
+        manager.provide(_RoomEventHandler, event_handler)
+
         from iris.room.hooks import register_hooks
 
         register_hooks(manager)

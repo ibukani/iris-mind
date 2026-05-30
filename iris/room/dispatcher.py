@@ -44,9 +44,6 @@ class _RoomDispatcher:
         logger.debug("RoomDispatcher: unhandled action={}", action)
         return None
 
-    def handle_session_disconnect(self, session_id: str) -> None:
-        self._room_manager.on_session_disconnect(session_id)
-
     def _handle_create(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent:
         name = msg.text.strip() if msg.text else ""
         if not name:

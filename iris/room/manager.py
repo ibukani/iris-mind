@@ -184,43 +184,6 @@ class RoomManager:
 
         logger.debug("RoomManager: account {} left room {} (session={})", account_id, room_id, session_id)
 
-    def on_session_disconnect(self, session_id: str) -> None:
-        """セッション切断時に、そのセッションを含むメンバーの session_ids を更新し、空になったら退室処理する。"""
-        members = self._store.find_active_members_containing_session(session_id)
-        for member in members:
-            if session_id in member.session_ids:
-                member.session_ids.remove(session_id)
-
-            if not member.session_ids:
-                member.disconnected_at = datetime.now(UTC).isoformat()
-                self._store.update_member(member)
-                if self._event_bus:
-                    self._event_bus.publish(
-                        RoomLeftEvent(
-                            timestamp=datetime.now(UTC),
-                            source="room",
-                            room_id=member.room_id,
-                            account_id=member.account_id,
-                            display_name=self._resolve_display_name(member.account_id),
-                        ),
-                    )
-                logger.debug(
-                    "RoomManager: account {} disconnected from room {} (no remaining sessions)",
-                    member.account_id,
-                    member.room_id,
-                )
-            else:
-                self._store.update_member(member)
-                logger.debug(
-                    "RoomManager: removed session {} from account {} ({} sessions remain)",
-                    session_id,
-                    member.account_id,
-                    len(member.session_ids),
-                )
-
-        if members:
-            logger.debug("RoomManager: processed session disconnect for session={}", session_id)
-
     def get_members(self, room_id: str) -> list[RoomMember]:
         """ルームメンバー一覧を取得する。"""
         return self._store.find_members_by_room(room_id)

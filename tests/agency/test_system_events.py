@@ -41,12 +41,9 @@ def _make_handlers(event_bus: EventBus, memory_mgr: MemoryManager, tmp_path: Pat
     account_dispatcher = _AccountDispatcher(account_manager=account_provider)
     room_dispatcher = _RoomDispatcher(room_manager=room_provider, account_manager=account_provider)
 
-    from iris.event.event_types import SessionDisconnectEvent
+    from iris.room.handler import _RoomEventHandler
 
-    event_bus.subscribe(
-        SessionDisconnectEvent,
-        lambda ev: room_dispatcher.handle_session_disconnect(ev.session_id),
-    )
+    _RoomEventHandler(event_bus=event_bus, store=room_store, room_manager=room_provider)
 
     _MemoryEventHandler(
         event_bus,

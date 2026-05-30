@@ -213,26 +213,44 @@ BidirectionalStreamRequest(
 ```python
 BidirectionalStreamRequest(
     control=ControlMessage(
-        action="account.join",
+        action="room.join",
+        account_id="abc123",
+        room_id="discord:guild_1:channel_1",
+    )
+)
+# → ControlMessage(action="room.joined", room_id="discord:guild_1:channel_1", text="Joined room: discord:guild_1:channel_1")
+```
+
+`account_id` 未指定時は `identity` からアカウントを自動解決/作成する:
+
+```python
+BidirectionalStreamRequest(
+    control=ControlMessage(
+        action="room.join",
         identity=Identity(provider="discord", subject="1234567890", display_name="Bob"),
         room_id="discord:guild_1:channel_1",
     )
 )
-# → ControlMessage(action="account.joined", account_id="...", room_id="discord:guild_1:channel_1", text="Joined: Bob")
+# → ControlMessage(action="room.joined", account_id="abc123", room_id="discord:guild_1:channel_1", text="Joined room: discord:guild_1:channel_1")
 ```
 
 明示入室は任意。最初の発話でも自動joinされる。
 
 ### 5.3 明示退室
 
+退室は `room.leave` で行う:
+
 ```python
 BidirectionalStreamRequest(
-    control=ControlMessage(action="account.leave", room_id="discord:guild_1:channel_1")
+    control=ControlMessage(
+        action="room.leave",
+        room_id="discord:guild_1:channel_1",
+    )
 )
-# → ControlMessage(action="account.left", text="Left: Bob")
+# → ControlMessage(action="room.left", room_id="discord:guild_1:channel_1", text="Left room: discord:guild_1:channel_1")
 ```
 
-同じgRPC session + room内なら `identity` は省略できる。
+`account_id` 未指定時は `identity` から自動解決する。
 
 ### 5.4 アカウント更新
 
@@ -249,31 +267,49 @@ BidirectionalStreamRequest(
 ### 5.5 アカウント操作
 
 ```python
-# 現セッションのアカウント取得
-BidirectionalStreamRequest(control=ControlMessage(action="account.get", room_id="discord:guild_1:channel_1"))
+# アカウント識別（identity解決/作成、ルーム参加は行わない）
+BidirectionalStreamRequest(
+    control=ControlMessage(
+        action="account.identify",
+        identity=Identity(provider="discord", subject="1234567890"),
+    )
+)
+# → ControlMessage(action="account.identified", account_id="abc123", nickname="Bob")
+
+# アカウント情報取得
+BidirectionalStreamRequest(control=ControlMessage(action="account.profile"))
+# → ControlMessage(action="account.profile", text="{...}")
 
 # 別identityを紐付け
 BidirectionalStreamRequest(
     control=ControlMessage(
-        action="account.link_identity",
+        action="account.link",
         identity=Identity(provider="local", subject="local-user"),
     )
 )
+# → ControlMessage(action="account.linked", text="Linked identity: local:local-user")
 ```
 
 ### 動作仕様
 
 | アクション | 必須フィールド | 処理 |
 |-----------|---------------|------|
-| `account.join` | `identity.provider`, `identity.subject` | アカウント解決/作成、セッション紐付け |
-| `account.leave` | なし | 現セッションの紐付け解除 |
-| `account.get` | なし | 現セッションのアカウント情報返却 |
+| `account.identify` | `identity.provider`, `identity.subject` | identity解決/作成、アカウント情報返却 |
+| `account.profile` | なし | アカウント情報取得 |
 | `account.update` | `nickname` または `profile` | ニックネーム・プロフィール更新 |
-| `account.link_identity` | `identity.provider`, `identity.subject` | 現アカウントへ外部ID追加 |
+| `account.link` | `identity.provider`, `identity.subject` | 現アカウントへ外部ID追加 |
+| `room.join` | `room_id`, (`account_id` or `identity`) | ルーム参加（identityからaccount作成も可） |
+| `room.leave` | `room_id`, (`account_id` or `identity`) | ルーム退室 |
+| `room.create` | `text` (ルーム名) | ルーム作成 |
+| `room.list` | なし | ルーム一覧取得 |
+| `room.info` | `room_id` | ルーム情報取得 |
+| `room.update` | `room_id`, `text` (JSON) | ルーム情報更新 |
+| `room.delete` | `room_id` | ルーム削除 |
+| `room.members` | `room_id` | ルームメンバー一覧取得 |
 
 ### セッション切断時の自動処理
 
-クライアントが `account.leave` を送信せずに切断しても、サーバーは同一セッションの短期参加者を退室扱いにする。
+クライアントが切断すると、サーバーは同一セッション配下の全ルームから自動退室させ、各ルームに `presence.left` を配信する。
 
 ### Presence通知
 
@@ -295,7 +331,7 @@ ControlMessage(
 ```
 1. Discord Bot がIrisへgRPC接続
 2. Discord channelの発話を Message(speaker, room_id, content) で送信
-3. Iris が speaker からアカウントを自動解決/作成
+3. Iris が speaker からアカウントを自動解決し、room.join を自動実行
 4. Iris の応答には room_id が含まれる
 5. Bot が room_id からDiscord channelへ返信
 ```

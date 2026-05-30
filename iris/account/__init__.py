@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
+from iris.kernel.plugin.hooks import hook
 
 if TYPE_CHECKING:
     from iris.kernel.manager import PluginManager
@@ -37,15 +38,24 @@ class AccountPlugin(PluginProtocol):
         event_bus = manager.resolve(EventBus)
         provider = AccountProvider(store=store, event_bus=event_bus)
 
-        account_handler = _AccountEventHandler(account_provider=provider)
+        self._handler = _AccountEventHandler(account_provider=provider)
 
         manager.provide(AccountStore, store)
         manager.provide(AccountProvider, provider)
-        manager.provide(_AccountEventHandler, account_handler)
+        manager.provide(_AccountEventHandler, self._handler)
+
+        manager.hook_registry.register_decorated(self)
 
         from iris.account.hooks import register_hooks
 
         register_hooks(manager)
+
+    @hook("io.dispatch", priority=100)
+    def _on_dispatch(self, ctx: dict[str, Any]) -> dict[str, Any]:
+        msg = ctx["msg"]
+        if ctx["type"] == "control" and msg.action.startswith("account."):
+            ctx["response"] = self._handler.handle_control_message(msg, ctx["session_id"])
+        return ctx
 
     def start(self, manager: PluginManager) -> None:
         pass

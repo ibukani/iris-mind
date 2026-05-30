@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
+from iris.kernel.plugin.hooks import hook
 
 if TYPE_CHECKING:
     from iris.kernel.manager import PluginManager
@@ -41,18 +42,27 @@ class RoomPlugin(PluginProtocol):
         account_provider = manager.resolve_optional(AccountProviderCls)
         provider = RoomProvider(store=store, event_bus=event_bus, account_provider=account_provider)
 
-        handler = _RoomEventHandler(
+        self._handler = _RoomEventHandler(
             room_provider=provider,
             account_provider=account_provider,
         )
 
         manager.provide(RoomStore, store)
         manager.provide(RoomProvider, provider)
-        manager.provide(_RoomEventHandler, handler)
+        manager.provide(_RoomEventHandler, self._handler)
+
+        manager.hook_registry.register_decorated(self)
 
         from iris.room.hooks import register_hooks
 
         register_hooks(manager)
+
+    @hook("io.dispatch", priority=200)
+    def _on_dispatch(self, ctx: dict[str, Any]) -> dict[str, Any]:
+        msg = ctx["msg"]
+        if ctx["type"] == "control" and msg.action.startswith("room."):
+            ctx["response"] = self._handler.handle_control_message(msg, ctx["session_id"])
+        return ctx
 
     def start(self, manager: PluginManager) -> None:
         pass

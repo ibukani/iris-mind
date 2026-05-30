@@ -5,11 +5,12 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from iris.event.event_types import InputReady
+from iris.event.event_types import ControlMessageEvent, InputReady
 from iris.io.models import CommandInput, CommandOutput, ControlMessage, Direction, Identity, Message
 
 if TYPE_CHECKING:
     from iris.io.session.manager import SessionManager
+    from iris.kernel.plugin.hooks import HookRegistry
 
 
 class _IOGateway:
@@ -18,12 +19,12 @@ class _IOGateway:
     責務:
     - gRPC メッセージを内部表現に変換し、EventBus に publish する
     - command メッセージは直接コールバックで処理（同期レスポンス必要）
-    - control メッセージは直接コールバックで処理（同期レスポンス必要）
+    - control メッセージは io.dispatch Hook 経由でルーティング
     - IO レベルのルーティング（target_role ≠ mind は直接セッションに転送）
 
     設計:
     - 通常メッセージ: EventBus.publish(InputReady) のみ（send-only）
-    - control メッセージ: 同期レスポンスが必要なためコールバック維持
+    - control メッセージ: io.dispatch Hook で同期ルーティング
     - command メッセージ: 同期レスポンスが必要なためコールバック維持
     """
 
@@ -31,44 +32,54 @@ class _IOGateway:
         self,
         session_manager: SessionManager,
         event_bus: Any,
+        hook_registry: HookRegistry,
         command_handler: Callable[..., str] | None = None,
     ) -> None:
         self._session_mgr = session_manager
         self._event_bus = event_bus
+        self._hook_registry = hook_registry
         self._cmd_handler = command_handler
-        self._control_handler: Callable[[ControlMessage, str], ControlMessage | None] | None = None
 
     def set_command_handler(self, handler: Callable[..., str]) -> None:
         self._cmd_handler = handler
 
-    def set_control_handler(self, handler: Callable[[ControlMessage, str], ControlMessage | None]) -> None:
-        """control メッセージのハンドラを設定する。
-
-        handler は gRPC の ControlMessage と session_id を受け取り、
-        レスポンスの ControlMessage または None を返す。
-        同期レスポンスが必要なため、コールバック pattern を維持する。
-        """
-        self._control_handler = handler
-
     def on_grpc_control(self, control_msg: ControlMessage, session_id: str, session_role: str) -> None:
-        if not self._control_handler:
-            return
-        result = self._control_handler(control_msg, session_id)
-        if result is not None:
-            self._session_mgr.route_control_message(self._to_control_message(result), session_id)
+        evt = ControlMessageEvent(
+            timestamp=None,
+            source="io",
+            action=control_msg.action,
+            account_id=control_msg.account_id,
+            room_id=control_msg.room_id,
+            nickname=control_msg.nickname,
+            text=control_msg.text,
+            session_id=session_id,
+            identity=control_msg.identity.model_dump() if control_msg.identity else None,
+            profile=control_msg.profile,
+            metadata=control_msg.metadata,
+        )
 
-    @staticmethod
-    def _to_control_message(result: Any) -> ControlMessage:
-        identity = getattr(result, "identity", None)
-        return ControlMessage(
-            action=getattr(result, "action", ""),
-            account_id=getattr(result, "account_id", ""),
-            room_id=getattr(result, "room_id", ""),
-            nickname=getattr(result, "nickname", ""),
-            text=getattr(result, "text", ""),
-            identity=Identity(**identity) if isinstance(identity, dict) else identity,
-            profile=getattr(result, "profile", None) or {},
-            metadata=getattr(result, "metadata", None) or {},
+        ctx: dict[str, Any] = {"msg": evt, "type": "control", "session_id": session_id, "response": None}
+        result = self._hook_registry.execute_sync("io.dispatch", ctx)
+
+        self._event_bus.publish(evt)
+
+        response = result.get("response")
+        if response is None:
+            return
+
+        identity = getattr(response, "identity", None)
+        self._session_mgr.route_control_message(
+            ControlMessage(
+                action=getattr(response, "action", ""),
+                account_id=getattr(response, "account_id", ""),
+                room_id=getattr(response, "room_id", ""),
+                nickname=getattr(response, "nickname", ""),
+                text=getattr(response, "text", ""),
+                identity=Identity(**identity) if isinstance(identity, dict) else identity,
+                profile=getattr(response, "profile", None) or {},
+                metadata=getattr(response, "metadata", None) or {},
+            ),
+            session_id,
         )
 
     def on_grpc_message(self, msg: Message) -> None:

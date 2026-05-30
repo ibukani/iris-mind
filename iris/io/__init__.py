@@ -51,7 +51,11 @@ class IoPlugin(PluginProtocol):
 
         from iris.io.gateway import _IOGateway
 
-        gateway = _IOGateway(session_manager=session_mgr, event_bus=event_bus)
+        gateway = _IOGateway(
+            session_manager=session_mgr,
+            event_bus=event_bus,
+            hook_registry=manager.hook_registry,
+        )
 
         from iris.io.manager import IOManager
 

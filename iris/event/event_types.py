@@ -148,6 +148,22 @@ class ControlMessageEvent(Event):
     metadata: dict[str, str] | None = None
 
 
+@dataclass
+class RoomJoinedEvent(Event):
+    room_id: str = ""
+    account_id: str = ""
+    session_id: str = ""
+    nickname: str = ""
+
+
+@dataclass
+class RoomLeftEvent(Event):
+    room_id: str = ""
+    account_id: str = ""
+    session_id: str = ""
+    nickname: str = ""
+
+
 def new_trace_id() -> str:
     return _uuid.uuid4().hex[:12]
 
@@ -164,6 +180,8 @@ __all__ = [
     "InterruptEvent",
     "MemoryUpdateEvent",
     "MessageEvent",
+    "RoomJoinedEvent",
+    "RoomLeftEvent",
     "SessionDisconnectEvent",
     "TimerTick",
     "new_trace_id",

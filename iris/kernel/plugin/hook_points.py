@@ -26,4 +26,5 @@ HOOK_POINTS: dict[str, HookPoint] = {
     "agency.before_exec": HookPoint("agency.before_exec", "実行前"),
     "io.before_send": HookPoint("io.before_send", "送信前"),
     "io.after_receive": HookPoint("io.after_receive", "受信後"),
+    "io.dispatch": HookPoint("io.dispatch", "IO受信メッセージのディスパッチ"),
 }

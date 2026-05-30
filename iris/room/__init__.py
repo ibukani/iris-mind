@@ -12,7 +12,7 @@ MANIFEST = PluginManifest(
     version="0.1.0",
     category=PluginCategory.LAYER,
     phase=PluginPhase.STORE,
-    dependencies={"EventBus", "Account"},
+    dependencies={"EventBus", "account"},
     provides=["RoomManager", "RoomStore"],
     description="ルーム管理（ルームCRUD・メンバーシップ管理・アカウント連携）",
 )

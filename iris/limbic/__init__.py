@@ -3,7 +3,7 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING
 
-from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase
+from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
 
 from .orchestrator import LimbicOrchestrator
 
@@ -23,7 +23,7 @@ MANIFEST = PluginManifest(
 )
 
 
-class LimbicPlugin:
+class LimbicPlugin(PluginProtocol):
     MANIFEST = MANIFEST
 
     def init(self, manager: PluginManager) -> None:

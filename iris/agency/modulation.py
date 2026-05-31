@@ -6,32 +6,96 @@ import random
 
 @dataclass
 class ModulationState:
-    """人格変調状態。単一 chaos軸 から始め、将来感情軸等に拡張可能。
-
-    現在:
-      chaos_level: 0.0=予測可能(標準) ~ 1.0=最大混乱
-
-    将来の拡張例:
-      valence: float = 0.0    # -1.0(negative) ~ 1.0(positive)
-      arousal: float = 0.0    # 0.0(calm) ~ 1.0(excited)
-    """
+    """人格変調状態。数値軸は内部制御に留め、prompt には自然語だけを渡す。"""
 
     chaos_level: float = 0.0
+    valence: float = 0.0
+    arousal: float = 0.0
+    dominance: float = 0.0
+    mood_label: str = "neutral"
+    emotion_label: str = ""
 
     def __post_init__(self) -> None:
         self.chaos_level = max(0.0, min(1.0, self.chaos_level))
+        self.valence = max(-1.0, min(1.0, self.valence))
+        self.arousal = max(-1.0, min(1.0, self.arousal))
+        self.dominance = max(-1.0, min(1.0, self.dominance))
 
     # --- sampling parameter calculations ---
 
     @property
     def sampling_temperature(self) -> float:
-        """0.0 → 0.3 (ほぼ決定論的), 1.0 → 2.0 (高多様性)"""
-        return 0.3 + self.chaos_level * 1.7
+        """local LLM向けに小さく揺らす。感情値を直接promptへ出さない。"""
+        base = 0.45 + self.chaos_level * 0.35
+        arousal_shift = max(0.0, self.arousal) * 0.08 - max(0.0, -self.arousal) * 0.04
+        valence_shift = -0.03 if self.valence < -0.35 else 0.02 if self.valence > 0.35 else 0.0
+        return max(0.2, min(0.9, base + arousal_shift + valence_shift))
 
     @property
     def min_p_threshold(self) -> float:
         """0.0 → 0.1 (標準), 1.0 → 0.02 (ほぼ全トークン候補)"""
         return max(0.02, 0.1 - self.chaos_level * 0.08)
+
+    # --- affective language for prompts ---
+
+    @property
+    def has_affective_signal(self) -> bool:
+        return (
+            abs(self.valence) >= 0.12
+            or abs(self.arousal) >= 0.12
+            or abs(self.dominance) >= 0.12
+            or bool(self.emotion_label)
+        )
+
+    @property
+    def affective_tone(self) -> str:
+        if not self.has_affective_signal:
+            return ""
+        if self.valence < -0.35 and self.arousal > 0.35:
+            return "緊張や警戒が少し強い"
+        if self.valence < -0.35 and self.arousal <= 0.35:
+            return "心配や落ち込みを少し含む"
+        if self.valence > 0.35 and self.arousal > 0.25:
+            return "明るく前向き"
+        if self.valence > 0.35:
+            return "穏やかで好意的"
+        if self.arousal > 0.45:
+            return "反応が速くなりやすい"
+        if self.arousal < -0.35:
+            return "落ち着いて静か"
+        return self.mood_label if self.mood_label != "neutral" else "平静"
+
+    @property
+    def behavior_directives(self) -> list[str]:
+        if not self.has_affective_signal:
+            return []
+        directives: list[str] = []
+        if self.valence < -0.25:
+            directives.append("相手を急かさず、受け止める表現を優先する")
+        elif self.valence > 0.25:
+            directives.append("前向きさを少しだけにじませる")
+        if self.arousal > 0.35:
+            directives.append("短く、テンポよく返す")
+        elif self.arousal < -0.25:
+            directives.append("落ち着いた間合いで返す")
+        if self.dominance < -0.25:
+            directives.append("断定を避け、確認や提案の形に寄せる")
+        elif self.dominance > 0.35:
+            directives.append("必要な判断を簡潔に示す")
+        return directives
+
+    @property
+    def prompt_lines(self) -> list[str]:
+        if not self.has_affective_signal:
+            return []
+        lines = [f"- 受け止め方: {self.affective_tone}"]
+        lines.extend(f"- 話し方: {directive}" for directive in self.behavior_directives)
+        lines.append("- 注意: 感情状態そのものを説明しない")
+        return lines
+
+    @property
+    def should_suppress_proactive(self) -> bool:
+        return self.valence < -0.45 and self.arousal > 0.35
 
     # --- behavioral probability calculations ---
 

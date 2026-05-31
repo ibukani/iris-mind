@@ -45,6 +45,13 @@ class TestLimbicOrchestrator:
         assert "emotion" in prompt_data
         assert "trust" in prompt_data
 
+    def test_get_modulation_state(self) -> None:
+        self.orchestrator.process("腹が立つ許せない最悪だ")
+        modulation = self.orchestrator.get_modulation_state()
+        assert modulation.has_affective_signal
+        assert modulation.prompt_lines
+        assert "VAD" not in "\n".join(modulation.prompt_lines)
+
 
 class TestLimbicOrchestratorPerAccount:
     def setup_method(self) -> None:

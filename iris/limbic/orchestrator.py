@@ -13,6 +13,7 @@ from .state import EmotionStateManager
 
 if TYPE_CHECKING:
     from iris.account.manager import AccountManager
+    from iris.agency.modulation import ModulationState
     from iris.room.manager import RoomManager
 
 
@@ -113,8 +114,42 @@ class LimbicOrchestrator:
     def get_emotion_for_prompt(self, account_id: str = "") -> dict[str, Any]:
         return self._state.get_emotion_for_prompt()
 
+    def get_modulation_state(self) -> ModulationState:
+        from iris.agency.modulation import ModulationState
+
+        latest = self._state.get_latest()
+        if latest is None:
+            return ModulationState()
+
+        mood = latest.mood
+        emotion = latest.emotion
+        return ModulationState(
+            chaos_level=self._compute_chaos_level(emotion),
+            valence=mood.valence,
+            arousal=mood.arousal,
+            dominance=mood.dominance,
+            mood_label=self._classify_mood(mood.valence, mood.arousal),
+            emotion_label=emotion.primary.value,
+        )
+
     def get_relationship_profile(self, account_id: str = "") -> dict[str, Any]:
         return self._relationship.get_profile(account_id)
+
+    def _compute_chaos_level(self, emotion: CompanionEmotion) -> float:
+        if emotion.primary.value in ("anger", "fear", "disgust", "surprise"):
+            return min(0.35, emotion.intensity * 0.25)
+        return min(0.2, emotion.intensity * 0.12)
+
+    def _classify_mood(self, valence: float, arousal: float) -> str:
+        if valence < -0.35 and arousal > 0.25:
+            return "警戒"
+        if valence < -0.35:
+            return "心配"
+        if valence > 0.35 and arousal > 0.25:
+            return "明るい"
+        if valence > 0.35:
+            return "穏やか"
+        return "neutral"
 
     def _check_reappraisal_needed(self, dimensions: AppraisalDimensions, emotion: CompanionEmotion) -> bool:
         return (emotion.primary.value in ("anger", "fear", "disgust") and emotion.intensity > 0.6) or (

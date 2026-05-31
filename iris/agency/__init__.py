@@ -63,8 +63,10 @@ class AgencyPlugin(PluginProtocol):
         from iris.agency.execution.handler import _FlowExecutionHandler
         from iris.agency.planning.handler import _PlanningEventHandler
         from iris.event.event_bus import EventBus
+        from iris.limbic.orchestrator import LimbicOrchestrator
 
         event_bus = manager.resolve(EventBus)
+        limbic = manager.resolve_optional(LimbicOrchestrator)
 
         _FlowExecutionHandler(
             event_bus=event_bus,
@@ -80,6 +82,7 @@ class AgencyPlugin(PluginProtocol):
             proactive_strategy=components["proactive_strategy"],
             response_strategy=components["response_strategy"],
             inhibition=components["inhibition"],
+            limbic=limbic,
         )
 
         from iris.agency.inhibition.handler import _InhibitionEventHandler

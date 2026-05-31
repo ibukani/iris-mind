@@ -66,8 +66,10 @@ class LLMGateway:
         chaos_level: float = 0.0,
         room_id: str = "",
         account_id: str = "",
+        modulation: ModulationState | None = None,
     ) -> list[BaseMessage]:
         display_name = self.resolve_display_name(account_id)
+        mod = modulation or ModulationState(chaos_level=chaos_level)
         return self._prompt_builder.build(
             node_type=node_type,
             context_hint=context_hint,
@@ -75,9 +77,10 @@ class LLMGateway:
             session_roles_summary=self._session_roles_summary,
             current_display_name=display_name,
             include_profile=include_profile,
-            chaos_level=chaos_level,
+            chaos_level=mod.chaos_level,
             room_id=room_id,
             account_id=account_id,
+            modulation=mod,
         )
 
     async def _call_llm(
@@ -142,6 +145,7 @@ class LLMGateway:
                 chaos_level=mod.chaos_level,
                 room_id=room_id,
                 account_id=account_id,
+                modulation=mod,
             )
         if show_thinking and messages and isinstance(messages[-1], HumanMessage):
             last_msg = messages[-1]

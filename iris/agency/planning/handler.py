@@ -13,6 +13,7 @@ from iris.event.event_types import InputReady
 
 if TYPE_CHECKING:
     from iris.event.event_bus import EventBus
+    from iris.limbic.orchestrator import LimbicOrchestrator
 
 
 class _PlanningEventHandler:
@@ -24,12 +25,14 @@ class _PlanningEventHandler:
         proactive_strategy: ProactivePlanStrategy,
         response_strategy: ResponsePlanStrategy,
         inhibition: InhibitionManager | None = None,
+        limbic: LimbicOrchestrator | None = None,
     ) -> None:
         self._bus = internal_bus
         self._proactive_judge = proactive_judge
         self._proactive_strategy = proactive_strategy
         self._response_strategy = response_strategy
         self._inhibition = inhibition
+        self._limbic = limbic
 
         event_bus.subscribe(InputReady, self._on_input_ready)
 
@@ -52,6 +55,10 @@ class _PlanningEventHandler:
         if proactive_context is None:
             return
         plan = self._proactive_strategy.build_proactive(proactive_context)
+        self._apply_limbic_modulation(plan)
+        if plan.modulation.should_suppress_proactive:
+            logger.debug("Proactive suppressed by affective modulation")
+            return
         self._publish(
             plan, event.session_id, event.account_id or context.get("identity", ""), event.room_id, from_timer=True
         )
@@ -64,7 +71,13 @@ class _PlanningEventHandler:
             room_id=event.room_id,
             account_id=event.account_id,
         )
+        self._apply_limbic_modulation(plan)
         self._publish(plan, event.session_id, event.account_id, event.room_id, from_timer=False)
+
+    def _apply_limbic_modulation(self, plan: Plan) -> None:
+        if self._limbic is None:
+            return
+        plan.modulation = self._limbic.get_modulation_state()
 
     def _publish(self, plan: Plan, session_id: str, account_id: str, room_id: str, from_timer: bool) -> None:
         plan.session_id = session_id

@@ -8,6 +8,7 @@ from iris.agency.execution.llm.node_prompt_factory import NodePromptFactory
 from iris.agency.execution.llm.profile_builder import ProfileBuilder
 
 if TYPE_CHECKING:
+    from iris.agency.modulation import ModulationState
     from iris.llm.prompt import Personality
     from iris.memory.long_term.stores import AgentsMdStore
     from iris.memory.manager import MemoryManager
@@ -44,6 +45,7 @@ class SystemPromptBuilder:
         room_id: str = "",
         account_id: str = "",
         active_users: list[tuple[str, str]] | None = None,
+        modulation: ModulationState | None = None,
     ) -> list[BaseMessage]:
         msgs: list[BaseMessage] = []
 
@@ -56,6 +58,7 @@ class SystemPromptBuilder:
                     room_id=room_id,
                     account_id=account_id,
                     active_users=active_users,
+                    modulation=modulation,
                 ),
             )
 

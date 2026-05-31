@@ -97,6 +97,7 @@ class BaseLLMNode(ABC):
             chaos_level=plan.modulation.chaos_level,
             room_id=plan.room_id,
             account_id=plan.account_id,
+            modulation=plan.modulation,
         )
 
     def _build_chat_params(

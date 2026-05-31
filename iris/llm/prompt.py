@@ -39,6 +39,7 @@ class Personality:
         session_roles: str = "",
         response_style: str = "",
         governance_principles: str = "",
+        affective_guidance: str = "",
     ) -> str:
         if agents_md_content:
             agents_md_content = agents_md_content.replace("{name}", self.name)
@@ -53,6 +54,7 @@ class Personality:
             ("## 接続セッション", session_roles),
             ("## 自己規律", governance_principles),
             ("## 応答スタイル", response_style),
+            ("## Irisの現在の応答傾向", affective_guidance),
         ]:
             if content:
                 prompt += f"\n\n{header}\n{content}"

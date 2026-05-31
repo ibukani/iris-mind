@@ -191,6 +191,8 @@ class LimbicOrchestrator:
     """全コンポーネントの統合"""
 ```
 
+`get_modulation_state()` は最新の `EmotionResult` から agency 層向けの `ModulationState` を生成する。VAD は sampling や抑制判定の内部制御に使い、prompt へは自然語の応答傾向だけが渡る。
+
 Reappraisal 判定条件:
 - anger/fear/disgust かつ intensity > 0.6
 - または unpleasantness > 0.7 かつ control < 0.3

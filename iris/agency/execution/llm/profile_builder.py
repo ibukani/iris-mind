@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 from langchain_core.messages import SystemMessage
 
 if TYPE_CHECKING:
+    from iris.agency.modulation import ModulationState
     from iris.llm.prompt import Personality
     from iris.memory.long_term.stores import AgentsMdStore
     from iris.memory.manager import MemoryManager
@@ -34,9 +35,11 @@ class ProfileBuilder:
         room_id: str = "",
         account_id: str = "",
         active_users: list[tuple[str, str]] | None = None,
+        modulation: ModulationState | None = None,
     ) -> SystemMessage:
         agents_md = self._load_agents_md()
         user_prefs = self._build_user_preferences_section(room_id=room_id, account_id=account_id)
+        affective_guidance = "\n".join(modulation.prompt_lines) if modulation else ""
 
         base = self._personality.build_system_prompt(
             agents_md_content=agents_md,
@@ -44,6 +47,7 @@ class ProfileBuilder:
             session_roles=session_roles_summary,
             response_style=response_style,
             governance_principles=self._governance_principles,
+            affective_guidance=affective_guidance,
         )
 
         parts: list[str] = [base]

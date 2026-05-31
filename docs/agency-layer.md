@@ -142,6 +142,22 @@ plan は `Plan` クラス（`iris/agency/planning/models.py`）で表現され�
 | `context_hint` | str | LLMへの文脈ヒント |
 | `account_id` | str | 発話者識別子（グループチャット時） |
 | `overrides` | dict | レベルプロファイルの上書き値 |
+| `modulation` | ModulationState | limbic 層から受け取った内部変調状態。prompt には数値を出さず、自然語の応答傾向だけを渡す |
+
+### Emotion-Behavior Coupling
+
+`agency/modulation.py` の `ModulationState` は `chaos_level` と VAD 軸を内部制御に使う。VAD の生数値は LLM prompt に載せない。`ProfileBuilder` は `prompt_lines` を使い、短い自然語の応答傾向だけを system prompt に追加する。
+
+例:
+
+```text
+## Irisの現在の応答傾向
+- 受け止め方: 心配や落ち込みを少し含む
+- 話し方: 相手を急かさず、受け止める表現を優先する
+- 注意: 感情状態そのものを説明しない
+```
+
+`LLMGateway` の sampling temperature は `ModulationState.sampling_temperature` を使う。local LLM で破綻しにくいよう、VAD 由来の変化は小さく、範囲は `0.2`〜`0.9` に収める。負の感情かつ覚醒が高い時の proactive は PlanningEventHandler で抑制する。
 
 ## FlowExecutor
 

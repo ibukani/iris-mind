@@ -112,13 +112,7 @@ sequenceDiagram
     IO->>EB: InputReady(source=io, content)
     EB->>LIM: MessageEvent (Limbic購読)
     LIM->>LIM: Appraisal→Emotion→Relationship更新
-    EB->>MEM: InputReady (MemoryManager購読)
-    MEM->>MEM: sensory.store_raw(content)
-
-    KRN->>EB: TimerTick (1秒間隔)
-    EB->>MEM: TimerTick (subscribe)
-    MEM->>MEM: sensory.take_raw() → InputReady(source=memory)
-    MEM->>EB: InputReady(content)
+    Note over MEM: 二重処理防止のため sensory には保存せず
     EB->>AG: InputReady (PlanningManager直購読)
     AG->>AG: _build_plan → PlanDecided
     AG->>AG: _execute_general(plan)

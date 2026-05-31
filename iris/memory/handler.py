@@ -82,18 +82,15 @@ class _MemoryEventHandler:
         MessageEvent への変換は行わず、SensorMemory に raw として蓄積し、
         TimerTick での一括処理に委ねる。
         source="io" のみ処理。
+
+        注: PlanningHandler が InputReady(source="io") を直接処理するため、
+        sensory への保存は行わない（二重処理防止）。
+        TimerTick 経由で再 publish されると同じ内容が 2 度処理される。
         """
         if event.source != "io":
             return
         if not event.content:
             return
-
-        self.sensory.store_raw(
-            event.content,
-            account_id=event.account_id,
-            room_id=event.room_id,
-            session_id=event.session_id,
-        )
 
     def _store_and_flush_pending_block(
         self,

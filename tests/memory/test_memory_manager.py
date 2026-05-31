@@ -254,7 +254,9 @@ class TestMemoryManagerInputPending:
 class TestInputReadySubscription:
     """_on_input_ready: Gateway → EventBus(InputReady) → Handler の経路。"""
 
-    def test_input_ready_stores_to_sensory(self, event_bus: EventBus) -> None:
+    def test_input_ready_does_not_store_to_sensory(self, event_bus: EventBus) -> None:
+        """PlanningHandler が InputReady(source="io") を直接処理するため、
+        MemoryHandler は sensory に保存しない（二重処理防止）。"""
         _, mgr = _memory_with_handler_pair(event_bus)
 
         event = InputReady(
@@ -271,14 +273,11 @@ class TestInputReadySubscription:
         )
         event_bus.publish(event)
 
-        assert mgr.sensory.has_pending_raw
-        raw = mgr.sensory.take_raw()
-        assert raw["raw"] == "hello"
-        assert raw.get("account_id") == "a1"
-        assert raw.get("session_id") == "s1"
+        assert not mgr.sensory.has_pending_raw
 
-    def test_input_ready_chained_to_timer(self, event_bus: EventBus) -> None:
-        """InputReady → sensory → TimerTick → InputReady(memory) のチェイン"""
+    def test_input_ready_not_chained_to_timer(self, event_bus: EventBus) -> None:
+        """InputReady(source="io") は PlanningHandler が直接処理するため、
+        sensory に保存されず TimerTick 経由では再 publish されない。"""
         _memory_with_handler(event_bus)
         flushed_events: list[InputReady] = []
         event_bus.subscribe("InputReady", lambda e: flushed_events.append(e) if e.source == "memory" else None)
@@ -297,13 +296,10 @@ class TestInputReadySubscription:
             TimerTick(timestamp=None, source="kernel", tick_count=0),
         )
 
-        assert len(flushed_events) == 1
-        assert flushed_events[0].content == "hello"
-        assert flushed_events[0].account_id == "a1"
-        assert flushed_events[0].source == "memory"
-        assert flushed_events[0].context == {}
+        assert len(flushed_events) == 0
 
-    def test_input_ready_stores_pending(self, event_bus: EventBus) -> None:
+    def test_input_ready_does_not_store_pending(self, event_bus: EventBus) -> None:
+        """InputReady(source="io") は sensory/pending に保存されない。"""
         _memory_with_handler(event_bus)
         flushed_events: list[InputReady] = []
         event_bus.subscribe("InputReady", lambda e: flushed_events.append(e) if e.source == "memory" else None)
@@ -323,8 +319,7 @@ class TestInputReadySubscription:
         event_bus.publish(event)
         event_bus.publish(TimerTick(timestamp=None, source="kernel", tick_count=0))
 
-        assert len(flushed_events) == 1
-        assert flushed_events[0].content == "テスト"
+        assert len(flushed_events) == 0
 
     def test_input_ready_inhibition_ignored_by_memory(self, event_bus: EventBus) -> None:
         """Memory層は msg_type=inhibition を無視する（InhibitionEventHandlerが担当）。"""

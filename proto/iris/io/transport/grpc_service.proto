@@ -15,7 +15,7 @@ enum Permission {
   PERMISSION_SEND_INHIBITION = 8;
 }
 
-// A message exchanged between roles in the Iris system.
+// External identity of a user within a provider.
 message Identity {
   // External identity provider, e.g. "discord".
   string provider = 1;
@@ -25,6 +25,24 @@ message Identity {
   string provider_name = 3;
   // Provider-specific metadata.
   map<string, string> metadata = 4;
+}
+
+// Direction of a message within the Iris system.
+enum Direction {
+  DIRECTION_UNSPECIFIED = 0;
+  DIRECTION_REQUEST = 1;
+  DIRECTION_RESPONSE = 2;
+  DIRECTION_STREAM = 3;
+  DIRECTION_EVENT = 4;
+}
+
+// Processing state for streaming responses.
+enum StreamState {
+  STREAM_STATE_UNSPECIFIED = 0;
+  STREAM_STATE_THINKING = 1;
+  STREAM_STATE_SPEAKING = 2;
+  STREAM_STATE_DONE = 3;
+  STREAM_STATE_INTERRUPTED = 4;
 }
 
 // A message exchanged between roles in the Iris system.
@@ -39,8 +57,8 @@ message Message {
   string source_role = 4;
   // Role of the intended recipient, or "*" for broadcast.
   string target_role = 5;
-  // Direction of the message (request/response/stream/event).
-  string direction = 6;
+  // Direction of the message.
+  Direction direction = 6;
   // Message type (e.g. "chat", "command", "system").
   string msg_type = 7;
   // Message body content.
@@ -48,13 +66,15 @@ message Message {
   // MIME type of the content (default "text/plain").
   string content_type = 9;
   // Processing state for streaming responses.
-  string state = 10;
+  StreamState state = 10;
   // Arbitrary key-value metadata.
   map<string, string> metadata = 11;
   // Speaker identity for group chat transports.
   Identity speaker = 12;
   // Conversation room, e.g. "discord:<guild_id>:<channel_id>".
   string room_id = 13;
+  // Internal Iris account ID, resolved from speaker identity by the server.
+  string account_id = 14;
 }
 
 // A command input received from a client.

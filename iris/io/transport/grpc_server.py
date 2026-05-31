@@ -16,8 +16,10 @@ from iris.io.transport.formatter import (
     build_command_frame,
     build_identity_frame,
     build_message_frame,
+    parse_direction,
     parse_identity,
     parse_message_metadata,
+    parse_stream_state,
 )
 
 
@@ -142,7 +144,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             id="",
             msg_type="auth_success",
             session_id=session_id,
-            direction="response",
+            direction=grpc_service_pb2.DIRECTION_RESPONSE,
             content="authenticated",
         )
         yield grpc_service_pb2.BidirectionalStreamResponse(message=ack)  # type: ignore[attr-defined]
@@ -245,7 +247,6 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
 
     async def _dispatch_message(self, msg_proto: Any, session_id: str, session_role: str) -> None:
         metadata = parse_message_metadata(msg_proto.metadata)
-        account_id = metadata.get("account_id", "") or ""
 
         try:
             msg = Message(
@@ -254,12 +255,12 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
                 session_id=session_id,
                 source_role=session_role,
                 target_role=msg_proto.target_role or "*",
-                account_id=account_id,
-                direction=Direction(msg_proto.direction),
+                account_id=msg_proto.account_id,
+                direction=Direction(parse_direction(msg_proto.direction)),
                 msg_type=msg_proto.msg_type,
                 content=msg_proto.content,
                 content_type=msg_proto.content_type or "text/plain",
-                state=msg_proto.state or None,
+                state=parse_stream_state(msg_proto.state),
                 metadata=metadata,
                 speaker=parse_identity(msg_proto.speaker),
                 room_id=msg_proto.room_id,

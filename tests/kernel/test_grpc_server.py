@@ -53,7 +53,7 @@ def test_grpc_server_auth_and_communication():
             # 1. チャットメッセージ送信
             msg = grpc_service_pb2.Message(
                 id="msg_1",
-                direction="request",
+                direction=grpc_service_pb2.DIRECTION_REQUEST,
                 msg_type="chat",
                 content="Hello World",
             )

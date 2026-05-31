@@ -38,12 +38,12 @@ sequenceDiagram
     Server-->>Client: ControlMessage(action="room.created", room_id="a1b2c3d4e5f6g78", text="Created room: My Room")
 
     Note over Client,Server: 3. 発話
-    Client->>Server: Message(msg_type="chat", direction="request", target_role="mind", content="Hello", speaker={provider:"discord", subject:"123"}, room_id="a1b2c3d4e5f6g78")
+    Client->>Server: Message(msg_type="chat", direction=DIRECTION_REQUEST, target_role="mind", content="Hello", speaker={provider:"discord", subject:"123"}, room_id="a1b2c3d4e5f6g78")
     Note over Server: speaker → Account 自動解決<br/>Account → Room 自動 join
-    Server-->>Client: Message(direction="stream", state="thinking")
-    Server-->>Client: Message(direction="stream", state="speaking", content="Hello!")
-    Server-->>Client: Message(direction="stream", state="done")
-    Server-->>Client: Message(direction="response", content="Hello! How can I help you today?")
+    Server-->>Client: Message(direction=DIRECTION_STREAM, state=STREAM_STATE_THINKING)
+    Server-->>Client: Message(direction=DIRECTION_STREAM, state=STREAM_STATE_SPEAKING, content="Hello!")
+    Server-->>Client: Message(direction=DIRECTION_STREAM, state=STREAM_STATE_DONE)
+    Server-->>Client: Message(direction=DIRECTION_RESPONSE, content="Hello! How can I help you today?")
 ```
 
 ### 1.3 欠落時のエラー
@@ -86,20 +86,20 @@ sequenceDiagram
     Note over Server: メタデータ検証・セッション生成
     Server-->>Client: 接続確立 (双方向ストリーム開始)
 
-    Client->>Server: BidirectionalStreamRequest(Message: msg_type="chat", direction="request", content="Hello", speaker=Identity, room_id="a1b2c3d4e5f6g78")
+    Client->>Server: BidirectionalStreamRequest(Message: msg_type="chat", direction=DIRECTION_REQUEST, content="Hello", speaker=Identity, room_id="a1b2c3d4e5f6g78")
     Server->>GW: on_grpc_message(msg)
     Note over GW: validation: direction, speaker, content, room_id チェック
     GW->>GW: publish(InputReady) to EventBus
     Handler->>Handler: publish(MessageEvent) to EventBus
     activate Kernel
     Kernel-->>Server: OutputRequest(thinking)
-    Server-->>Client: BidirectionalStreamResponse(Message: msg_type="chat", direction="stream", state="thinking")
+    Server-->>Client: BidirectionalStreamResponse(Message: msg_type="chat", direction=DIRECTION_STREAM, state=STREAM_STATE_THINKING)
     Kernel-->>Server: OutputRequest(speaking, content="Hello! How can I help you today?")
-    Server-->>Client: BidirectionalStreamResponse(Message: msg_type="chat", direction="stream", state="speaking", content="Hello!")
+    Server-->>Client: BidirectionalStreamResponse(Message: msg_type="chat", direction=DIRECTION_STREAM, state=STREAM_STATE_SPEAKING, content="Hello!")
     Kernel-->>Server: OutputRequest(done)
-    Server-->>Client: BidirectionalStreamResponse(Message: msg_type="chat", direction="stream", state="done")
+    Server-->>Client: BidirectionalStreamResponse(Message: msg_type="chat", direction=DIRECTION_STREAM, state=STREAM_STATE_DONE)
     Kernel-->>Server: OutputRequest(response)
-    Server-->>Client: BidirectionalStreamResponse(Message: msg_type="chat", direction="response", content="Hello! How can I help you today?")
+    Server-->>Client: BidirectionalStreamResponse(Message: msg_type="chat", direction=DIRECTION_RESPONSE, content="Hello! How can I help you today?")
     deactivate Kernel
     deactivate Server
 ```
@@ -256,7 +256,7 @@ def run():
                 message=pb2.Message(
                     id="msg_001",
                     msg_type="chat",
-                    direction="request",
+                    direction=pb2.DIRECTION_REQUEST,
                     target_role="mind",
                     content="Hello Iris!",
                     speaker=pb2.Identity(
@@ -281,9 +281,9 @@ def run():
             elif response.HasField("message"):
                 msg = response.message
                 is_error = msg.metadata.get("error") == "true"
-                if msg.direction == "stream":
+                if msg.direction == pb2.DIRECTION_STREAM:
                     print(f"[{msg.state}] {msg.content}")
-                elif msg.direction == "response":
+                elif msg.direction == pb2.DIRECTION_RESPONSE:
                     prefix = "[Error]" if is_error else "[Final]"
                     print(f"{prefix} {msg.content}")
             elif response.HasField("command"):
@@ -327,7 +327,7 @@ class IrisClient:
         yield pb2.BidirectionalStreamRequest(
             message=pb2.Message(
                 msg_type="chat",
-                direction="request",
+                direction=pb2.DIRECTION_REQUEST,
                 target_role="mind",
                 content="Hello Iris!",
                 speaker=pb2.Identity(
@@ -359,9 +359,9 @@ class IrisClient:
                         self._room_ready.set()
                 elif response.HasField("message"):
                     msg = response.message
-                    if msg.direction == "stream":
+                    if msg.direction == pb2.DIRECTION_STREAM:
                         print(f"[{msg.state}] {msg.content}")
-                    elif msg.direction == "response":
+                    elif msg.direction == pb2.DIRECTION_RESPONSE:
                         print(f"[Final] {msg.content}")
                 elif response.HasField("command"):
                     print(f"[Command] {response.command.content}")
@@ -456,7 +456,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 id: "msg_001".to_string(),
                 msg_type: "chat".to_string(),
                 session_id: String::new(),
-                direction: "request".to_string(),
+                direction: 1,  // DIRECTION_REQUEST
                 source_role: "cli".to_string(),
                 target_role: "mind".to_string(),
                 content: "Hello Iris!".to_string(),
@@ -483,7 +483,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let is_error = msg.metadata.get("error").map_or(false, |v| v == "true");
                     if is_error {
                         eprintln!("[Error] {}", msg.content);
-                    } else if msg.direction == "stream" {
+                    } else if msg.direction == 3 {  // DIRECTION_STREAM
                         println!("[{}] {}", msg.state, msg.content);
                     } else {
                         println!("[Final] {}", msg.content);

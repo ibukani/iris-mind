@@ -164,12 +164,12 @@ proactive:
 ```python
 # 録音開始
 BidirectionalStreamRequest(
-    message=Message(msg_type="inhibition", direction="event", content="voice_recording:true", target_role="mind")
+    message=Message(msg_type="inhibition", direction=DIRECTION_EVENT, content="voice_recording:true", target_role="mind")
 )
 
 # 録音終了
 BidirectionalStreamRequest(
-    message=Message(msg_type="inhibition", direction="event", content="voice_recording:false", target_role="mind")
+    message=Message(msg_type="inhibition", direction=DIRECTION_EVENT, content="voice_recording:false", target_role="mind")
 )
 ```
 
@@ -237,7 +237,7 @@ ROOM_ID = "a1b2c3d4e5f6g78"  # room.create で発行された値
 BidirectionalStreamRequest(
     message=Message(
         msg_type="chat",
-        direction="request",
+        direction=DIRECTION_REQUEST,
         target_role="mind",
         content="こんにちは",
         speaker=Identity(
@@ -467,9 +467,9 @@ ControlMessage(
 1. gRPC dial (127.0.0.1:9876) に access_token, role 等のメタデータを付与して接続
 2. IrisService.BidirectionalStream を呼び出し、双方向ストリームを開く
 3. 送信: BidirectionalStreamRequest(message=Message(id="1", msg_type="chat", content="hello"))
-4. 受信: BidirectionalStreamResponse(message=Message(msg_type="stream", state="thinking"))
-5. 受信: BidirectionalStreamResponse(message=Message(msg_type="stream", state="speaking", content="Hello!"))
-6. 受信: BidirectionalStreamResponse(message=Message(msg_type="stream", state="done"))
+4. 受信: BidirectionalStreamResponse(message=Message(msg_type="stream", state=STREAM_STATE_THINKING))
+5. 受信: BidirectionalStreamResponse(message=Message(msg_type="stream", state=STREAM_STATE_SPEAKING, content="Hello!"))
+6. 受信: BidirectionalStreamResponse(message=Message(msg_type="stream", state=STREAM_STATE_DONE))
 7. 受信: BidirectionalStreamResponse(message=Message(msg_type="response", content="Hello!"))
 ```
 

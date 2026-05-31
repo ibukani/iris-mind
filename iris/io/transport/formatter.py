@@ -6,6 +6,31 @@ from iris.io.models import Identity
 
 from . import grpc_service_pb2 as _pb2
 
+_DIRECTION_MAP: dict[str, int] = {
+    "request": _pb2.DIRECTION_REQUEST,
+    "response": _pb2.DIRECTION_RESPONSE,
+    "stream": _pb2.DIRECTION_STREAM,
+    "event": _pb2.DIRECTION_EVENT,
+}
+
+_STREAM_STATE_MAP: dict[str, int] = {
+    "thinking": _pb2.STREAM_STATE_THINKING,
+    "speaking": _pb2.STREAM_STATE_SPEAKING,
+    "done": _pb2.STREAM_STATE_DONE,
+    "interrupted": _pb2.STREAM_STATE_INTERRUPTED,
+}
+
+_REVERSE_DIRECTION: dict[int, str] = {v: k for k, v in _DIRECTION_MAP.items()}
+_REVERSE_STREAM_STATE: dict[int, str] = {v: k for k, v in _STREAM_STATE_MAP.items()}
+
+
+def parse_direction(proto_value: int) -> str:
+    return _REVERSE_DIRECTION.get(proto_value, "")
+
+
+def parse_stream_state(proto_value: int) -> str | None:
+    return _REVERSE_STREAM_STATE.get(proto_value)
+
 
 def build_command_frame(data: dict[str, Any]) -> Any:
     return _pb2.CommandOutput(  # type: ignore[attr-defined]
@@ -19,22 +44,23 @@ def build_command_frame(data: dict[str, Any]) -> Any:
 
 
 def build_message_frame(data: dict[str, Any]) -> Any:
+    direction_raw = data.get("direction", "")
+    state_raw = data.get("state") or ""
+
     msg = _pb2.Message(  # type: ignore[attr-defined]
         id=data.get("id", ""),
         correlation_id=data.get("correlation_id", ""),
         session_id=data.get("session_id", ""),
         source_role=data.get("source_role", ""),
         target_role=data.get("target_role", ""),
-        direction=data.get("direction", ""),
+        direction=_DIRECTION_MAP.get(direction_raw, _pb2.DIRECTION_UNSPECIFIED),
         msg_type=data.get("msg_type", ""),
         content=data.get("content", ""),
         content_type=data.get("content_type", ""),
-        state=data.get("state") or "",
+        state=_STREAM_STATE_MAP.get(state_raw, _pb2.STREAM_STATE_UNSPECIFIED),
+        account_id=data.get("account_id", ""),
     )
     meta = data.get("metadata", {})
-    uid = data.get("account_id", "")
-    if uid:
-        meta["account_id"] = uid
     room_id = data.get("room_id", "")
     if room_id:
         msg.room_id = room_id

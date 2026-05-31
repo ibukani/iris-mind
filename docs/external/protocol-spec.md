@@ -58,14 +58,31 @@ enum Permission {
   PERMISSION_RECEIVE_LOG = 5;
   PERMISSION_INTERRUPT = 6;
   PERMISSION_EXECUTE_ACTION = 7;
-  PERMISSION_SEND_VOICE_INDICATOR = 8;
+  PERMISSION_SEND_INHIBITION = 8;
 }
 
+// External identity of a user within a provider.
 message Identity {
   string provider = 1;
   string subject = 2;
   string provider_name = 3;
   map<string, string> metadata = 4;
+}
+
+enum Direction {
+  DIRECTION_UNSPECIFIED = 0;
+  DIRECTION_REQUEST = 1;
+  DIRECTION_RESPONSE = 2;
+  DIRECTION_STREAM = 3;
+  DIRECTION_EVENT = 4;
+}
+
+enum StreamState {
+  STREAM_STATE_UNSPECIFIED = 0;
+  STREAM_STATE_THINKING = 1;
+  STREAM_STATE_SPEAKING = 2;
+  STREAM_STATE_DONE = 3;
+  STREAM_STATE_INTERRUPTED = 4;
 }
 
 message Message {
@@ -74,14 +91,15 @@ message Message {
   string session_id = 3;
   string source_role = 4;
   string target_role = 5;
-  string direction = 6;
+  Direction direction = 6;
   string msg_type = 7;
   string content = 8;
   string content_type = 9;
-  string state = 10;
+  StreamState state = 10;
   map<string, string> metadata = 11;
   Identity speaker = 12;
   string room_id = 13;
+  string account_id = 14;
 }
 
 message CommandInput {

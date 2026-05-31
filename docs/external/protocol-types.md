@@ -21,12 +21,14 @@
 
 ### 1.2 Direction (`Message.direction`)
 
+Proto 定義では `Direction` enum 型。値は整数で送信される。
+
 | 値 | 方向 | 説明 |
 |----|------|------|
-| `request` | Client→Server | クライアントからのリクエスト |
-| `response` | Server→Client | サーバーからの単一応答（最終結果） |
-| `stream` | Server→Client | ストリーミング中継（`state` と併用） |
-| `event` | Server→Client | イベント通知（ブロードキャスト等） |
+| `DIRECTION_REQUEST` (1) | Client→Server | クライアントからのリクエスト |
+| `DIRECTION_RESPONSE` (2) | Server→Client | サーバーからの単一応答（最終結果） |
+| `DIRECTION_STREAM` (3) | Server→Client | ストリーミング中継（`state` と併用） |
+| `DIRECTION_EVENT` (4) | Server→Client | イベント通知（ブロードキャスト等） |
 
 ### 1.3 msg_type 定義 (`Message.msg_type`)
 
@@ -92,9 +94,9 @@
 | キー | 方向 | 型 | 説明 |
 |------|------|-----|------|
 | `ack_required` | C→S | `"true"` / `"false"` | 文字列の真偽値。true 時サーバーが確認応答を返送（protocol-flows.md §2.5） |
-| `account_id` | S→C | string | 応答メッセージに対応するアカウントID |
-| `room_id` | S→C | string | 応答メッセージのルームID |
 | `error` | S→C | `"true"` | エラー応答の判別用。値が `"true"` のメッセージはエラー通知。§1.3 の `msg_type="error"` とは異なり、`msg_type="response"` に付与される（§4参照） |
+
+> **注**: `account_id` は旧版では `metadata` に格納されていたが、現在は `Message.account_id` としてトップレベルフィールドに移動済み（§1.8 参照）。
 
 クライアントは任意のキーを追加可能。gRPC 接続メタデータ（`access_token`, `role`, `permissions`, `session_tag`, `description`）とは別。
 
@@ -185,14 +187,15 @@ Iris の中核メッセージ型。会話テキスト、ストリーミング応
 | `session_id` | string | 任意 | セッションID。空文字可（サーバー上書き）。送信不要（§2.2） |
 | `source_role` | string | 任意 | 送信元ロール。クライアント送信時はサーバーが認証ロールで上書き（§1.4） |
 | `target_role` | string | 条件付き要 | 配送先ロール。Iris への発話時は `"mind"` が必須。省略すると `"*"` にフォールバックし、Iris は処理しない（§1.4） |
-| `direction` | string | 要 | 通信方向。`request` / `response` / `stream` / `event`（§1.2） |
+| `direction` | Direction (enum) | 要 | 通信方向。`DIRECTION_REQUEST` / `DIRECTION_RESPONSE` / `DIRECTION_STREAM` / `DIRECTION_EVENT`（§1.2） |
 | `msg_type` | string | 要 | メッセージ種別。`chat` / `system` / `proactive` etc（§1.3） |
 | `content` | string | 条件付き要 | メッセージ本文。`chat`メッセージでは必須（空文字時はエラー応答）。`interrupt`/`inhibition`等では不要 |
 | `content_type` | string | 任意 | MIME type。デフォルト `"text/plain"`（§1.5.1） |
-| `state` | string | 任意 | ストリーム状態。`thinking` / `speaking` / `done` / `interrupted` |
-| `metadata` | map<string,string> | 任意 | 拡張メタデータ。ack_required, account_id, room_id（§1.5.2） |
+| `state` | StreamState (enum) | 任意 | ストリーム状態。`STREAM_STATE_THINKING` / `STREAM_STATE_SPEAKING` / `STREAM_STATE_DONE` / `STREAM_STATE_INTERRUPTED`。未指定時は `STREAM_STATE_UNSPECIFIED` |
+| `metadata` | map\<string,string\> | 任意 | 拡張メタデータ。ack_required（§1.5.2） |
 | `speaker` | Identity | 条件付き要 | 発話者外部ID。Client→Serverの`request`方向では必須（欠落時はエラー応答）。グループチャット・アカウント解決で使用（§1.6） |
 | `room_id` | string | 条件付き要 | 会話ルームID。`room.create` 発行の16進UUID。chat/systemメッセージで必須、空の場合はエラー応答（protocol-spec.md §2.2, §4） |
+| `account_id` | string | 任意 | Iris内部アカウントID。Server→Client で speaker から自動解決された値が格納される。Client→Server では通常空文字（サーバーが設定） |
 
 ### 1.9 CommandInput (`BidirectionalStreamRequest.command`)
 

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
 from iris.memory.builder import MemoryComponents
 from iris.memory.long_term.manager import LongTermMemoryManager
-from iris.memory.long_term.protocols import (
+from iris.memory.long_term.store_protocols import (
     AgentsMdStoreProtocol,
     EpisodicStoreProtocol,
     SemanticStoreProtocol,

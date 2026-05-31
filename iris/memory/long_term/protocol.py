@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from iris.memory.long_term.protocols import EpisodicStoreProtocol, SemanticStoreProtocol
+from iris.memory.long_term.store_protocols import EpisodicStoreProtocol, SemanticStoreProtocol
 
 
 class LongTermMemoryProtocol(Protocol):

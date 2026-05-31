@@ -5,15 +5,10 @@ from typing import Any
 
 from loguru import logger
 
-from iris.event.event_types import (
-    InputReady,
-    InterruptEvent,
-    MessageEvent,
-    RoomJoinedBatchEvent,
-    TimerTick,
-)
-from iris.memory.models import ContentBlock, system_event_block
-from iris.room.events import RoomJoinedEvent, RoomLeftEvent
+from iris.event.event_types import InputReady, InterruptEvent, MessageEvent, TimerTick
+from iris.memory.events import ProactiveTrigger, RoomEventHandler
+from iris.memory.models import ContentBlock
+from iris.room.events import RoomJoinedBatchEvent, RoomJoinedEvent, RoomLeftEvent
 
 
 class _MemoryEventHandler:
@@ -22,7 +17,8 @@ class _MemoryEventHandler:
     責務:
     - EventBus 上のイベントを購読し、記憶系の処理を行う
     - 通常メッセージ: Gateway → EventBus.publish(InputReady) → subscribe で受信
-    - Room 参加/退室: RoomJoinedEvent/RoomLeftEvent → ユーザー追跡 + system_event_block
+    - Room 参加/退室: RoomEventHandler に委譲
+    - TimerTick/プロアクティブ: ProactiveTrigger に委譲
 
     設計:
     - control メッセージは KernelManager で room.* と account.* に分岐し、
@@ -49,12 +45,19 @@ class _MemoryEventHandler:
         self._pending_input: dict[tuple[str, str], list[tuple[str, str, str]]] = {}
         self._pending_lock = Lock()
 
+        self._proactive_trigger = ProactiveTrigger(event_bus, room_provider)
+        self._room_handler = RoomEventHandler(
+            sensory,
+            short_term,
+            self._store_and_flush_pending_block,
+        )
+
         event_bus.subscribe(InputReady, self._on_input_ready)
         event_bus.subscribe(MessageEvent, self._on_message_event)
         event_bus.subscribe(TimerTick, self._on_timer_tick)
-        event_bus.subscribe(RoomJoinedEvent, self._on_room_joined)
-        event_bus.subscribe(RoomJoinedBatchEvent, self._on_room_joined_batch)
-        event_bus.subscribe(RoomLeftEvent, self._on_room_left)
+        event_bus.subscribe(RoomJoinedEvent, self._room_handler.handle_joined)
+        event_bus.subscribe(RoomJoinedBatchEvent, self._room_handler.handle_joined_batch)
+        event_bus.subscribe(RoomLeftEvent, self._room_handler.handle_left)
 
     def _on_message_event(self, event: MessageEvent) -> None:
         if not event.content:
@@ -90,73 +93,6 @@ class _MemoryEventHandler:
             room_id=event.room_id,
             session_id=event.session_id,
         )
-
-    def _on_room_joined(self, event: RoomJoinedEvent) -> None:
-        """Room参加時にユーザーを追跡し、system_event_blockを生成する。"""
-        self._sync_room_membership(event.account_id, event.display_name, event.room_id, joined=True)
-        self._store_room_event_block(
-            "room.joined",
-            f"[system] {event.display_name} が入室しました",
-            event.account_id,
-            event.display_name,
-            event.room_id,
-        )
-
-    def _on_room_joined_batch(self, event: RoomJoinedBatchEvent) -> None:
-        """Room参加バッチ時にユーザーを追跡し、1つのsystem_event_blockを生成する。"""
-        if not event.joins:
-            return
-        for join in event.joins:
-            self._sync_room_membership(join.account_id, join.display_name, join.room_id, joined=True)
-        first = event.joins[0]
-        join_count = len(event.joins)
-        if join_count > 1:
-            text = f"[system] {first.display_name} 他{join_count - 1}名が入室しました"
-        else:
-            text = f"[system] {first.display_name} が入室しました"
-        self._store_room_event_block(
-            "room.joined",
-            text,
-            first.account_id,
-            first.display_name,
-            first.room_id,
-        )
-
-    def _on_room_left(self, event: RoomLeftEvent) -> None:
-        """Room退室時にユーザー追跡を解除する。"""
-        self._sync_room_membership(event.account_id, event.display_name, event.room_id, joined=False)
-        self._store_room_event_block(
-            "room.left",
-            f"[system] {event.display_name} が退室しました",
-            event.account_id,
-            event.display_name,
-            event.room_id,
-        )
-
-    def _sync_room_membership(self, account_id: str, display_name: str, room_id: str, *, joined: bool) -> None:
-        if not self.short_term:
-            return
-        if joined:
-            self.short_term.add_user(account_id, display_name, room_id=room_id)
-        else:
-            self.short_term.remove_user(account_id, room_id=room_id)
-
-    def _store_room_event_block(
-        self,
-        event_type: str,
-        text: str,
-        account_id: str,
-        display_name: str,
-        room_id: str,
-    ) -> None:
-        block = system_event_block(
-            text,
-            event_type=event_type,
-            account_id=account_id,
-            display_name=display_name,
-            room_id=room_id,
-        )
-        self._store_and_flush_pending_block(block, account_id, room_id)
 
     def _store_and_flush_pending_block(
         self,
@@ -204,40 +140,7 @@ class _MemoryEventHandler:
             return
         if self.proactive_config is None:
             return
-        self._publish_proactive_input_ready()
-
-    def _publish_proactive_input_ready(self) -> None:
-        room_id = self._select_proactive_room()
-        self.event_bus.publish(
-            InputReady(
-                timestamp=None,
-                source="memory",
-                session_id="",
-                room_id=room_id,
-                content="",
-                context={"from_timer": True},
-            ),
-        )
-
-    def _select_proactive_room(self) -> str:
-        if not self._room_provider:
-            return ""
-        rooms = self._room_provider.list_rooms()
-        if not rooms:
-            default = self._room_provider.get_default_room()
-            return default.room_id if default else ""
-        best_room = None
-        best_active = None
-        for room in rooms:
-            members = self._room_provider.get_members(room.room_id)
-            for m in members:
-                if m.is_active and (best_active is None or (m.last_active or "") > (best_active or "")):
-                    best_active = m.last_active
-                    best_room = room
-        if best_room:
-            return str(best_room.room_id)
-        default = self._room_provider.get_default_room()
-        return default.room_id if default else ""
+        self._proactive_trigger.publish()
 
     def flush_pending(self) -> dict[tuple[str, str], list[tuple[str, str, str]]]:
         bus = self.event_bus

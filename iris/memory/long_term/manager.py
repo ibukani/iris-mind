@@ -8,7 +8,7 @@ if TYPE_CHECKING:
 
 
 from iris.memory.long_term.protocol import LongTermMemoryProtocol
-from iris.memory.long_term.protocols import EpisodicStoreProtocol, SemanticStoreProtocol
+from iris.memory.long_term.store_protocols import EpisodicStoreProtocol, SemanticStoreProtocol
 from iris.memory.long_term.vector_store import VectorStore
 
 

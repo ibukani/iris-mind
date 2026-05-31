@@ -11,9 +11,7 @@ from iris.agency.execution.router import route_after_llm
 
 @pytest.fixture
 def mock_llm() -> AsyncMock:
-    mock = AsyncMock()
-    mock.set_session_roles_summary = MagicMock()
-    return mock
+    return AsyncMock()
 
 
 def _make_orchestrator(mock_llm: AsyncMock) -> ExecutionOrchestrator:

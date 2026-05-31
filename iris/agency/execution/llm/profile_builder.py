@@ -30,7 +30,6 @@ class ProfileBuilder:
     def build(
         self,
         response_style: str = "",
-        session_roles_summary: str = "",
         current_display_name: str = "",
         room_id: str = "",
         account_id: str = "",
@@ -44,7 +43,6 @@ class ProfileBuilder:
         base = self._personality.build_system_prompt(
             agents_md_content=agents_md,
             user_preferences=user_prefs,
-            session_roles=session_roles_summary,
             response_style=response_style,
             governance_principles=self._governance_principles,
             affective_guidance=affective_guidance,

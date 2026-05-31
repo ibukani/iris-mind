@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from langchain_core.messages import BaseMessage, SystemMessage
@@ -28,7 +27,6 @@ class FlowExecutor(AsyncWorker):
         event_bus: EventBus,
         llm_pipeline: LLMGateway,
         tool_executor: ToolEngine | None = None,
-        session_roles_getter: Callable[[], str] | None = None,
         memory: MemoryManager | None = None,
         capability_checker: CapabilityChecker | None = None,
         inhibition: InhibitionManager | None = None,
@@ -49,7 +47,6 @@ class FlowExecutor(AsyncWorker):
             tool_executor=tool_executor,
             event_bus=event_bus,
             memory=memory,
-            session_roles_getter=session_roles_getter,
             capability_checker=capability_checker,
         )
 

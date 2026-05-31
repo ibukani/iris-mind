@@ -38,7 +38,6 @@ class SystemPromptBuilder:
         node_type: str = "general_task",
         context_hint: str = "",
         response_style: str = "",
-        session_roles_summary: str = "",
         current_display_name: str = "",
         include_profile: bool = True,
         chaos_level: float = 0.0,
@@ -53,7 +52,6 @@ class SystemPromptBuilder:
             msgs.append(
                 self._profile_builder.build(
                     response_style=response_style,
-                    session_roles_summary=session_roles_summary,
                     current_display_name=current_display_name,
                     room_id=room_id,
                     account_id=account_id,

@@ -36,7 +36,7 @@ class LLMGateway:
         self._personality = personality
         self._capability_checker = capability_checker
         self._debug_capture = debug_capture
-        self._session_roles_summary: str = ""
+
         self._last_system_prompt: str = ""
         self._last_call_model_role: str = "medium"
         self._account_provider = account_provider
@@ -48,9 +48,6 @@ class LLMGateway:
             memory=memory,
             prompts_dir=prompts_dir,
         )
-
-    def set_session_roles_summary(self, summary: str) -> None:
-        self._session_roles_summary = summary
 
     def resolve_display_name(self, account_id: str) -> str:
         if account_id and self._account_provider:
@@ -74,7 +71,6 @@ class LLMGateway:
             node_type=node_type,
             context_hint=context_hint,
             response_style=response_style,
-            session_roles_summary=self._session_roles_summary,
             current_display_name=display_name,
             include_profile=include_profile,
             chaos_level=mod.chaos_level,

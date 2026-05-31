@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from langchain_core.messages import HumanMessage
@@ -26,14 +25,12 @@ class SetupNode:
         event_bus: EventBus | None = None,
         memory: MemoryManager | None = None,
         consolidator: Consolidator | None = None,
-        session_roles_getter: Callable[[], str] | None = None,
         dynamic: DynamicState | None = None,
     ) -> None:
         self._pipeline = pipeline
         self._event_bus = event_bus
         self._memory = memory
         self._consolidator = consolidator
-        self._session_roles_getter = session_roles_getter
         self._dynamic = dynamic or DynamicState()
 
     async def __call__(self, state: ExecutionState) -> None:
@@ -73,9 +70,6 @@ class SetupNode:
                     room_id=plan.room_id,
                 ),
             )
-
-        if self._session_roles_getter:
-            self._pipeline.set_session_roles_summary(self._session_roles_getter())
 
     def _set_on_token_callback(self) -> None:
         event_bus = self._event_bus

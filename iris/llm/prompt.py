@@ -36,7 +36,6 @@ class Personality:
         self,
         agents_md_content: str = "",
         user_preferences: str = "",
-        session_roles: str = "",
         response_style: str = "",
         governance_principles: str = "",
         affective_guidance: str = "",
@@ -51,7 +50,6 @@ class Personality:
 
         for header, content in [
             ("## ユーザー情報", user_preferences),
-            ("## 接続セッション", session_roles),
             ("## 自己規律", governance_principles),
             ("## 応答スタイル", response_style),
             ("## Irisの現在の応答傾向", affective_guidance),

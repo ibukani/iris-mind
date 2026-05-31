@@ -48,7 +48,6 @@ class ExecutionOrchestrator:
         tool_executor: ToolEngine | None = None,
         event_bus: EventBus | None = None,
         memory: MemoryManager | None = None,
-        session_roles_getter: Callable[[], str] | None = None,
         capability_checker: CapabilityChecker | None = None,
     ) -> None:
         self._dynamic = DynamicState()
@@ -57,7 +56,6 @@ class ExecutionOrchestrator:
             pipeline=pipeline,
             event_bus=event_bus,
             memory=memory,
-            session_roles_getter=session_roles_getter,
             dynamic=self._dynamic,
         )
         self._general_chat = GeneralChatNode(

@@ -4,7 +4,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from iris.agency.inhibition.gate import _Gate
-from iris.agency.inhibition.models import GateDecision
+from iris.agency.inhibition.models import GateDecision, SuppressionProfile
 from iris.agency.inhibition.striatum import _Striatum
 
 if TYPE_CHECKING:
@@ -36,13 +36,22 @@ class InhibitionManager:
         return self._striatum.evaluate(plan)
 
     def should_suppress_proactive(self, room_id: str = "") -> bool:
-        gate = self._gate._get_gate(room_id)
+        if room_id:
+            is_executing = self._gate.is_room_executing(room_id)
+            is_on_cooldown = self._gate.is_room_on_cooldown(room_id)
+        else:
+            is_executing = self._gate.is_executing
+            is_on_cooldown = self._gate.is_on_cooldown
         return (
-            (self._cfg.inhibit_proactive_during_execution and gate.is_executing)
-            or (self._cfg.inhibit_proactive_during_cooldown and gate.is_on_cooldown)
+            (self._cfg.inhibit_proactive_during_execution and is_executing)
+            or (self._cfg.inhibit_proactive_during_cooldown and is_on_cooldown)
             or self._striatum.has_active_suppression
             or (self._session_getter is not None and not self._session_getter())
         )
+
+    def should_suppress(self, plan_reason: str, room_id: str | None = None) -> bool:
+        """指定された plan_reason が現在の抑制状態でブロックされるかを判定する。"""
+        return self._striatum.should_suppress(plan_reason, room_id)
 
     # ---- Execution gate (Gate) ----
 
@@ -72,11 +81,20 @@ class InhibitionManager:
 
     # ---- Generic suppression API ----
 
-    def suppress(self, reason: str, duration: float = 0.0, room_id: str | None = None) -> None:
-        self._striatum.suppress(reason, duration, room_id)
+    def suppress(
+        self,
+        reason: str,
+        duration: float = 0.0,
+        room_id: str | None = None,
+        profile: SuppressionProfile | None = None,
+    ) -> None:
+        self._striatum.suppress(reason, duration, room_id, profile)
 
     def unsuppress(self, reason: str, room_id: str | None = None) -> None:
         self._striatum.unsuppress(reason, room_id)
+
+    def get_active_suppressions(self) -> list[dict]:
+        return self._striatum.get_active_suppressions()
 
     # ---- Diagnostics ----
 

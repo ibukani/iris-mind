@@ -236,7 +236,7 @@ def run():
     metadata = [
         ("access_token", "your_access_token"),
         ("role", "cli"),
-        ("permissions", "send_chat,receive_chat,send_command,receive_command,send_voice_indicator"),
+        ("permissions", "send_chat,receive_chat,send_command,receive_command,send_inhibition"),
     ]
 
     with grpc.insecure_channel("localhost:9876") as channel:
@@ -343,7 +343,7 @@ class IrisClient:
         metadata = [
             ("access_token", "your_access_token"),
             ("role", "cli"),
-            ("permissions", "send_chat,receive_chat,send_command,receive_command,send_voice_indicator"),
+            ("permissions", "send_chat,receive_chat,send_command,receive_command,send_inhibition"),
         ]
 
         with grpc.insecure_channel("localhost:9876") as channel:
@@ -400,7 +400,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let token: MetadataValue<_> = "your_access_token".parse()?;
     let role: MetadataValue<_> = "cli".parse()?;
     let permissions: MetadataValue<_> =
-        "send_chat,receive_chat,send_command,receive_command,send_voice_indicator".parse()?;
+        "send_chat,receive_chat,send_command,receive_command,send_inhibition".parse()?;
 
     let mut client = IrisServiceClient::with_interceptor(channel, move |mut req: Request<()>| {
         req.metadata_mut().insert("access_token", token.clone());

@@ -206,8 +206,8 @@ sequenceDiagram
         Note over MGR: _voice_active が空でなければ Proactive 抑制
         MGR->>EB: publish InputReady(content="", context={from_timer: True})
     else 音声録音中
-        EB-->>MGR: MessageEvent(msg_type=voice_indicator, content="true"/"false")
-        MGR->>MGR: _voice_active 更新（sensory/pending非保存）
+        EB-->>MGR: MessageEvent(msg_type=inhibition, content="reason:true[:duration]")
+        MGR->>MGR: InhibitionEvent publish（sensory/pending非保存）
     else クライアント再接続
         EB-->>MGR: ClientSessionEvent(action=connected)
         MGR->>EB: InputReady(content="", context={system_event, offline_duration})
@@ -221,7 +221,7 @@ sequenceDiagram
 
 | イベント | ハンドラ | 処理 |
 |----------|----------|------|
-| `MessageEvent` | `_on_message_event` | sensory.store_raw + pending保存（direction=request / event, msg_type=chat / system）。msg_type=voice_indicator は制御信号として別処理（sensory/pending非保存、_voice_active 更新） |
+| `MessageEvent` | `_on_message_event` | sensory.store_raw + pending保存（direction=request / event, msg_type=chat / system）。msg_type=inhibition は制御信号として別処理（sensory/pending非保存、InhibitionEvent publish） |
 | `TimerTick` | `_on_timer_tick` | pending pop → InputReady + InterruptEvent または proactive InputReady |
 | `ClientSessionEvent` | `_on_client_session_event` | 再接続時に escalation InputReady を発行 |
 

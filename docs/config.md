@@ -137,6 +137,23 @@ trigger_weights:
 | inhibit_proactive_during_execution | bool | True | 実行中はproactive抑制 |
 | inhibit_proactive_during_cooldown | bool | True | クールダウン中はproactive抑制 |
 | tts_mora_per_sec | float | 6.5 | TTSモーラ/秒（発話時間推定用） |
+| suppression_profiles | dict[str, SuppressionProfileConfig] | {} | 抑制プロファイルの上書き設定 |
+
+`suppression_profiles` の例:
+
+```yaml
+inhibition:
+  suppression_profiles:
+    speaking:
+      blocked_reasons: ["proactive_curiosity", "proactive_escalation", "timer"]
+      priority: 1
+    voice_recording:
+      blocked_reasons: ["proactive_curiosity", "proactive_escalation", "timer"]
+      priority: 2
+    hyperdirect:
+      blocked_reasons: ["user_input", "proactive_curiosity", "proactive_escalation", "timer"]
+      priority: 100
+```
 
 ## MemoryConfig
 

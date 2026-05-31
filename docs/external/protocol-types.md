@@ -17,7 +17,7 @@
 | `receive_log` | ログ・デバッグ情報を受信可能 |
 | `interrupt` | 生成中断を要求可能 |
 | `execute_action` | アクション実行要求を受信可能 |
-| `send_voice_indicator` | 音声録音状態を送信可能 |
+| `send_inhibition` | 抑制制御信号を送信可能 |
 
 ### 1.2 Direction (`Message.direction`)
 
@@ -40,7 +40,20 @@
 | `proactive` | Server→Client | 自発発話（stream を経ず1メッセージで完了） |
 | `ack` | Server→Client | 受信確認（`metadata.ack_required` 時） |
 | `error` | Server→Client | エラー通知 |
-| `voice_indicator` | Client→Server | 音声録音状態通知（制御信号）。`content` が `"true"` で録音開始、`"false"` で録音終了。`direction:event` で送信 |
+| `inhibition` | Client→Server | 抑制制御信号。`content` フォーマット: `"reason:true[:duration]"` で抑制開始、`"reason:false"` で解除。例: `"voice_recording:true"` `direction:event` で送信 |
+
+#### 組み込み抑制理由（reason）
+
+| reason | 説明 | ブロック対象 | priority |
+|--------|------|-------------|----------|
+| `speaking` | TTS発話中（自動設定） | proactive_curiosity, proactive_escalation, timer | 1 |
+| `voice_recording` | 音声録音中（クライアント制御） | proactive_curiosity, proactive_escalation, timer | 2 |
+| `emotional_fatigue` | 感情的疲労 | proactive_curiosity, proactive_escalation, timer | 1 |
+| `user_away` | ユーザー不在 | proactive_curiosity, proactive_escalation, timer | 1 |
+| `hyperdirect` | 緊急停止（全Plan拒否） | user_input, proactive_curiosity, proactive_escalation, timer | 100 |
+
+- `blocked_reasons` は `config.yaml` の `inhibition.suppression_profiles` で上書き可能
+- カスタム reason を追加して `profile` を渡すことで拡張可能
 
 ### 1.4 Role（`source_role` / `target_role`）
 
@@ -174,7 +187,7 @@ Iris の中核メッセージ型。会話テキスト、ストリーミング応
 | `target_role` | string | 条件付き要 | 配送先ロール。Iris への発話時は `"mind"` が必須。省略すると `"*"` にフォールバックし、Iris は処理しない（§1.4） |
 | `direction` | string | 要 | 通信方向。`request` / `response` / `stream` / `event`（§1.2） |
 | `msg_type` | string | 要 | メッセージ種別。`chat` / `system` / `proactive` etc（§1.3） |
-| `content` | string | 条件付き要 | メッセージ本文。`chat`メッセージでは必須（空文字時はエラー応答）。`interrupt`/`voice_indicator`等では不要 |
+| `content` | string | 条件付き要 | メッセージ本文。`chat`メッセージでは必須（空文字時はエラー応答）。`interrupt`/`inhibition`等では不要 |
 | `content_type` | string | 任意 | MIME type。デフォルト `"text/plain"`（§1.5.1） |
 | `state` | string | 任意 | ストリーム状態。`thinking` / `speaking` / `done` / `interrupted` |
 | `metadata` | map<string,string> | 任意 | 拡張メタデータ。ack_required, account_id, room_id（§1.5.2） |

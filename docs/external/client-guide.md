@@ -136,7 +136,7 @@ Iris は以下の条件が揃うと、ユーザー入力なしで `proactive` �
 | 状態 | 原因 | 解除方法 |
 |------|------|----------|
 | クールダウン | 直近で応答した | 5秒経過（`post_execution_cooldown_sec`） |
-| 音声録音中 | `voice_indicator:true` 受信 | 録音終了で自動解除 |
+| 音声録音中 | `inhibition:voice_recording:true` 受信 | 録音終了で自動解除 |
 
 ### 設定による制御
 
@@ -156,7 +156,7 @@ proactive:
 ### 必要なPermission
 
 ```
-("permissions", "send_chat,receive_chat,send_command,receive_command,receive_log,interrupt,execute_action,send_voice_indicator")
+("permissions", "send_chat,receive_chat,send_command,receive_command,receive_log,interrupt,execute_action,send_inhibition")
 ```
 
 ### プロトコル
@@ -164,12 +164,12 @@ proactive:
 ```python
 # 録音開始
 BidirectionalStreamRequest(
-    message=Message(msg_type="voice_indicator", direction="event", content="true", target_role="mind")
+    message=Message(msg_type="inhibition", direction="event", content="voice_recording:true", target_role="mind")
 )
 
 # 録音終了
 BidirectionalStreamRequest(
-    message=Message(msg_type="voice_indicator", direction="event", content="false", target_role="mind")
+    message=Message(msg_type="inhibition", direction="event", content="voice_recording:false", target_role="mind")
 )
 ```
 
@@ -177,11 +177,11 @@ BidirectionalStreamRequest(
 
 ```
 Client                         Iris Mind
-  │── voice_indicator(true) ──→│  Proactive抑制開始
-  │    (録音中...)              │
-  │── voice_indicator(false) ──→│  抑制解除
-  │── chat("こんにちは") ──────→│  通常応答
-  │←──── response ───────────│
+  │── inhibition(voice_recording:true) ──→│  Proactive抑制開始
+  │    (録音中...)                          │
+  │── inhibition(voice_recording:false) ──→│  抑制解除
+  │── chat("こんにちは") ──────────────→│  通常応答
+  │←──── response ───────────────────────│
 ```
 
 | 状態 | 動作 |
@@ -189,6 +189,18 @@ Client                         Iris Mind
 | 録音中 | 自発発話が抑制される。通常のメッセージ応答は正常に動作 |
 | 録音終了 | 抑制解除。次のTimerTickからproactive判定が再開 |
 | 切断（録音中に切断） | 自動クリーンアップされ抑制解除 |
+
+### 利用可能な抑制理由
+
+| reason | 説明 | 使用例 |
+|--------|------|--------|
+| `voice_recording` | 音声録音中 | `inhibition("voice_recording:true")` |
+| `speaking` | TTS発話中（自動） | クライアント送信不要 |
+| `emotional_fatigue` | 感情的疲労 | 専用APIからのみ |
+| `user_away` | ユーザー不在 | 専用APIからのみ |
+| `hyperdirect` | 緊急停止 | システム内部のみ |
+
+クライアントが直接制御できるのは `voice_recording` のみ。他の reason はシステム内部で自動設定される。
 
 ---
 

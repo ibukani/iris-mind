@@ -42,6 +42,11 @@ dev = [
     "pyright>=1.1",
 ]
 
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.13"
+
 [tool.setuptools.packages.find]
 include = ["iris*"]
 

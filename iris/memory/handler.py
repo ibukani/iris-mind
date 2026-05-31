@@ -7,8 +7,6 @@ from loguru import logger
 
 from iris.event.event_types import (
     Identity,
-    InhibitionAction,
-    InhibitionEvent,
     InputReady,
     InterruptEvent,
     MessageEvent,
@@ -29,6 +27,7 @@ class _MemoryEventHandler:
     設計:
     - control メッセージは KernelManager で room.* と account.* に分岐し、
       Memory 層には届かない。Memory 層は Room イベント経由で間接的に処理する。
+    - msg_type="inhibition" は InhibitionEventHandler が処理し、Memory 層には届かない。
     """
 
     def __init__(
@@ -57,10 +56,6 @@ class _MemoryEventHandler:
         event_bus.subscribe(RoomLeftEvent, self._on_room_left)
 
     def _on_message_event(self, event: MessageEvent) -> None:
-        if event.msg_type == "voice_indicator":
-            self._publish_voice_inhibition(event)
-            return
-
         if not event.content:
             return
         if event.direction not in ("request", "event") or event.msg_type not in ("chat", "system"):
@@ -72,18 +67,6 @@ class _MemoryEventHandler:
             "MemoryManager: input pending account={} content={:.80}",
             event.account_id,
             event.content,
-        )
-
-    def _publish_voice_inhibition(self, event: MessageEvent) -> None:
-        action = InhibitionAction.SUPPRESS if event.content == "true" else InhibitionAction.UNSUPPRESS
-        self.event_bus.publish(
-            InhibitionEvent(
-                timestamp=None,
-                source="memory",
-                action=action,
-                reason="voice_recording",
-                room_id=event.room_id,
-            ),
         )
 
     def _on_input_ready(self, event: InputReady) -> None:

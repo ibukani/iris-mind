@@ -153,12 +153,20 @@ class ModelConfig(BaseModel):
         return 4096
 
 
+class SuppressionProfileConfig(BaseModel):
+    """抑制プロファイル設定。config.yaml の suppression_profiles で上書き可能。"""
+
+    blocked_reasons: list[str] = Field(default_factory=list)
+    priority: int = 1
+
+
 class InhibitionConfig(BaseModel):
     post_execution_cooldown_sec: float = 5.0
     max_concurrent_executions: int = 1
     inhibit_proactive_during_execution: bool = True
     inhibit_proactive_during_cooldown: bool = True
     tts_mora_per_sec: float = 6.5
+    suppression_profiles: dict[str, SuppressionProfileConfig] = Field(default_factory=dict)
 
 
 class ProactiveConfig(BaseModel):

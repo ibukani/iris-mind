@@ -140,7 +140,7 @@ service IrisService {
 | 通信方向 | 種別 | 説明 |
 |---------|------|------|
 | Client → Server | `BidirectionalStreamRequest.message` | テキスト入力、制御、アクション結果 |
-| Client → Server | `BidirectionalStreamRequest.message` (msg_type=voice_indicator) | 音声録音状態の制御信号（sensory/pending_input非保存、EventBus経由でProactive抑制） |
+| Client → Server | `BidirectionalStreamRequest.message` (msg_type=inhibition) | 抑制制御信号（sensory/pending_input非保存、EventBus経由でProactive抑制） |
 | Client → Server | `BidirectionalStreamRequest.command` | システムコマンド（`CommandInput` fast-path） |
 | Client → Server | `BidirectionalStreamRequest.control` | アカウント制御プロトコル |
 | Server → Client | `BidirectionalStreamResponse.message` | 応答、アクション要求、確認（`direction:stream`/`direction:response` で配送） |

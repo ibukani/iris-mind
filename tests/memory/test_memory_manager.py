@@ -301,7 +301,8 @@ class TestInputReadySubscription:
         assert len(flushed_events) == 1
         assert flushed_events[0].content == "テスト"
 
-    def test_input_ready_voice_indicator(self, event_bus: EventBus) -> None:
+    def test_input_ready_inhibition_ignored_by_memory(self, event_bus: EventBus) -> None:
+        """Memory層は msg_type=inhibition を無視する（InhibitionEventHandlerが担当）。"""
         _memory_with_handler(event_bus)
         inhibition_events: list = []
         event_bus.subscribe("InhibitionEvent", lambda e: inhibition_events.append(e))
@@ -310,18 +311,17 @@ class TestInputReadySubscription:
             timestamp=None,
             source="io",
             session_id="s1",
-            content="true",
+            content="voice_recording:true",
             account_id="",
             context={
                 "source_role": "cli",
                 "target_role": "mind",
-                "msg_type": "voice_indicator",
+                "msg_type": "inhibition",
             },
         )
         event_bus.publish(event)
 
-        assert len(inhibition_events) == 1
-        assert inhibition_events[0].action.value == "suppress"
+        assert len(inhibition_events) == 0
 
 
 class TestRoomId:

@@ -183,81 +183,97 @@ class TestInhibitionHandler:
 
     def test_suppress_via_message_event(self) -> None:
         bus, inhibition = self._setup()
-        bus.publish(MessageEvent(
-            timestamp=None,
-            source="io",
-            msg_type="inhibition",
-            content="voice_recording:true",
-        ))
+        bus.publish(
+            MessageEvent(
+                timestamp=None,
+                source="io",
+                msg_type="inhibition",
+                content="voice_recording:true",
+            )
+        )
         assert inhibition.is_suppressed("voice_recording")
 
     def test_unsuppress_via_message_event(self) -> None:
         bus, inhibition = self._setup()
-        bus.publish(MessageEvent(
-            timestamp=None,
-            source="io",
-            msg_type="inhibition",
-            content="voice_recording:true",
-        ))
+        bus.publish(
+            MessageEvent(
+                timestamp=None,
+                source="io",
+                msg_type="inhibition",
+                content="voice_recording:true",
+            )
+        )
         assert inhibition.is_suppressed("voice_recording")
-        bus.publish(MessageEvent(
-            timestamp=None,
-            source="io",
-            msg_type="inhibition",
-            content="voice_recording:false",
-        ))
+        bus.publish(
+            MessageEvent(
+                timestamp=None,
+                source="io",
+                msg_type="inhibition",
+                content="voice_recording:false",
+            )
+        )
         assert not inhibition.is_suppressed("voice_recording")
 
     def test_suppress_with_duration(self) -> None:
         bus, inhibition = self._setup()
-        bus.publish(MessageEvent(
-            timestamp=None,
-            source="io",
-            msg_type="inhibition",
-            content="speaking:true:0.01",
-        ))
+        bus.publish(
+            MessageEvent(
+                timestamp=None,
+                source="io",
+                msg_type="inhibition",
+                content="speaking:true:0.01",
+            )
+        )
         assert inhibition.is_suppressed("speaking")
         time.sleep(0.02)
         assert not inhibition.is_suppressed("speaking")
 
     def test_ignores_non_inhibition_msg_type(self) -> None:
         bus, inhibition = self._setup()
-        bus.publish(MessageEvent(
-            timestamp=None,
-            source="io",
-            msg_type="chat",
-            content="voice_recording:true",
-        ))
+        bus.publish(
+            MessageEvent(
+                timestamp=None,
+                source="io",
+                msg_type="chat",
+                content="voice_recording:true",
+            )
+        )
         assert not inhibition.is_suppressed("voice_recording")
 
     def test_invalid_content_too_short(self) -> None:
         bus, inhibition = self._setup()
-        bus.publish(MessageEvent(
-            timestamp=None,
-            source="io",
-            msg_type="inhibition",
-            content="voice_recording",
-        ))
+        bus.publish(
+            MessageEvent(
+                timestamp=None,
+                source="io",
+                msg_type="inhibition",
+                content="voice_recording",
+            )
+        )
         assert not inhibition.is_suppressed("voice_recording")
 
     def test_invalid_duration_ignored(self) -> None:
         bus, inhibition = self._setup()
-        bus.publish(MessageEvent(
-            timestamp=None,
-            source="io",
-            msg_type="inhibition",
-            content="speaking:true:abc",
-        ))
+        bus.publish(
+            MessageEvent(
+                timestamp=None,
+                source="io",
+                msg_type="inhibition",
+                content="speaking:true:abc",
+            )
+        )
         assert not inhibition.is_suppressed("speaking")
 
     def test_room_scoped_suppress(self) -> None:
         bus, inhibition = self._setup()
-        bus.publish(MessageEvent(
-            timestamp=None,
-            source="io",
-            msg_type="inhibition",
-            content="voice_recording:true",
-            room_id="room1",
-        ))
+        bus.publish(
+            MessageEvent(
+                timestamp=None,
+                source="io",
+                msg_type="inhibition",
+                content="voice_recording:true",
+                room_id="room1",
+            )
+        )
         assert inhibition.is_suppressed("voice_recording", room_id="room1")
         assert not inhibition.is_suppressed("voice_recording", room_id="room2")

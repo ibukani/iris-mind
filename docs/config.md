@@ -204,7 +204,7 @@ inhibition:
 
 | フィールド | 型 | デフォルト | 説明 |
 |-----------|-----|-----------|------|
-| interval_sec | float | 5.0 | 鼓動タイマーの発行間隔（秒） |
+| interval_sec | float | 1.0 | 鼓動タイマーの発行間隔（秒） |
 
 ## SessionConfig
 
@@ -328,7 +328,7 @@ debug:
   capture_max_entries: 10
 
 timer:
-  interval_sec: 5.0
+  interval_sec: 1.0
 
 logging:
   backup_count: 14

@@ -41,6 +41,8 @@ class SensoryMemoryManager(SensoryMemoryProtocol):
         self._closed = False
         self._raw_input: ContentBlock | None = None
         self._raw_timestamp: str | None = None
+        self._raw_account_id: str = ""
+        self._raw_session_id: str = ""
 
     # ---- fragment mode ----
 
@@ -110,6 +112,8 @@ class SensoryMemoryManager(SensoryMemoryProtocol):
             self._fragments.clear()
             self._raw_input = None
             self._raw_timestamp = None
+            self._raw_account_id = ""
+            self._raw_session_id = ""
 
     def clear(self) -> None:
         with self._lock:
@@ -117,6 +121,33 @@ class SensoryMemoryManager(SensoryMemoryProtocol):
             self._fragments.clear()
             self._raw_input = None
             self._raw_timestamp = None
+            self._raw_account_id = ""
+            self._raw_session_id = ""
+
+    def clear_raw(self) -> None:
+        with self._lock:
+            self._raw_input = None
+            self._raw_timestamp = None
+            self._raw_account_id = ""
+            self._raw_session_id = ""
+
+    def take_raw(self) -> dict[str, Any]:
+        with self._lock:
+            result: dict[str, Any] = {"room_id": self._room_id}
+            if self._raw_input is not None:
+                result["raw"] = self._raw_input.get("text", "")
+                result["raw_block"] = self._raw_input
+            if self._raw_timestamp is not None:
+                result["raw_timestamp"] = self._raw_timestamp
+            if self._raw_account_id:
+                result["account_id"] = self._raw_account_id
+            if self._raw_session_id:
+                result["session_id"] = self._raw_session_id
+            self._raw_input = None
+            self._raw_timestamp = None
+            self._raw_account_id = ""
+            self._raw_session_id = ""
+        return result
 
     def close(self) -> None:
         with self._lock:
@@ -126,16 +157,24 @@ class SensoryMemoryManager(SensoryMemoryProtocol):
             self._flush_callback = None
             self._raw_input = None
             self._raw_timestamp = None
+            self._raw_account_id = ""
+            self._raw_session_id = ""
 
     # ---- raw input mode ----
 
-    def store_raw(self, content: str, room_id: str = "") -> None:
-        self.store_raw_block(text_block(content), room_id=room_id)
+    def store_raw(self, content: str, room_id: str = "", account_id: str = "", session_id: str = "") -> None:
+        self.store_raw_block(text_block(content), room_id=room_id, account_id=account_id, session_id=session_id)
 
-    def store_raw_block(self, block: ContentBlock, room_id: str = "") -> None:
+    def store_raw_block(
+        self, block: ContentBlock, room_id: str = "", account_id: str = "", session_id: str = ""
+    ) -> None:
         with self._lock:
             if room_id:
                 self._room_id = room_id
+            if account_id:
+                self._raw_account_id = account_id
+            if session_id:
+                self._raw_session_id = session_id
             self._raw_input = block
             self._raw_timestamp = datetime.now(UTC).isoformat()
         logger.debug("SensoryMemory: stored raw block type={}", block.get("type", "text"))
@@ -148,11 +187,17 @@ class SensoryMemoryManager(SensoryMemoryProtocol):
                 result["fragment"] = blocks_text(self._fragments)
             raw_input = self._raw_input
             raw_timestamp = self._raw_timestamp
+            raw_account_id = self._raw_account_id
+            raw_session_id = self._raw_session_id
         if raw_input is not None:
             result["raw"] = raw_input.get("text", "") if raw_input.get("type") == "text" else ""
             result["raw_block"] = raw_input
             if raw_timestamp is not None:
                 result["raw_timestamp"] = raw_timestamp
+            if raw_account_id:
+                result["account_id"] = raw_account_id
+            if raw_session_id:
+                result["session_id"] = raw_session_id
         return result
 
     @property

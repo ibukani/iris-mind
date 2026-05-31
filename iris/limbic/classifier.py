@@ -82,7 +82,7 @@ class NeuralEmotionClassifier:
             ) from exc
 
         try:
-            import torch  # type: ignore[import-not-found]  # noqa: F401
+            import torch  # noqa: F401
         except ImportError as exc:
             raise RuntimeError(
                 "Neural emotion classifier requires PyTorch: install torch (e.g. `uv pip install torch`)."

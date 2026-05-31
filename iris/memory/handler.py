@@ -6,7 +6,6 @@ from typing import Any
 from loguru import logger
 
 from iris.event.event_types import (
-    Identity,
     InputReady,
     InterruptEvent,
     MessageEvent,
@@ -62,7 +61,9 @@ class _MemoryEventHandler:
             return
         if event.direction not in ("request", "event") or event.msg_type not in ("chat", "system"):
             return
-        self.sensory.store_raw(event.content)
+        self.sensory.store_raw(
+            event.content, account_id=event.account_id, room_id=event.room_id, session_id=event.session_id
+        )
         with self._pending_lock:
             self._pending_input[(event.account_id, event.room_id)] = [(event.content, event.account_id, event.room_id)]
         logger.debug(
@@ -72,34 +73,22 @@ class _MemoryEventHandler:
         )
 
     def _on_input_ready(self, event: InputReady) -> None:
-        """Gateway から EventBus 経由で受信した通常メッセージを処理する。
+        """Gateway からの入力を SensoryMemory に格納する。
 
-        InputReady イベントを MessageEvent に変換して EventBus に publish し、
-        _on_message_event（記憶処理）および io/handler（レスポンス・ストリームのルーティング）を動作させる。
-        source="io" のみ処理。source="memory"（flush_pending からの発行）は無視してループ防止。
+        MessageEvent への変換は行わず、SensorMemory に raw として蓄積し、
+        TimerTick での一括処理に委ねる。
+        source="io" のみ処理。
         """
         if event.source != "io":
             return
         if not event.content:
             return
 
-        context = event.context or {}
-        raw_speaker = context.get("speaker")
-        speaker = Identity(**raw_speaker) if isinstance(raw_speaker, dict) else None
-        self.event_bus.publish(
-            MessageEvent(
-                timestamp=None,
-                source="io",
-                session_id=event.session_id,
-                source_role=context.get("source_role", ""),
-                target_role=context.get("target_role", ""),
-                account_id=event.account_id,
-                direction="request",
-                msg_type=context.get("msg_type", "chat"),
-                content=event.content,
-                room_id=event.room_id,
-                speaker=speaker,
-            ),
+        self.sensory.store_raw(
+            event.content,
+            account_id=event.account_id,
+            room_id=event.room_id,
+            session_id=event.session_id,
         )
 
     def _on_room_joined(self, event: RoomJoinedEvent) -> None:
@@ -181,9 +170,34 @@ class _MemoryEventHandler:
         with self._pending_lock:
             self._pending_input[(account_id, room_id)] = [(block.get("text", ""), account_id, room_id)]
         self.flush_pending()
+        self.sensory.clear_raw()
 
     def _on_timer_tick(self, event: TimerTick) -> None:
         if self.event_bus is None:
+            return
+        raw = self.sensory.take_raw()
+        if raw.get("raw"):
+            bus = self.event_bus
+            bus.publish(
+                InterruptEvent(
+                    timestamp=None,
+                    source="memory",
+                    room_id=raw.get("room_id", ""),
+                ),
+            )
+            bus.publish(
+                InputReady(
+                    timestamp=None,
+                    source="memory",
+                    content=raw["raw"],
+                    account_id=raw.get("account_id", ""),
+                    room_id=raw.get("room_id", ""),
+                    session_id=raw.get("session_id", ""),
+                    context={},
+                ),
+            )
+            with self._pending_lock:
+                self._pending_input.clear()
             return
         pending = self.flush_pending()
         if pending:

@@ -242,7 +242,7 @@ class DebugConfig(BaseModel):
 
 
 class TimerConfig(BaseModel):
-    interval_sec: float = 5.0
+    interval_sec: float = 1.0
 
 
 class PluginConfig(BaseModel):

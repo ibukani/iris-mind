@@ -111,13 +111,15 @@ class _Striatum:
         for entry in self._suppressions.values():
             if entry.expiry == 0.0 or now < entry.expiry:
                 remaining = "permanent" if entry.expiry == 0.0 else round(entry.expiry - now, 1)
-                result.append({
-                    "reason": entry.reason,
-                    "room_id": entry.room_id,
-                    "priority": entry.profile.priority,
-                    "blocked_reasons": list(entry.profile.blocked_reasons),
-                    "remaining": remaining,
-                })
+                result.append(
+                    {
+                        "reason": entry.reason,
+                        "room_id": entry.room_id,
+                        "priority": entry.profile.priority,
+                        "blocked_reasons": list(entry.profile.blocked_reasons),
+                        "remaining": remaining,
+                    }
+                )
         return result
 
     def evaluate(self, plan: Plan) -> GateDecision:

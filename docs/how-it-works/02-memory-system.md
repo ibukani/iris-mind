@@ -53,10 +53,11 @@ flush 時は `flush_callback(session_id, content)` が呼ばれる。
 
 ### 系統2: 生入力保持 (raw mode)
 
-`store_raw(content)` で完全な入力を保持。`retrieve()` で取得可能。
+`store_raw(content, account_id, room_id, session_id)` で完全な入力を保持。`retrieve()` で取得可能。
 
 - `has_pending_raw`: 未処理の raw 入力有無
-- MemoryManager の TimerTick 処理で pop され、`InputReady` として再 publish
+- `take_raw()`: 未処理 raw を原子的に取得しクリア
+- MemoryManager の TimerTick が `take_raw()` で pop し、`InputReady` として再 publish
 
 ### 状態管理
 

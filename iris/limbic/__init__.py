@@ -3,6 +3,8 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING
 
+from loguru import logger
+
 from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
 
 from .appraiser import Appraiser
@@ -39,20 +41,29 @@ class LimbicPlugin(PluginProtocol):
             room_mgr = manager.resolve(RoomManager)
 
         classifier_config = manager.config.limbic.emotion_classifier
-        emotion_classifier = None
+        self._emotion_classifier: NeuralEmotionClassifier | None = None
         if classifier_config.type == "neural":
-            emotion_classifier = NeuralEmotionClassifier(model_name=classifier_config.model_name)
+            self._emotion_classifier = NeuralEmotionClassifier(
+                model_name=classifier_config.model_name,
+                device=classifier_config.device,
+            )
 
         self._account_manager = account_mgr
         self._room_manager = room_mgr
         self._orchestrator = LimbicOrchestrator(
             account_manager=account_mgr,
             room_manager=room_mgr,
-            appraiser=Appraiser(emotion_classifier=emotion_classifier),
+            appraiser=Appraiser(emotion_classifier=self._emotion_classifier),
         )
         manager.provide(LimbicOrchestrator, self._orchestrator)
 
     def start(self, manager: PluginManager) -> None:
+        if self._emotion_classifier is not None:
+            try:
+                self._emotion_classifier.preload()
+            except Exception:
+                logger.warning("Limbic: failed to preload emotion model, falling back to keyword classifier")
+
         from .hooks import subscribe_events
 
         subscribe_events(

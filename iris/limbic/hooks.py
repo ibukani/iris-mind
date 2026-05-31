@@ -29,7 +29,7 @@ def subscribe_events(
     bus = manager.event_bus
 
     def _on_message(event: MessageEvent) -> None:
-        if event.direction != "inbound":
+        if event.direction != "request":
             return
         if not event.content:
             return

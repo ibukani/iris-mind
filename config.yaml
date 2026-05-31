@@ -28,7 +28,8 @@ room: {}
 limbic:
     emotion_classifier:
         type: neural # keyword / neural
-        model_name: koshin2001/Japanese-to-emotions
+        model_name: YoichiTakenaka/deverta-v3-japanese-base-Anticipation
+        device: auto # auto / cuda / cpu / 0
 
 # 自発発話 — プロアクティブな割り込みの重み・閾値
 proactive:
@@ -110,7 +111,7 @@ logging:
     console_format: "{time:YYYY-MM-DD HH:mm:ss} [{level}] {message}"
     console_level: DEBUG
     dir: logs
-    file_level: INFO
+    file_level: DEBUG
     # 特定ロガーのレベル上書き（例: iris.io: DEBUG）
     loggers:
         iris.io: DEBUG

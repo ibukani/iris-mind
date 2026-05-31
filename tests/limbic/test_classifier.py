@@ -58,3 +58,39 @@ def test_missing_transformers_reports_optional_dependency(monkeypatch: pytest.Mo
 
     with pytest.raises(RuntimeError, match="iris-mind\\[emotion\\]"):
         classifier.classify("嬉しい")
+
+
+def test_preload_forces_model_load() -> None:
+    load_count = 0
+
+    def _factory() -> _FakePipeline:
+        nonlocal load_count
+        load_count += 1
+        return _FakePipeline([{"label": "joy", "score": 0.9}])
+
+    classifier = NeuralEmotionClassifier(pipeline_factory=_factory)
+    classifier.preload()
+
+    assert load_count == 1
+    assert classifier.classify("嬉しい") == {"joy": 0.9}
+    assert load_count == 1
+
+
+def test_preload_idempotent() -> None:
+    load_count = 0
+
+    def _factory() -> _FakePipeline:
+        nonlocal load_count
+        load_count += 1
+        return _FakePipeline([{"label": "joy", "score": 0.9}])
+
+    classifier = NeuralEmotionClassifier(pipeline_factory=_factory)
+    classifier.preload()
+    classifier.preload()
+
+    assert load_count == 1
+
+
+def test_device_stored() -> None:
+    classifier = NeuralEmotionClassifier(device="cuda:0")
+    assert classifier._device == "cuda:0"

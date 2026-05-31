@@ -183,6 +183,7 @@ class ProactiveConfig(BaseModel):
 class EmotionClassifierConfig(BaseModel):
     type: Literal["keyword", "neural"] = "keyword"
     model_name: str = "koshin2001/Japanese-to-emotions"
+    device: str = "auto"
 
 
 class LimbicConfig(BaseModel):

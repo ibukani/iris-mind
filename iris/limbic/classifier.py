@@ -2,7 +2,10 @@ from __future__ import annotations
 
 from collections.abc import Callable
 import importlib
+import time
 from typing import Any
+
+from loguru import logger
 
 from .models import PlutchikEmotion
 
@@ -42,11 +45,17 @@ class NeuralEmotionClassifier:
         self,
         model_name: str = DEFAULT_EMOTION_MODEL,
         *,
+        device: str = "auto",
         pipeline_factory: Callable[[], Any] | None = None,
     ) -> None:
         self._model_name = model_name or DEFAULT_EMOTION_MODEL
+        self._device = device
         self._pipeline_factory = pipeline_factory
         self._pipeline: Callable[[str], object] | None = None
+
+    def preload(self) -> None:
+        """起動時にモデルをGPUへロードする。"""
+        self._load_model()
 
     def classify(self, text: str) -> dict[str, float]:
         if not text.strip():
@@ -72,13 +81,37 @@ class NeuralEmotionClassifier:
                 "install iris-mind[emotion] and a transformers backend such as torch."
             ) from exc
 
+        try:
+            import torch  # type: ignore[import-not-found]  # noqa: F401
+        except ImportError as exc:
+            raise RuntimeError(
+                "Neural emotion classifier requires PyTorch: install torch (e.g. `uv pip install torch`)."
+            ) from exc
+
         pipeline = transformers.pipeline
-        self._pipeline = pipeline(
-            "text-classification",
-            model=self._model_name,
-            top_k=None,
-            function_to_apply="sigmoid",
-        )
+        try:
+            t0 = time.monotonic()
+            self._pipeline = pipeline(
+                "text-classification",
+                model=self._model_name,
+                device=self._device,
+                top_k=None,
+                function_to_apply="sigmoid",
+            )
+            elapsed = time.monotonic() - t0
+            device_info = getattr(self._pipeline, "device", "unknown")
+            logger.info(
+                "Limbic: emotion model loaded in {:.2f}s on {} ({})",
+                elapsed,
+                device_info,
+                self._model_name,
+            )
+        except ModuleNotFoundError as exc:
+            raise RuntimeError(
+                f"Neural emotion classifier model '{self._model_name}' "
+                f"requires additional dependencies: {exc}. "
+                "Install them with `uv pip install fugashi`."
+            ) from exc
 
     def _map_to_plutchik(self, results: object) -> dict[str, float]:
         items = self._flatten_results(results)

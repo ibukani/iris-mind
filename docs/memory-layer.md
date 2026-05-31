@@ -19,8 +19,8 @@ class MemoryManager:
     """
 
     # === EventBus subscribers ===
-    # subscribe: InputReceived → sensory.store_raw() + pending dict
-    # subscribe: TimerTick     → pending pop → InputReady / proactive InputReady(from_timer=True)
+    # subscribe: InputReady(source=io) → sensory.store_raw()
+    # subscribe: TimerTick → sensory.take_raw() → InputReady(source=memory) / proactive InputReady(from_timer=True)
 
     # === 公開 I/F（汎用） ===
     def store(self, stream: str, data: Any) -> None
@@ -193,20 +193,20 @@ sequenceDiagram
     participant LTM as long_term
 
     alt ユーザー入力
-        EB-->>MGR: MessageEvent(content, direction=request, account_id)
-        MGR->>SEN: store_raw(content)
-        MGR->>MGR: pending_dict[session_id].append((content, account_id))
-        MGR->>EB: TimerTick → flush → InputReady(content, account_id)
-        MGR->>EB: InterruptEvent(session_id)
+        EB-->>MGR: InputReady(source="io", content, account_id)
+        MGR->>SEN: store_raw(content, account_id, room_id)
+        MGR->>MGR: TimerTick(1s) → sensory.take_raw()
+        MGR->>EB: InterruptEvent(room_id)
+        MGR->>EB: InputReady(source="memory", content, account_id)
 
         Note over EB,STM: PlanningManager が Plan 決定後に FlowExecutor が add_turn
         EB-->>MGR: (FlowExecutor) short_term.add_turn("user", content)
     else 自発発話トリガー
-        EB-->>MGR: TimerTick（pending なし）
+        EB-->>MGR: TimerTick（sensory 未処理なし）
         Note over MGR: _voice_active が空でなければ Proactive 抑制
         MGR->>EB: publish InputReady(content="", context={from_timer: True})
     else 音声録音中
-        EB-->>MGR: MessageEvent(msg_type=inhibition, content="reason:true[:duration]")
+        EB-->>MGR: InputReady(msg_type=inhibition, content="reason:true[:duration]")
         MGR->>MGR: InhibitionEvent publish（sensory/pending非保存）
     else クライアント再接続
         EB-->>MGR: ClientSessionEvent(action=connected)
@@ -221,8 +221,9 @@ sequenceDiagram
 
 | イベント | ハンドラ | 処理 |
 |----------|----------|------|
-| `MessageEvent` | `_on_message_event` | sensory.store_raw + pending保存（direction=request / event, msg_type=chat / system）。msg_type=inhibition は制御信号として別処理（sensory/pending非保存、InhibitionEvent publish） |
-| `TimerTick` | `_on_timer_tick` | pending pop → InputReady + InterruptEvent または proactive InputReady |
+| `InputReady` | `_on_input_ready` | source="io" の入力 → `sensory.store_raw()` に格納（MessageEvent への変換は行わず、TimerTick での一括処理に委ねる） |
+| `MessageEvent` | `_on_message_event` | pending保存（direction=request / event, msg_type=chat / system）。msg_type=inhibition は制御信号として別処理 |
+| `TimerTick` | `_on_timer_tick` | sensory.take_raw() → 未処理入力があれば InterruptEvent + InputReady(source="memory")。なければ proactive InputReady |
 | `ClientSessionEvent` | `_on_client_session_event` | 再接続時に escalation InputReady を発行 |
 
 MemoryManager は **Completed イベントを購読しない**。

@@ -106,10 +106,9 @@ class TestMemoryManagerInputPending:
             TimerTick(timestamp=None, source="kernel", tick_count=0),
         )
 
-        assert len(ready_events) == 2
-        contents = {e.content for e in ready_events}
-        assert contents == {"hello", "world"}
-        assert all(e.context == {} for e in ready_events)
+        assert len(ready_events) == 1
+        assert ready_events[0].content == "world"
+        assert ready_events[0].context == {}
 
     def test_timer_with_pending_produces_input_ready(self, event_bus: EventBus, memory: MemoryManager) -> None:
         ready_events: list[InputReady] = []
@@ -173,15 +172,15 @@ class TestMemoryManagerInputPending:
         event_bus.publish(
             TimerTick(timestamp=None, source="kernel", tick_count=0),
         )
-        assert len(ready_events) == 2
-        contents = {e.content for e in ready_events}
-        assert contents == {"first", "second"}
+        # sensory には最後の1件のみ保持される
+        assert len(ready_events) == 1
+        assert ready_events[0].content == "second"
 
         event_bus.publish(
             TimerTick(timestamp=None, source="kernel", tick_count=1),
         )
         # proactive_config が有効ではないので、これ以上イベントは増えないはず
-        assert len(ready_events) == 2
+        assert len(ready_events) == 1
 
     def test_later_input_overwrites_earlier_same_session(self, event_bus: EventBus) -> None:
         ready_events: list[InputReady] = []
@@ -254,17 +253,15 @@ class TestMemoryManagerInputPending:
 class TestInputReadySubscription:
     """_on_input_ready: Gateway → EventBus(InputReady) → Handler の経路。"""
 
-    def test_input_ready_publishes_message_event(self, event_bus: EventBus) -> None:
-        _memory_with_handler(event_bus)
-        received: list[MessageEvent] = []
-        event_bus.subscribe("MessageEvent", lambda e: received.append(e))
+    def test_input_ready_stores_to_sensory(self, event_bus: EventBus) -> None:
+        _, mgr = _memory_with_handler_pair(event_bus)
 
         event = InputReady(
             timestamp=None,
             source="io",
             session_id="s1",
             content="hello",
-            account_id="",
+            account_id="a1",
             context={
                 "source_role": "cli",
                 "target_role": "mind",
@@ -273,10 +270,37 @@ class TestInputReadySubscription:
         )
         event_bus.publish(event)
 
-        assert len(received) == 1
-        assert received[0].content == "hello"
-        assert received[0].session_id == "s1"
-        assert received[0].direction == "request"
+        assert mgr.sensory.has_pending_raw
+        raw = mgr.sensory.take_raw()
+        assert raw["raw"] == "hello"
+        assert raw.get("account_id") == "a1"
+        assert raw.get("session_id") == "s1"
+
+    def test_input_ready_chained_to_timer(self, event_bus: EventBus) -> None:
+        """InputReady → sensory → TimerTick → InputReady(memory) のチェイン"""
+        _memory_with_handler(event_bus)
+        flushed_events: list[InputReady] = []
+        event_bus.subscribe("InputReady", lambda e: flushed_events.append(e) if e.source == "memory" else None)
+
+        event_bus.publish(
+            InputReady(
+                timestamp=None,
+                source="io",
+                session_id="s1",
+                content="hello",
+                account_id="a1",
+                context={"source_role": "cli", "target_role": "mind", "msg_type": "chat"},
+            ),
+        )
+        event_bus.publish(
+            TimerTick(timestamp=None, source="kernel", tick_count=0),
+        )
+
+        assert len(flushed_events) == 1
+        assert flushed_events[0].content == "hello"
+        assert flushed_events[0].account_id == "a1"
+        assert flushed_events[0].source == "memory"
+        assert flushed_events[0].context == {}
 
     def test_input_ready_stores_pending(self, event_bus: EventBus) -> None:
         _memory_with_handler(event_bus)
@@ -341,9 +365,8 @@ class TestRoomId:
             TimerTick(timestamp=None, source="kernel", tick_count=0),
         )
 
-        assert len(ready_events) == 2
-        contents = {e.content for e in ready_events}
-        assert contents == {"hello", "world"}
+        assert len(ready_events) == 1
+        assert ready_events[0].content == "world"
 
     def test_store_with_room_id_sets_default(self) -> None:
         mgr = MemoryManager()

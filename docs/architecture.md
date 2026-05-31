@@ -109,11 +109,15 @@ sequenceDiagram
     participant KRN as Kernel層
 
     TCP->>IO: Message (direction:request, target_role:mind)
-    IO->>EB: MessageEvent(...)
+    IO->>EB: InputReady(source=io, content)
     EB->>LIM: MessageEvent (Limbic購読)
     LIM->>LIM: Appraisal→Emotion→Relationship更新
-    EB->>MEM: MessageEvent (MemoryManager購読)
-    MEM->>MEM: sensory buffer → flush
+    EB->>MEM: InputReady (MemoryManager購読)
+    MEM->>MEM: sensory.store_raw(content)
+
+    KRN->>EB: TimerTick (1秒間隔)
+    EB->>MEM: TimerTick (subscribe)
+    MEM->>MEM: sensory.take_raw() → InputReady(source=memory)
     MEM->>EB: InputReady(content)
     EB->>AG: InputReady (PlanningManager直購読)
     AG->>AG: _build_plan → PlanDecided
@@ -122,10 +126,10 @@ sequenceDiagram
     EB->>IO: MessageEvent
     IO->>TCP: Message (direction:response)
 
-    KRN->>EB: TimerTick (5秒間隔)
+    KRN->>EB: TimerTick (1秒間隔)
     EB->>MEM: TimerTick (subscribe)
-    MEM->>MEM: rate-limit check
-    MEM->>EB: InputReady(from_timer=True)
+    MEM->>MEM: sensory 未処理なし → rate-limit check
+    MEM->>EB: InputReady(from_timer=True, source=memory)
     EB->>AG: InputReady
     AG->>AG: scoring + threshold → PlanDecided
 ```

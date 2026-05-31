@@ -153,6 +153,22 @@ def test_default_values() -> None:
     assert config.model.providers == {}
     assert config.model.hf_token == ""
     assert config.personality.name == "Iris"
+    assert config.limbic.emotion_classifier.type == "keyword"
+    assert config.limbic.emotion_classifier.model_name == "koshin2001/Japanese-to-emotions"
+
+
+def test_limbic_emotion_classifier_config_loads() -> None:
+    config = Config(
+        limbic={
+            "emotion_classifier": {
+                "type": "neural",
+                "model_name": "example/model",
+            },
+        },  # pyright: ignore[reportArgumentType]
+    )
+
+    assert config.limbic.emotion_classifier.type == "neural"
+    assert config.limbic.emotion_classifier.model_name == "example/model"
 
 
 def test_proactive_config_defaults() -> None:

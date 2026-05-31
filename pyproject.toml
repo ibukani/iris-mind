@@ -31,6 +31,11 @@ dependencies = [
     "orjson>=3.10",
 ]
 
+[project.optional-dependencies]
+emotion = [
+    "transformers>=4.57",
+]
+
 [tool.setuptools.packages.find]
 include = ["iris*"]
 

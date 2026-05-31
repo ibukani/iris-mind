@@ -94,7 +94,7 @@ class Appraiser:
 | 次元 | 範囲 | 意味 |
 |------|------|------|
 | novelty | 0.0–1.0 | 新規性（新話題=0.8, 話題変更=0.6, 継続=0.3） |
-| pleasantness | -1.0–1.0 | 快不快（キーワード検出でスコア） |
+| pleasantness | -1.0–1.0 | 快不快（感情分類結果でスコア） |
 | goal_relevance | 0.0–1.0 | 目標関連性（文脈パターンから判定） |
 | agency | 0.0–1.0 | 自己主体性 |
 | coping_potential | 0.0–1.0 | 対処可能性（trust × familiarity から算出） |
@@ -119,7 +119,7 @@ class Appraiser:
 | effort | 1.0 - primary.coping_potential |
 | attention | primary.goal_relevance |
 
-**感情キーワード辞書**: 日本語 8 感情（joy/sadness/anticipation/surprise/anger/fear/disgust/trust）のキーワードリスト。`detect_word_emotions()` が正規表現マッチでスコアリング。
+**感情分類**: `detect_word_emotions()` は既定で日本語キーワード辞書を使い、joy/sadness/anticipation/surprise/anger/fear/disgust/trust を正規表現マッチでスコアリングする。`config.yaml` の `limbic.emotion_classifier.type: neural` では `NeuralEmotionClassifier` を使い、HuggingFace text-classification モデルの出力を Plutchik 8感情へマッピングする。ニューラル分類器は初回分類時に `transformers` / `torch` を遅延ロードする。
 
 **文脈パターン**: self_disclosure / support_seeking / positive_feedback / negative_feedback の4種。`detect_context_type()` が正規表現で最マッチを返す。
 
@@ -359,4 +359,3 @@ AIコンパニオン（Neuro-sama等）の研究において、ユーザーが�
 - **Multi-Party Chat** (Wei et al., Meta 2023): pairwise-trained モデルが欠く2スキル — (1) いつ話すかの判断、(2) 複数キャラクターに基づいた一貫発話
 - **Quan et al.** (IEEE 2023): マルチパーティ会話では感情のダイナミクスが参加者間で伝播
 - **Grassi et al.** (2025): グループ全体の望ましいダイナミクス達成のための会話フロー制御
-

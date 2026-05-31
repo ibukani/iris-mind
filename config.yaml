@@ -24,6 +24,12 @@ account:
 # ルーム管理 — ルームCRUD・メンバーシップ管理（インメモリ）
 room: {}
 
+# 辺縁系 — 感情分類器（既定は軽量なキーワード判定）
+limbic:
+    emotion_classifier:
+        type: keyword # keyword / neural
+        model_name: koshin2001/Japanese-to-emotions
+
 # 自発発話 — プロアクティブな割り込みの重み・閾値
 proactive:
     check_interval_sec: 5.0

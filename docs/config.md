@@ -12,6 +12,7 @@ Config
 ├── personality: PersonalityConfig — 人格・プロンプト
 ├── account: AccountConfig      — アカウント管理
 ├── memory: MemoryConfig        — 記憶管理
+├── limbic: LimbicConfig        — 感情分類
 ├── proactive: ProactiveConfig  — 自発発話
 ├── inhibition: InhibitionConfig — 抑制制御
 ├── quasi_sync: QuasiSyncConfig — 準同期入力制御
@@ -91,6 +92,21 @@ Config
 | `get_effective_max_tokens(role)` | int | role 別最大トークン数。モデル設定がなければ 4096 |
 | `get_model_capabilities(role)` | list[str] | role 別の機能ラベル一覧 |
 | `get_model_performance_tier(role)` | str | role 別の性能区分 |
+
+## LimbicConfig
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| emotion_classifier | EmotionClassifierConfig | default | Appraiser が使う感情分類器 |
+
+### EmotionClassifierConfig
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| type | "keyword" \| "neural" | "keyword" | 感情分類方式。`keyword` は日本語キーワード辞書、`neural` は HuggingFace text-classification モデル |
+| model_name | str | "koshin2001/Japanese-to-emotions" | `type: neural` の時にロードするモデル名 |
+
+`type: neural` は `transformers` / `torch` を遅延ロードする。通常起動では `keyword` の既存挙動を維持する。
 
 ## ProactiveConfig
 
@@ -251,6 +267,11 @@ account:
   accounts_path: .iris/data/accounts.jsonl
   identities_path: .iris/data/account_identities.jsonl
   bindings_path: .iris/data/account_bindings.jsonl
+
+limbic:
+  emotion_classifier:
+    type: keyword
+    model_name: koshin2001/Japanese-to-emotions
 
 proactive:
   check_interval_sec: 5.0

@@ -23,8 +23,9 @@ class LimbicOrchestrator:
         self,
         account_manager: AccountManager | None = None,
         room_manager: RoomManager | None = None,
+        appraiser: Appraiser | None = None,
     ) -> None:
-        self._appraiser = Appraiser()
+        self._appraiser = appraiser or Appraiser()
         self._generator = EmotionGenerator()
         self._mood = MoodDynamics()
         self._relationship = RelationshipManager()

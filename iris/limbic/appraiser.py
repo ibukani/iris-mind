@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, Protocol
 
 from .models import (
     AppraisalDimensions,
@@ -135,10 +135,15 @@ _CONTEXT_PATTERNS: dict[str, list[str]] = {
 }
 
 
+class EmotionClassifierProtocol(Protocol):
+    def classify(self, text: str) -> dict[str, float]: ...
+
+
 class Appraiser:
     """2段階Appraisal (Lazarus: Primary + Secondary)"""
 
-    def __init__(self) -> None:
+    def __init__(self, emotion_classifier: EmotionClassifierProtocol | None = None) -> None:
+        self._emotion_classifier = emotion_classifier
         self._keyword_compiled: dict[str, list[re.Pattern[str]]] = {}
         for emotion, keywords in _KEYWORD_MAP.items():
             self._keyword_compiled[emotion] = [re.compile(re.escape(kw)) for kw in keywords]
@@ -217,6 +222,11 @@ class Appraiser:
     # ---- ヘルパー ----
 
     def detect_word_emotions(self, text: str) -> dict[str, float]:
+        if self._emotion_classifier is not None:
+            return self._emotion_classifier.classify(text)
+        return self._keyword_match(text)
+
+    def _keyword_match(self, text: str) -> dict[str, float]:
         scores: dict[str, float] = {}
         for emotion, patterns in self._keyword_compiled.items():
             count = sum(1 for p in patterns if p.search(text))

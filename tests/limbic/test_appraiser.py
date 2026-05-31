@@ -4,6 +4,11 @@ from iris.limbic.appraiser import Appraiser
 from iris.limbic.models import PrimaryAppraisal, SecondaryAppraisal
 
 
+class _FakeClassifier:
+    def classify(self, text: str) -> dict[str, float]:
+        return {"joy": 0.7}
+
+
 class TestAppraiser:
     def setup_method(self) -> None:
         self.appraiser = Appraiser()
@@ -46,3 +51,8 @@ class TestAppraiser:
         result = self.appraiser.appraise_primary("助けてください相談です")
         assert isinstance(result, PrimaryAppraisal)
         assert result.goal_relevance > 0.5
+
+    def test_detect_word_emotions_uses_injected_classifier(self) -> None:
+        appraiser = Appraiser(emotion_classifier=_FakeClassifier())
+
+        assert appraiser.detect_word_emotions("辞書にない肯定文") == {"joy": 0.7}

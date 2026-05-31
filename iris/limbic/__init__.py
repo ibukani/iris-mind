@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING
 
 from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
 
+from .appraiser import Appraiser
+from .classifier import NeuralEmotionClassifier
 from .orchestrator import LimbicOrchestrator
 
 if TYPE_CHECKING:
@@ -36,11 +38,17 @@ class LimbicPlugin(PluginProtocol):
         with contextlib.suppress(Exception):
             room_mgr = manager.resolve(RoomManager)
 
+        classifier_config = manager.config.limbic.emotion_classifier
+        emotion_classifier = None
+        if classifier_config.type == "neural":
+            emotion_classifier = NeuralEmotionClassifier(model_name=classifier_config.model_name)
+
         self._account_manager = account_mgr
         self._room_manager = room_mgr
         self._orchestrator = LimbicOrchestrator(
             account_manager=account_mgr,
             room_manager=room_mgr,
+            appraiser=Appraiser(emotion_classifier=emotion_classifier),
         )
         manager.provide(LimbicOrchestrator, self._orchestrator)
 

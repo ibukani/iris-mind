@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import re
+from typing import Literal
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator
@@ -179,6 +180,15 @@ class ProactiveConfig(BaseModel):
     abbreviated_threshold: float = 0.25
 
 
+class EmotionClassifierConfig(BaseModel):
+    type: Literal["keyword", "neural"] = "keyword"
+    model_name: str = "koshin2001/Japanese-to-emotions"
+
+
+class LimbicConfig(BaseModel):
+    emotion_classifier: EmotionClassifierConfig = Field(default_factory=EmotionClassifierConfig)
+
+
 class PersonalityConfig(BaseModel):
     name: str = "Iris"
     prompt_file: str = ".iris/config/system_prompt.md"
@@ -244,6 +254,7 @@ class Config(BaseModel):
     model: ModelConfig = Field(default_factory=ModelConfig)
     personality: PersonalityConfig = Field(default_factory=PersonalityConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
+    limbic: LimbicConfig = Field(default_factory=LimbicConfig)
     inhibition: InhibitionConfig = Field(default_factory=InhibitionConfig)
     proactive: ProactiveConfig = Field(default_factory=ProactiveConfig)
     timer: TimerConfig = Field(default_factory=TimerConfig)

@@ -36,6 +36,7 @@ class _IOGateway:
         self._hook_registry = hook_registry
         self._manager = manager
         self._room_store: Any = None
+        self._account_manager: Any = None
 
     def _build_control_message(self, response: Any) -> ControlMessage:
         identity = getattr(response, "identity", None)
@@ -56,6 +57,13 @@ class _IOGateway:
 
             self._room_store = self._manager.resolve_optional(RoomStore)
         return self._room_store
+
+    def _get_account_manager(self) -> Any:
+        if self._account_manager is None and self._manager is not None:
+            from iris.account.manager import AccountManager
+
+            self._account_manager = self._manager.resolve_optional(AccountManager)
+        return self._account_manager
 
     def _send_error(self, orig: Message, text: str) -> None:
         session_info = self._session_mgr.get_session_info(orig.session_id)
@@ -126,6 +134,24 @@ class _IOGateway:
             self._send_error(msg, "room_id is required")
             return
 
+        account_id = msg.account_id
+        if not account_id and msg.speaker:
+            account_mgr = self._get_account_manager()
+            if account_mgr:
+                from iris.account.models import Provider
+
+                try:
+                    provider = Provider(msg.speaker.provider)
+                    account = account_mgr.resolve_or_create_identity(
+                        provider,
+                        msg.speaker.subject,
+                        provider_name=msg.speaker.provider_name,
+                        metadata=msg.speaker.metadata,
+                    )
+                    account_id = str(account.account_id)
+                except Exception as e:
+                    logger.error("IOGateway: failed to resolve account: {}", e)
+
         store = self._get_room_store()
         if store is not None and not store.find_room_by_id(msg.room_id):
             self._send_error(msg, f"room not found: {msg.room_id}")
@@ -148,7 +174,7 @@ class _IOGateway:
                 source="io",
                 session_id=msg.session_id,
                 content=msg.content,
-                account_id=msg.account_id,
+                account_id=account_id,
                 room_id=msg.room_id,
                 context={
                     "source_role": msg.source_role,

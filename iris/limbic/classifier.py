@@ -82,7 +82,7 @@ class NeuralEmotionClassifier:
             ) from exc
 
         try:
-            import torch  # noqa: F401
+            import torch
         except ImportError as exc:
             raise RuntimeError(
                 "Neural emotion classifier requires PyTorch: install torch (e.g. `uv pip install torch`)."
@@ -91,10 +91,19 @@ class NeuralEmotionClassifier:
         pipeline = transformers.pipeline
         try:
             t0 = time.monotonic()
+            device = self._device
+            if device == "auto":
+                if torch.cuda.is_available():
+                    device = "cuda"
+                elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+                    device = "mps"
+                else:
+                    device = "cpu"
+
             self._pipeline = pipeline(
                 "text-classification",
                 model=self._model_name,
-                device=self._device,
+                device=device,
                 top_k=None,
                 function_to_apply="sigmoid",
             )

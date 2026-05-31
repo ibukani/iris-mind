@@ -113,7 +113,7 @@ def test_layer_import_rules() -> None:
         for filepath, imp in _get_iris_imports(package_dir):
             for forbidden_prefix in forbidden:
                 if imp.startswith(forbidden_prefix):
-                    rel_path = str(filepath.relative_to(PROJECT_ROOT))
+                    rel_path = filepath.relative_to(PROJECT_ROOT).as_posix()
                     if _is_allowed_exception(package_dir, rel_path, imp):
                         exc_reason = next(
                             r for p, f, px, r in EXCEPTIONS if p == package_dir and f == rel_path and imp.startswith(px)

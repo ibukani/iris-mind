@@ -18,9 +18,7 @@ class WorkingMemoryProvider:
 
             recent = self._memory.get_recent(3, room_id=room_id)
             topics = [
-                f"{e['summary'][:60]}（{format_age(e.get('timestamp', ''))}）"
-                for e in recent
-                if e.get("summary")
+                f"{e['summary'][:60]}（{format_age(e.get('timestamp', ''))}）" for e in recent if e.get("summary")
             ]
             if topics:
                 return "直近の話題: " + " | ".join(topics)

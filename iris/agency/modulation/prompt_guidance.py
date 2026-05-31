@@ -4,12 +4,7 @@ from iris.agency.modulation.state import ModulationState
 
 
 def has_affective_signal(mod: ModulationState) -> bool:
-    return (
-        abs(mod.valence) >= 0.12
-        or abs(mod.arousal) >= 0.12
-        or abs(mod.dominance) >= 0.12
-        or bool(mod.emotion_label)
-    )
+    return abs(mod.valence) >= 0.12 or abs(mod.arousal) >= 0.12 or abs(mod.dominance) >= 0.12 or bool(mod.emotion_label)
 
 
 def affective_tone(mod: ModulationState) -> str:

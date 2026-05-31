@@ -27,7 +27,7 @@ room: {}
 limbic:
     emotion_classifier:
         type: neural # keyword / neural
-        model_name: YoichiTakenaka/deverta-v3-japanese-base-Anticipation
+        model_name: YoichiTakenaka/deverta-v3-japanese-large-Anticipation
         device: auto # auto / cuda / cpu / 0
 
 # 自発発話 — プロアクティブな割り込みの重み・閾値

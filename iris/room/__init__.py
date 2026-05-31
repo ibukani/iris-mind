@@ -70,12 +70,11 @@ class RoomPlugin(PluginProtocol):
         pass
 
     def stop(self, manager: PluginManager) -> None:
-        from iris.room.batcher import RoomJoinBatcher
-
         # ルーム参加のバッチ処理を停止（インメモリで保存しているため）
         # batcher = manager.resolve_optional(RoomJoinBatcher)
         # if batcher:
         #     batcher.stop()
+        pass
 
 
 plugin: PluginProtocol = RoomPlugin()

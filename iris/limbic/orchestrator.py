@@ -73,12 +73,24 @@ class LimbicOrchestrator:
         self._state.update(result)
 
         logger.debug(
-            "Limbic: emotion={} intensity={:.2f} trust={:.2f} level={} account={}",
+            "Limbic: {}({:.2f}/{:.2f}) ctx={} apt=({:.2f},{:.2f},{:.2f},{:.2f},{:.2f},{:.2f}) "
+            "mood=({:.2f},{:.2f},{:.2f}) trust={:.2f} {} reappraisal={}",
             emotion.primary.value,
             emotion.intensity,
+            emotion.secondary_intensity,
+            context_type or "-",
+            dimensions.unpleasantness,
+            dimensions.control,
+            dimensions.responsibility,
+            dimensions.certainty,
+            dimensions.effort,
+            dimensions.attention,
+            updated_mood.valence,
+            updated_mood.arousal,
+            updated_mood.dominance,
             relationship.trust,
             relationship.level.name,
-            account_id or "(global)",
+            reappraisal_needed,
         )
 
         return result

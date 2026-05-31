@@ -27,7 +27,7 @@ room: {}
 # 辺縁系 — 感情分類器（既定は軽量なキーワード判定）
 limbic:
     emotion_classifier:
-        type: keyword # keyword / neural
+        type: neural # keyword / neural
         model_name: koshin2001/Japanese-to-emotions
 
 # 自発発話 — プロアクティブな割り込みの重み・閾値
@@ -114,4 +114,5 @@ logging:
     # 特定ロガーのレベル上書き（例: iris.io: DEBUG）
     loggers:
         iris.io: DEBUG
+        iris.limbic: DEBUG
     max_bytes: 5242880

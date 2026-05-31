@@ -19,7 +19,6 @@ memory:
 account:
     accounts_path: .iris/data/accounts.jsonl
     identities_path: .iris/data/account_identities.jsonl
-    bindings_path: .iris/data/account_bindings.jsonl
 
 # ルーム管理 — ルームCRUD・メンバーシップ管理（インメモリ）
 room: {}

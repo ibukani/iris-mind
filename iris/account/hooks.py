@@ -9,9 +9,9 @@ if TYPE_CHECKING:
 def register_hooks(manager: PluginManager) -> None:
     hooks = manager.hook_registry
 
-    from iris.account.dispatcher import _AccountDispatcher
+    from iris.account.dispatcher import AccountDispatcher
 
-    dispatcher = manager.resolve(_AccountDispatcher)
+    dispatcher = manager.resolve(AccountDispatcher)
 
     def _on_dispatch(ctx: dict[str, Any]) -> dict[str, Any]:
         msg = ctx["msg"]

@@ -14,7 +14,7 @@ iris/account/
 ├── models.py         Account, AccountIdentity
 ├── store.py          AccountStore (JSONL永続化)
 ├── manager.py        AccountManager (コアサービス)
-├── dispatcher.py     _AccountDispatcher (ControlMessage処理)
+├── dispatcher.py     AccountDispatcher (ControlMessage処理)
 ├── events.py         AccountCreated/Updated/IdentityLinked/Presence
 └── hooks.py          EventBus Hook登録
 ```
@@ -26,7 +26,7 @@ iris/account/
 | name | `account` |
 | category | `LAYER` |
 | phase | `STORE(15)` |
-| provides | `AccountManager`, `AccountStore`, `_AccountDispatcher` |
+| provides | `AccountManager`, `AccountStore`, `AccountDispatcher` |
 | dependencies | `EventBus` |
 
 ## モデル
@@ -83,7 +83,7 @@ class AccountIdentity:
 
 ## ControlMessage 処理
 
-`_AccountDispatcher` は `ControlMessageEvent` を処理し、以下のアクションに対応する:
+`AccountDispatcher` は `ControlMessageEvent` を処理し、以下のアクションに対応する:
 
 | アクション | 処理 |
 |-----------|------|

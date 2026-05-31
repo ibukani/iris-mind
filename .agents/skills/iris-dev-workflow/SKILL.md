@@ -12,72 +12,72 @@ metadata:
 
 ## Purpose
 
-Iris の通常開発手順。MVP開発を妨げる保守的すぎる判断を避け、現在仕様に合わせて最小で動く形へ直す。
+This is the ordinary Iris development workflow. Avoid overly conservative decisions that block MVP development. Fix the implementation into the smallest working shape that matches the current specification.
 
 ## Operating Rules
 
-- 影響範囲は `rg` / `rg --files` で先に絞る。
-- 関連ファイルは並列で読む。1ターンの読み込みは原則5ファイルまで。
-- 実装が一次情報。ドキュメントやSkillと矛盾したら実装を確認して直す。
-- 変更前の互換維持は要求がある時だけ行う。
-- 仕様変更時は既存関数の変更・削除・名前変更を許可する。
-- 不要になった関数、分岐、設定、テスト、docsは残さない。
-- 既存実装の上に覆いかぶせない。現在仕様に合う形へ置換する。
-- 抽象化は重複や複雑さを実際に減らす時だけ追加する。
-- 将来のための拡張点、未使用hook、互換wrapperは作らない。
+- Narrow the impact area first with `rg` / `rg --files`.
+- Read related files in parallel. As a default, read up to 5 files per turn.
+- Implementation is the primary source. If documentation or Skills conflict with code, inspect and fix the implementation or documentation as needed.
+- Preserve backward compatibility only when explicitly requested.
+- Specification changes may change, delete, or rename existing functions.
+- Do not keep unnecessary functions, branches, settings, tests, or docs.
+- Do not layer new behavior on top of obsolete implementation. Replace it with a shape that matches the current specification.
+- Add abstraction only when it actually reduces duplication or complexity.
+- Do not create future-only extension points, unused hooks, or compatibility wrappers.
 
 ## Workflow
 
-1. 要件確認。ブロッカーだけ質問。
-2. 影響範囲調査。glob + grep。
-3. 既存実装とテストを読む。
-4. 現在仕様に合わない古い実装を削除・置換する。
-5. 変更単位ごとに検証する。
-6. `doc-sync` で更新漏れを確認する。
-7. ユーザーが明示的に依頼した場合のみコミットする。
+1. Confirm requirements. Ask only about blockers.
+2. Investigate impact area with glob + grep.
+3. Read existing implementation and tests.
+4. Delete or replace old implementation that does not match the current specification.
+5. Validate per change unit.
+6. Use `doc-sync` to check for missed documentation updates.
+7. Commit only when the user explicitly asks.
 
 ## MVP Decision Policy
 
-- 「壊さない」より「今の仕様に正しく合う」を優先。
-- public APIでも、ユーザーが仕様変更を求めたなら変更してよい。
-- 移行コード、deprecated経路、旧形式パースは明示要求がない限り追加しない。
-- テストは新仕様を固定する。旧仕様のテストは削除または書き換える。
-- 大きな再設計より、小さく完結した置換を優先する。
-- ただしデータ破壊、認証、外部送信、永続ストレージ削除、Git履歴変更は明示確認する。
+- Prefer "correct for the current specification" over "avoid breaking anything".
+- Public APIs may be changed when the user requested a specification change.
+- Do not add migration code, deprecated paths, or old-format parsing unless explicitly requested.
+- Tests should lock the new specification. Delete or rewrite tests for the old specification.
+- Prefer small complete replacements over large redesigns.
+- However, explicitly confirm destructive data changes, authentication changes, external sending, persistent storage deletion, and Git history changes.
 
 ## Python Rules
 
-- Python 3.13+。
-- 各ファイル先頭に `from __future__ import annotations`。
-- `Optional[X]` ではなく `X | None`。
-- `List[X]`, `Dict[K, V]`, `Union[X, Y]` ではなく `list[X]`, `dict[K, V]`, `X | Y`。
-- 戻り値なしは `-> None`。
-- import順: future → stdlib → 3rd party → `iris.`。
-- `snake_case`, `PascalCase`, `UPPER_SNAKE_CASE`。
-- ベア `except:` 禁止。`except Exception:` も最小限。
-- リソースは `with`。
-- コメントは意図が不明瞭な箇所だけ。
-- f-string優先。
+- Python 3.13+.
+- Put `from __future__ import annotations` at the top of each Python file.
+- Use `X | None`, not `Optional[X]`.
+- Use `list[X]`, `dict[K, V]`, and `X | Y`, not `List[X]`, `Dict[K, V]`, or `Union[X, Y]`.
+- Use `-> None` when there is no return value.
+- Import order: future -> stdlib -> third party -> `iris.`.
+- Naming: `snake_case`, `PascalCase`, `UPPER_SNAKE_CASE`.
+- Do not use bare `except:`. Use `except Exception:` only sparingly.
+- Use `with` for resources.
+- Comment only where intent is not obvious.
+- Prefer f-strings.
 
 ## Architecture Rules
 
-- 全層は `iris/event/` を介して疎結合。
-- `debug_tools/` は `iris/` に依存してよい。逆は禁止。
-- PluginManager をロジッククラスに保持しない。依存はコンストラクタ注入。
-- EventBus subscribe は原則 `handler.py` に置く。manager から直接 subscribe しない。
-- 既存実装を構造ルールに完全一致させるだけの大規模リファクタは行わない。今回の変更範囲に関係する責務分離のみ行う。
-- Plugin構造の詳細は `iris-plugin-structure` を読む。
+- All layers stay loosely coupled through `iris/event/`.
+- `debug_tools/` may depend on `iris/`; the reverse is forbidden.
+- Do not keep `PluginManager` inside logic classes. Use explicit constructor injection.
+- EventBus subscription should generally live in `handler.py`. Managers should not subscribe directly.
+- Do not perform a large refactor solely to make existing implementation perfectly match structure rules. Split responsibilities only when it is relevant to the current change.
+- For Plugin structure details, read `iris-plugin-structure`.
 
 ## Refactor Policy
 
-- 仕様変更を既存構造に無理やり追加すると責務混在・重複・複雑な分岐が増える場合は、先に必要なリファクタを行う。
-- 新仕様に合わない古い設計は、互換維持よりも現在仕様に合う構造への置換を優先する。
-- リファクタは今回の仕様変更を自然に実装するために必要な範囲に限定する。
-- 目的外の美化、大規模な全面整理、構造ルールへの完全準拠だけを目的とした変更は行わない。
+- If forcing a specification change into the current structure would increase mixed responsibilities, duplication, or complex branching, perform the necessary refactor first.
+- When an old design no longer matches the new specification, prefer replacing it with a current-spec structure over preserving compatibility.
+- Limit refactoring to the scope needed to implement the current specification naturally.
+- Do not perform unrelated beautification, broad cleanups, or changes whose only goal is perfect compliance with structure rules.
 
 ## Validation
 
-検証のみ:
+Validation only:
 
 ```bash
 uv run pytest tests/ -q
@@ -86,24 +86,24 @@ uv run ruff format --check .
 uv run mypy .
 ```
 
-修正を許可されている場合:
+When fixes are allowed:
 
 ```bash
 uv run ruff check --fix .
 uv run ruff format .
 ```
 
-狭い変更では対象テストから始めてよい。最後に必要範囲を広げる。
+For narrow changes, start with targeted tests. Expand validation to the necessary range before finishing.
 
 ## Docs
 
-- コード変更後は `doc-sync` を読む。
-- 削除した機能の説明は残さない。
-- 「現在は」「従来は」「かつては」のような過去仕様メモを残さない。
-- AGENTS.md に詳細を戻さない。参照だけにする。
+- After code changes, read `doc-sync`.
+- Do not leave descriptions of deleted features.
+- Do not leave historical notes such as "currently", "previously", or "formerly".
+- Do not move details back into `AGENTS.md`; keep it reference-only.
 
 ## Git
 
-- コミットはユーザーが明示的に依頼した場合のみ行う。
-- メッセージは日本語。
-- コード変更と必要なdocs更新は同一コミット。
+- Commit only when the user explicitly asks.
+- Use Japanese commit messages.
+- Put code changes and required documentation updates in the same commit.

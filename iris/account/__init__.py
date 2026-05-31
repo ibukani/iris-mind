@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from iris.account.models import Provider
+from iris.account.models import Provider, parse_identity
 from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
 
 if TYPE_CHECKING:
     from iris.kernel.manager import PluginManager
 
-__all__ = ["MANIFEST", "AccountPlugin", "Provider"]
+__all__ = ["MANIFEST", "AccountPlugin", "Provider", "parse_identity"]
 
 MANIFEST = PluginManifest(
     name="account",
@@ -16,7 +16,7 @@ MANIFEST = PluginManifest(
     category=PluginCategory.LAYER,
     phase=PluginPhase.STORE,
     dependencies={"EventBus"},
-    provides=["AccountManager", "AccountStore", "_AccountDispatcher"],
+    provides=["AccountManager", "AccountStore", "AccountDispatcher"],
     description="アカウント管理（ユーザー識別・外部ID連携）",
 )
 
@@ -27,7 +27,7 @@ class AccountPlugin(PluginProtocol):
     def init(self, manager: PluginManager) -> None:
         manager.register_manifest(MANIFEST)
 
-        from iris.account.dispatcher import _AccountDispatcher
+        from iris.account.dispatcher import AccountDispatcher
         from iris.account.manager import AccountManager
         from iris.account.store import AccountStore
         from iris.event.event_bus import EventBus
@@ -40,11 +40,11 @@ class AccountPlugin(PluginProtocol):
         event_bus = manager.resolve(EventBus)
         manager_inst = AccountManager(store=store, event_bus=event_bus)
 
-        dispatcher = _AccountDispatcher(account_manager=manager_inst)
+        dispatcher = AccountDispatcher(account_manager=manager_inst)
 
         manager.provide(AccountStore, store)
         manager.provide(AccountManager, manager_inst)
-        manager.provide(_AccountDispatcher, dispatcher)
+        manager.provide(AccountDispatcher, dispatcher)
 
         from iris.account.hooks import register_hooks
 

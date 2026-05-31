@@ -3,8 +3,27 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import cast
+from typing import Any, cast
 from uuid import uuid4
+
+
+def parse_identity(identity: dict[str, Any] | None) -> tuple[Provider | None, str, str, dict[str, object]]:
+    """identity dictを Provider + subject + provider_name + metadata に変換する。"""
+    if not identity:
+        return None, "", "", {}
+    raw_metadata = identity.get("metadata", {})
+    metadata: dict[str, object] = raw_metadata if isinstance(raw_metadata, dict) else {}
+    raw_provider = str(identity.get("provider", ""))
+    try:
+        provider = Provider(raw_provider)
+    except ValueError:
+        return None, "", "", {}
+    return (
+        provider,
+        str(identity.get("subject", "")),
+        str(identity.get("provider_name", "")),
+        metadata,
+    )
 
 
 class Provider(StrEnum):

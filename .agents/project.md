@@ -1,57 +1,56 @@
 # Iris Project Brief
 
-このファイルは Iris 固有の概要と責務境界だけを素早く確認するための補助メモです。
-通常開発ルールは `.agents/skills/iris-dev-workflow/SKILL.md`、設計判断は `docs/architecture.md` を一次情報にします。
+This file is a compact helper note for Iris-specific scope and responsibility boundaries. Use `.agents/skills/iris-dev-workflow/SKILL.md` as the source for ordinary development rules, and `docs/architecture.md` as the source for design decisions.
 
 ## Scope
 
-- Iris は Python 製のAIコンパニオン・アシスタントKernel。自律的行動・タスク実行を担い、最終的には自己進化を目指す。
-- このリポジトリは Kernel 本体を扱う。UI や外部クライアントは別プロジェクトの責務。
-- LLM provider は Ollama / OpenRouter などを設定で切り替える。
-- モデルは単一モデル構成と role ベースの複数モデル構成をサポートする。
-- 設定は `config.yaml`。`model.providers` でプロバイダ接続情報を定義し、`model.models[].provider` で各モデルのプロバイダを指定する。
+- Iris is a Python AI companion / assistant Kernel. It handles autonomous behavior and task execution, and ultimately aims to support self-evolution.
+- This repository contains the Kernel itself. UI and external clients belong to separate projects.
+- LLM providers such as Ollama and OpenRouter are switched through configuration.
+- Models support both a single-model setup and role-based multi-model setups.
+- Configuration lives in `config.yaml`. `model.providers` defines provider connection information, and `model.models[].provider` selects the provider for each model.
 
 ## Main Modules
 
-- `iris/kernel/`: プロセス管理、DI、Plugin lifecycle、Command。
-- `iris/event/`: Global EventBus、イベント型、トレース。
-- `iris/io/`: 入出力、gRPC、Session、Permission。
-- `iris/account/`: ユーザー識別、外部ID連携、Presence。
-- `iris/room/`: Room CRUD、membership、account連携。
-- `iris/memory/`: sensory / short-term / long-term memory。
-- `iris/limbic/`: emotion、mood、relationship。
-- `iris/agency/`: planning、inhibition、execution。
-- `iris/llm/`: provider、context window、tokenizer、prompt。
-- `iris/tools/`: `@tool`、ToolRegistry、builtins。
-- `iris/admin/`: CLI管理。
+- `iris/kernel/`: process management, DI, Plugin lifecycle, commands.
+- `iris/event/`: Global EventBus, event types, tracing.
+- `iris/io/`: input/output, gRPC, sessions, permissions.
+- `iris/account/`: user identity, external identity linkage, presence.
+- `iris/room/`: Room CRUD, membership, account linkage.
+- `iris/memory/`: sensory / short-term / long-term memory.
+- `iris/limbic/`: emotion, mood, relationship.
+- `iris/agency/`: planning, inhibition, execution.
+- `iris/llm/`: providers, context window, tokenizer, prompts.
+- `iris/tools/`: `@tool`, ToolRegistry, builtins.
+- `iris/admin/`: CLI administration.
 
-### 設計方針: Irisの個性とRoom
+### Design Policy: Iris Identity and Rooms
 
-- **Irisは個として1体のみ存在する**
-- Roomは会話場所を増やすためのシステム（Irisの複製ではない）
-- 感情（Limbic）はグローバル。Roomごとの個別管理はしない
-- 関係性（Relationship）はユーザー（Account）単位。Room単位ではない
-- 複数Roomで同一ユーザーと会話しても、親密度等は共通
+- **Only one Iris exists as an individual.**
+- Rooms are a system for adding conversation locations, not copies of Iris.
+- Emotion (`limbic`) is global. It is not managed per room.
+- Relationship is per user (`Account`), not per room.
+- If the same user talks to Iris in multiple rooms, intimacy and related relationship values are shared.
 
 ## Boundaries
 
-- `iris/kernel/` はドメイン層。外部サービス実装を直接持ち込まない。
-- `iris/llm/`, `iris/tools/` は kernel へ注入されるインフラ層。
-- `iris/io/`, `iris/agency/`, `iris/memory/`, `iris/event/`, `iris/account/`, `iris/room/` は kernel から分離された独立層。
-- 全層は EventBus (`iris/event/`) を介して疎結合。
-- `debug_tools/` は `iris/` に依存してよいが、`iris/` から `debug_tools/` へ依存しない。
-- IPC とプロセス設計の詳細は `docs/architecture.md` を読む。
+- `iris/kernel/` is a domain layer. Do not put external service implementations directly into it.
+- `iris/llm/` and `iris/tools/` are infrastructure layers injected into the kernel.
+- `iris/io/`, `iris/agency/`, `iris/memory/`, `iris/event/`, `iris/account/`, and `iris/room/` are independent layers separated from the kernel.
+- All layers stay loosely coupled through the EventBus (`iris/event/`).
+- `debug_tools/` may depend on `iris/`, but `iris/` must not depend on `debug_tools/`.
+- For IPC and process design details, read `docs/architecture.md`.
 
 ## Workflows
 
-- 通常開発: `.agents/skills/iris-dev-workflow/SKILL.md`
-- capability 追加: `.agents/skills/capability-pattern/SKILL.md`
-- ドキュメント更新確認: `.agents/skills/doc-sync/SKILL.md`
-- 設計変更: `docs/architecture.md` に残し、必要な設計文書だけ更新する。
+- Ordinary development: `.agents/skills/iris-dev-workflow/SKILL.md`
+- Capability addition: `.agents/skills/capability-pattern/SKILL.md`
+- Documentation update check: `.agents/skills/doc-sync/SKILL.md`
+- Design changes: record them in `docs/architecture.md` and update only the required design documents.
 
 ## Context Rules
 
-- ブランチ状態、完了済みタスク、過去の決定ログはここに書かない。
-- 実装前に必要なファイルだけ読む。大きい設計文書は該当セクションから確認する。
-- 変更後は `AGENTS.md` と `.agents/README.md` の読み込み方針と矛盾しないか確認する。
-- 詳細なディレクトリツリーをここに増やさない。必要なら `rg --files iris` で実コードを見る。
+- Do not write branch status, completed tasks, or past decision logs here.
+- Before implementation, read only the files required for the task. For large design documents, inspect only relevant sections.
+- After changes, ensure they do not conflict with the loading policy in `AGENTS.md` and `.agents/README.md`.
+- Do not add a detailed directory tree here. Use `rg --files iris` to inspect actual code when needed.

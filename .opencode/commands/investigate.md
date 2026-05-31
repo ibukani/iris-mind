@@ -1,25 +1,25 @@
 ---
-description: 指定された対象を調査する。コード変更は禁止。
+description: Investigate the specified target. Code changes are forbidden.
 ---
 
 @planner
 
-対象: `$1`
+Target: `$1`
 
-コード変更せず、対象を調査してください。
+Investigate the target without changing code.
 
-## 調査ルール
+## Investigation Rules
 
-- 指定対象は初期仮説です
-- `rg` / import / call site / tests / config / entrypoint を確認してください
-- 関連する legacy / deprecated / 類似実装がないか確認してください
-- ドキュメントと実装が矛盾していないか確認してください
+- The specified target is an initial hypothesis.
+- Check `rg` / imports / call sites / tests / config / entrypoints.
+- Check for related legacy / deprecated / similar implementations.
+- Check for conflicts between documentation and implementation.
 
-## 出力
+## Output
 
-- 初期指定ファイル
-- 追加で確認したファイル
-- 現状
-- 関連する call path
-- 問題点
-- 推奨する次の行動
+- Initially specified files
+- Additional files checked
+- Current state
+- Related call path
+- Problems
+- Recommended next action

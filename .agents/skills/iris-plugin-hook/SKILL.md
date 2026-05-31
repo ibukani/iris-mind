@@ -11,40 +11,39 @@ metadata:
 
 ## Purpose
 
-既存の HookPoint に新しいハンドラを登録するとき、または新しい HookPoint を定義するときに読む。
+Read this when registering a new handler to an existing HookPoint or defining a new HookPoint.
 
-## HookPoint 一覧
+## HookPoint List
 
-| HookPoint | 実行タイミング | シグネチャ | 用途例 |
+| HookPoint | Timing | Signature | Example use |
 |---|---|---|---|
-| `llm.before_chat` | LLM呼出直前 | `(messages: list) -> list` | LoRAアダプタ注入、プロンプト加工 |
-| `llm.after_chat` | LLM応答直後 | `(response: dict) -> dict` | 応答フィルタ、感情分析 |
-| `llm.before_stream` | ストリームchunk毎 | `(chunk: str) -> str` | リアルタイムフィルタ |
-| `memory.before_store` | エピソード保存前 | `(episode: Episode) -> Episode` | 感情タグ付与 |
-| `memory.after_search` | 記憶検索後 | `(hits: list[SearchHit]) -> list[SearchHit]` | 検索結果リランキング |
-| `agency.plan_decided` | 計画決定時 | `(plan: Plan) -> Plan` | 計画修正、制約追加 |
-| `agency.before_exec` | 実行前 | `(state: ExecState) -> ExecState` | 実行状態注入 |
-| `io.before_send` | 送信前 | `(msg: Message) -> Message` | 送信フィルタ |
-| `io.after_receive` | 受信後 | `(msg: Message) -> Message` | 受信加工 |
-| `io.dispatch` | IO受信メッセージのディスパッチ | `(ctx: dict) -> dict` | コマンド振り分け |
+| `llm.before_chat` | Immediately before LLM call | `(messages: list) -> list` | LoRA adapter injection, prompt transformation |
+| `llm.after_chat` | Immediately after LLM response | `(response: dict) -> dict` | Response filtering, emotion analysis |
+| `llm.before_stream` | For each stream chunk | `(chunk: str) -> str` | Real-time filtering |
+| `memory.before_store` | Before episode storage | `(episode: Episode) -> Episode` | Emotion tagging |
+| `memory.after_search` | After memory search | `(hits: list[SearchHit]) -> list[SearchHit]` | Search result reranking |
+| `agency.plan_decided` | When a plan is decided | `(plan: Plan) -> Plan` | Plan adjustment, constraint addition |
+| `agency.before_exec` | Before execution | `(state: ExecState) -> ExecState` | Execution state injection |
+| `io.before_send` | Before sending | `(msg: Message) -> Message` | Send filtering |
+| `io.after_receive` | After receiving | `(msg: Message) -> Message` | Receive transformation |
+| `io.dispatch` | Dispatch of IO received messages | `(ctx: dict) -> dict` | Command routing |
 
 ## HookPriority
 
-| レンジ | 分類 | 例 |
+| Range | Category | Example |
 |---|---|---|
-| 0-99 | SYSTEM | 必須システムフック |
-| 100-999 | CORE | コア層フック |
-| 1000-4999 | FEATURE | 機能プラグインフック |
-| 5000-9999 | USER | 外部プラグインフック |
+| 0-99 | SYSTEM | Required system hooks |
+| 100-999 | CORE | Core layer hooks |
+| 1000-4999 | FEATURE | Feature plugin hooks |
+| 5000-9999 | USER | External plugin hooks |
 
-優先度の数値が小さい順に実行される。同優先度内は登録順。
-`HookPriority` は範囲確認用の `range` 定義なので、登録時は該当レンジ内の整数を渡す。
+Handlers run in ascending priority order. Within the same priority, registration order is used. `HookPriority` defines ranges for validation; pass an integer inside the appropriate range when registering.
 
 ## Steps
 
-### 既存HookPointにハンドラを登録する
+### Register a handler to an existing HookPoint
 
-方法1: 手動登録
+Option 1: manual registration.
 
 ```python
 # iris/<plugin>/hooks.py
@@ -52,13 +51,12 @@ def register_hooks(manager):
     hooks = manager.hook_registry
 
     def _my_before_chat(messages):
-        # メッセージを加工
         return messages
 
-    hooks.register("llm.before_chat", _my_before_chat, priority=500)  # CORE range
+    hooks.register("llm.before_chat", _my_before_chat, priority=500)
 ```
 
-方法2: `@hook` デコレータ（推奨）
+Option 2: `@hook` decorator, preferred.
 
 ```python
 # iris/<plugin>/hooks.py
@@ -74,20 +72,20 @@ class MyHooks:
         return hits
 ```
 
-Plugin の `init()` で `manager.hook_registry.register_decorated(self)` を呼ぶと、
-`@hook` デコレータ付きメソッドが全て自動登録される。
+Call `manager.hook_registry.register_decorated(self)` in Plugin `init()` to automatically register all `@hook` methods.
 
 ```python
 def init(self, manager):
     manager.hook_registry.register_decorated(self)
 ```
 
-ルール:
-- ハンドラは入力を受け取り、加工した同型のデータを返す
-- 例外を投げても他のハンドラは継続実行される
-- `priority` で実行順を制御する
+Rules:
 
-### async ハンドラ
+- A handler receives input and returns transformed data of the same shape.
+- If a handler raises, later handlers still run.
+- Use `priority` to control order.
+
+### Async handlers
 
 ```python
 async def _my_async_hook(data):
@@ -97,26 +95,26 @@ async def _my_async_hook(data):
 hooks.register("llm.before_chat", _my_async_hook, priority=500)
 ```
 
-`HookRegistry.execute()` が自動判別する。呼び出し側が `await` する前提。
+`HookRegistry.execute()` detects async handlers automatically. The caller is expected to `await` execution.
 
-### 新しいHookPointを追加する
+### Add a new HookPoint
 
-1. `iris/kernel/plugin/hook_points.py` に定義を追加:
+1. Add the definition to `iris/kernel/plugin/hook_points.py`:
 
 ```python
 HOOK_POINTS: dict[str, HookPoint] = {
     ...
-    "agency.plan_decided": HookPoint("agency.plan_decided", "計画決定時"),
+    "agency.plan_decided": HookPoint("agency.plan_decided", "when a plan is decided"),
 }
 ```
 
-2. 呼び出し元のコードに `execute()` を埋め込む:
+2. Call `execute()` from the caller:
 
 ```python
 result = await manager.hook_registry.execute("agency.plan_decided", plan)
 ```
 
-3. 定義を呼び出すPlugin側の `hooks.py` にハンドラを登録:
+3. Register a handler in the Plugin-side `hooks.py`:
 
 ```python
 hooks.register("agency.plan_decided", _on_plan_decided, priority=1000)
@@ -124,9 +122,9 @@ hooks.register("agency.plan_decided", _on_plan_decided, priority=1000)
 
 ## Rules
 
-- ハンドラは入力データを破壊せず、新しいデータを返すこと
-- 例外はログ出力のみで握り潰される。後続ハンドラには影響しない
-- `HookRegistry.execute()` は async、`execute_sync()` は sync
-- 新しいHookPointは `HOOK_POINTS` dict に必ず登録すること
-- HookPoint名は `.` 区切りの命名規則（`layer.action`）を守る
-- priority は `HookPriority` の範囲に収まる整数を使用すること
+- Do not mutate input data in place; return new transformed data.
+- Exceptions are logged and swallowed. They must not block later handlers.
+- `HookRegistry.execute()` is async; `execute_sync()` is sync.
+- Always register a new HookPoint in the `HOOK_POINTS` dict.
+- HookPoint names must follow dot-separated `layer.action` naming.
+- `priority` must be an integer within a `HookPriority` range.

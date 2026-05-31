@@ -11,26 +11,24 @@ metadata:
 
 ## Purpose
 
-LLMプロバイダ、ストアバックエンド、ベクトルDBなど、既存Pluginの交換部品を追加するときに読む。
-サブプラグインは PluginManager のライフサイクル管理外。親Pluginの規約に従って発見・登録される。
+Read this when adding a replaceable part of an existing Plugin, such as an LLM provider, store backend, or vector DB. Sub-plugins are outside `PluginManager` lifecycle management. They are discovered and registered according to the parent Plugin's conventions.
 
-## LLM Provider 現行方式
+## Current LLM Provider Pattern
 
-`iris/llm/providers/` の LLM Provider は `BaseLLMProvider` 継承クラスを自動発見する。
-`provider_name` を設定すると `__init_subclass__` で自動登録されるため、通常はファイル追加だけでよい。
+LLM providers under `iris/llm/providers/` are auto-discovered by finding subclasses of `BaseLLMProvider`. Setting `provider_name` registers the class through `__init_subclass__`, so adding a file is usually enough.
 
-```
+```text
 iris/llm/providers/
-├── __init__.py              # discover_providers() を呼ぶ
+├── __init__.py              # calls discover_providers()
 ├── base.py                  # BaseLLMProvider + registry
 ├── ollama.py
 ├── openai_compatible.py
-└── new_provider.py          # 追加するファイル
+└── new_provider.py          # new file
 ```
 
 ## Steps
 
-### 1. Providerクラスを作成する
+### 1. Create the provider class
 
 ```python
 from __future__ import annotations
@@ -76,10 +74,9 @@ class NewProvider(BaseLLMProvider):
         return True
 ```
 
-### 2. 接続デフォルトを追加する（必要な場合）
+### 2. Add connection defaults when needed
 
-`config.yaml` 側で `model.providers.<provider>.base_url` を必須にするなら不要。
-デフォルトURLを持たせる場合は `iris/llm/model_factory.py` の `_PROVIDER_DEFAULTS` に追加する。
+If `config.yaml` requires `model.providers.<provider>.base_url`, no default is needed. If a default URL is needed, add it to `_PROVIDER_DEFAULTS` in `iris/llm/model_factory.py`.
 
 ```python
 _PROVIDER_DEFAULTS: dict[str, str] = {
@@ -87,9 +84,9 @@ _PROVIDER_DEFAULTS: dict[str, str] = {
 }
 ```
 
-### 3. 複数provider名を1クラスで扱う場合
+### 3. Support multiple provider names with one class
 
-`OpenAICompatibleProvider` のように1クラスを複数名へ割り当てる場合だけ、`iris/llm/providers/__init__.py` に明示登録を追加する。
+Only when mapping multiple names to one class, as with `OpenAICompatibleProvider`, add explicit registration in `iris/llm/providers/__init__.py`.
 
 ```python
 from .new_provider import NewProvider
@@ -97,9 +94,9 @@ from .new_provider import NewProvider
 register_provider("new_provider_alias", NewProvider)
 ```
 
-公開APIとして外部importさせる必要がある場合のみ `__all__` も更新する。
+Update `__all__` only when it must be imported as public API.
 
-### 4. テストを追加する
+### 4. Add tests
 
 ```python
 def test_new_provider_build_call_kwargs() -> None:
@@ -110,18 +107,18 @@ def test_new_provider_build_call_kwargs() -> None:
 
 ## Other Sub-plugins
 
-LLM Provider以外は親Pluginごとの規約を確認する。
+For sub-plugins other than LLM providers, inspect the parent Plugin's current convention first.
 
-| 親Plugin | ディレクトリ | 発見・登録 |
+| Parent Plugin | Directory | Discovery / registration |
 |---|---|---|
-| `llm` | `iris/llm/providers/` | `BaseLLMProvider.provider_name` による自動登録 |
-| `tools` | `iris/tools/builtins/` | ToolRegistry が builtins を読み込み、`register(registry)` / decorator を登録 |
-| `memory` | 未固定 | 追加時に親Plugin側の規約を先に設計 |
+| `llm` | `iris/llm/providers/` | Auto-registration through `BaseLLMProvider.provider_name` |
+| `tools` | `iris/tools/builtins/` | ToolRegistry loads builtins and registers `register(registry)` / decorators |
+| `memory` | Not fixed | Design the parent Plugin convention first when adding one |
 
 ## Rules
 
-- PluginManager の `MANIFEST` は持たない。親Pluginが責任を持つ
-- LLM Provider は `BaseLLMProvider` を継承し、`provider_name` を `config.yaml` の `models[].provider` と一致させる
-- `create_chat_model()` と `build_call_kwargs()` を必ず実装する
-- `_` で始まる provider ファイルは自動発見されない
-- 既存の `discover_sub_plugins()` 前提で手順を書かない。親Pluginの現行発見方式を実コードで確認する
+- Do not create a `MANIFEST` for sub-plugins. The parent Plugin owns responsibility.
+- LLM providers must inherit `BaseLLMProvider` and set `provider_name` to match `models[].provider` in `config.yaml`.
+- Always implement `create_chat_model()` and `build_call_kwargs()`.
+- Provider files starting with `_` are not auto-discovered.
+- Do not assume an existing `discover_sub_plugins()` workflow. Confirm the parent Plugin's current discovery mechanism in code.

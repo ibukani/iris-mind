@@ -1,24 +1,24 @@
 ---
-description: 指定された変更の設計計画を作る。コード変更は禁止。
+description: Create a design plan for the specified change. Code changes are forbidden.
 ---
 
 @architect
 
-変更内容: `$1`
+Change: `$1`
 
-コード変更せず、設計計画を作ってください。
+Create a design plan without changing code.
 
-## 含めること
+## Include
 
-- 現在の挙動
-- 望ましい挙動
-- 影響するレイヤー
-- 変更候補ファイル
-- out of scope
-- テスト方針
-- リスク
-- 実装手順
+- Current behavior
+- Desired behavior
+- Affected layers
+- Candidate files to change
+- Out of scope
+- Test policy
+- Risks
+- Implementation steps
 
-## 注意
+## Note
 
-ファイル指定がある場合も、それは初期調査対象として扱ってください。
+If files are specified, treat them as initial investigation targets only.

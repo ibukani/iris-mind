@@ -69,10 +69,11 @@ class Identity(BaseModel):
 
         if not v:
             return v
-        for p in Provider:
-            if p.value == v:
-                return v
-        raise ValueError(f"Unknown provider: {v}")
+        try:
+            Provider(v)
+        except ValueError:
+            raise ValueError(f"Unknown provider: {v}") from None
+        return v
 
 
 class Message(BaseModel):

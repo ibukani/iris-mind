@@ -11,67 +11,71 @@ metadata:
   workflow: iris-docs
 ---
 
-## What I do
+## What I Do
 
-機能追加・変更・プロジェクトルール変更を行った際に、更新が必要なドキュメントを洗い出し、更新するワークフローです。
+This workflow identifies and updates documentation that may need changes after feature additions, code changes, refactoring, architecture changes, or project rule changes.
 
-## Documents to check
+## Documents to Check
 
-### 1. 設計ドキュメント `docs/*.md`
+### 1. Design documents `docs/*.md`
 
-変更内容に応じて該当する文書を更新：
+Update the relevant document according to the type of change:
 
-| 変更対象 | 更新すべき文書 |
-|----------|---------------|
-| アーキテクチャ変更 | `docs/architecture.md` |
-| 記憶システム変更 | `docs/memory-layer.md`, `docs/how-it-works/02-memory-system.md` |
-| EventBus変更 | `docs/how-it-works/01-eventbus.md`, `docs/architecture.md`, 関連する層ドキュメント |
-| 意思決定/行動実行変更 | `docs/agency-layer.md`, `docs/how-it-works/05-decision-making.md`, `docs/how-it-works/08-execution-pipeline.md` |
-| プロセス管理変更 | `docs/kernel-layer.md` |
-| 入出力変更 | `docs/io-layer.md`, `docs/external/*.md` |
-| 設定変更 | `docs/config.md` |
-| モデルルーティング変更 | `docs/how-it-works/11-model-routing.md`, `docs/config.md` |
-| 新機能全般 | 該当する文書がない場合は新規作成を検討 |
+| Change target | Documents to update |
+|---|---|
+| Architecture changes | `docs/architecture.md` |
+| Memory system changes | `docs/memory-layer.md`, `docs/how-it-works/02-memory-system.md` |
+| EventBus changes | `docs/how-it-works/01-eventbus.md`, `docs/architecture.md`, related layer documents |
+| Decision-making / action execution changes | `docs/agency-layer.md`, `docs/how-it-works/05-decision-making.md`, `docs/how-it-works/08-execution-pipeline.md` |
+| Process management changes | `docs/kernel-layer.md` |
+| Input/output changes | `docs/io-layer.md`, `docs/external/*.md` |
+| Configuration changes | `docs/config.md` |
+| Model routing changes | `docs/how-it-works/11-model-routing.md`, `docs/config.md` |
+| General new feature | Consider creating a new relevant document when none exists |
 
-実装側では、変更に応じて `iris/event/event_types.py` など関連コードとの整合も確認する。
+When updating docs, also check consistency with related code such as `iris/event/event_types.py`.
 
-### 2. 自己プロフィール `.iris/config/iris_profile.md`
+### 2. Self profile `.iris/config/iris_profile.md`
 
-- 人格・口調・ルール記述の変更があった場合
-- Irisの自己認識、使用可能能力、ふるまいに影響する capability 変更があった場合
-- 内部実装だけの変更では更新しない
+Update only when:
 
-### 3. AGENTS.md
+- Personality, tone, or behavior rules changed.
+- A capability change affects Iris self-recognition, available capabilities, or behavior.
+- Do not update it for internal implementation-only changes.
 
-- エージェント入口としての参照先変更
-- 常時読むファイル方針の変更
-- 最優先の行動原則変更
+### 3. `AGENTS.md`
 
-詳細なコーディング規約、ワークフロー、ディレクトリ構成は AGENTS.md に戻さず、該当Skillか `.agents/project.md` に置く。
+Update only for:
+
+- Reference route changes for the agent entry point.
+- Changes to the always-read file policy.
+- Changes to highest-priority operating principles.
+
+Do not move detailed coding standards, workflows, or directory structures back into `AGENTS.md`. Put them in the relevant Skill or `.agents/project.md`.
 
 ### 4. `.agents/README.md`, `.agents/project.md`
 
-以下の内容が変わった場合に更新：
+Update when these change:
 
-- エージェント向け導線 (`.agents/README.md`)
-- プロジェクト概要 (`.agents/project.md`)
-- Skill 選択ルールや責務境界
+- Agent routing (`.agents/README.md`).
+- Project summary (`.agents/project.md`).
+- Skill selection rules or responsibility boundaries.
 
-ただし、`.agents/` はトークン効率を優先する。詳細な設計情報、進捗ログ、履歴は重複して書かず、一次情報への参照に留める。
+Keep `.agents/` token-efficient. Do not duplicate detailed design information, progress logs, or history. Link to the source of truth instead.
 
 ### 5. Skills `.agents/skills/*/SKILL.md`
 
-capability 追加パターン、開発ワークフロー、MVP判断、Plugin規約が変わった場合に更新。
+Update when capability addition patterns, development workflow, MVP decisions, or Plugin conventions change.
 
 ## Procedure
 
-1. 変更の内容を特定する
-2. 上の表に照らして更新すべき文書をリストアップする
-3. 各文書を順に読み、該当箇所を更新する
-   - **削除された機能の記述は完全に消す。「現在は〜」「従来は〜」「かつては〜」のような過去形の遺残は一切残さない。ドキュメントは現状のみを記述する。**
-4. 変更種別に応じて検証する
+1. Identify what changed.
+2. Use the table above to list documents that may need updates.
+3. Read each document and update the relevant sections.
+   - Remove descriptions of deleted features completely. Do not leave historical residue such as "currently", "previously", or "formerly" notes. Documentation should describe the current state only.
+4. Validate according to the change type.
 
-検証のみ:
+Validation only:
 
 ```bash
 uv run pytest tests/ -q
@@ -80,17 +84,17 @@ uv run ruff format --check .
 uv run mypy .
 ```
 
-修正を許可されている場合:
+When fixes are allowed:
 
 ```bash
 uv run ruff check --fix .
 uv run ruff format .
 ```
 
-5. ユーザーが明示的に依頼した場合のみ、コード変更とドキュメント更新を同一コミットに含める
+5. If and only if the user explicitly asks for a commit, include code changes and documentation updates in the same commit.
 
-## When to use me
+## When to Use Me
 
-- 機能追加・変更を行ったとき
-- コミット前に更新漏れがないか確認したいとき
-- プロジェクトルールを変更したとき
+- After adding or changing features.
+- Before a commit when you need to check for missed documentation updates.
+- After changing project rules.

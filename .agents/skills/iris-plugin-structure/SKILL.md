@@ -11,165 +11,165 @@ metadata:
 
 ## Purpose
 
-既存プラグインの内部ファイルを整理・分割するとき、または新規プラグインのコンポーネント構成を決めるときに読む。
-`iris-plugin-create` が「新規作成」手順を提供するのに対し、本スキルは「内部構造の設計規約と命名規則」を定義する。
+Read this when organizing or splitting internal files of an existing Plugin, or when deciding component layout for a new Plugin. `iris-plugin-create` covers creation steps; this Skill defines structure and naming rules.
 
-## 基本原則
+## Basic Principles
 
-- **1ファイル = 1責務**。単一責務を超えたら分割する
-- **ファイル名から責務が推測できる**こと
-- **クラス名とファイル名を対応させる**: `manager.py` → `XxxManager`、`protocols.py` → `XxxProtocol`
-- **内部実装は `_leading_underscore`** で外部からの直接使用を防ぐ
-- **依存性逆転の原則 (DIP)**: 他プラグインとの連携は具象クラスではなく `Protocol` を介して行う
-- **依存性注入 (DI) の徹底**: `PluginManager` をロジッククラス内に保持して動的に解決する（サービスロケーターパターン）のを禁止し、すべてコンストラクタで明示的に注入する
-- **純粋ロジックとI/Oの分離**: スコアラーやエクストラクター等は純粋なデータ処理に徹し、ファイルI/OやEventBusパブリッシュなどの副作用を持たせない
-- **EventBus subscribe は handler で行う**: manager が直接 subscribe してはいけない。購読処理は必ず `handler.py` に分離し、`__init__.py` で wiring する
-- **既存Pluginの過剰リファクタ禁止**: 構造ルールに完全一致させるためだけの大規模リファクタは行わない。今回の変更範囲に関係する責務分離のみ行う
+- **1 file = 1 responsibility.** Split a file when it exceeds a single responsibility.
+- **Responsibility should be inferable from the file name.**
+- **Class names should match file responsibility**: `manager.py` -> `XxxManager`, `protocols.py` -> `XxxProtocol`.
+- **Internal implementation uses `_leading_underscore`** to discourage direct external use.
+- **Dependency inversion (DIP)**: collaborate with other Plugins through `Protocol`, not concrete classes.
+- **Dependency injection (DI)**: inject dependencies explicitly through constructors. Do not keep `PluginManager` inside logic classes as a service locator.
+- **Separate pure logic from I/O**: scorers and extractors should only transform data. They should not perform file I/O or publish to EventBus.
+- **EventBus subscription belongs in handlers**: managers must not subscribe directly. Put subscription in `handler.py` and wire it from `__init__.py` or `builder.py`.
+- **No excessive refactor of existing Plugins**: do not perform a broad refactor only to force perfect compliance. Split only responsibilities relevant to the current change.
 
-## 標準ディレクトリ構成
+## Standard Directory Structure
 
-```
+```text
 iris/<plugin_name>/
-├── __init__.py           # MANIFEST + Plugin クラス + plugin インスタンス
-├── builder.py            # コンポーネント組み立て（init() が複雑な場合）
-├── manager.py            # コアオーケストレータ
-├── handler.py            # EventBus イベントハンドラ
-├── dispatcher.py         # store/retrieve/search のルーティング
-├── router.py             # 条件分岐ルーティング
-├── protocol.py           # 1件の Protocol 定義
-├── protocols.py          # 複数の Protocol 定義
-├── models.py             # dataclass / TypedDict / Pydantic
-├── base.py               # 抽象基底クラス
-├── hooks.py              # HookPoint 登録
-├── events.py             # プラグイン固有イベント型
-├── utils.py              # ユーティリティ関数
-├── scorer.py             # スコアリング/評価
-├── extractor.py          # エンティティ抽出
-├── renderer.py           # フォーマット/レンダリング
-├── formatter.py          # 出力整形
-├── config.py             # 設定読み込み
-└── tools/                # @tool 定義（TOOLカテゴリ向け）
+├── __init__.py           # MANIFEST + Plugin class + plugin instance
+├── builder.py            # component assembly when init() is complex
+├── manager.py            # core orchestrator
+├── handler.py            # EventBus event handlers
+├── dispatcher.py         # operation routing for store/retrieve/search/etc.
+├── router.py             # conditional routing
+├── protocol.py           # one Protocol definition
+├── protocols.py          # multiple Protocol definitions
+├── models.py             # dataclass / TypedDict / Pydantic models
+├── base.py               # abstract base classes
+├── hooks.py              # HookPoint registration
+├── events.py             # Plugin-specific event types
+├── utils.py              # utility functions
+├── scorer.py             # scoring/evaluation
+├── extractor.py          # entity extraction
+├── renderer.py           # formatting/rendering
+├── formatter.py          # output formatting
+├── config.py             # configuration loading
+└── tools/                # @tool definitions for TOOL category
     └── __init__.py
 ```
 
-## ファイル別命名規則
+## File Naming by Responsibility
 
-### 責務: オーケストレーション
+### Orchestration
 
-| ファイル | 含めるもの | クラス名パターン | 実装例 |
+| File | Contents | Class/function pattern | Example |
 |---|---|---|---|
-| `manager.py` | 中心オーケストレータ | `XxxManager` | `MemoryManager`, `AgencyManager` |
-| `handler.py` | EventBus イベント購読 | `_XxxEventHandler` (private) | `_MemoryEventHandler` |
-| `dispatcher.py` | 操作の振り分け | `build_xxx_handlers()` + `_xxx_yyy()` | `build_store_handlers()` + `_store_sensory()` |
-| `router.py` | 条件分岐 | `route_xxx_yyy()` | `route_after_llm(state) -> str` |
-| `builder.py` | コンポーネント組立 | `build_xxx(manager)` | `build_agency(manager) -> dict` |
+| `manager.py` | central orchestrator | `XxxManager` | `MemoryManager`, `AgencyManager` |
+| `handler.py` | EventBus subscriptions | `_XxxEventHandler` private | `_MemoryEventHandler` |
+| `dispatcher.py` | operation dispatch | `build_xxx_handlers()` + `_xxx_yyy()` | `build_store_handlers()` + `_store_sensory()` |
+| `router.py` | conditional branching | `route_xxx_yyy()` | `route_after_llm(state) -> str` |
+| `builder.py` | component assembly | `build_xxx(manager)` | `build_agency(manager) -> dict` |
 
-### 責務: データ構造
+### Data Structures
 
-| ファイル | 含めるもの | クラス名パターン | 実装例 |
+| File | Contents | Class pattern | Example |
 |---|---|---|---|
-| `models.py` | データ型定義 | `XxxData`, `XxxState` | `TurnData`, `SearchResult`, `ExecutionState` |
-| `protocol.py` | 単一 Protocol | `XxxProtocol` | `MemoryManagerProtocol` |
-| `protocols.py` | 複数 Protocol | `XxxProtocol` | `EpisodicStoreProtocol`, `SemanticStoreProtocol` |
-| `base.py` | 抽象基底 | `_XxxBase` (private) | `_JsonlStore` |
+| `models.py` | data type definitions | `XxxData`, `XxxState` | `TurnData`, `SearchResult`, `ExecutionState` |
+| `protocol.py` | single Protocol | `XxxProtocol` | `MemoryManagerProtocol` |
+| `protocols.py` | multiple Protocols | `XxxProtocol` | `EpisodicStoreProtocol`, `SemanticStoreProtocol` |
+| `base.py` | abstract base | `_XxxBase` private | `_JsonlStore` |
 
-### 責務: 単一処理
+### Single-purpose Processing
 
-| ファイル | 含めるもの | クラス名パターン | 実装例 |
+| File | Contents | Pattern | Example |
 |---|---|---|---|
-| `scorer.py` | スコアリング | `XxxScorer` (Protocol) + `DefaultXxxScorer` | `ImportanceScorer` + `DefaultImportanceScorer` |
-| `extractor.py` | 抽出/解析 | `XxxExtractor` (Protocol) + `ConcreteExtractor` | `EntityExtractor` + `RegexEntityExtractor` |
-| `renderer.py` | レンダリング | `render_xxx_context(...)` | `render_short_term_context(turns, ...) -> str` |
-| `formatter.py` | 出力整形 | `XxxFormatter` | `CaptureFormatter` |
-| `utils.py` | ユーティリティ | `xxx_yyy()` (関数) | `build_time_label() -> str` |
-| `config.py` | 設定読み込み | `XxxConfig` | — |
+| `scorer.py` | scoring | `XxxScorer` Protocol + `DefaultXxxScorer` | `ImportanceScorer` + `DefaultImportanceScorer` |
+| `extractor.py` | extraction/analysis | `XxxExtractor` Protocol + concrete extractor | `EntityExtractor` + `RegexEntityExtractor` |
+| `renderer.py` | rendering | `render_xxx_context(...)` | `render_short_term_context(turns, ...) -> str` |
+| `formatter.py` | output formatting | `XxxFormatter` | `CaptureFormatter` |
+| `utils.py` | utilities | `xxx_yyy()` functions | `build_time_label() -> str` |
+| `config.py` | config loading | `XxxConfig` | - |
 
-### 責務: フックとイベント
+### Hooks and Events
 
-| ファイル | 含めるもの | 関数名パターン |
+| File | Contents | Function pattern |
 |---|---|---|
-| `hooks.py` | HookPoint 登録 | `register_hooks(manager)` |
-| `events.py` | イベント型定義 | `XxxEvent(DataClass)` |
+| `hooks.py` | HookPoint registration | `register_hooks(manager)` |
+| `events.py` | event type definitions | `XxxEvent(DataClass)` |
 
-## 分割トリガー
+## Split Triggers
 
-| 条件 | 抽出先 |
+| Condition | Extract to |
 |---|---|
-| `__init__.py` の `init()` 本体 > 50行 | `builder.py` に分割 |
-| ファイル > 200行 かつ 責務が2以上 | 責務ごとにファイル分割 |
-| 1つ以上の EventBus subscribe | `handler.py` に必須分離（manager からの直接 subscribe 禁止） |
-| Protocol クラスが3以上 | `protocols.py` に集約（複数形） |
-| 基底クラスがある | `base.py` に抽出 |
-| モジュールレベル関数のみのファイルがある | 関数の責務を確認し、責務が単一なら維持も可（`utils.py`, `router.py`） |
-| static method が2以上 | `utils.py` に抽出 |
-| コンポーネント生成が複雑（> 10行） | `builder.py` に抽出 |
+| `__init__.py` `init()` body > 50 lines | `builder.py` |
+| File > 200 lines and has 2+ responsibilities | split by responsibility |
+| One or more EventBus subscriptions | `handler.py` required |
+| 3+ Protocol classes | `protocols.py` |
+| Base class exists | `base.py` |
+| File contains only module-level functions | keep if single-responsibility, otherwise split into `utils.py` / `router.py` |
+| 2+ static methods | module-level functions in `utils.py` |
+| Component creation is complex (> 10 lines) | `builder.py` |
 
-## 命名規則詳細
+## Detailed Naming Rules
 
-### ファイル名
+### File Names
 
-- `snake_case.py`。略語禁止（`di.py` → `service_container.py`）
-- 単数形優先。ただし複数エンティティのコンテナは複数形可（`protocols.py`, `stores.py`）
-- 数字接尾辞禁止（`handler2.py` ではなく責務名で分割）
+- Use `snake_case.py`.
+- Avoid abbreviations (`di.py` -> `service_container.py`).
+- Prefer singular names, except container modules such as `protocols.py` or `stores.py`.
+- Do not use numeric suffixes such as `handler2.py`; split by responsibility instead.
 
-### クラス名
+### Class Names
 
-- `PascalCase`。ファイル名とプレフィックスを合わせる
-  - `manager.py` → クラス名は `XxxManager`
-  - `protocols.py` → クラス名は `XxxProtocol`
-- 内部専用クラスは `_` プレフィックス（`_MemoryEventHandler`, `_JsonlStore`）
-- Protocol クラスは `XxxProtocol` の命名を推奨（`typing.Protocol` のサブクラスであることが明示的）
+- Use `PascalCase` and align with the file responsibility.
+- `manager.py` -> `XxxManager`.
+- `protocols.py` -> `XxxProtocol`.
+- Internal-only classes use `_` prefix, such as `_MemoryEventHandler` or `_JsonlStore`.
+- Prefer `XxxProtocol` for `typing.Protocol` subclasses.
 
-### 関数名
+### Function Names
 
-- `snake_case`。モジュールレベル関数は `動詞_目的語` パターン
-  - `build_agency`, `route_after_llm`, `render_short_term_context`
-- プライベート関数は `_prefix`
-- ハンドラは `_on_xxx_event`（イベント購読用）、`_xxx_hook`（Hook用）
+- Use `snake_case`.
+- Module-level functions should generally use `verb_object` style.
+- Private functions use `_prefix`.
+- Event handlers use `_on_xxx_event`; Hook handlers use `_xxx_hook`.
 
-### 定数
+### Constants
 
-- `UPPER_SNAKE_CASE`
-- モジュールレベル定数はファイル先頭に集約
+- Use `UPPER_SNAKE_CASE`.
+- Keep module-level constants near the top of the file.
 
-## プライベート可視性ルール
+## Private Visibility Rules
 
-| 可視性 | 命名 | 使用範囲 |
+| Visibility | Naming | Intended use |
 |---|---|---|
-| 公開API | `XxxManager`, `build_xxx()` | 他Pluginからの利用を意図 |
-| 内部実装 | `_XxxHandler`, `_xxx_helper()` | 同一Plugin内のみ |
-| 同一ファイルのみ | 関数内関数 / ネストクラス | 関数スコープ内 |
+| Public API | `XxxManager`, `build_xxx()` | intended for use from other Plugins |
+| Internal implementation | `_XxxHandler`, `_xxx_helper()` | same Plugin only |
+| Same file only | nested function / nested class | function scope only |
 
-## パッケージ内インポート規約
+## Package Import Rules
 
-- **同一プラグイン内**: 相対インポート推奨（`from .manager import XxxManager`）
-- **他プラグイン**: 絶対インポート（`from iris.memory.manager import MemoryManager`）
-- `__init__.py` は公開APIのみ再エクスポート。内部モジュールへの直接アクセスは非推奨
-- **循環参照の回避**: 型ヒントのみで参照するクラスは `if TYPE_CHECKING:` ブロック内でインポートし、ランタイムのインポートループを防ぐ
+- Inside the same Plugin, prefer relative imports such as `from .manager import XxxManager`.
+- Across Plugins, use absolute imports such as `from iris.memory.manager import MemoryManager`.
+- For type-only references, import inside `if TYPE_CHECKING:` to avoid runtime cycles.
+- `__init__.py` should re-export only public API. Direct access to internal modules is discouraged.
 
-## サブプラグイン・プロバイダ構造
+## Sub-plugin and Provider Structure
 
-```
-iris/llm/providers/           # LLM プロバイダ
-├── __init__.py               # discover_providers() を呼ぶ
+```text
+iris/llm/providers/
+├── __init__.py               # calls discover_providers()
 ├── base.py                   # BaseLLMProvider + registry
 ├── ollama.py
 ├── openrouter.py
 └── google.py
 
-iris/tools/builtins/          # 組み込みツール
+iris/tools/builtins/
 ├── __init__.py
 └── <tool_name>/
-    └── server.py             # register(registry) 関数
+    └── server.py             # register(registry) function
 ```
 
-- LLM Provider は `BaseLLMProvider.provider_name` による自動登録を使う
-- Tool capability は `register(registry)` / decorator を使う
-- ファイル名はプロバイダ/ツール名をそのまま使う（`ollama.py`, `git.py`）
+- LLM providers use auto-registration through `BaseLLMProvider.provider_name`.
+- Tool capabilities use `register(registry)` / decorators.
+- Use provider/tool names directly as file names, such as `ollama.py` or `git.py`.
 
-## 実装パターン集
+## Implementation Patterns
 
-### Builder（組立関数）と `__init__.py` の連携
+### Builder and `__init__.py`
 
 ```python
 # iris/<plugin>/__init__.py
@@ -185,7 +185,6 @@ if TYPE_CHECKING:
 
 class XxxPlugin(PluginProtocol):
     def init(self, manager: PluginManager) -> None:
-        # 複雑なコンポーネント組み立てを builder に委譲
         self._components = build_components(manager)
 ```
 
@@ -209,126 +208,57 @@ def build_components(manager: PluginManager) -> dict[str, Any]:
     return {"manager": component}
 ```
 
-### Handler（イベント購読）
-
-handler は `__init__.py` の `init()` で wiring する。manager に購読を委譲しない。
+### Handler for EventBus Subscription
 
 ```python
 # iris/<plugin>/handler.py
 from __future__ import annotations
-from typing import Any
-
-from iris.event.event_types import MessageEvent, TimerTick
 
 
 class _XxxEventHandler:
-    def __init__(self, event_bus: Any, dependency: Any) -> None:
-        self._dependency = dependency
-        event_bus.subscribe(MessageEvent, self._on_message_event)
-        event_bus.subscribe(TimerTick, self._on_tick)
+    def __init__(self, event_bus, manager):
+        self._event_bus = event_bus
+        self._manager = manager
 
-    def _on_message_event(self, event: MessageEvent) -> None:
-        ...
+    def subscribe(self) -> None:
+        self._event_bus.subscribe("some.event", self._on_event)
 
-    def _on_tick(self, event: TimerTick) -> None:
-        ...
+    async def _on_event(self, event) -> None:
+        await self._manager.handle_event(event)
 ```
 
-```python
-# iris/<plugin>/__init__.py の init() 内
-_XxxEventHandler(
-    event_bus=manager.resolve(EventBus),
-    dependency=components["dependency"],
-)
-```
-
-handler が manager のメソッドを呼び戻す必要がある場合は `Protocol` を定義して疎結合にする。
+### Protocol + Implementation
 
 ```python
-# iris/<plugin>/handler.py
-from __future__ import annotations
-from typing import Any, Protocol
-
-from iris.event.event_types import SomeEvent
-
-
-class _XxxControlProtocol(Protocol):
-    def some_action(self) -> None: ...
-
-
-class _XxxEventHandler:
-    def __init__(self, event_bus: Any, controller: _XxxControlProtocol) -> None:
-        self._controller = controller
-        event_bus.subscribe(SomeEvent, self._on_some_event)
-
-    def _on_some_event(self, event: SomeEvent) -> None:
-        self._controller.some_action()
-```
-
-```python
-# iris/<plugin>/__init__.py の init() 内
-# XxxManager が Protocol を実装している前提
-_FlowExecutionHandler(
-    event_bus=manager.resolve(EventBus),
-    controller=components["execution"],
-)
-```
-
-### Protocol + 実装
-
-```python
-# iris/<plugin>/scorer.py
+# iris/<plugin>/protocols.py
 from __future__ import annotations
 from typing import Protocol
 
 
-class XxxScorer(Protocol):
-    def score(self, data: InputType) -> int: ...
-
-
-class DefaultXxxScorer:
-    def score(self, data: InputType) -> int:
-        return 0
+class XxxStoreProtocol(Protocol):
+    async def save(self, item: object) -> None: ...
 ```
 
-### Dispatcher（振り分け）
+### Dispatcher
 
 ```python
-# iris/<plugin>/dispatcher.py
-from __future__ import annotations
-from collections.abc import Callable
-from typing import Any
-
-
-def build_dispatch_handlers(...) -> dict[str, Callable[..., Any]]:
+def build_store_handlers(manager):
     return {
-        "store": _store_impl,
-        "search": _search_impl,
+        "sensory": lambda item: manager.store_sensory(item),
+        "short_term": lambda item: manager.store_short_term(item),
     }
-
-
-def _store_impl(data: Any) -> None: ...
-def _search_impl(query: Any) -> list[Any]: ...
 ```
 
-## 既存Pluginの構造例
+## Existing Plugin Structure Examples
 
-| Plugin | mainファイル | サブファイル |
-|---|---|---|
-| `memory/` | `manager.py` | `handler.py`, `dispatcher.py`, `protocol.py`, `base.py`, `models.py` + `short_term/{manager,models,scorer,extractor,renderer}.py` + `long_term/{manager,stores,protocols,vector_store,goal_store}.py` + `sensory/{manager,readiness}.py` |
-| `agency/` | `manager.py` | `builder.py`, `internal_bus.py`, `task_level.py`, `modulation.py` + `inhibition/{manager,handler,gate,striatum,models}.py` + `planning/{manager,models,handler,context_hint_builder,question_generator,task_content,utils}.py` + `execution/{orchestrator,router,executor,models,engine,builder,node_type,worker,handler}.py` + `execution/llm/{gateway,prompt_builder,node_prompt_factory,profile_builder,capture}.py` + `execution/nodes/{base,general_chat,general_task,setup,tool_run,finalize}.py` + `regulation/consolidator.py` |
-| `llm/` | `bridge.py` | `capability.py`, `context.py`, `hooks.py`, `interrupt_token.py`, `model_factory.py`, `priority_lock.py`, `prompt.py`, `repetition.py`, `token_utils.py`, `tokenizer.py` + `providers/{base,ollama,openai_compatible}.py` |
+Use existing code as the source of truth. Before changing structure, inspect the current implementation, imports, call sites, tests, plugin registration, and runtime entrypoints.
 
 ## Rules
 
-- ファイル名は必ず `snake_case.py`。略語禁止。単数形優先
-- クラス名は `PascalCase` でファイル名とのプレフィックス一致を意識
-- 内部クラスは `_` プレフィックス。外部から `import` させない
-- 分割トリガーに達する前の過剰分割は禁止。必要になるまで単一ファイルで良い。ただし EventBus subscribe は1つでも handler.py へ必須分離（本原則の唯一の例外）
-- 既存Pluginを構造ルールに完全一致させるためだけの大規模リファクタは行わない
-- 仕様変更に伴う構造変更は分割トリガー未到達でも許容。新仕様に適合する構造を優先する
-- `__init__.py` の `init()` が 50行を超えたら `builder.py` に切り出す
-- 1ファイル200行を目安に、超えたら責務分割を検討
-- `PluginManager` インスタンスをロジッククラス（`XxxManager` 等）のメンバ変数に保持させない（コンストラクタで具象依存を注入する）
-- `models.py` にはデータ保持用のピュアなクラスのみを定義し、APIやVDB用のシリアライズ/デシリアライズ等の外部表現変換は `formatter.py` や `renderer.py` 等で行う
-- EventBus subscribe は manager ではなく handler.py で行い、wiring は `__init__.py` で行う。manager コンストラクタに `event_bus` を渡して購読させてはならない
+- Do not refactor only to satisfy the template.
+- Do not add unused abstraction.
+- Keep public API small.
+- Preserve async cancellation and streaming behavior.
+- Do not put provider-specific logic into execution / limbic / memory.
+- Do not move persistence responsibilities into limbic.
+- Do not put domain logic into transport.

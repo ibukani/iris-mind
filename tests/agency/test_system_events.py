@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from iris.account.dispatcher import _AccountDispatcher
+from iris.account.dispatcher import AccountDispatcher
 from iris.account.manager import AccountManager
 from iris.account.models import Provider
 from iris.account.store import AccountStore
@@ -36,7 +36,7 @@ def _make_handlers(event_bus: EventBus, memory_mgr: MemoryManager, tmp_path: Pat
     room_store = RoomStore()
     room_provider = RoomManager(store=room_store, event_bus=event_bus, account_manager=account_provider)
 
-    account_dispatcher = _AccountDispatcher(account_manager=account_provider)
+    account_dispatcher = AccountDispatcher(account_manager=account_provider)
     room_dispatcher = _RoomDispatcher(room_manager=room_provider, account_manager=account_provider)
 
     from iris.room.handler import _RoomEventHandler

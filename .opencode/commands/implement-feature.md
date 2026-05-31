@@ -1,22 +1,22 @@
 ---
-description: 指定された機能・変更を実装する。
+description: Implement the specified feature or change.
 ---
 
 @implementer
 
-実装内容: `$1`
+Implementation request: `$1`
 
-指定された機能または変更を実装してください。
+Implement the specified feature or change.
 
-## ルール
+## Rules
 
-- 事前に必要な範囲を調査する
-- 変更範囲を必要最小限にする
-- 変更した挙動にはテストを追加・更新する
-- provider 固有処理を上位レイヤーに漏らさない
-- memory / limbic / execution / transport の責務境界を崩さない
+- Investigate the necessary scope first.
+- Keep the change scope as small as necessary.
+- Add or update tests for changed behavior.
+- Do not leak provider-specific behavior into upper layers.
+- Do not break memory / limbic / execution / transport responsibility boundaries.
 
-## 検証候補
+## Validation Candidates
 
 ```bash
 uv run pytest tests/ -q

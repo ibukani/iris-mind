@@ -1,18 +1,18 @@
 ---
-description: 現在の差分をレビューする。原則コード変更は禁止。
+description: Review the current diff. Code changes are usually forbidden.
 ---
 
 @reviewer
 
-現在の差分をレビューしてください。
+Review the current diff.
 
-## 観点
+## Review Points
 
-- 変更範囲は妥当か
-- layer boundary は守られているか
-- provider 固有処理が上位層に漏れていないか
-- protobuf 依存が domain に漏れていないか
-- manager / gateway / orchestrator が肥大化していないか
-- 不要な互換層や dead code がないか
-- テストは十分か
-- 検証結果は正直に報告されているか
+- Is the change scope appropriate?
+- Are layer boundaries preserved?
+- Did provider-specific behavior leak into upper layers?
+- Did protobuf dependency leak into domain code?
+- Are managers / gateways / orchestrators growing too large?
+- Are there unnecessary compatibility layers or dead code?
+- Are tests sufficient?
+- Are validation results reported honestly?

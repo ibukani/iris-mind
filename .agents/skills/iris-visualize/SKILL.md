@@ -7,82 +7,91 @@ description: |
 
 # Iris Visualize Skill
 
-Irisの層アーキテクチャやEventBusによる疎結合設計を正しく表現し、Mermaidの構文チェックおよびレンダリングを行う。
+Represent Iris layer architecture and the loosely coupled EventBus design accurately, then validate and render Mermaid syntax.
 
 ---
 
-## 1. Mermaidシンタックス検証方法
+## 1. Mermaid Syntax Validation
 
-記述したMermaidコードに構文エラーがないか検証する。
+Validate Mermaid code for syntax errors.
 
-### A. CLIによる検証 (最速・推奨)
-`npx` を使って構文エラーがないかを検証する（Windows環境では `NUL` 出力先を使用して画像出力をスキップする）。
+### A. CLI validation, fastest and recommended
+
+Use `npx` to check for syntax errors. On Windows, use a `NUL` output destination when you want to skip image output.
+
 ```powershell
-npx -y @mermaid-js/mermaid-cli -i <対象ファイル.mmd> -o temp.svg
-# 検証完了後に生成された temp.svg は削除してよい。
+npx -y @mermaid-js/mermaid-cli -i <target-file.mmd> -o temp.svg
+# Delete generated temp.svg after validation if it is not needed.
 ```
-*※ 正常終了（終了コード0）なら構文は正しい。エラーがある場合はエラー箇所と詳細が出力される。*
 
-### B. レンダリングによる検証
-既存のレンダリングスクリプトを実行し、エラーが発生しないか確認する。
+A successful exit code `0` means the syntax is valid. If errors exist, the command prints the location and details.
+
+### B. Validation by rendering
+
+Run the existing render script and confirm that no error occurs.
+
 ```powershell
-node scripts/render.mjs --input <対象ファイル.mmd>
+node scripts/render.mjs --input <target-file.mmd>
 ```
 
 ---
 
-## 2. レンダリングコマンド
+## 2. Rendering Commands
 
-### SVGレンダリング (ドキュメント用)
+### SVG rendering for documentation
+
 ```powershell
 node scripts/render.mjs --input diagram.mmd --output diagram.svg --theme tokyo-night
 ```
-- **推奨テーマ**: `tokyo-night` (ダークモード用), `github-light` (ライトモード用)
 
-### ASCIIレンダリング (README・ターミナル表示用)
+- Recommended themes: `tokyo-night` for dark mode, `github-light` for light mode.
+
+### ASCII rendering for README / terminal output
+
 ```powershell
 node scripts/render.mjs --input diagram.mmd --format ascii --use-ascii
 ```
 
 ---
 
-## 3. Iris特化型 Mermaid テンプレート
+## 3. Iris-specific Mermaid Templates
 
-### A. 層アーキテクチャ図 (flowchart)
-各層の境界と、EventBusを介した疎結合な関係性を示すための標準構成。
+### A. Layer architecture diagram, flowchart
+
+Standard structure for showing layer boundaries and loosely coupled relationships through EventBus.
 
 ```mermaid
 flowchart TB
-    subgraph KernelLayer["kernel (脳幹)"]
+    subgraph KernelLayer["kernel (brainstem)"]
         manager["KernelManager"]
         process["KernelProcess"]
         factory["DI Factory"]
     end
-    subgraph IoLayer["io (視床)"]
+    subgraph IoLayer["io (thalamus)"]
         io_mgr["IOManager"]
         grpc["GrpcListener"]
     end
-    subgraph EventLayer["event (神経路)"]
+    subgraph EventLayer["event (neural pathway)"]
         bus["EventBus"]
     end
     subgraph HeartbeatLayer["heartbeat (TimerTick)"]
         hb_svc["HeartbeatService"]
     end
-    subgraph MemoryLayer["memory (記憶系)"]
+    subgraph MemoryLayer["memory"]
         mem_mgr["MemoryManager"]
         sensory["SensoryMemory"]
         stm["ShortTermMemory"]
         ltm["LongTermMemory"]
     end
-    subgraph AgencyLayer["agency (高度認知)"]
+    subgraph AgencyLayer["agency (higher cognition)"]
         planning["PlanningManager"]
         execution["ExecutionOrchestrator"]
     end
-    subgraph LlmLayer["llm (LLM基盤)"]
+    subgraph LlmLayer["llm"]
         bridge["LLMBridge"]
     end
 
-    %% 依存関係（EventBus経由の疎結合）
+    %% Dependencies through EventBus for loose coupling
     KernelLayer -.-> bus
     IoLayer -.-> bus
     HeartbeatLayer -.-> bus
@@ -90,8 +99,9 @@ flowchart TB
     AgencyLayer -.-> bus
 ```
 
-### B. EventBus 連携シーケンス図 (sequenceDiagram)
-イベント発行と各層の並列処理を示すための標準構成。
+### B. EventBus integration sequence diagram
+
+Standard structure for showing event publication and parallel processing by layers.
 
 ```mermaid
 sequenceDiagram
@@ -107,21 +117,21 @@ sequenceDiagram
     deactivate E
 
     activate H
-    H->>H: TimerTick処理
+    H->>H: process TimerTick
     H->>E: publish(TimerTick)
     deactivate H
 
     activate M
-    M->>M: 記憶保存
+    M->>M: store memory
     deactivate M
 ```
 
 ---
 
-## 4. トラブルシューティング
+## 4. Troubleshooting
 
-- **Syntax Errorでビルド失敗**:
-  - `A --> B` などの矢印の間にスペースがあるか確認。
-  - クラス図の型指定で `<` や `>` などの特殊文字を使用する場合はエンコードするか、ダブルクォーテーションで囲む。
-- **beautiful-mermaid モジュールエラー**:
-  - `.agents/skills/iris-visualize/` ディレクトリ内で `npm install` を実行する。
+- **Build fails with Syntax Error**:
+  - Check whether arrows have proper spacing, such as `A --> B`.
+  - When using special characters such as `<` or `>` in class diagram type annotations, encode them or wrap them in double quotes.
+- **beautiful-mermaid module error**:
+  - Run `npm install` inside `.agents/skills/iris-visualize/`.

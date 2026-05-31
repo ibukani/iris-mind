@@ -5,11 +5,11 @@ from typing import Any
 from loguru import logger
 import orjson
 
-from iris.account.models import Provider
+from iris.account.models import parse_identity
 from iris.event.event_types import ControlMessageEvent
 
 
-class _AccountDispatcher:
+class AccountDispatcher:
     """アカウント管理のControlMessage振り分け＋レスポンス構築。
 
     責務:
@@ -40,7 +40,7 @@ class _AccountDispatcher:
         self,
         identity: dict[str, Any] | None,
     ) -> tuple[str, str]:
-        provider, subject, provider_name, metadata = self._parse_identity(identity)
+        provider, subject, provider_name, metadata = parse_identity(identity)
         if provider is None or not subject:
             return "", ""
 
@@ -53,7 +53,7 @@ class _AccountDispatcher:
         return account.account_id, account.display_name
 
     def _handle_identify(self, msg: ControlMessageEvent) -> ControlMessageEvent:
-        provider, subject, provider_name, metadata = self._parse_identity(msg.identity)
+        provider, subject, provider_name, metadata = parse_identity(msg.identity)
         if provider is None or not subject:
             return self._error("account.identify", "identity.provider and identity.subject required")
 
@@ -116,7 +116,7 @@ class _AccountDispatcher:
         if account is None:
             return self._error("account.link", "not identified")
 
-        provider, subject, provider_name, metadata = self._parse_identity(msg.identity)
+        provider, subject, provider_name, metadata = parse_identity(msg.identity)
         if provider is None or not subject:
             return self._error("account.link", "identity.provider and identity.subject required")
 
@@ -145,32 +145,13 @@ class _AccountDispatcher:
             if account is not None:
                 return account
 
-        provider, subject, _provider_name, _metadata = self._parse_identity(msg.identity)
+        provider, subject, _provider_name, _metadata = parse_identity(msg.identity)
         if provider is not None and subject:
             account = self._account_manager.get_account_by_identity(provider, subject)
             if account is not None:
                 return account
 
         return None
-
-    @staticmethod
-    def _parse_identity(identity: dict[str, Any] | None) -> tuple[Provider | None, str, str, dict[str, object]]:
-        if not identity:
-            return None, "", "", {}
-        raw_metadata = identity.get("metadata", {})
-        metadata: dict[str, object] = raw_metadata if isinstance(raw_metadata, dict) else {}
-        raw_provider = str(identity.get("provider", ""))
-        try:
-            provider = Provider(raw_provider)
-        except ValueError:
-            logger.warning("AccountDispatcher: unknown provider={}", raw_provider)
-            return None, "", "", {}
-        return (
-            provider,
-            str(identity.get("subject", "")),
-            str(identity.get("provider_name", "")),
-            metadata,
-        )
 
     @staticmethod
     def _error(action: str, message: str) -> ControlMessageEvent:

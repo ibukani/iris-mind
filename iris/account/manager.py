@@ -68,40 +68,60 @@ class AccountManager:
         metadata: dict[str, object] | None = None,
     ) -> Account:
         """外部IDからアカウントを解決し、なければ作成する。"""
-        now = datetime.now(UTC).isoformat()
         identity = self._store.find_identity(provider.value, subject)
         if identity is not None:
-            identity.provider_name = provider_name or identity.provider_name
-            identity.metadata = metadata or identity.metadata
-            identity.last_seen = now
-            self._store.update_identity(identity)
-            account = self.resolve(identity.account_id)
-            if account is not None:
-                account.last_seen = now
-                if provider_name and not account.display_name:
-                    account.display_name = provider_name
-                self._store.update_account(account)
-                return account
-            logger.warning(
-                "AccountManager: identity {}:{} linked to missing account {}, creating replacement",
-                provider.value,
-                subject,
-                identity.account_id,
-            )
+            return self._update_existing_identity(identity, provider, subject, provider_name, metadata)
+        return self._create_new_identity(provider, subject, provider_name, metadata)
 
+    def _update_existing_identity(
+        self,
+        identity: AccountIdentity,
+        provider: Provider,
+        subject: str,
+        provider_name: str,
+        metadata: dict[str, object] | None,
+    ) -> Account:
+        """既存identity: last_seen更新 + account解決。account削除時はリリンク。"""
+        now = datetime.now(UTC).isoformat()
+        identity.provider_name = provider_name or identity.provider_name
+        identity.metadata = metadata or identity.metadata
+        identity.last_seen = now
+        self._store.update_identity(identity)
+        account = self.resolve(identity.account_id)
+        if account is not None:
+            account.last_seen = now
+            if provider_name and not account.display_name:
+                account.display_name = provider_name
+            self._store.update_account(account)
+            return account
+        logger.warning(
+            "AccountManager: identity {}:{} linked to missing account {}, creating replacement",
+            provider.value,
+            subject,
+            identity.account_id,
+        )
         account = self.register(provider_name or f"{provider.value}:{subject}")
-        if identity is not None:
-            identity.account_id = account.account_id
-            identity.last_seen = now
-            self._store.update_identity(identity)
-            logger.info(
-                "AccountManager: relinked identity {}:{} to new account {}",
-                provider.value,
-                subject,
-                account.account_id,
-            )
-        else:
-            self.link_identity(account.account_id, provider, subject, provider_name=provider_name, metadata=metadata)
+        identity.account_id = account.account_id
+        identity.last_seen = now
+        self._store.update_identity(identity)
+        logger.info(
+            "AccountManager: relinked identity {}:{} to new account {}",
+            provider.value,
+            subject,
+            account.account_id,
+        )
+        return account
+
+    def _create_new_identity(
+        self,
+        provider: Provider,
+        subject: str,
+        provider_name: str,
+        metadata: dict[str, object] | None,
+    ) -> Account:
+        """新規identity: account作成 + identity紐付け。"""
+        account = self.register(provider_name or f"{provider.value}:{subject}")
+        self.link_identity(account.account_id, provider, subject, provider_name=provider_name, metadata=metadata)
         return account
 
     def update_display_name(self, account_id: str, display_name: str) -> None:

@@ -1,28 +1,28 @@
 ---
-description: 指定レイヤーの責務・依存・境界を調査する。コード変更は禁止。
+description: Inspect responsibilities, dependencies, and boundaries of the specified layer. Code changes are forbidden.
 ---
 
 @architect
 
-レイヤー: `$1`
+Layer: `$1`
 
-指定されたレイヤーについて、コード変更せずに調査してください。
+Investigate the specified layer without changing code.
 
-## 調査項目
+## Investigation Items
 
-- 現在の責務
-- 主要ファイル
+- Current responsibilities
+- Main files
 - import / call graph
-- 関連テスト
-- 他レイヤーとの境界
-- 責務の混在
-- 肥大化している manager / gateway / orchestrator
-- 次に改善するならどこか
+- Related tests
+- Boundaries with other layers
+- Mixed responsibilities
+- Oversized managers / gateways / orchestrators
+- Best next improvement target
 
-## 出力
+## Output
 
-- 現状
-- 問題
-- 境界リスク
-- 改善候補
-- 最小実装ステップ
+- Current state
+- Problems
+- Boundary risks
+- Improvement candidates
+- Minimum implementation steps

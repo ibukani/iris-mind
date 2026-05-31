@@ -73,7 +73,7 @@ flowchart TD
     subgraph Account["account/ アカウント管理"]
         ACC_Manager["AccountManager<br/>CRUD・外部ID連携"]
         ACC_Store["AccountStore<br/>JSONL永続化"]
-        ACC_Handler["_AccountDispatcher<br/>ControlMessage処理"]
+        ACC_Handler["AccountDispatcher<br/>ControlMessage処理"]
     end
 
     subgraph Room["room/ ルーム管理"]
@@ -202,7 +202,7 @@ iris/
 │   ├── store.py               AccountStore（JSONL永続化）
 │   ├── manager.py             AccountManager（コアサービス）
 │   ├── events.py              AccountCreated/Updated/IdentityLinked/Presence
-│   ├── dispatcher.py          _AccountDispatcher（ControlMessage処理）
+│   ├── dispatcher.py          AccountDispatcher（ControlMessage処理）
 │   └── hooks.py               EventBus Hook登録
 │
 ├── room/                      # ルーム管理: ルームCRUD・メンバーシップ・アカウント連携

@@ -12,194 +12,126 @@ metadata:
 
 ## Purpose
 
-Iris に新しいトップレベルPluginを追加するときに読む。
-@tool capability は `capability-pattern`、LLM provider / store backend は `iris-plugin-provider`、Hook は `iris-plugin-hook` を読む。
-すべてのトップレベルPluginは `PluginProtocol` に準拠する。
-詳細な `PluginProtocol` / `PluginManifest` / lifecycle 定義は `iris/kernel/plugin/` の実装を一次情報にする。以下は現在の標準パターン。
+Read this only when creating a brand-new top-level Iris Plugin. For internal file layout and naming details, also read `iris-plugin-structure`.
 
-## Plugin カテゴリ
+## Plugin Categories
 
-| カテゴリ | Phase | 説明 | 例 |
-|---|---|---|---|
-| `CORE` | 10 | 必須インフラ層 | io, llm, tools |
-| `LAYER` | 15/20/30 | データ層・認知層・高度認知 | account, room, memory, limbic, agency |
-| `FEATURE` | 40 | 機能拡張 | 任意機能 |
-| `PROVIDER` | 親に従う | 実装差し替え | 外部プロバイダPlugin |
-| `TOOL` | 10/40 | ツール基盤・ツール拡張 | tools |
-
-`COGNITIVE` は `PluginPhase` であり `PluginCategory` ではない。
+- DOMAIN: core Iris domain modules such as memory, agency, limbic, room, account.
+- INFRA: infrastructure modules such as llm, tools, io.
+- TOOL: tool-facing modules that expose `@tool` capabilities.
+- ADMIN: admin, CLI, diagnostics, or debug support.
 
 ## Steps
 
-### 1. ディレクトリを作成する
+### 1. Create the directory
 
-```
+```text
 iris/<plugin_name>/
-├── __init__.py     # MANIFEST + プラグインクラス + plugin インスタンス
-├── manager.py      # 任意: 中心サービス / オーケストレータ
-├── hooks.py        # 任意: register_hooks(manager)
-├── handler.py      # 任意: EventBus購読 (_XxxEventHandler)
-├── events.py       # 任意: プラグイン固有イベント型
-├── models.py       # 任意: プラグイン固有の型
-└── tools/          # 任意: @tool 定義 (TOOLカテゴリの場合)
-    └── __init__.py
+├── __init__.py
+├── manager.py
+├── handler.py        # required when subscribing to EventBus
+├── hooks.py          # optional when registering Hook handlers
+├── models.py         # optional data types
+└── protocols.py      # optional Protocols
 ```
 
-### 2. `__init__.py` を作成する
+For complex components, add `builder.py`. Do not create extra files until they have a real responsibility.
+
+### 2. Create `__init__.py`
+
+Use `PluginProtocol`, `PluginManifest`, and `PluginCategory`. Keep lifecycle methods thin. Move complex component wiring to `builder.py`.
 
 ```python
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from iris.event.event_bus import EventBus
-from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
-
-from .manager import MyService
+from iris.kernel.plugin import PluginCategory, PluginManifest, PluginProtocol
 
 if TYPE_CHECKING:
     from iris.kernel.manager import PluginManager
 
+
 MANIFEST = PluginManifest(
-    name="my_plugin",
+    name="example",
     version="0.1.0",
-    category=PluginCategory.FEATURE,
-    phase=PluginPhase.FEATURE,
-    dependencies={"EventBus", "LLMBridge"},  # プラグイン名 / provides名 / 組み込みサービス名
-    provides=["MyService"],
-    description="プラグインの説明",
+    description="Example Plugin",
+    category=PluginCategory.DOMAIN,
 )
 
 
-class MyPlugin(PluginProtocol):
-    MANIFEST = MANIFEST
+class ExamplePlugin(PluginProtocol):
+    @property
+    def manifest(self) -> PluginManifest:
+        return MANIFEST
 
     def init(self, manager: PluginManager) -> None:
-        """DI登録 + コンポーネント生成 + 配線 + Hook購読"""
-        manager.register_manifest(MANIFEST)
+        # Create components and provide public services here.
+        ...
 
-        event_bus = manager.resolve(EventBus)
-        instance = MyService(event_bus=event_bus)
-        manager.provide(MyService, instance)
+    async def start(self) -> None:
+        ...
 
-        from .hooks import register_hooks
-        register_hooks(manager)
-
-    def start(self, manager: PluginManager) -> None:
-        """バックグラウンド処理開始（任意）"""
-        pass
-
-    def stop(self, manager: PluginManager) -> None:
-        """クリーンアップ（任意）"""
-        pass
+    async def shutdown(self) -> None:
+        ...
 
 
-plugin: PluginProtocol = MyPlugin()
+plugin = ExamplePlugin()
 ```
 
-### 3. `hooks.py` を作成する（任意）
+### 3. Create `hooks.py` when needed
+
+Use this only for HookRegistry integration. Do not mix EventBus subscription into `hooks.py`.
 
 ```python
-def register_hooks(manager) -> None:
+def register_hooks(manager):
     hooks = manager.hook_registry
-
-    def _my_hook(data):
-        return data
-
-    hooks.register("llm.before_chat", _my_hook, priority=500)
+    hooks.register("llm.before_chat", _before_chat, priority=500)
 ```
 
-利用可能な HookPoint 一覧は `.agents/skills/iris-plugin-hook/SKILL.md` を参照。
+### 4. Create `handler.py` when EventBus subscription is needed
 
-### 4. `handler.py` を作成する（EventBus購読がある場合は必須）
+If the Plugin subscribes to the EventBus, separate subscription logic into `handler.py`. Managers should not subscribe directly.
 
 ```python
-from __future__ import annotations
+class _ExampleEventHandler:
+    def __init__(self, event_bus, manager):
+        self._event_bus = event_bus
+        self._manager = manager
 
-from typing import TYPE_CHECKING, Any
+    def subscribe(self) -> None:
+        self._event_bus.subscribe("some.event", self._on_event)
 
-from iris.event.event_types import MessageEvent
-
-if TYPE_CHECKING:
-    from .manager import MyService
-
-
-class _MyEventHandler:
-    def __init__(self, event_bus: Any, service: MyService) -> None:
-        self._service = service
-        event_bus.subscribe(MessageEvent, self._on_message_event)
-
-    def _on_message_event(self, event: MessageEvent) -> None:
-        self._service.handle(event)
+    async def _on_event(self, event) -> None:
+        await self._manager.handle(event)
 ```
 
-`__init__.py` の `init()` 内で生成して配線する。EventBus購読を manager や managerクラスに置かない。
+Wire the handler from `__init__.py` or `builder.py`.
 
-### 5. 依存を確認する
+### 5. Check dependencies
 
-`MANIFEST.dependencies` は依存するプラグイン名、`provides` 名、または組み込みサービス名を文字列で宣言する。
-DIの取得・登録は型キーで行う。
+- Use constructor injection for dependencies.
+- Do not keep `PluginManager` inside logic classes.
+- Depend on Protocols when collaborating with other Plugins.
+- Keep the EventBus as the cross-layer integration mechanism.
+- Avoid direct imports that create cycles.
 
-PluginManager が提供する標準サービス:
+### 6. Use Plugin configuration when needed
 
-| 依存文字列 | DI型 | 提供元 |
-|---|---|---|
-| `EventBus` | `EventBus` | PluginManager（インフラ） |
-| `HookRegistry` | `HookRegistry` | PluginManager（インフラ） |
-| `Config` | `Config` | PluginManager（インフラ） |
-| `PluginManager` | `PluginManager` | PluginManager（自己） |
-| `IOManager` | `IOManager` | io Plugin |
-| `SessionManager` | `SessionManager` | io Plugin |
-| `GrpcListener` | `GrpcListener` | io Plugin |
-| `LLMBridge` | `LLMBridge` | llm Plugin |
-| `DebugCapture` | `DebugCapture` | llm Plugin |
-| `CapabilityChecker` | `CapabilityChecker` | llm Plugin |
-| `MemoryManager` | `MemoryManager` | memory Plugin |
-| `SensoryMemoryManager` | `SensoryMemoryManager` | memory Plugin |
-| `ShortTermMemoryManager` | `ShortTermMemoryManager` | memory Plugin |
-| `LongTermMemoryManager` | `LongTermMemoryManager` | memory Plugin |
-| `VectorStore` | `VectorStore` | memory Plugin |
-| `ToolRegistry` | `ToolRegistry` | tools Plugin |
-| `ToolEngine` | `ToolEngine` | tools/agency Plugin |
-| `AgencyManager` | `AgencyManager` | agency Plugin |
-| `PlanningManager` | `PlanningManager` | agency Plugin |
-| `FlowExecutor` | `FlowExecutor` | agency Plugin |
-| `LLMGateway` | `LLMGateway` | agency Plugin |
+Read configuration through the kernel configuration object. Do not hard-code environment-specific values in Plugin logic. Add documentation updates when configuration shape changes.
 
-任意依存は `manager.resolve_optional(ServiceType)` で安全に取得。
+### 7. Add tests
 
-### 6. プラグイン設定を使う（任意）
+- Test manager logic without starting external services.
+- Test EventBus handlers with fakes or minimal fixtures.
+- Do not require real external LLM APIs or Ollama in unit tests.
+- Add integration tests only when the boundary itself is being tested.
 
-`config.yaml`:
+### 8. Disable during debugging
 
-```yaml
-plugins:
-  config:
-    my_plugin:
-      param1: value
-```
+Use the existing Plugin configuration or runtime controls. Do not add ad hoc debug branches into production logic.
 
-```python
-cfg = manager.get_plugin_config("my_plugin")
-```
-
-### 7. テストを追加する
-
-- `tests/<plugin_name>/test_*.py`
-- PluginManager の `discover_and_build_all()` + `start_all()` の結合テスト推奨
-- 依存PluginはDIからFake注入
-
-### 8. 無効化する（デバッグ時）
-
-```yaml
-plugins:
-  disabled:
-    - my_plugin
-```
-
-### 9. 検証する
-
-検証のみ:
+### 9. Validate
 
 ```bash
 uv run pytest tests/ -q
@@ -208,117 +140,83 @@ uv run ruff format --check .
 uv run mypy .
 ```
 
-修正を許可されている場合:
+When fixes are allowed:
 
 ```bash
 uv run ruff check --fix .
 uv run ruff format .
 ```
 
-### 10. コミットする
+### 10. Commit
 
-ユーザーが明示的に依頼した場合のみ行う。
+Commit only when the user explicitly asks.
 
 ```bash
 git add .
-git commit -m "feat: <plugin_name> プラグインを追加"
+git commit -m "feat: add <plugin-name> plugin"
 ```
 
 ## Rules
 
-- `__init__.py` に `MANIFEST` + `class XxxPlugin` + `plugin = XxxPlugin()` が必須
-- `init(manager)` で DI resolve → create → wire → provide → hooks
-- 依存は `MANIFEST.dependencies` に必ず宣言すること（未解決依存は起動時に `DependencyError` が発生）
-- `manager.register_manifest(MANIFEST)` を `init()` の最初に呼ぶこと
-- PluginState は PluginManager が管理する。プラグイン側で触らない
-- `start()` / `stop()` は非ブロッキング。バックグラウンドは Plugin 内部でスレッド管理
-- EventBus subscribe は型安全版を使用すること（`bus.subscribe(TimerTick, handler)`）
-- ホットリロード: `manager.reload_plugin("plugin_name")` で実行中の再読み込みが可能
-- capability / tool 追加だけならこのSkillを使わず `capability-pattern` を読む
-- LLM provider / store backend / sub-plugin 追加だけならこのSkillを使わず `iris-plugin-provider` を読む
+- Create a new top-level Plugin only when a real top-level responsibility exists.
+- Keep lifecycle methods small.
+- Use `builder.py` when component construction becomes complex.
+- Use `handler.py` for EventBus subscription.
+- Use `hooks.py` for HookRegistry integration.
+- Do not create sub-plugins through `PluginManager` lifecycle.
+- Do not add compatibility layers unless explicitly requested.
+- Do not add future-only hooks or unused extension points.
 
-## Plugin 標準実装契約
+## Plugin Standard Implementation Contract
 
-全 Plugin は以下の共通インターフェースを実装すること:
+- `MANIFEST` is required.
+- The Plugin class must implement `manifest`.
+- The module should expose `plugin = XxxPlugin()`.
+- `init()` is for dependency resolution and component registration.
+- `start()` is for runtime start behavior.
+- `shutdown()` is for cleanup.
+- Public services should be provided through the manager / container mechanism used by the current implementation.
 
-| メソッド | 必須 | 説明 |
+### Lifecycle Hook Usage
+
+| Hook | Use for | Avoid |
 |---|---|---|
-| `init(manager)` | Yes | DI wiring + component creation + hook registration |
-| `start(manager)` | No | バックグラウンドスレッド開始 |
-| `stop(manager)` | No | リソースクリーンアップ |
-| `on_config_loaded(manager)` | No | 全プラグイン init 後に呼ばれる。設定の最終確認に使用 |
-| `on_all_ready(manager)` | No | 全プラグイン start 後に呼ばれる。遅延初期化に使用 |
-| `on_pre_shutdown(manager)` | No | シャットダウン前に呼ばれる。リソース解放の前に実行 |
-| `get_state()` | No | デバッグスナップショット用の状態辞書を返す |
-| `health()` | No | 健全性チェック。`(bool, str)` を返す |
+| `init()` | dependency wiring, service registration | long-running tasks |
+| `start()` | async startup, background services | dependency graph mutation |
+| `shutdown()` | cleanup, closing resources | new work scheduling |
+| reload-related hooks | configuration reload behavior | broad reinitialization without need |
 
-### Lifecycle フックの使い分け
+## Plugin Internal File Split Rules
 
-```
-discover_and_build_all():
-  init_all() → notify_config_loaded() → freeze
+Follow `iris-plugin-structure` for full details. Minimum rules:
 
-start_all():
-  start_all() → mark_all_ready() → notify_all_ready()
+- 1 file = 1 responsibility.
+- Split files over 200 lines when they contain multiple responsibilities.
+- `manager.py` is orchestration, not EventBus subscription.
+- `handler.py` owns EventBus subscription.
+- `dispatcher.py` routes operations.
+- `models.py` contains data structures.
+- `protocol.py` / `protocols.py` contain Protocol definitions.
+- `builder.py` wires components when `init()` becomes complex.
 
-stop_all():
-  notify_pre_shutdown() → stop_all()
-```
+### Naming Rules
 
-- `on_config_loaded`: DI が確定した直後。設定値の最終検証に使用
-- `on_all_ready`: 全プラグインが起動した後。他プラグインへの依存が全て揃った状態
-- `on_pre_shutdown`: stop の前。非同期処理の完了待ち等に使用
+- File names: `snake_case.py`.
+- Classes: `PascalCase`.
+- Private internal classes/functions: leading underscore.
+- Functions: `verb_object` style when possible.
+- Constants: `UPPER_SNAKE_CASE`.
 
-## Plugin 内部ファイル分割規則
+### Import Rules
 
-新規作成時に遵守すべきstructure規則を以下にまとめる。詳細は `.agents/skills/iris-plugin-structure/SKILL.md` を参照。
+- Use relative imports inside the same Plugin.
+- Use absolute imports for other Plugins.
+- Put type-only imports under `if TYPE_CHECKING:` to avoid runtime cycles.
+- `__init__.py` should re-export only public API.
 
-### ファイル名規約
+### Other Important Rules
 
-- `snake_case.py`。略語禁止（`di.py` → `service_container.py`）
-- 単数形優先。コンテナのみ複数形可（`protocols.py`, `stores.py`）
-- 数字接尾辞禁止（`handler2.py` ではなく責務名で分割）
-
-### クラス名規約
-
-- `PascalCase`。ファイル名とプレフィックスを一致させる
-  - `manager.py` → `XxxManager`
-  - `handler.py` → `_XxxEventHandler`（`_` プレフィックス必須）
-- Protocol は `XxxProtocol` 命名推奨
-
-### 関数名規約
-
-- モジュールレベル: `動詞_目的語`（`build_agency`, `route_after_llm`, `render_short_term_context`）
-- ハンドラ（EventBus購読）: **`_on_xxx_event`**（`_on_message_event`, `_on_tick`）
-- Hook ハンドラ: **`_xxx_hook`**（`_my_hook`）
-- プライベート: `_prefix`
-
-### handler.py 分離ルール
-
-- EventBus subscribe は manager で直接行わず、必ず `handler.py` に分離
-- `__init__.py` の `init()` で wiring する
-- handler が manager のメソッドを呼び戻す場合は `Protocol` を介して疎結合にする
-
-### 分割トリガー（新規作成時の判断基準）
-
-| 条件 | 抽出先 |
-|---|---|
-| `__init__.py` の `init()` 本体 > 50行 | `builder.py` |
-| EventBus subscribe が1つでもある | `handler.py`（必須分離） |
-| Protocol クラスが3以上 | `protocols.py` |
-| static method が2以上 | `utils.py` |
-| コンポーネント生成が複雑（> 10行） | `builder.py` |
-
-### インポート規約
-
-- **同一プラグイン内**: 相対インポート推奨（`from .manager import XxxManager`）
-- **他プラグイン**: 絶対インポート（`from iris.memory.manager import MemoryManager`）
-- 循環参照の回避: 型ヒントのみの参照は `if TYPE_CHECKING:` ブロック内でインポート
-
-### その他の重要ルール
-
-- PluginManager をロジッククラスのメンバ変数に保持させない。コンストラクタで具象依存を注入する
-- 1ファイル200行を目安に、超えたら責務分割を検討
-- 分割トリガーに達する前の過剰分割は禁止。必要になるまで単一ファイルで良い。EventBus subscribe の分離のみ例外
-- `__init__.py` は公開APIのみ再エクスポート。内部モジュールへの直接アクセスは非推奨
-- `models.py` はデータ保持用ピュアクラスのみ。シリアライズ/変換は `formatter.py` / `renderer.py` で行う
+- Do not refactor unrelated existing Plugins only to satisfy this template.
+- Do not move provider-specific behavior into domain layers.
+- Do not move memory persistence into limbic.
+- Do not put domain logic into transport.

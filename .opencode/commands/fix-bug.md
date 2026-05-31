@@ -1,22 +1,22 @@
 ---
-description: 指定されたバグを調査して最小修正する。
+description: Investigate the specified bug and apply the minimal fix.
 ---
 
 @debugger
 
-バグ内容: `$1`
+Bug: `$1`
 
-## 進め方
+## Process
 
-1. 症状を確認する
-2. 関連ファイルを反証的に調査する
-3. 原因を特定する
-4. 可能なら失敗テストを追加する
-5. 最小修正する
-6. 検証する
+1. Confirm the symptom.
+2. Investigate related files with falsification in mind.
+3. Identify the cause.
+4. Add a failing test when possible.
+5. Apply the minimal fix.
+6. Validate.
 
-## 禁止
+## Prohibited
 
-- 無関係な大規模修正
-- テストを弱める
-- mock で問題を隠す
+- Unrelated large fixes
+- Weakening tests
+- Hiding the problem with mocks

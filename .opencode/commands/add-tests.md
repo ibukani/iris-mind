@@ -1,21 +1,21 @@
 ---
-description: 現在の差分または指定対象にテストを追加する。
+description: Add tests for the current diff or specified target.
 ---
 
 @tester
 
-対象: `$1`
+Target: `$1`
 
-必要なテストを追加・更新してください。
+Add or update the necessary tests.
 
-## ルール
+## Rules
 
-- 差分や指定ファイルだけを完全な対象範囲とみなさない
-- 参照元、既存テスト、config、entrypoint を確認する
-- 外部 LLM API や Ollama 起動に依存させない
-- テストを通すために仕様を弱めない
+- Do not treat only the diff or specified files as the complete scope.
+- Check references, existing tests, config, and entrypoints.
+- Do not depend on external LLM APIs or a running Ollama instance.
+- Do not weaken the specification just to make tests pass.
 
-## 検証候補
+## Validation Candidates
 
 ```bash
 uv run pytest tests/ -q

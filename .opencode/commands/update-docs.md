@@ -1,16 +1,16 @@
 ---
-description: 実装に基づいてドキュメントを更新する。
+description: Update documentation based on implementation.
 ---
 
 @docs
 
-対象: `$1`
+Target: `$1`
 
-実装に基づいて関連ドキュメントを更新してください。
+Update related documentation based on implementation.
 
-## ルール
+## Rules
 
-- 実装を確認してから書く
-- 将来予定を現在の機能として書かない
-- 古い説明や矛盾があれば修正または報告する
-- 関連しないドキュメントを大きく書き換えない
+- Inspect the implementation before writing.
+- Do not describe future plans as current features.
+- Fix or report outdated descriptions and contradictions.
+- Do not rewrite unrelated documentation broadly.

@@ -43,6 +43,7 @@ class SystemPromptBuilder:
         chaos_level: float = 0.0,
         room_id: str = "",
         account_id: str = "",
+        active_users: list[tuple[str, str]] | None = None,
     ) -> list[BaseMessage]:
         msgs: list[BaseMessage] = []
 
@@ -54,6 +55,7 @@ class SystemPromptBuilder:
                     current_display_name=current_display_name,
                     room_id=room_id,
                     account_id=account_id,
+                    active_users=active_users,
                 ),
             )
 

@@ -33,6 +33,7 @@ class ProfileBuilder:
         current_display_name: str = "",
         room_id: str = "",
         account_id: str = "",
+        active_users: list[tuple[str, str]] | None = None,
     ) -> SystemMessage:
         agents_md = self._load_agents_md()
         user_prefs = self._build_user_preferences_section(room_id=room_id, account_id=account_id)
@@ -48,8 +49,13 @@ class ProfileBuilder:
         parts: list[str] = [base]
         parts.append(f"## 現在日時\n{self._build_time_string()}")
 
-        if current_display_name:
-            parts.append(f"## 現在の会話相手\n{current_display_name}")
+        participants = self._build_participants_section(
+            room_id=room_id,
+            current_display_name=current_display_name,
+            active_users=active_users,
+        )
+        if participants:
+            parts.append(participants)
 
         return SystemMessage(content="\n\n".join(parts))
 
@@ -66,6 +72,28 @@ class ProfileBuilder:
                 seen.add(c)
                 unique_prefs.append(f"- {c}")
         return "\n".join(unique_prefs)
+
+    def _build_participants_section(
+        self,
+        room_id: str = "",
+        current_display_name: str = "",
+        active_users: list[tuple[str, str]] | None = None,
+    ) -> str:
+        users = active_users or []
+        if not users and self._memory and room_id:
+            users = self._memory.short_term.get_users_by_room(room_id)
+
+        if not users:
+            if current_display_name:
+                return f"## 現在の会話相手\n{current_display_name}"
+            return ""
+
+        if len(users) == 1:
+            _, nick = users[0]
+            return f"## 現在の会話相手\n{nick}"
+
+        names = [nick for _, nick in users]
+        return "## ルームの参加者\n" + "\n".join(f"- {n}" for n in names)
 
     @staticmethod
     def _build_time_string() -> str:

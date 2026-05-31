@@ -52,6 +52,7 @@ class SetupNode:
                 "system" if is_system else "user",
                 [text_block(content)],
                 plan.account_id,
+                plan.room_id,
             )
 
         if show_thinking and self._event_bus:
@@ -70,8 +71,6 @@ class SetupNode:
 
         if self._session_roles_getter:
             self._pipeline.set_session_roles_summary(self._session_roles_getter())
-        if plan.account_id:
-            self._pipeline.set_current_account_id(plan.account_id)
 
     def _set_on_token_callback(self) -> None:
         event_bus = self._event_bus

@@ -96,6 +96,7 @@ class BaseLLMNode(ABC):
             node_type=self.node_type_name,
             chaos_level=plan.modulation.chaos_level,
             room_id=plan.room_id,
+            account_id=plan.account_id,
         )
 
     def _build_chat_params(
@@ -166,7 +167,9 @@ class BaseLLMNode(ABC):
             response_text = raw.strip() if isinstance(raw, str) else ""
 
             if response_text and self._memory:
-                self._memory.short_term.add_turn("assistant", [text_block(response_text)], plan.account_id)
+                self._memory.short_term.add_turn(
+                    "assistant", [text_block(response_text)], plan.account_id, plan.room_id
+                )
 
             return {"response_text": response_text}
         except Exception:

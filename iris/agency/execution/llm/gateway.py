@@ -37,8 +37,6 @@ class LLMGateway:
         self._capability_checker = capability_checker
         self._debug_capture = debug_capture
         self._session_roles_summary: str = ""
-        self._current_display_name: str = ""
-        self._current_account_id: str = ""
         self._last_system_prompt: str = ""
         self._last_call_model_role: str = "medium"
         self._account_provider = account_provider
@@ -54,12 +52,10 @@ class LLMGateway:
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
 
-    def set_current_account_id(self, account_id: str) -> None:
-        self._current_account_id = account_id
+    def _resolve_display_name(self, account_id: str) -> str:
         if account_id and self._account_provider:
-            self._current_display_name = self._account_provider.resolve_display_name(account_id)
-        else:
-            self._current_display_name = account_id
+            return self._account_provider.resolve_display_name(account_id)
+        return account_id
 
     def build_system_messages(
         self,
@@ -69,17 +65,19 @@ class LLMGateway:
         include_profile: bool = True,
         chaos_level: float = 0.0,
         room_id: str = "",
+        account_id: str = "",
     ) -> list[BaseMessage]:
+        display_name = self._resolve_display_name(account_id)
         return self._prompt_builder.build(
             node_type=node_type,
             context_hint=context_hint,
             response_style=response_style,
             session_roles_summary=self._session_roles_summary,
-            current_display_name=self._current_display_name,
+            current_display_name=display_name,
             include_profile=include_profile,
             chaos_level=chaos_level,
             room_id=room_id,
-            account_id=self._current_account_id,
+            account_id=account_id,
         )
 
     async def _call_llm(
@@ -135,6 +133,7 @@ class LLMGateway:
         show_thinking: bool = False,
         modulation: ModulationState | None = None,
         room_id: str = "",
+        account_id: str = "",
     ) -> AIMessage:
         mod = modulation or ModulationState()
         if system_msgs is None:
@@ -142,6 +141,7 @@ class LLMGateway:
                 context_hint=context_hint,
                 chaos_level=mod.chaos_level,
                 room_id=room_id,
+                account_id=account_id,
             )
         if show_thinking and messages and isinstance(messages[-1], HumanMessage):
             last_msg = messages[-1]

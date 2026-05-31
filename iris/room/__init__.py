@@ -13,7 +13,7 @@ MANIFEST = PluginManifest(
     category=PluginCategory.LAYER,
     phase=PluginPhase.STORE,
     dependencies={"EventBus", "account"},
-    provides=["RoomManager", "RoomStore"],
+    provides=["RoomManager", "RoomStore", "RoomJoinBatcher"],
     description="ルーム管理（ルームCRUD・メンバーシップ管理・アカウント連携）",
 )
 
@@ -25,6 +25,7 @@ class RoomPlugin(PluginProtocol):
         manager.register_manifest(MANIFEST)
 
         from iris.event.event_bus import EventBus
+        from iris.room.batcher import RoomJoinBatcher
         from iris.room.dispatcher import _RoomDispatcher
         from iris.room.manager import RoomManager
         from iris.room.store import RoomStore
@@ -32,14 +33,22 @@ class RoomPlugin(PluginProtocol):
         store = RoomStore()
         event_bus = manager.resolve(EventBus)
 
+        join_batcher = RoomJoinBatcher(event_bus=event_bus)
+
         from iris.account.manager import AccountManager as AccountManagerCls
 
         account_manager = manager.resolve_optional(AccountManagerCls)
-        manager_inst = RoomManager(store=store, event_bus=event_bus, account_manager=account_manager)
+        manager_inst = RoomManager(
+            store=store,
+            event_bus=event_bus,
+            account_manager=account_manager,
+            join_batcher=join_batcher,
+        )
 
         dispatcher = _RoomDispatcher(room_manager=manager_inst, account_manager=account_manager)
 
         manager.provide(RoomStore, store)
+        manager.provide(RoomJoinBatcher, join_batcher)
         manager.provide(RoomManager, manager_inst)
         manager.provide(_RoomDispatcher, dispatcher)
 
@@ -61,7 +70,12 @@ class RoomPlugin(PluginProtocol):
         pass
 
     def stop(self, manager: PluginManager) -> None:
-        pass
+        from iris.room.batcher import RoomJoinBatcher
+
+        # ルーム参加のバッチ処理を停止（インメモリで保存しているため）
+        # batcher = manager.resolve_optional(RoomJoinBatcher)
+        # if batcher:
+        #     batcher.stop()
 
 
 plugin: PluginProtocol = RoomPlugin()

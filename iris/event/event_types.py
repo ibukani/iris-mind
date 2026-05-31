@@ -167,6 +167,27 @@ class RoomJoinedEvent(Event):
 
 
 @dataclass
+class RoomJoinedBatchEvent(Event):
+    room_id: str = ""
+    joins: list[RoomJoinedEvent] = field(default_factory=list)
+    count: int = 0
+
+    def to_dict(self) -> dict[str, Any]:
+        result = super().to_dict()
+        result["joins"] = [j.to_dict() for j in self.joins]
+        return result
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Event:
+        joins_raw = data.get("joins", [])
+        data = {k: v for k, v in data.items() if k != "joins"}
+        event = super().from_dict(data)
+        if isinstance(event, RoomJoinedBatchEvent):
+            event.joins = [RoomJoinedEvent.from_dict(j) if isinstance(j, dict) else j for j in joins_raw]
+        return event
+
+
+@dataclass
 class RoomLeftEvent(Event):
     room_id: str = ""
     account_id: str = ""
@@ -190,6 +211,7 @@ __all__ = [
     "InterruptEvent",
     "MemoryUpdateEvent",
     "MessageEvent",
+    "RoomJoinedBatchEvent",
     "RoomJoinedEvent",
     "RoomLeftEvent",
     "SessionDisconnectEvent",

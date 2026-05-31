@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from iris.event.event_types import MessageEvent, RoomJoinedEvent, RoomLeftEvent
+from iris.event.event_types import MessageEvent, RoomJoinedBatchEvent, RoomJoinedEvent, RoomLeftEvent
 from iris.io.models import ControlMessage, Direction, Message
 
 if TYPE_CHECKING:
@@ -24,6 +24,7 @@ class _IOEventHandler:
         self._room_store = room_store
         event_bus.subscribe(MessageEvent, self._on_message_event)
         event_bus.subscribe(RoomJoinedEvent, self._on_room_joined)
+        event_bus.subscribe(RoomJoinedBatchEvent, self._on_room_joined_batch)
         event_bus.subscribe(RoomLeftEvent, self._on_room_left)
 
     def _build_message(self, event: MessageEvent, target_role: str, direction: str) -> Message:
@@ -81,6 +82,17 @@ class _IOEventHandler:
                 display_name=event.display_name,
             ),
         )
+
+    def _on_room_joined_batch(self, event: RoomJoinedBatchEvent) -> None:
+        for join in event.joins:
+            self._session_mgr.router.broadcast_control_message(
+                ControlMessage(
+                    action="presence.joined",
+                    account_id=join.account_id,
+                    room_id=join.room_id,
+                    display_name=join.display_name,
+                ),
+            )
 
     def _on_room_left(self, event: RoomLeftEvent) -> None:
         self._session_mgr.router.broadcast_control_message(

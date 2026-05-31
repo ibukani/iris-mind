@@ -5,6 +5,7 @@ from typing import Any
 
 from loguru import logger
 
+from iris.room.batcher import RoomJoinBatcher
 from iris.room.events import (
     RoomCreatedEvent,
     RoomDeletedEvent,
@@ -26,10 +27,17 @@ class RoomManager:
     - EventBus へのイベント発行
     """
 
-    def __init__(self, store: RoomStore, event_bus: Any = None, account_manager: Any = None) -> None:
+    def __init__(
+        self,
+        store: RoomStore,
+        event_bus: Any = None,
+        account_manager: Any = None,
+        join_batcher: RoomJoinBatcher | None = None,
+    ) -> None:
         self._store = store
         self._event_bus = event_bus
         self._account_manager = account_manager
+        self._join_batcher = join_batcher
 
     def set_account_manager(self, account_manager: Any) -> None:
         self._account_manager = account_manager
@@ -141,15 +149,17 @@ class RoomManager:
             self._store.add_member(member)
 
         if self._event_bus:
-            self._event_bus.publish(
-                RoomJoinedEvent(
-                    timestamp=datetime.now(UTC),
-                    source="room",
-                    room_id=room_id,
-                    account_id=account_id,
-                    display_name=self._resolve_display_name(account_id),
-                ),
+            event = RoomJoinedEvent(
+                timestamp=datetime.now(UTC),
+                source="room",
+                room_id=room_id,
+                account_id=account_id,
+                display_name=self._resolve_display_name(account_id),
             )
+            if self._join_batcher:
+                self._join_batcher.add(event)
+            else:
+                self._event_bus.publish(event)
 
         logger.debug("RoomManager: account {} joined room {} (session={})", account_id, room_id, session_id)
         return True

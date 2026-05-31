@@ -7,6 +7,7 @@ from loguru import logger
 from iris.event.event_types import (
     DebugSnapshotEvent,
     MessageEvent,
+    RoomJoinedBatchEvent,
     RoomJoinedEvent,
     RoomLeftEvent,
 )
@@ -75,6 +76,12 @@ def subscribe_events(
         except Exception:
             logger.exception("Limbic: failed to process room_joined event")
 
+    def _on_room_joined_batch(event: RoomJoinedBatchEvent) -> None:
+        try:
+            _publish_snapshot(bus, orchestrator, "room_joined_batch")
+        except Exception:
+            logger.debug("Limbic: failed to publish snapshot for room_joined_batch")
+
     def _on_room_left(event: RoomLeftEvent) -> None:
         try:
             orchestrator.process(
@@ -92,6 +99,7 @@ def subscribe_events(
 
     bus.subscribe(MessageEvent, _on_message)
     bus.subscribe(RoomJoinedEvent, _on_room_joined)
+    bus.subscribe(RoomJoinedBatchEvent, _on_room_joined_batch)
     bus.subscribe(RoomLeftEvent, _on_room_left)
 
 

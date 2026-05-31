@@ -10,6 +10,7 @@ from iris.event.event_types import (
     InputReady,
     InterruptEvent,
     MessageEvent,
+    RoomJoinedBatchEvent,
     TimerTick,
 )
 from iris.memory.models import ContentBlock, system_event_block
@@ -53,6 +54,7 @@ class _MemoryEventHandler:
         event_bus.subscribe(MessageEvent, self._on_message_event)
         event_bus.subscribe(TimerTick, self._on_timer_tick)
         event_bus.subscribe(RoomJoinedEvent, self._on_room_joined)
+        event_bus.subscribe(RoomJoinedBatchEvent, self._on_room_joined_batch)
         event_bus.subscribe(RoomLeftEvent, self._on_room_left)
 
     def _on_message_event(self, event: MessageEvent) -> None:
@@ -109,6 +111,26 @@ class _MemoryEventHandler:
             event.account_id,
             event.display_name,
             event.room_id,
+        )
+
+    def _on_room_joined_batch(self, event: RoomJoinedBatchEvent) -> None:
+        """Room参加バッチ時にユーザーを追跡し、1つのsystem_event_blockを生成する。"""
+        if not event.joins:
+            return
+        for join in event.joins:
+            self._sync_room_membership(join.account_id, join.display_name, join.room_id, joined=True)
+        first = event.joins[0]
+        join_count = len(event.joins)
+        if join_count > 1:
+            text = f"[system] {first.display_name} 他{join_count - 1}名が入室しました"
+        else:
+            text = f"[system] {first.display_name} が入室しました"
+        self._store_room_event_block(
+            "room.joined",
+            text,
+            first.account_id,
+            first.display_name,
+            first.room_id,
         )
 
     def _on_room_left(self, event: RoomLeftEvent) -> None:

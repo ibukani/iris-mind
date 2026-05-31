@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from iris.event.event_types import Event, RoomJoinedEvent, RoomLeftEvent  # noqa: F401
+from iris.event.event_types import Event, RoomJoinedBatchEvent, RoomJoinedEvent, RoomLeftEvent  # noqa: F401
 
 
 @dataclass

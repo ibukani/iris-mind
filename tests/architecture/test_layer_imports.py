@@ -52,6 +52,18 @@ EXCEPTIONS: list[tuple[str, str, str, str]] = [
         "IO domain event types moved from iris.event.event_types to iris.io.events — lightweight event definitions, no io runtime dependency",
     ),
     (
+        "iris/memory",
+        "iris/memory/sensory/handler.py",
+        "iris.io.events",
+        "IO domain event types moved from iris.event.event_types to iris.io.events — lightweight event definitions, no io runtime dependency",
+    ),
+    (
+        "iris/memory",
+        "iris/memory/sensory/manager.py",
+        "iris.io.events",
+        "IO domain event types moved from iris.event.event_types to iris.io.events — lightweight event definitions, no io runtime dependency",
+    ),
+    (
         "iris/room",
         "iris/room/dispatcher.py",
         "iris.io.events",

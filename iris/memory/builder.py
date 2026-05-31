@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, TypedDict
 
 if TYPE_CHECKING:
     from iris.kernel.manager import PluginManager
+    from iris.memory.handler import _MemoryEventHandler
     from iris.memory.long_term.manager import LongTermMemoryManager
     from iris.memory.long_term.stores import EpisodicStore, SemanticStore
     from iris.memory.long_term.vector_store import VectorStore
@@ -22,6 +23,7 @@ class MemoryComponents(TypedDict):
     vector_store: VectorStore
     episodic: EpisodicStore
     semantic: SemanticStore
+    event_handler: _MemoryEventHandler
 
 
 def build_memory(manager: PluginManager) -> MemoryComponents:
@@ -51,7 +53,10 @@ def build_memory(manager: PluginManager) -> MemoryComponents:
         vector_store=vector_store,
     )
     short_term = ShortTermMemoryManager()
-    sensory = SensoryMemoryManager()
+    from iris.event.event_bus import EventBus
+
+    event_bus = manager.resolve_optional(EventBus)
+    sensory = SensoryMemoryManager(event_bus=event_bus)
 
     mem = MemoryManager(
         sensory=sensory,
@@ -68,6 +73,26 @@ def build_memory(manager: PluginManager) -> MemoryComponents:
     )
     sensory.set_readiness_evaluator(readiness)
 
+    # ハンドラのビルドとイベント購読のワイヤリング
+    from iris.memory.events.proactive_trigger import ProactiveTrigger
+    from iris.memory.handler import _MemoryEventHandler
+    from iris.memory.sensory.handler import SensoryEventHandler
+    from iris.memory.short_term.handler import ShortTermEventHandler
+    from iris.room.manager import RoomManager
+
+    room_provider = manager.resolve_optional(RoomManager)
+
+    sensory_handler = SensoryEventHandler(event_bus, sensory)
+    ShortTermEventHandler(event_bus, short_term) if short_term else None
+    proactive_trigger = ProactiveTrigger(event_bus, room_provider)
+
+    event_handler = _MemoryEventHandler(
+        event_bus=event_bus,
+        sensory_handler=sensory_handler,
+        proactive_trigger=proactive_trigger,
+        proactive_config=config.proactive,
+    )
+
     return {
         "memory": mem,
         "sensory": sensory,
@@ -76,4 +101,5 @@ def build_memory(manager: PluginManager) -> MemoryComponents:
         "vector_store": vector_store,
         "episodic": episodic,
         "semantic": semantic,
+        "event_handler": event_handler,
     }

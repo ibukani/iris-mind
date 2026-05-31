@@ -60,24 +60,9 @@ class MemoryPlugin(PluginProtocol):
         manager.provide(VectorStore, components["vector_store"])
 
     def _wire_event_handler(self, manager: PluginManager, components: MemoryComponents) -> None:
-        from iris.account.dispatcher import AccountDispatcher
-        from iris.event.event_bus import EventBus
         from iris.memory.handler import _MemoryEventHandler
-        from iris.room.manager import RoomManager as RoomManagerCls
 
-        account_dispatcher = manager.resolve_optional(AccountDispatcher)
-        room_provider = manager.resolve_optional(RoomManagerCls)
-
-        event_handler = _MemoryEventHandler(
-            event_bus=manager.resolve(EventBus),
-            sensory=components["sensory"],
-            proactive_config=manager.config.proactive,
-            short_term=components["short_term"],
-            account_dispatcher=account_dispatcher,
-            room_provider=room_provider,
-        )
-
-        manager.provide(_MemoryEventHandler, event_handler)
+        manager.provide(_MemoryEventHandler, components["event_handler"])
 
     def start(self, manager: PluginManager) -> None:
         return None

@@ -27,6 +27,7 @@ class DummyConnection:
 
 
 def _make_handlers(event_bus: EventBus, memory_mgr: MemoryManager, tmp_path: Path):
+    memory_mgr.sensory.event_bus = event_bus
     account_store = AccountStore(
         accounts_path=str(tmp_path / "accounts.jsonl"),
         identities_path=str(tmp_path / "identities.jsonl"),
@@ -43,13 +44,19 @@ def _make_handlers(event_bus: EventBus, memory_mgr: MemoryManager, tmp_path: Pat
 
     _RoomEventHandler(event_bus=event_bus, store=room_store, room_manager=room_provider)
 
+    from iris.memory.events.proactive_trigger import ProactiveTrigger
+    from iris.memory.sensory.handler import SensoryEventHandler
+    from iris.memory.short_term.handler import ShortTermEventHandler
+
+    sensory_handler = SensoryEventHandler(event_bus, memory_mgr.sensory)
+    ShortTermEventHandler(event_bus, memory_mgr.short_term)
+    proactive_trigger = ProactiveTrigger(event_bus, room_provider)
+
     _MemoryEventHandler(
-        event_bus,
-        memory_mgr.sensory,
-        None,
-        short_term=memory_mgr.short_term,
-        account_dispatcher=account_dispatcher,
-        room_provider=room_provider,
+        event_bus=event_bus,
+        sensory_handler=sensory_handler,
+        proactive_trigger=proactive_trigger,
+        proactive_config=None,
     )
     return account_dispatcher, room_dispatcher, account_provider, room_provider
 

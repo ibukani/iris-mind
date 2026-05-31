@@ -30,8 +30,20 @@ def _message_event(session_id: str = "", content: str = "", account_id: str = ""
 
 def _memory_with_handler(event_bus: EventBus, proactive_config: Any = None) -> MemoryManager:
     mgr = MemoryManager()
+    mgr.sensory.event_bus = event_bus
+    from iris.memory.events.proactive_trigger import ProactiveTrigger
+    from iris.memory.sensory.handler import SensoryEventHandler
+    from iris.memory.short_term.handler import ShortTermEventHandler
+
+    sensory_handler = SensoryEventHandler(event_bus, mgr.sensory)
+    ShortTermEventHandler(event_bus, mgr.short_term)
+    proactive_trigger = ProactiveTrigger(event_bus, None)
+
     _MemoryEventHandler(
-        event_bus, mgr.sensory, proactive_config, short_term=mgr.short_term, account_dispatcher=None, room_provider=None
+        event_bus=event_bus,
+        sensory_handler=sensory_handler,
+        proactive_trigger=proactive_trigger,
+        proactive_config=proactive_config,
     )
     return mgr
 
@@ -40,8 +52,20 @@ def _memory_with_handler_pair(
     event_bus: EventBus, proactive_config: Any = None
 ) -> tuple[_MemoryEventHandler, MemoryManager]:
     mgr = MemoryManager()
+    mgr.sensory.event_bus = event_bus
+    from iris.memory.events.proactive_trigger import ProactiveTrigger
+    from iris.memory.sensory.handler import SensoryEventHandler
+    from iris.memory.short_term.handler import ShortTermEventHandler
+
+    sensory_handler = SensoryEventHandler(event_bus, mgr.sensory)
+    ShortTermEventHandler(event_bus, mgr.short_term)
+    proactive_trigger = ProactiveTrigger(event_bus, None)
+
     handler = _MemoryEventHandler(
-        event_bus, mgr.sensory, proactive_config, short_term=mgr.short_term, account_dispatcher=None, room_provider=None
+        event_bus=event_bus,
+        sensory_handler=sensory_handler,
+        proactive_trigger=proactive_trigger,
+        proactive_config=proactive_config,
     )
     return handler, mgr
 
@@ -273,7 +297,7 @@ class TestInputReadySubscription:
         )
         event_bus.publish(event)
 
-        assert not mgr.sensory.has_pending_raw
+        assert not mgr.sensory.has_pending_raw(room_id="")
 
     def test_input_ready_not_chained_to_timer(self, event_bus: EventBus) -> None:
         """InputReady(source="io") は PlanningHandler が直接処理するため、
@@ -654,17 +678,19 @@ class TestRoomId:
         assert "退室" in ready_events[0].content
 
     def test_pending_input_tracks_room_id(self, event_bus: EventBus) -> None:
-        handler, _ = _memory_with_handler_pair(event_bus)
+        _, mgr = _memory_with_handler_pair(event_bus)
 
         event_bus.publish(
             _message_event(account_id="a1", content="hello"),
         )
 
-        with handler._pending_lock:
-            assert ("a1", "") in handler._pending_input
+        with mgr.sensory.pending_lock:
+            from iris.memory.sensory.models import PendingInputKey
+
+            assert PendingInputKey("a1", "") in mgr.sensory.pending_input
 
     def test_pending_input_room_id_keyed(self, event_bus: EventBus) -> None:
-        handler, _ = _memory_with_handler_pair(event_bus)
+        _, mgr = _memory_with_handler_pair(event_bus)
 
         event_bus.publish(
             _message_event(account_id="a1", content="msg1"),
@@ -673,14 +699,18 @@ class TestRoomId:
             _message_event(account_id="a2", content="msg2"),
         )
 
-        with handler._pending_lock:
-            keys = set(handler._pending_input.keys())
-            assert ("a1", "") in keys
-            assert ("a2", "") in keys
+        with mgr.sensory.pending_lock:
+            from iris.memory.sensory.models import PendingInputKey
+
+            keys = set(mgr.sensory.pending_input.keys())
+            assert PendingInputKey("a1", "") in keys
+            assert PendingInputKey("a2", "") in keys
 
     def test_handler_user_tracking_add_room(self, event_bus: EventBus) -> None:
         st = ShortTermMemoryManager()
-        _MemoryEventHandler(event_bus, None, None, short_term=st, account_dispatcher=None, room_provider=None)
+        from iris.memory.short_term.handler import ShortTermEventHandler
+
+        ShortTermEventHandler(event_bus, st)
 
         event_bus.publish(
             RoomJoinedEvent(
@@ -698,7 +728,9 @@ class TestRoomId:
 
     def test_handler_user_tracking_remove_room(self, event_bus: EventBus) -> None:
         st = ShortTermMemoryManager()
-        _MemoryEventHandler(event_bus, None, None, short_term=st, account_dispatcher=None, room_provider=None)
+        from iris.memory.short_term.handler import ShortTermEventHandler
+
+        ShortTermEventHandler(event_bus, st)
 
         event_bus.publish(
             RoomJoinedEvent(

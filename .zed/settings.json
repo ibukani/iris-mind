@@ -2,12 +2,16 @@
     "lsp": {
         "ruff": {
             "settings": {
-                "lineLength": 120,
-            },
+                "lineLength": 120
+            }
         },
         "pyright": {
-            "settings": {},
-        },
+            "settings": {
+                "python": {
+                    "pythonPath": ".venv/bin/python"
+                }
+            }
+        }
     },
     "languages": {
         "Python": {
@@ -15,9 +19,9 @@
             "language_servers": ["ruff", "pyright"],
             "code_actions_on_format": {
                 "source.fixAll.ruff": true,
-                "source.organizeImports.ruff": true,
-            },
-        },
+                "source.organizeImports.ruff": true
+            }
+        }
     },
-    "tab_size": 4,
+    "tab_size": 4
 }

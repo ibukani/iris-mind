@@ -11,107 +11,117 @@ metadata:
 
 ## Purpose
 
-LLM プロバイダ、ストアバックエンド、ベクトルDBなど、既存プラグインの交換部品（サブプラグイン）を追加するときに読む。
+LLMプロバイダ、ストアバックエンド、ベクトルDBなど、既存Pluginの交換部品を追加するときに読む。
+サブプラグインは PluginManager のライフサイクル管理外。親Pluginの規約に従って発見・登録される。
 
-## サブプラグインとは
+## LLM Provider 現行方式
 
-サブプラグインは PluginManager が直接管理しない、親プラグインが独自に発見・登録する交換部品。
-Plugin 全体の MANIFEST は持たない。`register(parent)` 関数のみを提供する。
+`iris/llm/providers/` の LLM Provider は `BaseLLMProvider` 継承クラスを自動発見する。
+`provider_name` を設定すると `__init_subclass__` で自動登録されるため、通常はファイル追加だけでよい。
 
 ```
 iris/llm/providers/
-├── __init__.py         # register_providers(bridge) 集約
+├── __init__.py              # discover_providers() を呼ぶ
+├── base.py                  # BaseLLMProvider + registry
 ├── ollama.py
-├── openrouter.py
-└── google.py           # 追加するファイル
+├── openai_compatible.py
+└── new_provider.py          # 追加するファイル
 ```
 
 ## Steps
 
-### 1. サブプラグインファイルを作成する
+### 1. Providerクラスを作成する
 
 ```python
-# iris/llm/providers/google.py
-def register(bridge):
-    """bridge にプロバイダを登録する"""
-    bridge.register_provider("google", GoogleChatModel(...))
-    bridge.register_environment_check(GoogleProvider.ensure_environment)
-```
+from __future__ import annotations
 
-### 2. 親プラグインが自動発見する仕組みを確認する
+from typing import Any
 
-親プラグインの `register()` で `discover_sub_plugins()` が呼ばれているか:
+from langchain_core.language_models import BaseChatModel
 
-```python
-# iris/llm/__init__.py - LlmPlugin.init()
-for sub_module in discover_sub_plugins("iris/llm/providers"):
-    register_fn = getattr(sub_module, "register", None)
-    if register_fn is not None:
-        register_fn(llm)  # llm = LLMBridge インスタンス
-```
-
-親プラグインが `discover_sub_plugins()` を使っていない場合:
-1. 親プラグインに `discover_sub_plugins()` 呼び出しを追加する
-2. または親プラグインの `register()` 内で手動 `import` + `register(parent)` を呼ぶ
-
-### 3. サブプラグインの命名規則
-
-| 親Plugin | サブプラグインディレクトリ | ファイル名 | registerシグネチャ |
-|---|---|---|---|
-| `llm` | `iris/llm/providers/` | `<provider>.py` | `register(bridge: LLMBridge)` |
-| `tools` | `iris/tools/builtins/` | `<tool>/server.py` | `register(registry: ToolRegistry)` |
-| `memory` | `iris/memory/stores/` (将来) | `<store>.py` | `register(stores: ...)` |
-
-### 4. Provider 追加の完全な例
-
-```python
-# iris/llm/providers/new_provider.py
 from iris.kernel.config import ModelConfig, ModelEntry
 
-class NewProvider:
-    @classmethod
-    def ensure_environment(cls, entries, model_config):
-        # 環境チェック（API key確認、接続確認など）
+from .base import BaseLLMProvider
+
+
+class NewProvider(BaseLLMProvider):
+    provider_name = "new_provider"
+
+    def create_chat_model(
+        self,
+        entry: ModelEntry,
+        base_url: str,
+        api_key: str,
+        model_config: ModelConfig,
+    ) -> BaseChatModel:
         ...
 
-def register(bridge):
-    bridge.register_provider_class("new_provider", NewProvider)
-    # またはデフォルトURLの追加
-    bridge.register_default_url("new_provider", "https://api.newprovider.com/v1")
+    def build_call_kwargs(
+        self,
+        temperature: float,
+        max_tokens: int,
+        entry: ModelEntry | None,
+        kwargs: dict[str, Any],
+        reasoning: bool | None = None,
+        default_num_ctx: int = 8192,
+    ) -> dict[str, Any]:
+        ...
+
+    @classmethod
+    def ensure_environment(
+        cls,
+        entries: list[ModelEntry],
+        model_config: ModelConfig,
+    ) -> bool:
+        return True
 ```
 
-### 5. プロバイダエクスポートを更新する
+### 2. 接続デフォルトを追加する（必要な場合）
+
+`config.yaml` 側で `model.providers.<provider>.base_url` を必須にするなら不要。
+デフォルトURLを持たせる場合は `iris/llm/model_factory.py` の `_PROVIDER_DEFAULTS` に追加する。
 
 ```python
-# iris/llm/providers/__init__.py
+_PROVIDER_DEFAULTS: dict[str, str] = {
+    "new_provider": "https://api.example.com/v1",
+}
+```
+
+### 3. 複数provider名を1クラスで扱う場合
+
+`OpenAICompatibleProvider` のように1クラスを複数名へ割り当てる場合だけ、`iris/llm/providers/__init__.py` に明示登録を追加する。
+
+```python
 from .new_provider import NewProvider
 
-_PROVIDER_CLASSES["new_provider"] = NewProvider
-
-__all__ = [
-    ...,
-    "NewProvider",
-]
+register_provider("new_provider_alias", NewProvider)
 ```
 
-### 6. 環境チェックを main.py に追加する（任意）
+公開APIとして外部importさせる必要がある場合のみ `__all__` も更新する。
 
-`main.py` の `_check_environment()` が自動で全プロバイダをチェックする。
-新しいプロバイダタイプが `config.yaml` の `models[].provider` に指定されていれば自動検出される。
-
-### 7. テストを追加する
+### 4. テストを追加する
 
 ```python
-# tests/llm/test_new_provider.py
-def test_ensure_environment():
+def test_new_provider_build_call_kwargs() -> None:
     provider = NewProvider()
-    ...
+    kwargs = provider.build_call_kwargs(temperature=0.2, max_tokens=128, entry=None, kwargs={})
+    assert kwargs
 ```
+
+## Other Sub-plugins
+
+LLM Provider以外は親Pluginごとの規約を確認する。
+
+| 親Plugin | ディレクトリ | 発見・登録 |
+|---|---|---|
+| `llm` | `iris/llm/providers/` | `BaseLLMProvider.provider_name` による自動登録 |
+| `tools` | `iris/tools/builtins/` | ToolRegistry が builtins を読み込み、`register(registry)` / decorator を登録 |
+| `memory` | 未固定 | 追加時に親Plugin側の規約を先に設計 |
 
 ## Rules
 
-- サブプラグインは PluginManager のライフサイクル管理外。親Pluginが責任を持つ
-- サブプラグインの `register()` シグネチャは親Plugin依存。引数は親側の規約に従う
-- `_` で始まるファイルは自動発見されない
-- `register` 関数がなければサブプラグインとして認識されない（無視される）
-- プロバイダ追加時は `iris/llm/providers/__init__.py` の `_PROVIDER_CLASSES` と `__all__` も更新すること
+- PluginManager の `MANIFEST` は持たない。親Pluginが責任を持つ
+- LLM Provider は `BaseLLMProvider` を継承し、`provider_name` を `config.yaml` の `models[].provider` と一致させる
+- `create_chat_model()` と `build_call_kwargs()` を必ず実装する
+- `_` で始まる provider ファイルは自動発見されない
+- 既存の `discover_sub_plugins()` 前提で手順を書かない。親Pluginの現行発見方式を実コードで確認する

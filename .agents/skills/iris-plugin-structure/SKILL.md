@@ -167,8 +167,13 @@ iris/tools/builtins/          # 組み込みツール
 ```python
 # iris/<plugin>/__init__.py
 from __future__ import annotations
-from iris.kernel.plugin.protocol import PluginProtocol, PluginManager
+from typing import TYPE_CHECKING
+
+from iris.kernel.plugin import PluginProtocol
 from .builder import build_components
+
+if TYPE_CHECKING:
+    from iris.kernel.manager import PluginManager
 
 class XxxPlugin(PluginProtocol):
     def init(self, manager: PluginManager) -> None:
@@ -179,13 +184,17 @@ class XxxPlugin(PluginProtocol):
 from __future__ import annotations
 from typing import Any, TYPE_CHECKING
 
+from iris.event.event_bus import EventBus
+
+from .manager import XxxManager
+
 if TYPE_CHECKING:
-    from iris.kernel.plugin.protocol import PluginManager
+    from iris.kernel.manager import PluginManager
 
 def build_components(manager: PluginManager) -> dict[str, Any]:
-    dependency = manager.resolve("SomeService")
-    component = XxxManager(dependency)
-    manager.provide("XxxManager", component)
+    event_bus = manager.resolve(EventBus)
+    component = XxxManager(event_bus=event_bus)
+    manager.provide(XxxManager, component)
     return {"manager": component}
 ```
 
@@ -195,18 +204,18 @@ def build_components(manager: PluginManager) -> dict[str, Any]:
 # iris/<plugin>/__init__.py
 from __future__ import annotations
 from iris.kernel.plugin.loader import discover_sub_plugins
-from iris.kernel.plugin.protocol import PluginProtocol, PluginManager
+from iris.kernel.plugin import PluginProtocol
 
 class ParentPlugin(PluginProtocol):
-    def init(self, manager: PluginManager) -> None:
-        # サブプラグイン (プロバイダなど) を自動検知して登録
-        sub_plugins = discover_sub_plugins(
-            package_path="iris/<plugin>/providers",
-            package_name="iris.<plugin>.providers"
-        )
-        for _, register_fn in sub_plugins:
-            register_fn(self)  # 親プラグインに自身を登録させる
+    def init(self, manager) -> None:
+        # discover_sub_plugins(parent_path) は module のリストを返す
+        for module in discover_sub_plugins("iris/<plugin>/providers"):
+            register_fn = getattr(module, "register", None)
+            if register_fn is not None:
+                register_fn(self)
 ```
+
+LLM Provider はこの汎用 `register()` 方式ではなく、`BaseLLMProvider.provider_name` による自動登録を使う。
 
 ### Handler（イベント購読）
 

@@ -19,11 +19,12 @@ Iris に新しいプラグイン（層/機能/ツール/プロバイダ）を追
 | カテゴリ | Phase | 説明 | 例 |
 |---|---|---|---|
 | `CORE` | 10 | 必須インフラ層 | io, llm, tools |
-| `LAYER` | 20 | 認知層 | memory |
-| `COGNITIVE` | 30 | 高度認知 | agency |
-| `FEATURE` | 40 | 機能拡張 | heartbeat |
-| `PROVIDER` | - | 実装差し替え | (sub-plugin) |
-| `TOOL` | 10 | ツール拡張 | (sub-plugin) |
+| `LAYER` | 15/20/30 | データ層・認知層・高度認知 | account, room, memory, limbic, agency |
+| `FEATURE` | 40 | 機能拡張 | 任意機能 |
+| `PROVIDER` | 親に従う | 実装差し替え | 外部プロバイダPlugin |
+| `TOOL` | 10/40 | ツール基盤・ツール拡張 | tools |
+
+`COGNITIVE` は `PluginPhase` であり `PluginCategory` ではない。
 
 ## Steps
 
@@ -32,8 +33,10 @@ Iris に新しいプラグイン（層/機能/ツール/プロバイダ）を追
 ```
 iris/<plugin_name>/
 ├── __init__.py     # MANIFEST + プラグインクラス + plugin インスタンス
+├── manager.py      # 任意: 中心サービス / オーケストレータ
 ├── hooks.py        # 任意: register_hooks(manager)
-├── events.py       # 任意: イベント購読 (manager.event_bus.subscribe)
+├── handler.py      # 任意: EventBus購読 (_XxxEventHandler)
+├── events.py       # 任意: プラグイン固有イベント型
 ├── models.py       # 任意: プラグイン固有の型
 └── tools/          # 任意: @tool 定義 (TOOLカテゴリの場合)
     └── __init__.py
@@ -42,48 +45,59 @@ iris/<plugin_name>/
 ### 2. `__init__.py` を作成する
 
 ```python
-from iris.kernel.plugin import PluginManifest, PluginProtocol
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from iris.event.event_bus import EventBus
+from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
+
+from .manager import MyService
+
+if TYPE_CHECKING:
+    from iris.kernel.manager import PluginManager
 
 MANIFEST = PluginManifest(
     name="my_plugin",
     version="0.1.0",
     category=PluginCategory.FEATURE,
     phase=PluginPhase.FEATURE,
-    dependencies={"EventBus", "LLMBridge"},  # 依存するPlugin名
+    dependencies={"EventBus", "LLMBridge"},  # プラグイン名 / provides名 / 組み込みサービス名
     provides=["MyService"],
     description="プラグインの説明",
 )
 
-class MyPlugin:
+class MyPlugin(PluginProtocol):
     MANIFEST = MANIFEST
 
-    def init(self, manager):
+    def init(self, manager: PluginManager) -> None:
         """DI登録 + コンポーネント生成 + 配線 + Hook購読"""
         manager.register_manifest(MANIFEST)
-        # resolve: 依存をDIから取得
-        event_bus = manager.resolve("EventBus")
+        # resolve: 依存を型キーで取得
+        event_bus = manager.resolve(EventBus)
         # create + wire: 内部コンポーネント生成
+        instance = MyService(event_bus=event_bus)
         # provide: 他Plugin向けにDI登録
-        manager.provide("MyService", instance)
+        manager.provide(MyService, instance)
         # hooks
         from .hooks import register_hooks
         register_hooks(manager)
 
-    def start(self, manager):
+    def start(self, manager: PluginManager) -> None:
         """バックグラウンド処理開始（任意）"""
         pass
 
-    def stop(self, manager):
+    def stop(self, manager: PluginManager) -> None:
         """クリーンアップ（任意）"""
         pass
 
-plugin = MyPlugin()
+plugin: PluginProtocol = MyPlugin()
 ```
 
 ### 3. `hooks.py` を作成する（任意）
 
 ```python
-def register_hooks(manager):
+def register_hooks(manager) -> None:
     hooks = manager.hook_registry
 
     def _my_hook(data):
@@ -94,45 +108,62 @@ def register_hooks(manager):
 
 利用可能な HookPoint 一覧は `.agents/skills/iris-plugin-hook/SKILL.md` を参照。
 
-### 4. `events.py` を作成する（任意）
+### 4. `handler.py` を作成する（EventBus購読がある場合は必須）
 
 ```python
-def subscribe_events(manager):
-    bus = manager.event_bus
-    bus.subscribe(MessageEvent, _on_message)  # 型安全版（推奨）
-    # bus.subscribe("MessageEvent", _on_message)  # 後方互換（文字列）
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Any
+
+from iris.event.event_types import MessageEvent
+
+if TYPE_CHECKING:
+    from .manager import MyService
+
+
+class _MyEventHandler:
+    def __init__(self, event_bus: Any, service: MyService) -> None:
+        self._service = service
+        event_bus.subscribe(MessageEvent, self._on_message)
+
+    def _on_message(self, event: MessageEvent) -> None:
+        self._service.handle(event)
 ```
+
+`__init__.py` の `init()` 内で生成して配線する。EventBus購読を manager や managerクラスに置かない。
 
 ### 5. 依存を確認する
 
+`MANIFEST.dependencies` は依存するプラグイン名、`provides` 名、または組み込みサービス名を文字列で宣言する。
+DIの取得・登録は型キーで行う。
+
 PluginManager が提供する標準サービス:
 
-| サービス名 | 提供元 |
-|---|---|
-| `EventBus` | PluginManager（インフラ） |
-| `HookRegistry` | PluginManager（インフラ） |
-| `Config` | PluginManager（インフラ） |
-| `PluginManager` | PluginManager（自己） |
-| `IOManager` | io Plugin |
-| `SessionManager` | io Plugin |
-| `GrpcListener` | io Plugin |
-| `LLMBridge` | llm Plugin |
-| `Tokenizers` | llm Plugin |
-| `DebugCapture` | llm Plugin |
-| `CapabilityChecker` | llm Plugin |
-| `MemoryManager` | memory Plugin |
-| `SensoryMemoryManager` | memory Plugin |
-| `ShortTermMemoryManager` | memory Plugin |
-| `LongTermMemoryManager` | memory Plugin |
-| `VectorStore` | memory Plugin |
-| `ToolRegistry` | tools Plugin |
-| `ToolEngine` | tools Plugin |
-| `AgencyManager` | agency Plugin |
-| `PlanningManager` | agency Plugin |
-| `FlowExecutor` | agency Plugin |
-| `LLMGateway` | agency Plugin |
+| 依存文字列 | DI型 | 提供元 |
+|---|---|---|
+| `EventBus` | `EventBus` | PluginManager（インフラ） |
+| `HookRegistry` | `HookRegistry` | PluginManager（インフラ） |
+| `Config` | `Config` | PluginManager（インフラ） |
+| `PluginManager` | `PluginManager` | PluginManager（自己） |
+| `IOManager` | `IOManager` | io Plugin |
+| `SessionManager` | `SessionManager` | io Plugin |
+| `GrpcListener` | `GrpcListener` | io Plugin |
+| `LLMBridge` | `LLMBridge` | llm Plugin |
+| `DebugCapture` | `DebugCapture` | llm Plugin |
+| `CapabilityChecker` | `CapabilityChecker` | llm Plugin |
+| `MemoryManager` | `MemoryManager` | memory Plugin |
+| `SensoryMemoryManager` | `SensoryMemoryManager` | memory Plugin |
+| `ShortTermMemoryManager` | `ShortTermMemoryManager` | memory Plugin |
+| `LongTermMemoryManager` | `LongTermMemoryManager` | memory Plugin |
+| `VectorStore` | `VectorStore` | memory Plugin |
+| `ToolRegistry` | `ToolRegistry` | tools Plugin |
+| `ToolEngine` | `ToolEngine` | tools/agency Plugin |
+| `AgencyManager` | `AgencyManager` | agency Plugin |
+| `PlanningManager` | `PlanningManager` | agency Plugin |
+| `FlowExecutor` | `FlowExecutor` | agency Plugin |
+| `LLMGateway` | `LLMGateway` | agency Plugin |
 
-不明なサービスは `manager.resolve_optional("Name")` で安全に取得。
+任意依存は `manager.resolve_optional(ServiceType)` で安全に取得。
 
 ### 6. プラグイン設定を使う（任意）
 
@@ -165,9 +196,10 @@ plugins:
 ### 9. 検証してコミットする
 
 ```powershell
-ruff check .
-mypy .
 pytest tests/ -q
+ruff check --fix .
+ruff format --check .
+mypy .
 git add .
 git commit -m "feat: <plugin_name> プラグインを追加"
 ```

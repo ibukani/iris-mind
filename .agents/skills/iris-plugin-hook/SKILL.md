@@ -26,6 +26,7 @@ metadata:
 | `agency.before_exec` | 実行前 | `(state: ExecState) -> ExecState` | 実行状態注入 |
 | `io.before_send` | 送信前 | `(msg: Message) -> Message` | 送信フィルタ |
 | `io.after_receive` | 受信後 | `(msg: Message) -> Message` | 受信加工 |
+| `io.dispatch` | IO受信メッセージのディスパッチ | `(ctx: dict) -> dict` | コマンド振り分け |
 
 ## HookPriority
 
@@ -37,12 +38,13 @@ metadata:
 | 5000-9999 | USER | 外部プラグインフック |
 
 優先度の数値が小さい順に実行される。同優先度内は登録順。
+`HookPriority` は範囲確認用の `range` 定義なので、登録時は該当レンジ内の整数を渡す。
 
 ## Steps
 
 ### 既存HookPointにハンドラを登録する
 
-方法1: 手動登手動登録（従来通り）
+方法1: 手動登録
 
 ```python
 # iris/<plugin>/hooks.py
@@ -53,7 +55,7 @@ def register_hooks(manager):
         # メッセージを加工
         return messages
 
-    hooks.register("llm.before_chat", _my_before_chat, priority=500)
+    hooks.register("llm.before_chat", _my_before_chat, priority=500)  # CORE range
 ```
 
 方法2: `@hook` デコレータ（推奨）
@@ -127,4 +129,4 @@ hooks.register("agency.plan_decided", _on_plan_decided, priority=1000)
 - `HookRegistry.execute()` は async、`execute_sync()` は sync
 - 新しいHookPointは `HOOK_POINTS` dict に必ず登録すること
 - HookPoint名は `.` 区切りの命名規則（`layer.action`）を守る
-- priority は `HookPriority` の定数を使用すること
+- priority は `HookPriority` の範囲に収まる整数を使用すること

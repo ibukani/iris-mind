@@ -391,15 +391,15 @@ uv run pyright .
 
 全Pluginは `PluginProtocol` に準拠し、以下の5ステップで `init()` を実装する:
 1. `manager.register_manifest(MANIFEST)` — 自己宣言
-2. `manager.resolve("Dep")` — 依存をDIから取得
-3. コンポーネント生成 + 配線
-4. `manager.provide("Service", instance)` — 他向けにDI登録
-5. `manager.hook_registry.register(...)` — Hook購読（任意）
+2. `manager.resolve(DepType)` — 依存を型キーでDIから取得
+3. コンポーネント生成 + EventBus handler配線
+4. `manager.provide(ServiceType, instance)` — 他向けに型キーでDI登録
+5. `register_hooks(manager)` または `manager.hook_registry.register_decorated(self)` — HookPoint登録（任意）
 
 - Plugin categories: `CORE` / `LAYER` / `FEATURE` / `PROVIDER` / `TOOL`
-- Plugin phases: `INFRA(0)` → `CORE(10)` → `STORE(15)` → `LAYER(20)` → `COGNITIVE(30)` → `FEATURE(40)`
-- ライフサイクル: `UNLOADED` → `INITIALIZED` → `STARTED` → `READY` → `STOPPING` → `STOPPED`
-- サブプラグイン（Provider、built-ins等）は親Pluginが `discover_sub_plugins()` で自動発見
+- Plugin phases: `INFRA(0)` → `CORE(10)` → `STORE(15)` → `LAYER(20)` → `COGNITIVE(30)` → `FEATURE(40)` → `READY(50)`
+- ライフサイクル: `UNLOADED` → `INITIALIZED` → `STARTED` → `READY` → `STOPPING` → `STOPPED` / `ERROR`
+- サブプラグイン（Provider、built-ins等）は親Plugin側の規約で自動発見・登録
 - 依存検証: 起動時に未解決依存を自動検出し、`DependencyError` を発生
 - ホットリロード: `manager.reload_plugin("plugin_name")` で実行中の再読み込みが可能
 

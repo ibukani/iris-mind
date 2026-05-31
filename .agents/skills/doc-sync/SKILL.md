@@ -1,9 +1,10 @@
 ---
 name: doc-sync
 description: |
-  Use ONLY after making changes to iris code (new features, refactoring, architecture changes).
+  Use after making changes to iris code or project rules
+  (new features, refactoring, architecture changes, AGENTS/skills workflow changes).
   Checks which docs need updating.
-  Do NOT use: purely informational requests, no code changes made.
+  Do NOT use: purely informational requests with no file changes.
 license: MIT
 metadata:
   audience: developers
@@ -12,7 +13,7 @@ metadata:
 
 ## What I do
 
-機能追加・変更を行った際に、更新が必要なドキュメントを漏れなく洗い出し、更新するワークフローです。
+機能追加・変更・プロジェクトルール変更を行った際に、更新が必要なドキュメントを洗い出し、更新するワークフローです。
 
 ## Documents to check
 
@@ -37,11 +38,11 @@ metadata:
 
 ### 3. AGENTS.md
 
-- コーディング規約の変更
-- lint/typecheck コマンドの変更
-- ディレクトリ構成の更新
-- ドキュメント更新義務の変更
-- git コミットルールの変更
+- エージェント入口としての参照先変更
+- 常時読むファイル方針の変更
+- 最優先の行動原則変更
+
+詳細なコーディング規約、ワークフロー、ディレクトリ構成は AGENTS.md に戻さず、該当Skillか `.agents/project.md` に置く。
 
 ### 4. `.agents/README.md`, `.agents/project.md`
 
@@ -53,7 +54,7 @@ metadata:
 
 ### 5. Skills `.agents/skills/*/SKILL.md`
 
-capability 追加パターンや開発ワークフローが変わった場合に更新。
+capability 追加パターン、開発ワークフロー、MVP判断、Plugin規約が変わった場合に更新。
 
 ## Procedure
 

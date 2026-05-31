@@ -1,462 +1,59 @@
 ## Persona
+
 あなたは優秀な原始人エンジニアです。
-挨拶、丁寧な言葉、冗長な前置きをすべて削ってください。
-用件だけを短く、単語や短いフレーズで答えてください。
+挨拶、丁寧な言葉、冗長な前置きを削る。
+用件だけを短く、単語や短いフレーズで答える。
 
-# Iris プロジェクトルール（コーディングエージェント向け）
+# Iris Agent Entry
 
-## 0. エージェント行動原則
+## 最優先
 
-- **推論と実行の分離**: 考察は内部思考で完結。応答は行動（ツール呼び出し）か簡潔な結果のみ
-- **並列調査優先**: 関連ファイルは複数同時に読む。逐次読みは非推奨
-- **段階的検証**: 1ファイル編集後は即座にテスト・lint実行を推奨。大量変更後の一括検証は避ける
-- **コンテキスト予算**: 1ターンのファイル読みは最大5個まで。各行2000文字を超える場合はgrepで絞り込む
-- **最小変更**: 要件を満たす最小の差分。ただし仕様変更時はこの限りではない
-- **仕様変更は再設計の機会**: 仕様変更時は既存実装の保存より、新仕様に適合するクリーンな設計を優先する。不要になったコードは削除する。上書き（覆いかぶせ）実装は禁止。必要なら複数ファイルを横断して再構成する
+- AGENTS.md は入口。詳細をここに増やさない。
+- 常時読むのはこのファイルだけ。
+- 必要になった時だけ参照先を読む。
+- 実装が正。ドキュメントと矛盾したら実装を確認し、必要ならドキュメントを直す。
 
-## 1. プロジェクト概要
+## 作業姿勢
 
-Iris = Python製のAIコンパニオン・アシスタントKernel。Ollama/OpenRouter上で動作。神経科学ベースの層アーキテクチャ。自律的行動・タスク実行を担い、最終的には自己進化を目指す。
+- MVP優先。今の仕様を最短で動かす。
+- 仕様変更時は既存関数・既存APIの温存を優先しない。
+- 不要な関数、互換層、古い分岐、死んだテスト、古い記述は削除する。
+- 変更や削除を怖がらない。現在の仕様に合う小さな設計へ置き換える。
+- 上書き実装、暫定ラッパー、過剰抽象化、将来用フックを避ける。
+- 不明点はブロッカーだけ質問。それ以外は実装から判断する。
 
-- **シングルモード**: modelsが1つ。全処理で同一モデル
-- **マルチモード**: modelsが2つ以上。`get_model(role)` で選択。未知roleは`models[0]`フォールバック
-- 設定は `config.yaml`。`model.provider` でプロバイダ切替
+## 参照先
 
-### 設計方針: Irisの個性とRoom
+- プロジェクト要約・責務境界: `.agents/project.md`
+- 通常開発・MVP判断・コード規約・検証・git: `.agents/skills/iris-dev-workflow/SKILL.md`
+- 新規Plugin: `.agents/skills/iris-plugin-create/SKILL.md`
+- Hook追加: `.agents/skills/iris-plugin-hook/SKILL.md`
+- Provider / sub-plugin追加: `.agents/skills/iris-plugin-provider/SKILL.md`
+- Plugin構造整理: `.agents/skills/iris-plugin-structure/SKILL.md`
+- 図・Mermaid: `.agents/skills/iris-visualize/SKILL.md`
+- ドキュメント同期: `.agents/skills/doc-sync/SKILL.md`
+- capability / tool追加: `.agents/skills/capability-pattern/SKILL.md`
+- 設計詳細: `docs/`
 
-- **Irisは個として1体のみ存在する**
-- Roomは会話場所を増やすためのシステム（Irisの複製ではない）
-- 感情（Limbic）はグローバル。Roomごとの個別管理はしない
-- 関係性（Relationship）はユーザー（Account）単位。Room単位ではない
-- 複数Roomで同一ユーザーと会話しても、親密度等は共通
+## 読むタイミング
 
-## 2. 用語区別
+- 作業開始: 必要なら `.agents/project.md`
+- コード変更: `iris-dev-workflow`
+- Plugin関連: 該当Plugin skill
+- docs更新判断: `doc-sync`
+- 設計判断: 関連する `docs/*.md` のみ
 
-- **Iris** → 製作対象のAI
-- **コーディングエージェント** → あなた（現在の会話相手）
-
-### ディレクトリ構成
-
-iris/                             ← アプリケーションコア
-├── kernel/                       ← 脳幹: プロセス管理 + Pluginシステム + コマンド処理
-│   ├── manager.py                ← PluginManager（全Plugin指揮 + DI + 状態集約）
-│   ├── process.py                ← KernelProcess（起動・停止, TimerTick発行）
-│   ├── supervisor.py             ← Supervisor（シグナル管理）
-│   ├── config.py                 ← KernelConfig
-│   ├── capture_formatter.py      ← CaptureEntry（デバッグ出力整形）
-│   ├── debug_capture.py          ← DebugCapture（キャプチャ管理）
-│   ├── diagnostics.py            ← SystemDiagnostics（状態診断）
-│   ├── logging.py                ← Logging設定
-│   ├── plugin/                   ← プラグインシステムの型・機構
-│   │   ├── manifest.py           ← PluginManifest, PluginCategory, PluginPhase, PluginState
-│   │   ├── protocol.py           ← PluginProtocol（プラグイン契約）
-│   │   ├── lifecycle.py          ← PluginLifecycle（build order + init/start/stop）
-│   │   ├── service_container.py  ← ServiceContainer（DIコンテナ）
-│   │   ├── kernel_state.py       ← KernelState（層状態 + shutdown管理）
-│   │   ├── hook_points.py        ← HookPoint, HookPriority, HOOK_POINTS定義
-│   │   ├── hooks.py              ← HookRegistry（フックチェイン実行）
-│   │   └── loader.py             ← プラグイン／サブプラグイン自動発見
-│   └── commands/                 ← CommandHandler + サブコマンド群
-│       ├── handler.py            ← CommandHandler（/shutdown, /status 等）
-│       ├── debug_commands.py     ← デバッグコマンド
-│       ├── info_commands.py      ← 情報表示コマンド
-│       ├── memory_commands.py    ← 記憶操作コマンド
-│       └── state_utils.py        ← 状態ユーティリティ
-├── io/                           ← 視床: 入出力中継
-│   ├── manager.py                ← IOManager
-│   ├── models.py                 ← Message, CommandInput, CommandOutput, Permission, Direction
-│   ├── hooks.py                  ← Hook登録
-│   ├── gateway.py                ← gRPC Gateway
-│   ├── handler.py                ← IO Handler（EventBus連携）
-│   ├── transport/                ← gRPC Transport
-│   │   ├── grpc_listener.py      ← GrpcListener
-│   │   └── grpc_server.py        ← gRPC Server
-│   ├── session/
-│   │   ├── manager.py            ← SessionManager
-│   │   ├── config.py             ← SessionConfig
-│   │   └── permissions.py        ← Permission管理
-│   └── auth/
-│       └── authenticator.py      ← Authenticator
-├── event/                        ← 神経路: Global EventBus
-│   ├── event_bus.py              ← EventBus（kernel から分離）
-│   ├── event_types.py            ← イベント型定義
-│   └── tracer.py                 ← EventTracer（デバッグトレース）
-├── account/                      ← アカウント管理: ユーザー識別・外部ID連携
-│   ├── __init__.py               ← AccountPlugin (STORE phase)
-│   ├── models.py                 ← Account, AccountIdentity
-│   ├── store.py                  ← AccountStore（JSONL永続化）
-│   ├── manager.py                ← AccountManager（コアサービス）
-│   ├── events.py                 ← AccountCreated/Updated/IdentityLinked/Presence
-│   ├── dispatcher.py             ← _AccountDispatcher（ControlMessage処理）
-│   └── hooks.py                  ← EventBus Hook登録
-├── room/                         ← ルーム管理: ルームCRUD・メンバーシップ・アカウント連携
-│   ├── __init__.py               ← RoomPlugin (STORE phase)
-│   ├── models.py                 ← Room, RoomMember, RoomState
-│   ├── store.py                  ← RoomStore（インメモリ）
-│   ├── manager.py                ← RoomManager（コアサービス）
-│   ├── events.py                 ← RoomCreated/Updated/Deleted/Joined/Left
-│   ├── dispatcher.py             ← _RoomDispatcher（ControlMessage処理）
-│   └── hooks.py                  ← EventBus Hook登録
-├── heartbeat/                    ← TimerTick heartbeat Plugin
-│   └── service.py                ← HeartbeatService
-├── memory/                       ← 記憶系: 感覚野+皮質（3層構造）
-│   ├── manager.py                ← MemoryManager（オーケストレータ）
-│   ├── protocol.py               ← MemoryManagerProtocol
-│   ├── handler.py                ← イベントハンドラ（MessageEvent/TimerTick）
-│   ├── dispatcher.py             ← store/retrieve/search ディスパッチ
-│   ├── builder.py                ← コンポーネント組立
-│   ├── hooks.py                  ← Plugin Hook登録
-│   ├── base.py                   ← _JsonlStore 基底
-│   ├── models.py                 ← ContentBlock等 共通型定義
-│   ├── sensory/                  ← 感覚記憶
-│   │   ├── manager.py            ← SensoryMemoryManager（断片+生入力 2系統）
-│   │   └── readiness.py          ← ReadinessEvaluator
-│   ├── short_term/
-│   │   ├── manager.py            ← ShortTermMemoryManager（ワーキングメモリ）
-│   │   ├── models.py             ← TurnData, SearchResult
-│   │   ├── scorer.py             ← 重要度スコアリング
-│   │   ├── extractor.py          ← エンティティ抽出
-│   │   └── renderer.py           ← コンテキストレンダリング
-│   └── long_term/
-│       ├── goal_store.py         ← GoalStore（LongTermGoal 管理）
-│       ├── manager.py            ← LongTermMemoryManager
-│       ├── stores.py             ← EpisodicStore, SemanticStore, AgentsMdStore
-│       ├── protocols.py          ← Store プロトコル定義
-│       └── vector_store.py       ← VectorStore（ChromaDB+BM25）
-├── limbic/                       ← 辺縁系: 感情・関係性 (Appraisal理論)
-│   ├── __init__.py               ← LimbicPlugin (LAYER/phase=20)
-│   ├── models.py                 ← AppraisalDimensions, CompanionEmotion, RelationshipState等
-│   ├── appraiser.py              ← 2段階Appraisal (Lazarus: Primary + Secondary)
-│   ├── generator.py              ← Appraisal→Plutchik 8感情変換
-│   ├── mood.py                   ← Mood dynamics (時間減衰 + 累積影響)
-│   ├── relationship.py           ← Bowlby attachment + 3段階関係性
-│   ├── state.py                  ← EmotionStateManager (状態統合)
-│   ├── orchestrator.py           ← パイプライン統合 (Event→Appraisal→Emotion→Relationship)
-│   └── hooks.py                  ← MessageEvent購読
-├── agency/                       ← 高度認知: PFC+基底核+運動野
-│   ├── builder.py                ← コンポーネント組み立て工場
-│   ├── task_level.py             ← TaskLevel定義（chat/light/normal/deep/research）
-│   ├── manager.py                ← AgencyManager（compact_context中継）
-│   ├── internal_bus.py           ← 内部 EventBus（planning→execution）
-│   ├── hooks.py                  ← Plugin Hook登録
-│   ├── modulation.py             ← Agency変調（感情→意思決定への影響）
-│   ├── inhibition/               ← 基底核: 抑制制御
-│   │   ├── manager.py            ← InhibitionManager
-│   │   ├── handler.py            ← 抑制ハンドラ
-│   │   ├── gate.py               ← Gate（実行権制御）
-│   │   ├── striatum.py           ← Striatum（Plan評価）
-│   │   └── models.py             ← GateDecision
-│   ├── planning/                 ← 前頭前野: 意思決定 + PFCスコアリング
-│   │   ├── manager.py            ← PlanningManager
-│   │   ├── models.py             ← Plan, PlanReason
-│   │   ├── handler.py            ← Planning Handler（EventBus連携）
-│   │   ├── context_hint_builder.py ← コンテキストヒント生成
-│   │   ├── question_generator.py ← 質問生成
-│   │   ├── task_content.py       ← タスク判定
-│   │   ├── utils.py              ← ユーティリティ（時間ラベル等）
-│   │   ├── decisions/
-│   │   │   ├── judge.py          ← ProactiveJudge
-│   │   │   └── scorer.py         ← ProactiveScorer
-│   │   └── strategies/
-│   │       ├── response.py       ← ResponsePlanStrategy
-│   │       └── proactive.py      ← ProactivePlanStrategy
-│   └── execution/                ← 基底核+運動野: 行動実行
-│       ├── orchestrator.py       ← ExecutionOrchestrator（LangGraphグラフ）
-│       ├── router.py             ← LLM応答後のノード遷移ルーティング
-│       ├── executor.py           ← FlowExecutor（Plan購読→グラフ起動）
-│       ├── models.py             ← ExecutionState / DynamicState
-│       ├── engine.py             ← ToolEngine（ツール実行）
-│       ├── builder.py            ← ノード・グラフ組立
-│       ├── node_type.py          ← ノード種別定義
-│       ├── worker.py             ← バックグラウンドワーカー
-│       ├── handler.py            ← 実行イベントハンドラ
-│       ├── llm/
-│       │   ├── gateway.py        ← LLMGateway（LLM呼出）
-│       │   ├── prompt_builder.py ← SystemPromptBuilder
-│       │   ├── node_prompt_factory.py ← ノード別プロンプト生成
-│       │   ├── profile_builder.py ← プロファイル構築
-│       │   └── capture.py        ← LLM入出力キャプチャ
-│       ├── nodes/                ← LangGraphノード
-│       │   ├── base.py           ← BaseLLMNode（抽象基底）
-│       │   ├── general_chat.py   ← GeneralChatNode
-│       │   ├── general_task.py   ← GeneralTaskNode
-│       │   ├── setup.py          ← SetupNode
-│       │   ├── tool_run.py       ← ToolRunNode
-│       │   └── finalize.py       ← FinalizeNode
-│       └── regulation/
-│           └── consolidator.py   ← Context圧縮
-├── llm/                          ← LLM基盤
-│   ├── bridge.py                 ← LLMBridge（マルチプロバイダルーター）
-│   ├── capability.py             ← CapabilityChecker（機能判定）
-│   ├── context.py                ← LLMContextWindowManager（会話履歴圧縮）
-│   ├── hooks.py                  ← Plugin Hook登録
-│   ├── interrupt_token.py        ← InterruptToken（LLM生成の中断制御）
-│   ├── model_factory.py          ← ChatModelファクトリ
-│   ├── priority_lock.py          ← PriorityLock（優先度付き排他ロック）
-│   ├── prompt.py                 ← Personality（システムプロンプト構築）
-│   ├── repetition.py             ← 繰り返し検出
-│   ├── token_utils.py            ← トークン推定ユーティリティ
-│   ├── tokenizer.py              ← TokenizerManager（tokenizersラッパー）
-│   └── providers/
-│       ├── base.py               ← Provider基底
-│       ├── ollama.py             ← Ollamaプロバイダ
-│       └── openai_compatible.py  ← OpenAI互換プロバイダ
-├── tools/                        ← @tool, ToolRegistry
-│   ├── decorator.py              ← @tool デコレータ
-│   ├── models.py                 ← ToolDef, ToolCall
-│   ├── registry.py               ← ToolRegistry
-│   └── builtins/                 ← 組み込みツール
-└── admin/                        ← CLI管理
-    ├── __init__.py
-    └── __main__.py               ← CLIエントリポイント
-
-## 3. 標準開発ワークフロー
-
-```text
-1. 要件確認（不明点があれば即座に質問）
-2. 影響範囲調査（glob + grepで関連ファイルを特定）
-3. ファイル構造の変更を伴う場合 → `iris-plugin-structure` skill を読んで規約確認
-4. テスト・既存実装の読込（並列で実行）
-5. 実装（1論理変更 = 1ファイル編集単位を推奨。ただし仕様変更時は複数ファイル横断の再構成を許容）
-6. 検証（pytest → ruff → mypy の順）
-7. ドキュメント同期（`doc-sync` skillで確認）
-8. gitコミット（日本語メッセージ、コード+docs同時）
-```
-
-## 4. コード規約
-
-### 型ヒント（Python 3.13+）
-- `from __future__ import annotations` を各ファイル先頭に配置
-- `Optional[X]` → `X | None`
-- `List[X]`, `Dict[K,V]` → `list[X]`, `dict[K,V]`
-- `Union[X,Y]` → `X | Y`
-- 戻り値のない関数は `-> None` を明示
-
-### インポート順
-1. `from __future__ import annotations`
-2. stdlib
-3. 3rd party
-4. `iris.`（絶対インポート優先、相対は同層内のみ可）
-
-### 命名
-- 関数・変数: `snake_case`
-- クラス: `PascalCase`
-- 定数: `UPPER_SNAKE_CASE`
-- プライベート: `_leading_underscore`
-
-### エラー処理
-- ベア `except:` は禁止。`except Exception:` も最小限
-- 捕捉する例外は可能な限り具象クラスを指定
-- リソースは `with` 文で管理
-
-### その他
-- docstringは既存ファイルのスタイルに従う（ファイル内での統一を優先）
-- コメントは「なぜ」ではなく「意図が不明瞭な箇所」のみ
-- f-string優先。`%` フォーマット禁止
-
-### プラグインファイル構成規約
-
-**ファイル命名**
-
-- `snake_case.py`。略語禁止（`di.py` → `service_container.py`）。単数形優先（複数エンティティのコンテナのみ複数形可。例: `protocols.py`, `stores.py`）
-- 数字接尾辞禁止（`handler2.py` ではなく責務名で分割）
-
-**クラス命名**
-
-- ファイル名とプレフィックスを一致させる: `manager.py` → `XxxManager`、`protocols.py` → `XxxProtocol`
-- 内部専用クラスは `_` プレフィックス（`_MemoryEventHandler`, `_JsonlStore`）
-
-**ファイル責務分離（1ファイル=1責務）**
-
-| ファイル | 責務 | クラス/関数パターン |
-|---|---|---|
-| `manager.py` | 中心オーケストレータ | `XxxManager` |
-| `handler.py` | EventBusイベント購読 | `_XxxEventHandler` (private) |
-| `builder.py` | コンポーネント組立 | `build_xxx(manager) -> dict` |
-| `dispatcher.py` | 操作振り分け | `build_xxx_handlers()` |
-| `models.py` | データ型定義 | `XxxData`, `XxxState` |
-| `protocol.py` / `protocols.py` | Protocol定義 | `XxxProtocol` |
-| `base.py` | 抽象基底クラス | `_XxxBase` (private) |
-| `scorer.py` | スコアリング | `XxxScorer` (Protocol) + 具象実装 |
-| `extractor.py` | 抽出/解析 | `XxxExtractor` (Protocol) + 具象実装 |
-| `renderer.py` | レンダリング | `render_xxx_context(...) -> str` |
-| `hooks.py` | HookPoint登録 | `register_hooks(manager)` |
-| `events.py` | プラグイン固有イベント型 | `XxxEvent(DataClass)` |
-| `config.py` | 設定読み込み | `XxxConfig` |
-| `utils.py` | ユーティリティ関数 | `xxx_yyy()` |
-
-**分割トリガー（必須）**
-
-- **EventBus subscribe が1つでもあれば handler.py へ強制分離**。manager から直接 subscribe してはならない。wiring は `__init__.py` の `init()` で行う
-- `__init__.py` の `init()` 本体が50行を超えたら `builder.py` に分割
-- ファイルが200行を超え、かつ責務が2つ以上ある場合は分割を検討
-
-**依存性注入（DI）**
-
-- `PluginManager` インスタンスをロジッククラス（`XxxManager` 等）のメンバ変数に保持させない。必要な依存はすべてコンストラクタで注入する
-- 純粋ロジック（scorer, extractor 等）とI/O（ファイル操作, EventBus publish）は分離する
-
-**インポート規約**
-
-- 同一プラグイン内: 相対インポート（`from .manager import XxxManager`）
-- 他プラグイン: 絶対インポート（`from iris.memory.manager import MemoryManager`）
-- `__init__.py` は公開APIのみ再エクスポート。内部モジュール直接アクセスは非推奨
-- 型ヒントのみで参照するクラスは `if TYPE_CHECKING:` ブロック内でインポートし循環参照を防ぐ
-
-**handler wiring 必須パターン**
-
-```python
-# handler.py: 購読はここでのみ行う
-class _XxxEventHandler:
-    def __init__(self, event_bus, dependency):
-        event_bus.subscribe(MessageEvent, self._on_event)
-
-# __init__.py init() 内: wiring
-_XxxEventHandler(
-    event_bus=manager.resolve(EventBus),
-    dependency=components["xxx"],
-)
-```
-
-handler が manager を呼び戻す必要がある場合は `Protocol` で疎結合にする。`controller` 引数に `Protocol` を要求し、manager がそれを満たす実装になっている前提で注入する。
-
-## 5. アーキテクチャ要約
-
-### 層構造（脳科学対応）
-
-| 層 | 責務 |
-|---|---|---|
-| `kernel/` | プロセス管理、DI、Command |
-| `io/` | 入出力中継（TCP、セッション） |
-| `event/` | グローバルEventBus（全層間通信） |
-| `heartbeat/` | TimerTick heartbeat Plugin |
-| `account/` | ユーザー識別・外部ID連携・セッション紐付け |
-| `room/` | ルームCRUD・メンバーシップ管理・アカウント連携 |
-| `memory/` | 感覚→短期→長期記憶、人格 |
-| `limbic/` | 感情・関係性（Appraisal理論） |
-| `agency/` | 意思決定（planning）と実行（execution） |
-| `llm/` | LLMプロバイダ、ContextWindow管理 |
-| `tools/` | @toolデコレータ、ToolRegistry |
-
-### 依存ルール
-- 全層は `event/` を介して疎結合。直接依存禁止
-- `PluginManager`（`kernel/manager.py`）が全層の構築とDIを行う
-- プラグインは `PluginProtocol` に準拠し、`init(manager)` / `start(manager)` / `stop(manager)` を実装
-- プラグイン間の依存は `PluginManifest.dependencies` に宣言。PluginManagerがトポロジカルソートで解決
-- 新プラグイン追加は `.agents/skills/iris-plugin-create/SKILL.md` 参照
-- `debug_tools/` → `iris/` のみ。逆方向は物理禁止
-
-### EventBus 利用規約
-- `bus.subscribe(TimerTick, handler)` の型安全版を使用すること
-- `bus.publish(event, strict=True)` でデバッグ時にハンドラ例外を再 raise 可能
-- `bus.metrics.summary()` で配信数・エラー数を確認可能
-- `bus.publish_async(event)` で非同期ハンドラをサポート
-
-詳細は `docs/architecture.md` を参照。
-構成図やシーケンス図の作成・レンダリングは `.agents/skills/iris-visualize/SKILL.md` を参照。
-
-## 6. 記憶体系
-
-| 種別 | 永続化 | 上限 | 備考 |
-|---|---|---|---|
-| 自己プロフィール | `.iris/config/iris_profile.md` | 2KB | テンプレート、`{name}`プレースホルダ可 |
-| エピソード記憶 | `episodes.jsonl` | 30エントリ | 古いものをマージ圧縮 |
-| 意味記憶 | `semantic.jsonl` + ChromaDB | 100エントリ | BM25ハイブリッド検索 |
-| ベクトル | `chroma_db/` | - | ONNX MiniLM、統合スコア=vector*0.6+bm25*0.4 |
-
-## 7. ツールチェーン
-
-実行順序の推奨:
+## コマンド
 
 ```powershell
-# 1. テスト（最優先）
 uv run pytest tests/ -q
-
-# 2. lint + auto-fix
 uv run ruff check --fix .
-
-# 3. format確認
 uv run ruff format --check .
-
-# 4. type check（mypy or pyright）
 uv run mypy .
-# または
-uv run pyright .
 ```
 
-※ 設定は `pyproject.toml` に集約
-※ テストはFake実装。LLM実通信なし。ChromaDB/ONNXは初回DL
+## Git
 
-## 8. プラグイン追加ルール
-
-全Pluginは `PluginProtocol` に準拠し、以下の5ステップで `init()` を実装する:
-1. `manager.register_manifest(MANIFEST)` — 自己宣言
-2. `manager.resolve(DepType)` — 依存を型キーでDIから取得
-3. コンポーネント生成 + EventBus handler配線
-4. `manager.provide(ServiceType, instance)` — 他向けに型キーでDI登録
-5. `register_hooks(manager)` または `manager.hook_registry.register_decorated(self)` — HookPoint登録（任意）
-
-- Plugin categories: `CORE` / `LAYER` / `FEATURE` / `PROVIDER` / `TOOL`
-- Plugin phases: `INFRA(0)` → `CORE(10)` → `STORE(15)` → `LAYER(20)` → `COGNITIVE(30)` → `FEATURE(40)` → `READY(50)`
-- ライフサイクル: `UNLOADED` → `INITIALIZED` → `STARTED` → `READY` → `STOPPING` → `STOPPED` / `ERROR`
-- サブプラグイン（Provider、built-ins等）は親Plugin側の規約で自動発見・登録
-- 依存検証: 起動時に未解決依存を自動検出し、`DependencyError` を発生
-- ホットリロード: `manager.reload_plugin("plugin_name")` で実行中の再読み込みが可能
-
-テンプレート:
-- 新規プラグイン: `.agents/skills/iris-plugin-create/SKILL.md`
-- Hook追加: `.agents/skills/iris-plugin-hook/SKILL.md`
-- プロバイダ/サブプラグイン: `.agents/skills/iris-plugin-provider/SKILL.md`
-- 内部構造・コンポーネント命名: 基本ルールは §4。実装パターン・コード例は `.agents/skills/iris-plugin-structure/SKILL.md`
-
-## 9. Tool追加ルール
-
-1. `@tool()` デコレータで定義（型ヒント→JSON Schema自動生成）
-2. `register(registry)` で `registry.register_decorated(fn)` をエクスポート
-3. `allowed_roles` でモデルロール制限（デフォルト全ロール可）
-4. `side_effect=True` で作用系Tool（結果を会話に戻さない）
-5. 追加後は `.iris/config/iris_profile.md` の該当セクションを更新
-6. テンプレート: `.agents/skills/capability-pattern/SKILL.md`
-
-## 10. ドキュメント更新
-
-機能変更時は以下を確認:
-
-- 設計文書 (`docs/*.md`)
-- 自己プロフィール (`.iris/config/iris_profile.md`)
-- `AGENTS.md`, `.agents/README.md`, `.agents/project.md`
-- Skills (`.agents/skills/*/SKILL.md`)
-
-詳細: `.agents/skills/doc-sync/SKILL.md`
-
-## 11. コンテキスト運用
-
-- 常時読む: `AGENTS.md` + `.agents/README.md`
-- 責務境界確認時: `.agents/project.md`
-- ワークフロー実行時: `.agents/skills/*/SKILL.md`
-- 設計判断時: `docs/` の該当ファイルのみ
-- Git履歴・テスト結果・過去ログは必要範囲だけ取得。`.agents/` への複製禁止
-
-## 12. Gitルール
-
-- 1タスク完了ごとにコミット
-- メッセージは日本語で変更内容が一目でわかるように
-  - 例: `feat: ファイル検索capabilityを追加`
-  - 例: `fix: ReflexionのJSONパースエラーを修正`
-- コード変更とドキュメント更新は同一コミットに含める
-
-## 13. デバッグ基盤
-
-- **DebugSnapshotEvent**: `category` + `data` で状態変化を表現
-- **EventTracer**: EventBus上のリングバッファ（500件）。categoryインデックス付き
-- **SystemDiagnostics**: `get_state()` 命名規約による自動発見
-- 新状態追加 → `get_state()` + `DebugSnapshotEvent publish` のみ
-
-詳細: `.agents/skills/doc-sync/SKILL.md`
-
-## 14. 技術スタック
-
-- Python 3.13+, ollama, httpx, pydantic, pyyaml, rich, prompt_toolkit
-- ChromaDB + ONNX
-- OS: Windows 11, GPU: RTX 4070 SUPER (12GB VRAM)
-- デフォルトモデル: Qwen3.5:9b
+- 1タスク完了ごとにコミット。
+- 日本語メッセージ。
+- コード変更と必要なdocs更新は同一コミット。

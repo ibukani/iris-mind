@@ -5,8 +5,9 @@
 
 ## Context Budget
 
-- 常時読むのは `AGENTS.md` とこのファイルだけにする
-- `project.md` はアーキテクチャや責務境界を確認するときだけ読む
+- 常時読むのは `AGENTS.md` だけにする
+- このファイルは `.agents/` の役割確認が必要なときだけ読む
+- `project.md` はプロジェクト概要や責務境界を確認するときだけ読む
 - `skills/*/SKILL.md` は該当作業を行うときだけ読む
 - `docs/` は関連する設計判断が必要なときに対象ファイルだけ読む
 - Git 履歴やテスト結果は必要な範囲だけ取得し、過去ログを `.agents/` に複製しない
@@ -18,7 +19,8 @@
 
 ## Source of truth
 
-- プロジェクトルール: `AGENTS.md`
+- エージェント入口: `AGENTS.md`
+- 通常開発ルール: `skills/iris-dev-workflow/SKILL.md`
 - アーキテクチャと設計判断: `docs/architecture.md`
 - 実装の履歴: Git commit / PR / Issue
 - 一時的な作業メモ: 常設しない。必要時のみユーザーまたは作業ブランチ上で管理する。
@@ -27,5 +29,5 @@
 
 - `.agents/` に進捗ログやブランチ状態を常設しない
 - 設計判断は `docs/architecture.md` に記録する（必要に応じて `docs/adr/` を新設可）
-- 運用手順の変更は対応する Skill と `AGENTS.md` を更新する
+- 運用手順の変更は対応する Skill を更新し、`AGENTS.md` は参照先だけ必要最小限で更新する
 - 要約よりも参照先を優先し、同じ事実を複数ファイルに書かない

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from graphlib import TopologicalSorter
 import importlib
 import sys
 from types import ModuleType
@@ -8,30 +7,15 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
+from iris.kernel.plugin.manifest import PluginManifest, PluginState
 from iris.kernel.plugin.protocol import PluginProtocol
 
-from .manifest import PluginManifest, PluginPhase, PluginState
+from .dependency import DependencyError as DependencyError
+from .dependency import resolve_order, verify_dependencies
+from .models import PluginInstance
 
 if TYPE_CHECKING:
     from iris.kernel.manager import PluginManager
-
-
-class DependencyError(Exception):
-    """プラグインの依存関係エラー。"""
-
-    def __init__(self, plugin_name: str, missing: set[str]) -> None:
-        self.plugin_name = plugin_name
-        self.missing = missing
-        super().__init__(f"Plugin '{plugin_name}' has unresolved dependencies: {missing}")
-
-
-class PluginInstance:
-    __slots__ = ("manifest", "module", "state")
-
-    def __init__(self, manifest: PluginManifest, module: ModuleType) -> None:
-        self.manifest = manifest
-        self.module = module
-        self.state = PluginState.UNLOADED
 
 
 class PluginLifecycle:
@@ -59,24 +43,8 @@ class PluginLifecycle:
                 continue
             self._plugins[manifest.name] = PluginInstance(manifest=manifest, module=module)
 
-        self._resolve_order()
-        self._verify_dependencies()
-
-    def _verify_dependencies(self) -> None:
-        """全プラグインの依存関係を事前検証する。
-
-        未解決の依存がある場合は DependencyError を発生させる。
-        これにより、init 時に初めて依存不足が発見される問題を防ぐ。
-        """
-        known_services: set[str] = set(self._plugins.keys())
-        for p in self._plugins.values():
-            known_services.update(p.manifest.provides)
-        known_services.update(self._builtin_service_names)
-
-        for name, p in self._plugins.items():
-            missing = p.manifest.dependencies - known_services
-            if missing:
-                raise DependencyError(name, missing)
+        self._order = resolve_order(self._plugins, self._builtin_service_names)
+        verify_dependencies(self._plugins, self._builtin_service_names)
 
     # ── Lifecycle phases ──
 
@@ -94,7 +62,6 @@ class PluginLifecycle:
                 raise
 
     def notify_config_loaded(self, manager: PluginManager) -> None:
-        """全プラグインの init 後に on_config_loaded を呼ぶ。"""
         for name in self._order:
             p = self._plugins[name]
             if p.state != PluginState.INITIALIZED:
@@ -122,7 +89,6 @@ class PluginLifecycle:
                 raise
 
     def mark_all_ready(self, manager: PluginManager | None = None) -> None:
-        """全プラグインの起動が完了したことを記録し、on_all_ready を呼ぶ。"""
         for name in self._order:
             p = self._plugins[name]
             if p.state == PluginState.STARTED:
@@ -132,7 +98,6 @@ class PluginLifecycle:
             self._notify_all_ready(manager)
 
     def _notify_all_ready(self, manager: PluginManager) -> None:
-        """全プラグインに対して on_all_ready を呼ぶ。"""
         for name in self._order:
             p = self._plugins[name]
             if p.state not in (PluginState.READY, PluginState.STARTED):
@@ -144,7 +109,6 @@ class PluginLifecycle:
                 logger.exception("PluginLifecycle: on_all_ready failed for '{}'", name)
 
     def notify_pre_shutdown(self, manager: PluginManager) -> None:
-        """シャットダウン前に全プラグインに on_pre_shutdown を呼ぶ。"""
         for name in reversed(self._order):
             p = self._plugins.get(name)
             if p is None or p.state not in (PluginState.STARTED, PluginState.READY, PluginState.INITIALIZED):
@@ -170,19 +134,6 @@ class PluginLifecycle:
                 logger.exception("PluginLifecycle: stop failed for '{}'", name)
 
     def reload_plugin(self, plugin_name: str, manager: PluginManager) -> bool:
-        """プラグインをホットリロードする。
-
-        1. プラグインを停止
-        2. モジュールをリロード
-        3. 再初期化・再起動
-
-        Args:
-            plugin_name: リロード対象のプラグイン名。
-            manager: PluginManager インスタンス。
-
-        Returns:
-            成功した場合 True。
-        """
         if plugin_name not in self._plugins:
             logger.warning("PluginLifecycle: plugin '{}' not found for reload", plugin_name)
             return False
@@ -206,6 +157,7 @@ class PluginLifecycle:
 
         # Step 2: Reload module
         try:
+            assert p.module is not None
             module_name = p.module.__name__
             if module_name in sys.modules:
                 new_module = importlib.reload(p.module)
@@ -235,7 +187,9 @@ class PluginLifecycle:
     # ── Internal ──
 
     @staticmethod
-    def _resolve_plugin(module: ModuleType) -> PluginProtocol:
+    def _resolve_plugin(module: ModuleType | None) -> PluginProtocol:
+        if module is None:
+            raise RuntimeError("Plugin module is None")
         plugin: object | None = getattr(module, "plugin", None)
         if isinstance(plugin, PluginProtocol):
             return plugin
@@ -249,44 +203,6 @@ class PluginLifecycle:
             return module
 
         raise RuntimeError(f"Module '{module.__name__}' has no PluginProtocol implementation")
-
-    def _resolve_order(self) -> None:
-        graph: dict[str, set[str]] = {name: set(p.manifest.dependencies) for name, p in self._plugins.items()}
-
-        known_services: set[str] = set(self._plugins)
-        for p in self._plugins.values():
-            known_services.update(p.manifest.provides)
-        known_services.update(self._builtin_service_names)
-
-        for dep_set in graph.values():
-            for dep in dep_set:
-                if dep not in known_services:
-                    raise KeyError(f"Plugin has unresolved dependency '{dep}'")
-
-        phases: dict[PluginPhase, list[str]] = {}
-        for name, p in self._plugins.items():
-            phases.setdefault(p.manifest.phase, []).append(name)
-
-        self._order = []
-        for phase in sorted(PluginPhase):
-            names = phases.get(phase, [])
-            if not names:
-                continue
-            phase_graph = {n: graph[n] for n in names}
-            try:
-                ts: TopologicalSorter[str] = TopologicalSorter(phase_graph)
-                phase_order = list(ts.static_order())
-            except Exception:
-                logger.exception("PluginLifecycle: cycle detected in phase {}", phase.name)
-                raise
-            for name in phase_order:
-                if name in self._plugins:
-                    self._order.append(name)
-
-        logger.info(
-            "PluginLifecycle: order: {}",
-            " → ".join(f"({self._plugins[n].manifest.phase.name}){n}" for n in self._order),
-        )
 
     def _stop_started_before(self, failed_name: str, manager: PluginManager) -> None:
         idx = self._order.index(failed_name) if failed_name in self._order else -1

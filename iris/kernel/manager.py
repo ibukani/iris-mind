@@ -126,9 +126,9 @@ class PluginManager:
 
     def register_manifest(self, manifest: PluginManifest) -> None:
         if manifest.name not in self._lifecycle.plugins:
-            from .plugin.lifecycle import PluginInstance
+            from iris.kernel.plugin.lifecycle.models import PluginInstance
 
-            self._lifecycle.plugins[manifest.name] = PluginInstance(manifest=manifest, module=None)  # type: ignore[arg-type]
+            self._lifecycle.plugins[manifest.name] = PluginInstance(manifest=manifest, module=None)
 
     def reload_plugin(self, plugin_name: str) -> bool:
         return self._lifecycle.reload_plugin(plugin_name, self)

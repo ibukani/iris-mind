@@ -24,6 +24,7 @@ metadata:
 - **依存性注入 (DI) の徹底**: `PluginManager` をロジッククラス内に保持して動的に解決する（サービスロケーターパターン）のを禁止し、すべてコンストラクタで明示的に注入する
 - **純粋ロジックとI/Oの分離**: スコアラーやエクストラクター等は純粋なデータ処理に徹し、ファイルI/OやEventBusパブリッシュなどの副作用を持たせない
 - **EventBus subscribe は handler で行う**: manager が直接 subscribe してはいけない。購読処理は必ず `handler.py` に分離し、`__init__.py` で wiring する
+- **既存Pluginの過剰リファクタ禁止**: 構造ルールに完全一致させるためだけの大規模リファクタは行わない。今回の変更範囲に関係する責務分離のみ行う
 
 ## 標準ディレクトリ構成
 
@@ -106,11 +107,13 @@ iris/<plugin_name>/
 ## 命名規則詳細
 
 ### ファイル名
+
 - `snake_case.py`。略語禁止（`di.py` → `service_container.py`）
 - 単数形優先。ただし複数エンティティのコンテナは複数形可（`protocols.py`, `stores.py`）
 - 数字接尾辞禁止（`handler2.py` ではなく責務名で分割）
 
 ### クラス名
+
 - `PascalCase`。ファイル名とプレフィックスを合わせる
   - `manager.py` → クラス名は `XxxManager`
   - `protocols.py` → クラス名は `XxxProtocol`
@@ -118,12 +121,14 @@ iris/<plugin_name>/
 - Protocol クラスは `XxxProtocol` の命名を推奨（`typing.Protocol` のサブクラスであることが明示的）
 
 ### 関数名
+
 - `snake_case`。モジュールレベル関数は `動詞_目的語` パターン
   - `build_agency`, `route_after_llm`, `render_short_term_context`
 - プライベート関数は `_prefix`
 - ハンドラは `_on_xxx_event`（イベント購読用）、`_xxx_hook`（Hook用）
 
 ### 定数
+
 - `UPPER_SNAKE_CASE`
 - モジュールレベル定数はファイル先頭に集約
 
@@ -146,8 +151,9 @@ iris/<plugin_name>/
 
 ```
 iris/llm/providers/           # LLM プロバイダ
-├── __init__.py               # 集約 register 関数
-├── ollama.py                 # register(bridge) 関数
+├── __init__.py               # discover_providers() を呼ぶ
+├── base.py                   # BaseLLMProvider + registry
+├── ollama.py
 ├── openrouter.py
 └── google.py
 
@@ -157,7 +163,8 @@ iris/tools/builtins/          # 組み込みツール
     └── server.py             # register(registry) 関数
 ```
 
-- サブプラグインは `register(parent)` 単一関数をエクスポート
+- LLM Provider は `BaseLLMProvider.provider_name` による自動登録を使う
+- Tool capability は `register(registry)` / decorator を使う
 - ファイル名はプロバイダ/ツール名をそのまま使う（`ollama.py`, `git.py`）
 
 ## 実装パターン集
@@ -175,11 +182,14 @@ from .builder import build_components
 if TYPE_CHECKING:
     from iris.kernel.manager import PluginManager
 
+
 class XxxPlugin(PluginProtocol):
     def init(self, manager: PluginManager) -> None:
         # 複雑なコンポーネント組み立てを builder に委譲
         self._components = build_components(manager)
+```
 
+```python
 # iris/<plugin>/builder.py
 from __future__ import annotations
 from typing import Any, TYPE_CHECKING
@@ -191,31 +201,13 @@ from .manager import XxxManager
 if TYPE_CHECKING:
     from iris.kernel.manager import PluginManager
 
+
 def build_components(manager: PluginManager) -> dict[str, Any]:
     event_bus = manager.resolve(EventBus)
     component = XxxManager(event_bus=event_bus)
     manager.provide(XxxManager, component)
     return {"manager": component}
 ```
-
-### サブプラグイン自動発見と登録
-
-```python
-# iris/<plugin>/__init__.py
-from __future__ import annotations
-from iris.kernel.plugin.loader import discover_sub_plugins
-from iris.kernel.plugin import PluginProtocol
-
-class ParentPlugin(PluginProtocol):
-    def init(self, manager) -> None:
-        # discover_sub_plugins(parent_path) は module のリストを返す
-        for module in discover_sub_plugins("iris/<plugin>/providers"):
-            register_fn = getattr(module, "register", None)
-            if register_fn is not None:
-                register_fn(self)
-```
-
-LLM Provider はこの汎用 `register()` 方式ではなく、`BaseLLMProvider.provider_name` による自動登録を使う。
 
 ### Handler（イベント購読）
 
@@ -226,23 +218,23 @@ handler は `__init__.py` の `init()` で wiring する。manager に購読を�
 from __future__ import annotations
 from typing import Any
 
-from loguru import logger
-
 from iris.event.event_types import MessageEvent, TimerTick
 
 
 class _XxxEventHandler:
     def __init__(self, event_bus: Any, dependency: Any) -> None:
-        event_bus.subscribe(MessageEvent, self._on_event)  # 型安全版
+        self._dependency = dependency
+        event_bus.subscribe(MessageEvent, self._on_message_event)
         event_bus.subscribe(TimerTick, self._on_tick)
 
-    def _on_event(self, event: MessageEvent) -> None:
+    def _on_message_event(self, event: MessageEvent) -> None:
         ...
 
     def _on_tick(self, event: TimerTick) -> None:
         ...
+```
 
-
+```python
 # iris/<plugin>/__init__.py の init() 内
 _XxxEventHandler(
     event_bus=manager.resolve(EventBus),
@@ -255,18 +247,21 @@ handler が manager のメソッドを呼び戻す必要がある場合は `Prot
 ```python
 # iris/<plugin>/handler.py
 from __future__ import annotations
-from typing import Protocol
+from typing import Any, Protocol
 
 from iris.event.event_types import SomeEvent
+
 
 class _XxxControlProtocol(Protocol):
     def some_action(self) -> None: ...
 
+
 class _XxxEventHandler:
     def __init__(self, event_bus: Any, controller: _XxxControlProtocol) -> None:
-        event_bus.subscribe(SomeEvent, self._on_event)  # 型安全版
+        self._controller = controller
+        event_bus.subscribe(SomeEvent, self._on_some_event)
 
-    def _on_event(self, event: SomeEvent) -> None:
+    def _on_some_event(self, event: SomeEvent) -> None:
         self._controller.some_action()
 ```
 
@@ -275,7 +270,7 @@ class _XxxEventHandler:
 # XxxManager が Protocol を実装している前提
 _FlowExecutionHandler(
     event_bus=manager.resolve(EventBus),
-    controller=components["execution"],  # XxxManager 等
+    controller=components["execution"],
 )
 ```
 
@@ -286,8 +281,10 @@ _FlowExecutionHandler(
 from __future__ import annotations
 from typing import Protocol
 
+
 class XxxScorer(Protocol):
     def score(self, data: InputType) -> int: ...
+
 
 class DefaultXxxScorer:
     def score(self, data: InputType) -> int:
@@ -302,11 +299,13 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
+
 def build_dispatch_handlers(...) -> dict[str, Callable[..., Any]]:
     return {
         "store": _store_impl,
         "search": _search_impl,
     }
+
 
 def _store_impl(data: Any) -> None: ...
 def _search_impl(query: Any) -> list[Any]: ...
@@ -326,6 +325,7 @@ def _search_impl(query: Any) -> list[Any]: ...
 - クラス名は `PascalCase` でファイル名とのプレフィックス一致を意識
 - 内部クラスは `_` プレフィックス。外部から `import` させない
 - 分割トリガーに達する前の過剰分割は禁止。必要になるまで単一ファイルで良い。ただし EventBus subscribe は1つでも handler.py へ必須分離（本原則の唯一の例外）
+- 既存Pluginを構造ルールに完全一致させるためだけの大規模リファクタは行わない
 - 仕様変更に伴う構造変更は分割トリガー未到達でも許容。新仕様に適合する構造を優先する
 - `__init__.py` の `init()` が 50行を超えたら `builder.py` に切り出す
 - 1ファイル200行を目安に、超えたら責務分割を検討

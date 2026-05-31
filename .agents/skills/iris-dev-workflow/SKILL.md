@@ -34,7 +34,7 @@ Iris の通常開発手順。MVP開発を妨げる保守的すぎる判断を避
 4. 現在仕様に合わない古い実装を削除・置換する。
 5. 変更単位ごとに検証する。
 6. `doc-sync` で更新漏れを確認する。
-7. コミットする。
+7. ユーザーが明示的に依頼した場合のみコミットする。
 
 ## MVP Decision Policy
 
@@ -43,7 +43,7 @@ Iris の通常開発手順。MVP開発を妨げる保守的すぎる判断を避
 - 移行コード、deprecated経路、旧形式パースは明示要求がない限り追加しない。
 - テストは新仕様を固定する。旧仕様のテストは削除または書き換える。
 - 大きな再設計より、小さく完結した置換を優先する。
-- ただしデータ破壊、認証、外部副作用は明示確認する。
+- ただしデータ破壊、認証、外部送信、永続ストレージ削除、Git履歴変更は明示確認する。
 
 ## Python Rules
 
@@ -64,18 +64,26 @@ Iris の通常開発手順。MVP開発を妨げる保守的すぎる判断を避
 - 全層は `iris/event/` を介して疎結合。
 - `debug_tools/` は `iris/` に依存してよい。逆は禁止。
 - PluginManager をロジッククラスに保持しない。依存はコンストラクタ注入。
-- EventBus subscribe は `handler.py` に置く。manager から直接 subscribe しない。
+- EventBus subscribe は原則 `handler.py` に置く。manager から直接 subscribe しない。
+- 既存実装を構造ルールに完全一致させるだけの大規模リファクタは行わない。今回の変更範囲に関係する責務分離のみ行う。
 - Plugin構造の詳細は `iris-plugin-structure` を読む。
 
 ## Validation
 
-標準順:
+検証のみ:
 
-```powershell
+```bash
 uv run pytest tests/ -q
-uv run ruff check --fix .
+uv run ruff check .
 uv run ruff format --check .
 uv run mypy .
+```
+
+修正を許可されている場合:
+
+```bash
+uv run ruff check --fix .
+uv run ruff format .
 ```
 
 狭い変更では対象テストから始めてよい。最後に必要範囲を広げる。
@@ -89,6 +97,6 @@ uv run mypy .
 
 ## Git
 
-- 1タスク完了ごとにコミット。
+- コミットはユーザーが明示的に依頼した場合のみ行う。
 - メッセージは日本語。
 - コード変更と必要なdocs更新は同一コミット。

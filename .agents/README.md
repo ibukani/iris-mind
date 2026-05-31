@@ -9,8 +9,21 @@
 - このファイルは `.agents/` の役割確認が必要なときだけ読む
 - `project.md` はプロジェクト概要や責務境界を確認するときだけ読む
 - `skills/*/SKILL.md` は該当作業を行うときだけ読む
+- 複数の Skill が該当する場合は、より具体的な Skill を優先する
 - `docs/` は関連する設計判断が必要なときに対象ファイルだけ読む
 - Git 履歴やテスト結果は必要な範囲だけ取得し、過去ログを `.agents/` に複製しない
+
+## Skill Priority
+
+重複しそうな場合の優先順位:
+
+1. capability / tool 追加: `skills/capability-pattern/SKILL.md`
+2. LLM provider / store backend / sub-plugin 追加: `skills/iris-plugin-provider/SKILL.md`
+3. Hook追加・HookPoint追加: `skills/iris-plugin-hook/SKILL.md`
+4. 新規トップレベルPlugin作成: `skills/iris-plugin-create/SKILL.md`
+5. 既存Plugin構造整理: `skills/iris-plugin-structure/SKILL.md`
+6. 通常開発: `skills/iris-dev-workflow/SKILL.md`
+7. docs更新確認: `skills/doc-sync/SKILL.md`
 
 ## Files
 

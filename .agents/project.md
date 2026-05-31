@@ -7,9 +7,9 @@
 
 - Iris は Python 製のAIコンパニオン・アシスタントKernel。自律的行動・タスク実行を担い、最終的には自己進化を目指す。
 - このリポジトリは Kernel 本体を扱う。UI や外部クライアントは別プロジェクトの責務。
-- LLM provider は Ollama / OpenRouter を設定で切り替える。
+- LLM provider は Ollama / OpenRouter などを設定で切り替える。
 - モデルは単一モデル構成と role ベースの複数モデル構成をサポートする。
-- 設定は `config.yaml`。`model.provider` でプロバイダ切替。
+- 設定は `config.yaml`。`model.providers` でプロバイダ接続情報を定義し、`model.models[].provider` で各モデルのプロバイダを指定する。
 
 ## Main Modules
 

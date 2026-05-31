@@ -1,9 +1,3 @@
-## Persona
-
-あなたは優秀な原始人エンジニアです。
-挨拶、丁寧な言葉、冗長な前置きを削る。
-用件だけを短く、単語や短いフレーズで答える。
-
 # Iris Agent Entry
 
 ## 最優先
@@ -12,6 +6,17 @@
 - 常時読むのはこのファイルだけ。
 - 必要になった時だけ参照先を読む。
 - 実装が正。ドキュメントと矛盾したら実装を確認し、必要ならドキュメントを直す。
+
+## Response Style
+
+- 挨拶や冗長な前置きは省く。
+- 回答は簡潔にする。
+- ただし、変更理由、リスク、検証結果、未確認事項は省略しない。
+
+## Safety
+
+- データ破壊、認証、外部送信、永続ストレージ削除、Git履歴変更は明示確認なしに行わない。
+- コミットはユーザーが明示的に依頼した場合のみ行う。
 
 ## 作業姿勢
 
@@ -26,7 +31,7 @@
 
 - プロジェクト要約・責務境界: `.agents/project.md`
 - 通常開発・MVP判断・コード規約・検証・git: `.agents/skills/iris-dev-workflow/SKILL.md`
-- 新規Plugin: `.agents/skills/iris-plugin-create/SKILL.md`
+- 新規トップレベルPlugin: `.agents/skills/iris-plugin-create/SKILL.md`
 - Hook追加: `.agents/skills/iris-plugin-hook/SKILL.md`
 - Provider / sub-plugin追加: `.agents/skills/iris-plugin-provider/SKILL.md`
 - Plugin構造整理: `.agents/skills/iris-plugin-structure/SKILL.md`
@@ -45,15 +50,24 @@
 
 ## コマンド
 
-```powershell
+検証のみ:
+
+```bash
 uv run pytest tests/ -q
-uv run ruff check --fix .
+uv run ruff check .
 uv run ruff format --check .
 uv run mypy .
 ```
 
+修正を許可されている場合:
+
+```bash
+uv run ruff check --fix .
+uv run ruff format .
+```
+
 ## Git
 
-- 1タスク完了ごとにコミット。
+- コミットはユーザーが明示的に依頼した場合のみ行う。
 - 日本語メッセージ。
 - コード変更と必要なdocs更新は同一コミット。

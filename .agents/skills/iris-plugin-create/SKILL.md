@@ -1,8 +1,9 @@
 ---
 name: iris-plugin-create
 description: |
-  Use ONLY when creating a brand-new Plugin class (new layer/category/feature/tool).
-  Do NOT use: modifying existing plugins, adding hooks, adding sub-plugins.
+  Use ONLY when creating a brand-new top-level Iris Plugin class under iris/<plugin_name>/.
+  Do NOT use: modifying existing plugins, adding hooks, adding @tool capabilities,
+  adding LLM providers, adding store backends, or adding sub-plugins.
 license: MIT
 metadata:
   audience: developers
@@ -11,8 +12,10 @@ metadata:
 
 ## Purpose
 
-Iris に新しいプラグイン（層/機能/ツール/プロバイダ）を追加するときに読む。
-すべてのプラグインは `PluginProtocol` に準拠する。
+Iris に新しいトップレベルPluginを追加するときに読む。
+@tool capability は `capability-pattern`、LLM provider / store backend は `iris-plugin-provider`、Hook は `iris-plugin-hook` を読む。
+すべてのトップレベルPluginは `PluginProtocol` に準拠する。
+詳細な `PluginProtocol` / `PluginManifest` / lifecycle 定義は `iris/kernel/plugin/` の実装を一次情報にする。以下は現在の標準パターン。
 
 ## Plugin カテゴリ
 
@@ -67,19 +70,18 @@ MANIFEST = PluginManifest(
     description="プラグインの説明",
 )
 
+
 class MyPlugin(PluginProtocol):
     MANIFEST = MANIFEST
 
     def init(self, manager: PluginManager) -> None:
         """DI登録 + コンポーネント生成 + 配線 + Hook購読"""
         manager.register_manifest(MANIFEST)
-        # resolve: 依存を型キーで取得
+
         event_bus = manager.resolve(EventBus)
-        # create + wire: 内部コンポーネント生成
         instance = MyService(event_bus=event_bus)
-        # provide: 他Plugin向けにDI登録
         manager.provide(MyService, instance)
-        # hooks
+
         from .hooks import register_hooks
         register_hooks(manager)
 
@@ -90,6 +92,7 @@ class MyPlugin(PluginProtocol):
     def stop(self, manager: PluginManager) -> None:
         """クリーンアップ（任意）"""
         pass
+
 
 plugin: PluginProtocol = MyPlugin()
 ```
@@ -124,9 +127,9 @@ if TYPE_CHECKING:
 class _MyEventHandler:
     def __init__(self, event_bus: Any, service: MyService) -> None:
         self._service = service
-        event_bus.subscribe(MessageEvent, self._on_message)
+        event_bus.subscribe(MessageEvent, self._on_message_event)
 
-    def _on_message(self, event: MessageEvent) -> None:
+    def _on_message_event(self, event: MessageEvent) -> None:
         self._service.handle(event)
 ```
 
@@ -168,6 +171,7 @@ PluginManager が提供する標準サービス:
 ### 6. プラグイン設定を使う（任意）
 
 `config.yaml`:
+
 ```yaml
 plugins:
   config:
@@ -193,13 +197,29 @@ plugins:
     - my_plugin
 ```
 
-### 9. 検証してコミットする
+### 9. 検証する
 
-```powershell
-pytest tests/ -q
-ruff check --fix .
-ruff format --check .
-mypy .
+検証のみ:
+
+```bash
+uv run pytest tests/ -q
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy .
+```
+
+修正を許可されている場合:
+
+```bash
+uv run ruff check --fix .
+uv run ruff format .
+```
+
+### 10. コミットする
+
+ユーザーが明示的に依頼した場合のみ行う。
+
+```bash
 git add .
 git commit -m "feat: <plugin_name> プラグインを追加"
 ```
@@ -210,10 +230,12 @@ git commit -m "feat: <plugin_name> プラグインを追加"
 - `init(manager)` で DI resolve → create → wire → provide → hooks
 - 依存は `MANIFEST.dependencies` に必ず宣言すること（未解決依存は起動時に `DependencyError` が発生）
 - `manager.register_manifest(MANIFEST)` を `init()` の最初に呼ぶこと
-- `PluginState` は PluginManager が管理する。プラグイン側で触らない
+- PluginState は PluginManager が管理する。プラグイン側で触らない
 - `start()` / `stop()` は非ブロッキング。バックグラウンドは Plugin 内部でスレッド管理
 - EventBus subscribe は型安全版を使用すること（`bus.subscribe(TimerTick, handler)`）
 - ホットリロード: `manager.reload_plugin("plugin_name")` で実行中の再読み込みが可能
+- capability / tool 追加だけならこのSkillを使わず `capability-pattern` を読む
+- LLM provider / store backend / sub-plugin 追加だけならこのSkillを使わず `iris-plugin-provider` を読む
 
 ## Plugin 標準実装契約
 
@@ -267,11 +289,9 @@ stop_all():
 ### 関数名規約
 
 - モジュールレベル: `動詞_目的語`（`build_agency`, `route_after_llm`, `render_short_term_context`）
-- ハンドラ（EventBus購読）: **`_on_xxx_event`**（`_on_message`, `_on_tick`）
+- ハンドラ（EventBus購読）: **`_on_xxx_event`**（`_on_message_event`, `_on_tick`）
 - Hook ハンドラ: **`_xxx_hook`**（`_my_hook`）
 - プライベート: `_prefix`
-
-> ⚠️ handler.py 内の関数名は `_handle_xxx` ではなく `_on_xxx_event` とする
 
 ### handler.py 分離ルール
 
@@ -297,7 +317,7 @@ stop_all():
 
 ### その他の重要ルール
 
-- `PluginManager` をロジッククラスのメンバ変数に保持させない。コンストラクタで具象依存を注入する
+- PluginManager をロジッククラスのメンバ変数に保持させない。コンストラクタで具象依存を注入する
 - 1ファイル200行を目安に、超えたら責務分割を検討
 - 分割トリガーに達する前の過剰分割は禁止。必要になるまで単一ファイルで良い。EventBus subscribe の分離のみ例外
 - `__init__.py` は公開APIのみ再エクスポート。内部モジュールへの直接アクセスは非推奨

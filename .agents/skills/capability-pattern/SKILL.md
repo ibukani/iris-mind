@@ -2,9 +2,8 @@
 name: capability-pattern
 description: |
   Use ONLY when adding a new Tool/capability (new @tool decorated function with register function).
-  Do NOT use: creating plugins, adding hooks, adding LLM providers.
+  Do NOT use: creating plugins, adding hooks, adding LLM providers, adding store backends.
 license: MIT
-compatibility: *
 metadata:
   audience: developers
   workflow: iris-extension
@@ -56,16 +55,32 @@ def register(registry):
 
 5. ドキュメントと構造記憶を更新する
 
-- `.iris/config/iris_profile.md` の該当セクション
+- Irisの自己認識、使用可能能力、ふるまいに影響する場合のみ `.iris/config/iris_profile.md` を更新する
+- 内部実装だけの変更では `.iris/config/iris_profile.md` を更新しない
 - 必要なら `docs/` または `docs/adr/`
 - ドキュメント更新漏れ確認は `.agents/skills/doc-sync/SKILL.md`
 
-6. 検証してコミットする
+6. 検証する
 
-```powershell
-ruff check .
-mypy .
-pytest tests/ -q
+```bash
+uv run pytest tests/ -q
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy .
+```
+
+修正を許可されている場合:
+
+```bash
+uv run ruff check --fix .
+uv run ruff format .
+```
+
+7. コミットする
+
+ユーザーが明示的に依頼した場合のみ行う。
+
+```bash
 git add .
 git commit -m "feat: <ツール名> capability を追加"
 ```
@@ -76,3 +91,4 @@ git commit -m "feat: <ツール名> capability を追加"
 - `__init__.py` を必要なパッケージに置く。
 - 戻り値は基本 `str`。
 - `allowed_roles` を指定しない場合は全ロール利用可。
+- capability / tool 追加では新規トップレベルPluginを作らない。

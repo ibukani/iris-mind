@@ -144,7 +144,7 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             id="",
             msg_type="auth_success",
             session_id=session_id,
-            direction=grpc_service_pb2.DIRECTION_RESPONSE,
+            direction=grpc_service_pb2.DIRECTION_RESPONSE,  # type: ignore[attr-defined]
             content="authenticated",
         )
         yield grpc_service_pb2.BidirectionalStreamResponse(message=ack)  # type: ignore[attr-defined]

@@ -183,7 +183,7 @@ class RoomJoinedBatchEvent(Event):
         data = {k: v for k, v in data.items() if k != "joins"}
         event = super().from_dict(data)
         if isinstance(event, RoomJoinedBatchEvent):
-            event.joins = [RoomJoinedEvent.from_dict(j) if isinstance(j, dict) else j for j in joins_raw]
+            event.joins = [RoomJoinedEvent.from_dict(j) if isinstance(j, dict) else j for j in joins_raw]  # type: ignore[misc]
         return event
 
 

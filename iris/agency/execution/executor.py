@@ -12,7 +12,6 @@ from iris.agency.execution.worker import AsyncWorker
 from iris.agency.inhibition import InhibitionManager
 from iris.agency.planning.models import Plan, PlanReason
 from iris.event.event_bus import EventBus
-from iris.llm.capability import CapabilityChecker
 from iris.llm.interrupt_token import InterruptToken
 
 if TYPE_CHECKING:
@@ -28,7 +27,6 @@ class FlowExecutor(AsyncWorker):
         llm_pipeline: LLMGateway,
         tool_executor: ToolEngine | None = None,
         memory: MemoryManager | None = None,
-        capability_checker: CapabilityChecker | None = None,
         inhibition: InhibitionManager | None = None,
         messages: list[BaseMessage] | None = None,
         tts_mora_per_sec: float = 6.5,
@@ -47,7 +45,6 @@ class FlowExecutor(AsyncWorker):
             tool_executor=tool_executor,
             event_bus=event_bus,
             memory=memory,
-            capability_checker=capability_checker,
         )
 
     def get_state(self) -> dict:

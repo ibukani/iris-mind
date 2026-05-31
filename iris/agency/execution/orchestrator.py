@@ -18,7 +18,6 @@ if TYPE_CHECKING:
     from iris.agency.execution.engine import ToolEngine
     from iris.agency.execution.llm.gateway import LLMGateway
     from iris.event.event_bus import EventBus
-    from iris.llm.capability import CapabilityChecker
     from iris.memory.manager import MemoryManager
 
 from loguru import logger
@@ -48,7 +47,6 @@ class ExecutionOrchestrator:
         tool_executor: ToolEngine | None = None,
         event_bus: EventBus | None = None,
         memory: MemoryManager | None = None,
-        capability_checker: CapabilityChecker | None = None,
     ) -> None:
         self._dynamic = DynamicState()
 
@@ -61,7 +59,6 @@ class ExecutionOrchestrator:
         self._general_chat = GeneralChatNode(
             pipeline=pipeline,
             tool_executor=tool_executor,
-            capability_checker=capability_checker,
             dynamic=self._dynamic,
             event_bus=event_bus,
             memory=memory,
@@ -69,7 +66,6 @@ class ExecutionOrchestrator:
         self._general_task = GeneralTaskNode(
             pipeline=pipeline,
             tool_executor=tool_executor,
-            capability_checker=capability_checker,
             dynamic=self._dynamic,
             event_bus=event_bus,
             memory=memory,

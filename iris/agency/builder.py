@@ -105,7 +105,6 @@ def build_agency(manager: PluginManager) -> AgencyComponents:
         llm_pipeline=pipeline,
         tool_executor=tool_exec,
         memory=memory,
-        capability_checker=CapabilityChecker(config=config.model),
         inhibition=inhibition,
         tts_mora_per_sec=config.inhibition.tts_mora_per_sec,
     )

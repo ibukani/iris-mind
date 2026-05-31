@@ -9,7 +9,6 @@ if TYPE_CHECKING:
     from iris.agency.execution.llm.gateway import LLMGateway
     from iris.agency.execution.models import DynamicState
     from iris.event.event_bus import EventBus
-    from iris.llm.capability import CapabilityChecker
     from iris.memory.manager import MemoryManager
 
 
@@ -22,7 +21,6 @@ class GeneralTaskNode(BaseLLMNode):
         self,
         pipeline: LLMGateway,
         tool_executor: ToolEngine | None = None,
-        capability_checker: CapabilityChecker | None = None,
         dynamic: DynamicState | None = None,
         event_bus: EventBus | None = None,
         memory: MemoryManager | None = None,
@@ -30,7 +28,6 @@ class GeneralTaskNode(BaseLLMNode):
         super().__init__(
             pipeline=pipeline,
             tool_executor=tool_executor,
-            capability_checker=capability_checker,
             dynamic=dynamic,
             event_bus=event_bus,
             memory=memory,

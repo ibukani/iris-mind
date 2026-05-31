@@ -5,6 +5,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
+from iris.agency.execution.llm.invocation_policy import ModelInvocationPolicy
 from iris.agency.execution.llm.prompt_builder import SystemPromptBuilder
 from iris.agency.modulation import ModulationState
 from iris.kernel.config import ModelConfig
@@ -36,6 +37,7 @@ class LLMGateway:
         self._personality = personality
         self._capability_checker = capability_checker
         self._debug_capture = debug_capture
+        self._policy = ModelInvocationPolicy(capability_checker)
 
         self._last_system_prompt: str = ""
         self._last_call_model_role: str = "medium"
@@ -96,27 +98,31 @@ class LLMGateway:
         self._last_system_prompt = "\n\n".join(str(m.content) for m in system_msgs) if system_msgs else ""
         self._last_call_model_role = model_role
 
+        effective_tools = self._policy.resolve_tools(tools, model_role)
+        effective_thinking = self._policy.resolve_thinking(enable_thinking, model_role)
+        effective_temp = self._policy.resolve_temperature(
+            temperature, None, None, self._model_config.get_effective_temperature(model_role)
+        )
+
         resp = await self._llm.chat(
             messages=msgs,
             model=self._model_config.get_model(model_role),
-            temperature=temperature
-            if temperature is not None
-            else self._model_config.get_effective_temperature(model_role),
+            temperature=effective_temp,
             max_tokens=max_tokens
             if max_tokens is not None
             else self._model_config.get_effective_max_tokens(model_role),
-            tools=tools,
+            tools=effective_tools,
             on_token=on_token,
             interrupt_token=interrupt_token,
             priority=priority,
-            reasoning=enable_thinking or None,
+            reasoning=effective_thinking or None,
         )
 
         self._capture_debug(
             model_role=model_role,
             system_prompt=self._last_system_prompt,
             messages=msgs,
-            tools=tools,
+            tools=effective_tools,
             response=str(resp.content) if isinstance(resp.content, str) else "",
         )
         return resp
@@ -151,7 +157,12 @@ class LLMGateway:
             last_msg = messages[-1]
             last_msg.content = self._personality.build_thinking_prompt(str(last_msg.content))
 
-        effective_temp = temperature if temperature is not None else mod.sampling_temperature
+        effective_temp = self._policy.resolve_temperature(
+            temperature,
+            None,
+            mod.sampling_temperature,
+            self._model_config.get_effective_temperature(model_role),
+        )
 
         return await self._call_llm(
             system_msgs,

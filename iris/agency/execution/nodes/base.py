@@ -15,7 +15,6 @@ if TYPE_CHECKING:
     from iris.agency.execution.engine import ToolEngine
     from iris.agency.execution.llm.gateway import LLMGateway
     from iris.event.event_bus import EventBus
-    from iris.llm.capability import CapabilityChecker
     from iris.memory.manager import MemoryManager
 
 from loguru import logger
@@ -38,14 +37,12 @@ class BaseLLMNode(ABC):
         self,
         pipeline: LLMGateway,
         tool_executor: ToolEngine | None = None,
-        capability_checker: CapabilityChecker | None = None,
         dynamic: DynamicState | None = None,
         event_bus: EventBus | None = None,
         memory: MemoryManager | None = None,
     ) -> None:
         self._pipeline = pipeline
         self._tool_executor = tool_executor
-        self._capability_checker = capability_checker
         self._dynamic = dynamic or DynamicState()
         self._event_bus = event_bus
         self._memory = memory
@@ -69,18 +66,10 @@ class BaseLLMNode(ABC):
         names = nt.tool_list_by_level.get(level_name)
         allow_side_effects = plan.overrides.get("allow_side_effects", True)
         if names is not None:
-            tools = self._tool_executor.list_tools_by_name(names, allow_side_effects) or None
-        else:
-            tools = self._tool_executor.registry.list_tools(allow_side_effects=allow_side_effects) or None
-        if tools and self._capability_checker:
-            level = TASK_LEVELS[level_name]
-            if not self._capability_checker.supports_tools(level.model_role):
-                return None
-        return tools
+            return self._tool_executor.list_tools_by_name(names, allow_side_effects) or None
+        return self._tool_executor.registry.list_tools(allow_side_effects=allow_side_effects) or None
 
     def _build_routing_tools(self, state: ExecutionState, level: TaskLevel) -> list[dict[str, Any]]:
-        if self._capability_checker and not self._capability_checker.supports_tools(level.model_role):
-            return []
         nt = NODE_TYPES[self.node_type_name]
         if state["chain_depth"] >= nt.max_chain_depth:
             targets = [t for t in nt.routing_targets if t != nt.name]
@@ -125,10 +114,8 @@ class BaseLLMNode(ABC):
         plan: Plan,
     ) -> dict[str, Any]:
         params = self._build_chat_params(state, level, plan)
-        # Planning overrides
         if "priority" in plan.overrides:
             params["priority"] = plan.overrides["priority"]
-        # TaskLevel caps: can only reduce, never exceed TaskLevel
         if params.get("max_tokens") is not None and level.max_tokens > 0:
             params["max_tokens"] = min(params["max_tokens"], level.max_tokens)
         if params.get("temperature") is not None and level.temperature is not None:

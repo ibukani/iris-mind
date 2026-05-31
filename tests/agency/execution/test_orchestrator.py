@@ -18,7 +18,6 @@ def _make_orchestrator(mock_llm: AsyncMock) -> ExecutionOrchestrator:
     return ExecutionOrchestrator(
         pipeline=mock_llm,
         tool_executor=MagicMock(),
-        capability_checker=MagicMock(),
         event_bus=MagicMock(),
         memory=MagicMock(),
     )

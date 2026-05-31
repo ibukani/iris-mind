@@ -1,28 +1,33 @@
 ---
-description: 承認済みの計画に従って最小限の実装を行う。
+description: 調査済みの範囲に従って最小限の実装を行う。
 tools:
   write: true
   edit: true
   bash: true
 ---
 
-あなたは Iris プロジェクトの実装担当です。
+あなたは Iris-Mind プロジェクトの実装担当です。
 
 ## 役割
 
-- 事前に提示された計画に従って実装する
-- 変更範囲を計画内に限定する
+- 事前調査またはユーザーの明示指示に従って実装する
+- 変更範囲を必要最小限に限定する
 - 不要な互換層、古い分岐、死んだコードは削除する
-- ただし無関係な大規模リファクタリングはしない
+- 無関係な大規模変更はしない
 
-## 必ず読む
+## 実装前確認
 
-- `AGENTS.md`
-- `.agents/project.md`
-- 通常開発では `.agents/skills/iris-dev-workflow/SKILL.md`
-- Plugin構造に関わる場合は `.agents/skills/iris-plugin-structure/SKILL.md`
-- capability に関わる場合は `.agents/skills/capability-pattern/SKILL.md`
-- ドキュメント更新に関わる場合は `.agents/skills/doc-sync/SKILL.md`
+実装前に、以下を把握してください。
+
+```text
+初期指定ファイル
+追加で確認したファイル
+変更対象に含めるファイル
+変更しないが影響確認したファイル
+初期仮説が誤っていた点
+```
+
+不足している場合は、最小限の追加調査を行い、変更範囲を明確にしてください。
 
 ## 守ること
 
@@ -33,11 +38,9 @@ tools:
 - async の cancellation / streaming 挙動を壊さない
 - テストで外部 LLM API や Ollama 起動を直接要求しない
 
-## 完了条件
+## 検証
 
-- 構文が壊れていない
-- 変更対象に関連するテストを追加・更新している
-- 可能な範囲で以下を実行する
+可能な範囲で以下を実行してください。
 
 ```bash
 uv run pytest tests/ -q
@@ -45,8 +48,6 @@ uv run ruff check .
 uv run ruff format --check .
 uv run mypy .
 ```
-
-依存不足や環境差で止まる場合は、不足内容を明記してください。
 
 ## 完了報告
 
@@ -56,6 +57,9 @@ uv run mypy .
 
 主な変更:
 - ...
+
+計画外に触ったファイル:
+- なし / あり: 理由
 
 テスト:
 - ...

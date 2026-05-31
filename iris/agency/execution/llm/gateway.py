@@ -7,7 +7,7 @@ from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
 from iris.agency.execution.llm.invocation_policy import ModelInvocationPolicy
 from iris.agency.execution.llm.prompt_builder import SystemPromptBuilder
-from iris.agency.modulation import ModulationState
+from iris.agency.modulation import ModulationState, sampling_temperature
 from iris.kernel.config import ModelConfig
 from iris.kernel.debug_capture import DebugCapture
 from iris.llm.bridge import LLMBridge
@@ -160,7 +160,7 @@ class LLMGateway:
         effective_temp = self._policy.resolve_temperature(
             temperature,
             None,
-            mod.sampling_temperature,
+            sampling_temperature(mod),
             self._model_config.get_effective_temperature(model_role),
         )
 

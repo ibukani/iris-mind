@@ -8,9 +8,11 @@
 
 from __future__ import annotations
 
-from .base import BaseLLMProvider, discover_providers, get_provider_class, register_provider
+from .base import BaseLLMProvider
+from .discovery import discover_providers
 from .ollama import OllamaProvider
 from .openai_compatible import GoogleProvider, OpenAICompatibleProvider, OpenRouterProvider
+from .registry import get_provider_class, register_provider
 
 # ── Auto-discover: providers/ の全 .py を import → __init_subclass__ で auto-register ──
 

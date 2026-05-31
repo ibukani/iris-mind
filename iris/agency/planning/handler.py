@@ -6,6 +6,7 @@ from loguru import logger
 
 from iris.agency.inhibition import InhibitionManager
 from iris.agency.internal_bus import InternalBus, PlanDecided
+from iris.agency.modulation import should_suppress_proactive
 from iris.agency.planning.decisions import ProactiveJudge
 from iris.agency.planning.models import Plan
 from iris.agency.planning.strategies import ProactivePlanStrategy, ResponsePlanStrategy
@@ -56,7 +57,7 @@ class _PlanningEventHandler:
             return
         plan = self._proactive_strategy.build_proactive(proactive_context)
         self._apply_limbic_modulation(plan)
-        if plan.modulation.should_suppress_proactive:
+        if should_suppress_proactive(plan.modulation):
             logger.debug("Proactive suppressed by affective modulation")
             return
         self._publish(

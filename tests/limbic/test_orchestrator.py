@@ -46,11 +46,13 @@ class TestLimbicOrchestrator:
         assert "trust" in prompt_data
 
     def test_get_modulation_state(self) -> None:
+        from iris.agency.modulation import has_affective_signal, prompt_lines
+
         self.orchestrator.process("腹が立つ許せない最悪だ")
         modulation = self.orchestrator.get_modulation_state()
-        assert modulation.has_affective_signal
-        assert modulation.prompt_lines
-        assert "VAD" not in "\n".join(modulation.prompt_lines)
+        assert has_affective_signal(modulation)
+        assert prompt_lines(modulation)
+        assert "VAD" not in "\n".join(prompt_lines(modulation))
 
 
 class TestLimbicOrchestratorPerAccount:

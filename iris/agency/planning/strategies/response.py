@@ -7,7 +7,7 @@ from iris.agency.planning.models import Plan, PlanReason
 from iris.agency.planning.task_content import is_task_content
 
 if TYPE_CHECKING:
-    from iris.agency.planning.context_hint_builder import ContextHintBuilder
+    from iris.agency.planning.context import ContextHintBuilder
     from iris.kernel.config import ProactiveConfig
 
 from loguru import logger

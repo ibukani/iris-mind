@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import SystemMessage
 
+from iris.agency.modulation.prompt_guidance import prompt_lines
+
 if TYPE_CHECKING:
     from iris.agency.modulation import ModulationState
     from iris.llm.prompt import Personality
@@ -38,7 +40,7 @@ class ProfileBuilder:
     ) -> SystemMessage:
         agents_md = self._load_agents_md()
         user_prefs = self._build_user_preferences_section(room_id=room_id, account_id=account_id)
-        affective_guidance = "\n".join(modulation.prompt_lines) if modulation else ""
+        affective_guidance = "\n".join(prompt_lines(modulation)) if modulation else ""
 
         base = self._personality.build_system_prompt(
             agents_md_content=agents_md,

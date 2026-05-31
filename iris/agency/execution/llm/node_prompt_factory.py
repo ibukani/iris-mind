@@ -45,10 +45,10 @@ class NodePromptFactory:
             parts.append(f"## 会話コンテキスト\n{context_hint}")
 
         if chaos_level >= 0.5:
-            from iris.agency.modulation import ModulationState
+            from iris.agency.modulation import ModulationState, check_relax_response_rules
 
             mod = ModulationState(chaos_level=chaos_level)
-            rules = _RELAXED_RESPONSE_RULES if mod.relax_response_rules else _RESPONSE_RULES
+            rules = _RELAXED_RESPONSE_RULES if check_relax_response_rules(mod) else _RESPONSE_RULES
         else:
             rules = _RESPONSE_RULES
         parts.append(rules)

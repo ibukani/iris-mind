@@ -5,6 +5,13 @@
   2. providers/ 配下に配置 (auto-discover が自動発見 + 登録)
   3. create_chat_model(), build_call_kwargs() を実装
   追加ファイル 1 つだけ。既存コード編集不要。
+
+--- 後方互換エクスポート ---
+register_provider / get_provider_class / discover_providers は
+registry.py / discovery.py に移動したが、下位互換のため再エクスポートする。
+新規コードは明示的なモジュールからのインポートを推奨:
+  from iris.llm.providers.registry import register_provider, get_provider_class
+  from iris.llm.providers.discovery import discover_providers
 """
 
 from __future__ import annotations
@@ -16,44 +23,12 @@ from langchain_core.language_models import BaseChatModel
 
 from iris.kernel.config import ModelConfig, ModelEntry
 
-# ── Registry ────────────────────────────────────────────────
-
-_PROVIDER_REGISTRY: dict[str, type[BaseLLMProvider]] = {}
-
-
-def register_provider(name: str, cls: type[BaseLLMProvider]) -> None:
-    """プロバイダクラスをレジストリに登録する。"""
-    _PROVIDER_REGISTRY[name] = cls
-
-
-def get_provider_class(provider_type: str) -> type[BaseLLMProvider]:
-    """指定されたプロバイダ種別に対応するクラスを取得する。"""
-    cls = _PROVIDER_REGISTRY.get(provider_type)
-    if cls is None:
-        msg = f"Unknown provider type: {provider_type!r}"
-        raise ValueError(msg)
-    return cls
-
-
-def discover_providers() -> None:
-    """providers/ 配下の全プロバイダモジュールを自動発見し import する。
-
-    各モジュールのクラス定義時に __init_subclass__ が呼ばれ、
-    provider_name をキーに自動登録される。
-    追加ファイルを置くだけで既存コード編集は不要。
-    """
-    import importlib
-    from pathlib import Path
-
-    pkg_path = Path(__file__).parent
-    for f in sorted(pkg_path.glob("*.py")):
-        name = f.stem
-        if name in ("base", "__init__"):
-            continue
-        importlib.import_module(f".{name}", "iris.llm.providers")
-
-
-# ── ベースクラス ────────────────────────────────────────────
+# 後方互換のための再エクスポート
+from iris.llm.providers.discovery import discover_providers  # noqa: F401
+from iris.llm.providers.registry import (  # noqa: F401
+    get_provider_class,
+    register_provider,
+)
 
 
 class BaseLLMProvider(ABC):
@@ -70,6 +45,8 @@ class BaseLLMProvider(ABC):
     def __init_subclass__(cls, **kwargs: Any) -> None:
         super().__init_subclass__(**kwargs)
         if cls.provider_name:
+            from iris.llm.providers.registry import register_provider
+
             register_provider(cls.provider_name, cls)
 
     @abstractmethod

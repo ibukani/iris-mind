@@ -11,7 +11,7 @@ from iris.agency import (
     PlanningManager,
     ProactiveScorer,
 )
-from iris.agency.planning.context_hint_builder import ContextHintBuilder
+from iris.agency.planning.context import ContextHintBuilder
 from iris.agency.planning.decisions import ProactiveJudge
 from iris.agency.planning.question_generator import QuestionGenerator
 from iris.agency.planning.strategies import ProactivePlanStrategy, ResponsePlanStrategy

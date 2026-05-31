@@ -302,3 +302,29 @@ def test_get_model_performance_tier_default() -> None:
         ),
     )
     assert config.model.get_model_performance_tier("default") == "balanced"
+
+
+def test_env_var_missing_raises() -> None:
+    with tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False) as f:
+        yaml.dump(
+            {
+                "model": {
+                    "providers": {
+                        "openrouter": {
+                            "api_key": "${NONEXISTENT_ENV_VAR_XYZ}",
+                        },
+                    },
+                    "models": [
+                        {"name": "m", "roles": ["default"], "provider": "openrouter"},
+                    ],
+                },
+            },
+            f,
+        )
+        path = f.name
+
+    try:
+        with pytest.raises(ValueError, match="Environment variable NONEXISTENT_ENV_VAR_XYZ is not set"):
+            Config.load(path)
+    finally:
+        os.unlink(path)

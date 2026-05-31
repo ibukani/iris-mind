@@ -8,6 +8,7 @@ ModelConfig に基づき複数のプロバイダ ChatModel インスタンスを
 from __future__ import annotations
 
 from collections.abc import Callable
+import hashlib
 from typing import Any
 
 from langchain_core.language_models import BaseChatModel
@@ -22,6 +23,13 @@ from .priority_lock import PriorityLock
 from .repetition import RepetitionDetector
 
 
+def _hash_key(api_key: str) -> str:
+    """APIキーをハッシュ化してキャッシュキーに安全に使用する。"""
+    if not api_key:
+        return ""
+    return hashlib.sha256(api_key.encode()).hexdigest()[:16]
+
+
 class LLMBridge:
     """複数の LLM プロバイダへのアクセスを抽象化し、ルーティングを行うブリッジクラス。"""
 
@@ -29,7 +37,6 @@ class LLMBridge:
         from .providers import get_provider_class
 
         self._chat_models: dict[str, BaseChatModel] = {}
-        self._model_map: dict[str, str] = {}
         self._entries: dict[str, ModelEntry] = {}
         self._model_providers: dict[str, BaseLLMProvider] = {}
         self._provider_instances: dict[str, BaseLLMProvider] = {}
@@ -40,18 +47,11 @@ class LLMBridge:
         for entry in model_config.models:
             base_url, api_key = resolve_connection(entry, model_config)
             provider_cls = get_provider_class(entry.provider)
-            key = f"{entry.provider}|{base_url}|{api_key}"
+            provider_key = f"{entry.provider}|{base_url}|{_hash_key(api_key)}"
 
-            if key not in self._provider_instances:
-                provider = provider_cls()
-                self._provider_instances[key] = provider
-            else:
-                provider = self._provider_instances[key]
+            provider = self._provider_instances.setdefault(provider_key, provider_cls())
 
-            if key not in self._chat_models:
-                self._chat_models[key] = provider.create_chat_model(entry, base_url, api_key, model_config)
-
-            self._model_map[entry.name] = key
+            self._chat_models[entry.name] = provider.create_chat_model(entry, base_url, api_key, model_config)
             self._entries[entry.name] = entry
             self._model_providers[entry.name] = provider
 
@@ -147,12 +147,12 @@ class LLMBridge:
                 full_message = chunk if full_message is None else full_message + chunk
                 if chunk.content and isinstance(chunk.content, str):
                     wrapped_on_token(chunk.content)
+                if interrupt_token.is_cancelled:
+                    break
         except Exception as e:
             logger.error("LangChain stream error: {}", e)
             raise
 
-        if interrupt_token.is_cancelled:
-            return full_message or AIMessage(content="")
         return full_message or AIMessage(content="")
 
     async def chat_with_structured_output(
@@ -187,8 +187,8 @@ class LLMBridge:
         return self._repetition_detector.trim(text)
 
     def is_available(self) -> bool:
-        for key, chat_model in self._chat_models.items():
-            provider = self._provider_instances.get(key)
+        for name, chat_model in self._chat_models.items():
+            provider = self._model_providers.get(name)
             if provider and provider.check_health(chat_model):
                 return True
         return False
@@ -196,21 +196,18 @@ class LLMBridge:
     def unload_model(self, model_name: str | None = None) -> None:
         if not model_name:
             return
-        key = self._model_map.get(model_name)
-        if not key:
-            return
-        provider = self._provider_instances.get(key)
-        chat_model = self._chat_models.get(key)
+        provider = self._model_providers.get(model_name)
+        chat_model = self._chat_models.get(model_name)
         if provider and chat_model:
             provider.unload(model_name, chat_model)
 
     def _resolve_chat_model(self, model_name: str) -> BaseChatModel:
         """モデル名から対応する ChatModel インスタンスを解決する。"""
-        key = self._model_map.get(model_name)
-        if key:
-            return self._chat_models[key]
+        chat_model = self._chat_models.get(model_name)
+        if chat_model:
+            return chat_model
         first = next(iter(self._chat_models.values()))
-        logger.warning("Model {!r} not found in model map, using first provider", model_name)
+        logger.warning("Model {!r} not found, using first provider", model_name)
         return first
 
     def _get_provider_for_model(self, model_name: str) -> BaseLLMProvider:
@@ -223,7 +220,7 @@ class LLMBridge:
         return first
 
     def _get_default_model(self) -> str:
-        for name in self._model_map:
+        for name in self._chat_models:
             return name
         return ""
 

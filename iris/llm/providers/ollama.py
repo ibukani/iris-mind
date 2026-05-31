@@ -113,7 +113,7 @@ class OllamaProvider(BaseLLMProvider):
             logger.warning("Failed to unload ollama model {}: {}", model_name, e)
 
     @classmethod
-    def ensure_environment(
+    def validate_environment(
         cls,
         entries: list[ModelEntry],
         model_config: ModelConfig,
@@ -121,11 +121,29 @@ class OllamaProvider(BaseLLMProvider):
         default_gpu = model_config.default_num_gpu if entries else 99
         os.environ.setdefault("OLLAMA_GPU_LAYERS", str(default_gpu))
         os.environ["OLLAMA_FLASH_ATTENTION"] = "1"
+        return True
+
+    @classmethod
+    def prepare_environment(
+        cls,
+        entries: list[ModelEntry],
+        model_config: ModelConfig,
+    ) -> bool:
         cls._restart_ollama()
         model_names = [e.name for e in entries]
         cls._stop_config_models(model_names)
         time.sleep(0.5)
         return all(cls._ensure_model_pulled(name) for name in model_names)
+
+    @classmethod
+    def ensure_environment(
+        cls,
+        entries: list[ModelEntry],
+        model_config: ModelConfig,
+    ) -> bool:
+        if not cls.validate_environment(entries, model_config):
+            return False
+        return cls.prepare_environment(entries, model_config)
 
     # ── 内部ヘルパー ─────────────────────────────────────────
 

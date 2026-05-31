@@ -49,6 +49,15 @@ class LlmPlugin(PluginProtocol):
         manager.register_manifest(MANIFEST)
         config = manager.config
 
+        provider_entries: dict[str, list] = {}
+        for entry in config.model.models:
+            provider_entries.setdefault(entry.provider, []).append(entry)
+
+        for provider_name, entries in provider_entries.items():
+            provider_cls = get_provider_class(provider_name)
+            if not provider_cls.validate_environment(entries, config.model):
+                raise RuntimeError(f"Provider '{provider_name}' environment validation failed")
+
         llm = LLMBridge(model_config=config.model)
 
         tokenizers: dict[str, TokenizerManager] = {

@@ -99,8 +99,12 @@ class LLMGateway:
         resp = await self._llm.chat(
             messages=msgs,
             model=self._model_config.get_model(model_role),
-            temperature=temperature or self._model_config.get_effective_temperature(model_role),
-            max_tokens=max_tokens or self._model_config.get_effective_max_tokens(model_role),
+            temperature=temperature
+            if temperature is not None
+            else self._model_config.get_effective_temperature(model_role),
+            max_tokens=max_tokens
+            if max_tokens is not None
+            else self._model_config.get_effective_max_tokens(model_role),
             tools=tools,
             on_token=on_token,
             interrupt_token=interrupt_token,

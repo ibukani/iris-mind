@@ -65,12 +65,11 @@ def test_trim_repetition_single() -> None:
 def test_chat_non_streaming_repetition() -> None:
     bridge = _make_bridge()
 
-    model_key = next(iter(bridge._chat_models))
-    model_name = next(iter(bridge._model_map))
+    model_name = next(iter(bridge._chat_models))
 
     mock_model = AsyncMock()
     mock_model.ainvoke.return_value = AIMessage(content="同じことを言います。全部、全部、全部、全部、")
-    bridge._chat_models[model_key] = mock_model
+    bridge._chat_models[model_name] = mock_model
 
     mock_provider = MagicMock()
     mock_provider.build_call_kwargs.return_value = {}
@@ -84,8 +83,7 @@ def test_chat_non_streaming_repetition() -> None:
 def test_chat_streaming_repetition() -> None:
     bridge = _make_bridge()
 
-    model_key = next(iter(bridge._chat_models))
-    model_name = next(iter(bridge._model_map))
+    model_name = next(iter(bridge._chat_models))
 
     mock_model = AsyncMock()
 
@@ -95,7 +93,7 @@ def test_chat_streaming_repetition() -> None:
             yield AIMessageChunk(content=t)
 
     mock_model.astream = mock_astream
-    bridge._chat_models[model_key] = mock_model
+    bridge._chat_models[model_name] = mock_model
 
     mock_provider = MagicMock()
     mock_provider.build_call_kwargs.return_value = {}

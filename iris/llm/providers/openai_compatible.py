@@ -82,7 +82,7 @@ class OpenAICompatibleProvider(BaseLLMProvider):
         return False
 
     @classmethod
-    def ensure_environment(
+    def validate_environment(
         cls,
         entries: list[ModelEntry],
         model_config: ModelConfig,
@@ -93,13 +93,25 @@ class OpenAICompatibleProvider(BaseLLMProvider):
                 return False
         return True
 
+    @classmethod
+    def ensure_environment(
+        cls,
+        entries: list[ModelEntry],
+        model_config: ModelConfig,
+    ) -> bool:
+        return cls.validate_environment(entries, model_config)
 
-# ── 後方互換用エイリアス ────────────────────────────────────
+
+# ── プロバイダエイリアス ────────────────────────────────────
 
 
 class OpenRouterProvider(OpenAICompatibleProvider):
-    """OpenRouter 専用インスタンス (OpenAICompatibleProvider のエイリアス)。"""
+    """OpenRouter 専用プロバイダ。"""
+
+    provider_name = "openrouter"
 
 
 class GoogleProvider(OpenAICompatibleProvider):
-    """Google 専用インスタンス (OpenAICompatibleProvider のエイリアス)。"""
+    """Google 専用プロバイダ。"""
+
+    provider_name = "google"

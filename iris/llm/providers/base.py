@@ -107,10 +107,30 @@ class BaseLLMProvider(ABC):
         return
 
     @classmethod
+    def validate_environment(
+        cls,
+        entries: list[ModelEntry],
+        model_config: ModelConfig,
+    ) -> bool:
+        """実行環境の検証 (軽量)。デフォルトは True を返す。"""
+        return True
+
+    @classmethod
+    def prepare_environment(
+        cls,
+        entries: list[ModelEntry],
+        model_config: ModelConfig,
+    ) -> bool:
+        """実行環境の準備 (heavy: restart, pull 等)。デフォルトは True を返す。"""
+        return True
+
+    @classmethod
     def ensure_environment(
         cls,
         entries: list[ModelEntry],
         model_config: ModelConfig,
     ) -> bool:
-        """実行環境の確認・準備。デフォルトは True を返す。"""
-        return True
+        """validate + prepare を順に実行する。"""
+        if not cls.validate_environment(entries, model_config):
+            return False
+        return cls.prepare_environment(entries, model_config)

@@ -69,15 +69,18 @@ class BaseLLMNode(ABC):
         names = nt.tool_list_by_level.get(level_name)
         allow_side_effects = plan.overrides.get("allow_side_effects", True)
         if names is not None:
-            return self._tool_executor.list_tools_by_name(names, allow_side_effects) or None
-        tools = self._tool_executor.registry.list_tools(allow_side_effects=allow_side_effects)
+            tools = self._tool_executor.list_tools_by_name(names, allow_side_effects) or None
+        else:
+            tools = self._tool_executor.registry.list_tools(allow_side_effects=allow_side_effects) or None
         if tools and self._capability_checker:
             level = TASK_LEVELS[level_name]
             if not self._capability_checker.supports_tools(level.model_role):
                 return None
-        return tools or None
+        return tools
 
-    def _build_routing_tools(self, state: ExecutionState) -> list[dict[str, Any]]:
+    def _build_routing_tools(self, state: ExecutionState, level: TaskLevel) -> list[dict[str, Any]]:
+        if self._capability_checker and not self._capability_checker.supports_tools(level.model_role):
+            return []
         nt = NODE_TYPES[self.node_type_name]
         if state["chain_depth"] >= nt.max_chain_depth:
             targets = [t for t in nt.routing_targets if t != nt.name]
@@ -143,7 +146,7 @@ class BaseLLMNode(ABC):
         try:
             system_msgs = self._build_system_prompt(state, level, plan)
             tools = self._get_tools(level_name, plan)
-            routing_tools = self._build_routing_tools(state)
+            routing_tools = self._build_routing_tools(state, level)
 
             all_tools: list[dict[str, Any]] | None = None
             if tools or routing_tools:

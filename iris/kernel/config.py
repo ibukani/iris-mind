@@ -33,7 +33,11 @@ def _resolve_env_refs(raw: object) -> object:
     if isinstance(raw, str):
 
         def _replace(m: re.Match[str]) -> str:
-            return os.environ.get(m.group(1), m.group(0))
+            name = m.group(1)
+            value = os.environ.get(name)
+            if value is None:
+                raise ValueError(f"Environment variable {name} is not set")
+            return value
 
         return _ENV_REF_RE.sub(_replace, raw)
     if isinstance(raw, dict):

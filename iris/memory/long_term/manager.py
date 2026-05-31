@@ -1,15 +1,14 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from iris.limbic.models import EmotionState
 
-
-from iris.memory.long_term.stores import EpisodicStoreProtocol, SemanticStoreProtocol
+from iris.memory.long_term.protocol import LongTermMemoryProtocol
+from iris.memory.long_term.store_protocols import EpisodicStoreProtocol, SemanticStoreProtocol
 from iris.memory.long_term.vector_store import VectorStore
 
 
@@ -31,35 +30,7 @@ def _format_search_result(results: list[dict[str, Any]]) -> list[dict[str, Any]]
     ]
 
 
-class LongTermMemoryProtocol(Protocol):
-    """長期記憶のインターフェース。
-
-    なぜこの設計にしたか:
-    他のレイヤーが具象クラスである LongTermMemoryManager に直接依存するのを防ぎ、
-    モック化やテスト用の代替実装を容易にするため。
-    """
-
-    @property
-    def episodic(self) -> EpisodicStoreProtocol | None: ...
-
-    @property
-    def semantic(self) -> SemanticStoreProtocol | None: ...
-
-    def store_episodic(self, data: Any, kind: str = "") -> None: ...
-    def get_episodic_recent(self, n: int = 5) -> list[dict[str, Any]]: ...
-    def clear_episodic(self) -> None: ...
-    def store_semantic(self, data: Any) -> None: ...
-    def search_semantic(self, query: str, max_results: int = 3) -> list[dict[str, Any]]: ...
-    def clear_semantic(self) -> None: ...
-    def search_vector(self, query: str, max_results: int = 3) -> list[dict[str, Any]]: ...
-    def search_emotional(
-        self,
-        current_emotion: EmotionState | None = None,
-        max_results: int = 5,
-    ) -> list[dict[str, Any]]: ...
-
-
-class LongTermMemoryManager:
+class LongTermMemoryManager(LongTermMemoryProtocol):
     """長期記憶 (Long-Term Memory)。
     エピソード記憶 (EpisodicStore) + 意味記憶 (SemanticStore) を統合管理する。
 
@@ -75,14 +46,14 @@ class LongTermMemoryManager:
         episodic: EpisodicStoreProtocol | None = None,
         semantic: SemanticStoreProtocol | None = None,
         vector_store: VectorStore | None = None,
-    ):
+    ) -> None:
         self._episodic = episodic
         self._semantic = semantic
         self._vector_store = vector_store
 
     # ---- エピソード記憶 ----
 
-    def store_episodic(self, data: Any, kind: str = "") -> None:
+    def store_episodic(self, data: Any, kind: str = "", room_id: str = "", account_id: str = "") -> None:
         if self._episodic is None:
             return
         summary = ""
@@ -91,14 +62,16 @@ class LongTermMemoryManager:
         elif isinstance(data, dict):
             summary = data.get("content") or data.get("summary") or str(data)
             kind = data.get("kind", kind)
+            room_id = data.get("room_id", room_id)
+            account_id = data.get("account_id", account_id)
         if kind and not summary.startswith(f"[{kind}]"):
             summary = f"[{kind}] {summary}"
-        self._episodic.add(summary)
+        self._episodic.add(summary, room_id=room_id, account_id=account_id)
 
-    def get_episodic_recent(self, n: int = 5) -> list[dict[str, Any]]:
+    def get_episodic_recent(self, n: int = 5, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:
         if self._episodic is None:
             return []
-        return self._episodic.get_recent(n)
+        return self._episodic.get_recent(n, room_id=room_id, account_id=account_id)
 
     def clear_episodic(self) -> None:
         if self._episodic is not None:
@@ -106,20 +79,28 @@ class LongTermMemoryManager:
 
     # ---- 意味記憶 ----
 
-    def store_semantic(self, data: Any) -> None:
+    def store_semantic(self, data: Any, room_id: str = "", account_id: str = "") -> None:
         if self._semantic is None:
             return
         if isinstance(data, dict):
-            self._semantic.add(data)
+            room_id = data.get("room_id", room_id)
+            account_id = data.get("account_id", account_id)
+            self._semantic.add(data, room_id=room_id, account_id=account_id)
         else:
-            self._semantic.add({"content": str(data)})
+            self._semantic.add({"content": str(data)}, room_id=room_id, account_id=account_id)
 
-    def search_semantic(self, query: str, max_results: int = 3) -> list[dict[str, Any]]:
+    def search_semantic(
+        self, query: str, max_results: int = 3, room_id: str = "", account_id: str = ""
+    ) -> list[dict[str, Any]]:
         if self._semantic is not None:
-            results = self._semantic.search(query=query, max_results=max_results)
+            results = self._semantic.search(query=query, max_results=max_results, account_id=account_id)
+            if room_id:
+                results = [r for r in results if r.get("room_id") == room_id]
             return _format_search_result(results)
         if self._vector_store is not None:
-            results = self._vector_store.search(query=query, max_results=max_results)
+            results = self._vector_store.search(query=query, max_results=max_results, account_id=account_id)
+            if room_id:
+                results = [r for r in results if r.get("room_id") == room_id]
             return _format_search_result(results)
         return []
 
@@ -139,12 +120,15 @@ class LongTermMemoryManager:
 
     def search_emotional(
         self,
-        current_emotion: EmotionState | None = None,
+        current_emotion: Any | None = None,
         max_results: int = 5,
+        room_id: str = "",
     ) -> list[dict[str, Any]]:
         if not self._episodic:
             return []
         all_entries = self._episodic.get_recent(self._episodic.max_entries)
+        if room_id:
+            all_entries = [e for e in all_entries if e.get("room_id") == room_id]
         emotion_entries = [e for e in all_entries if e.get("metadata", {}).get("type") == "emotion_tag"]
         if not emotion_entries:
             return []
@@ -177,8 +161,11 @@ class LongTermMemoryManager:
         return self._semantic
 
 
+__all__ = ["LongTermMemoryManager", "LongTermMemoryProtocol"]
+
+
 def _pad_distance(
-    a: EmotionState,
+    a: Any,
     b: Mapping[str, Any],
 ) -> float:
     a_val = a.valence

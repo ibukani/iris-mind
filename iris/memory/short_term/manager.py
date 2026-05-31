@@ -2,104 +2,37 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 import re
-from typing import Protocol, TypedDict
 
 from loguru import logger
 
-_MAX_TURN_LENGTH = 500
-_MAX_CONTEXT_CHARS = 600
+from iris.memory.models import ContentBlock, blocks_text
+from iris.memory.short_term.extractor import EntityExtractor, RegexEntityExtractor
+from iris.memory.short_term.models import MAX_CONTEXT_CHARS, MAX_TURN_LENGTH, SearchResult, TurnData
+from iris.memory.short_term.protocol import ShortTermMemoryProtocol
+from iris.memory.short_term.renderer import render_short_term_context
+from iris.memory.short_term.scorer import DefaultImportanceScorer, ImportanceScorer
 
 
-class TurnData(TypedDict):
-    role: str
-    content: str
-    timestamp: str
-    consolidated: bool
-    importance: int
-    user_identity: str
+def _truncate_blocks(blocks: list[ContentBlock], max_chars: int) -> list[ContentBlock]:
+    total = 0
+    result: list[ContentBlock] = []
+    for b in blocks:
+        txt = b.get("text", "")
+        available = max_chars - total
+        if available <= 0:
+            break
+        if not txt or len(txt) <= available:
+            result.append(b)
+            total += len(txt)
+        else:
+            tb: ContentBlock = {"type": b.get("type", "text")}
+            tb["text"] = txt[:available]
+            result.append(tb)
+            total += available
+    return result
 
 
-class SearchResult(TurnData, total=False):
-    relevance: float
-    index: int
-
-
-class ImportanceScorer(Protocol):
-    """発話内容から重要度を算出するインターフェース。
-
-    なぜこの設計にしたか:
-    将来的にLLMを用いた重要度判定や、異なるヒューリスティックルールを容易に差し替え可能にするため。
-    """
-
-    def score(self, content: str) -> int: ...
-
-
-class DefaultImportanceScorer:
-    """ヒューリスティックに基づくデフォルトの重要度判定器。"""
-
-    def score(self, content: str) -> int:
-        score = 0
-        lower = content.lower()
-        if any(w in lower for w in ["important", "大事", "覚えて", "remember", "注意", "critical", "urgent"]):
-            score += 3
-        if any(w in lower for w in ["please", "お願い", "help", "assist", "question", "質問"]):
-            score += 1
-        if re.search(r"[A-Z]{3,}", content):
-            score += 1
-        if content.count("!") >= 2:
-            score += 1
-        return min(score, 5)
-
-
-class EntityExtractor(Protocol):
-    """テキストから特定の参照エンティティを抽出するインターフェース。
-
-    なぜこの設計にしたか:
-    正規表現による抽出だけでなく、NERモデルや外部NLPライブラリを用いた抽出エンジンへの差し替えをサポートするため。
-    """
-
-    def extract(self, content: str) -> list[str]: ...
-
-
-class RegexEntityExtractor:
-    """正規表現に基づくデフォルトのエンティティ抽出器。"""
-
-    def extract(self, content: str) -> list[str]:
-        entities: list[str] = []
-        entities.extend(re.findall(r"https?://[^\s]+", content))
-        entities.extend(re.findall(r"(?:/[^\s/]+)+(?:/?)", content))
-        entities.extend(re.findall(r"#\w+", content))
-        entities.extend(re.findall(r"@\w+", content))
-        entities.extend(re.findall(r"「([^」]+)」", content))
-        entities.extend(re.findall(r'"([^"]{3,})"', content))
-        entities.extend(re.findall(r"\b[A-Z][a-z]+(?:[A-Z][a-z]+)*\b", content))
-        return list({e for e in entities if len(e) > 2})
-
-
-class ShortTermMemoryProtocol(Protocol):
-    """短期記憶マネージャーのインターフェース。
-
-    なぜこの設計にしたか:
-    他のレイヤーが具象クラスである ShortTermMemoryManager に直接依存するのを防ぎ、
-    モック化やテスト用の代替実装を容易にするため。
-    """
-
-    def add_turn(self, role: str, content: str, user_identity: str = "") -> None: ...
-    def search(self, query: str, max_results: int = 5) -> list[SearchResult]: ...
-    def search_entities(self, entity_name: str) -> list[TurnData]: ...
-    def render_context(self, max_chars: int = _MAX_CONTEXT_CHARS, query: str | None = None) -> str: ...
-    def get_recent_turns(self, n: int = 4) -> list[TurnData]: ...
-    def get_unconsolidated_turns(self) -> list[TurnData]: ...
-    def mark_consolidated(self, up_to_index: int | None = None) -> None: ...
-    def clear(self) -> None: ...
-    def should_consolidate(self) -> bool: ...
-    @property
-    def current_topics(self) -> list[str]: ...
-    @property
-    def turn_count(self) -> int: ...
-
-
-class ShortTermMemoryManager:
+class ShortTermMemoryManager(ShortTermMemoryProtocol):
     """短期記憶（ワーキングメモリ）の管理を行うクラス。
 
     直近の会話履歴（ターン数制限あり）、現在の話題、参照されたエンティティを保持する。
@@ -120,30 +53,69 @@ class ShortTermMemoryManager:
         self._max_topics = max_topics
         self._importance_scorer = importance_scorer or DefaultImportanceScorer()
         self._entity_extractor = entity_extractor or RegexEntityExtractor()
+        self._active_users: dict[str, str] = {}
+        self._room_users: dict[str, list[str]] = {}
 
-    def add_turn(self, role: str, content: str, user_identity: str = "") -> None:
-        """会話の1ターンを追加し、エンティティの抽出と話題の更新を行う。
+    def add_user(self, account_id: str, display_name: str, room_id: str = "") -> None:
+        self._active_users[account_id] = display_name
+        if room_id:
+            self._add_room_user(room_id, account_id)
 
-        Args:
-            role: 発話者のロール（"user" または "assistant"）
-            content: 発話内容
-            user_identity: 発話者の識別子（グループチャット用）
-        """
-        if not content:
+    def remove_user(self, account_id: str, room_id: str = "") -> None:
+        if room_id:
+            self._remove_room_user(room_id, account_id)
+        else:
+            for uid_list in self._room_users.values():
+                while account_id in uid_list:
+                    uid_list.remove(account_id)
+
+        still_present = any(account_id in users for users in self._room_users.values())
+        if not still_present:
+            self._active_users.pop(account_id, None)
+
+    def get_active_users(self) -> list[tuple[str, str]]:
+        return list(self._active_users.items())
+
+    def get_users_by_room(self, room_id: str) -> list[tuple[str, str]]:
+        uid_list = self._room_users.get(room_id, [])
+        return [(uid, self._active_users.get(uid, uid)) for uid in uid_list if uid in self._active_users]
+
+    def _add_room_user(self, room_id: str, account_id: str) -> None:
+        uid_list = self._room_users.setdefault(room_id, [])
+        if account_id not in uid_list:
+            uid_list.append(account_id)
+
+    def _remove_room_user(self, room_id: str, account_id: str) -> None:
+        uid_list = self._room_users.get(room_id, [])
+        if account_id in uid_list:
+            uid_list.remove(account_id)
+
+    def _scope_turns(self, room_id: str = "", account_id: str = "") -> list[TurnData]:
+        turns = self._turns
+        if account_id:
+            turns = [t for t in turns if t.get("account_id") == account_id]
+        if room_id:
+            turns = [t for t in turns if t.get("room_id") == room_id]
+        return turns
+
+    def add_turn(self, role: str, blocks: list[ContentBlock], account_id: str = "", room_id: str = "") -> None:
+        if not blocks:
             return
-        truncated = content[:_MAX_TURN_LENGTH]
+        truncated_blocks = _truncate_blocks(blocks, MAX_TURN_LENGTH)
+        text = blocks_text(truncated_blocks)
         entry: TurnData = {
             "role": role,
-            "content": truncated,
+            "blocks": truncated_blocks,
             "timestamp": datetime.now(UTC).isoformat(),
             "consolidated": False,
-            "importance": self._importance_scorer.score(truncated),
-            "user_identity": user_identity,
+            "importance": self._importance_scorer.score(text),
+            "account_id": account_id,
+            "room_id": room_id,
         }
         self._turns.append(entry)
         if len(self._turns) > self._max_turns:
             self._turns.pop(0)
-        self._extract_from_content(truncated)
+        self._extract_from_content(text)
         logger.debug("ShortTerm: added {} turn, total={}", role, len(self._turns))
 
     def _extract_from_content(self, content: str) -> None:
@@ -158,88 +130,70 @@ class ShortTermMemoryManager:
         if len(self._current_topics) > self._max_topics:
             self._current_topics = self._current_topics[-self._max_topics :]
 
+    def _turn_text(self, turn: TurnData) -> str:
+        return blocks_text(turn.get("blocks", []))
+
     def _compute_relevance(self, query: str, turn: TurnData) -> float:
-        """クエリと会話ターンの関連度スコアを算出する。"""
-        if not query or not turn.get("content"):
+        if not query:
+            return 0.0
+        text = self._turn_text(turn)
+        if not text:
             return 0.0
         q_words = set(re.findall(r"\w+", query.lower()))
-        t_words = set(re.findall(r"\w+", turn["content"].lower()))
+        t_words = set(re.findall(r"\w+", text.lower()))
         if not q_words or not t_words:
             return 0.0
         overlap = len(q_words & t_words)
         return overlap / len(q_words)
 
-    def search(self, query: str, max_results: int = 5) -> list[SearchResult]:
-        """クエリに関連する会話ターンを検索する。"""
+    def search(self, query: str, max_results: int = 5, room_id: str = "", account_id: str = "") -> list[SearchResult]:
         if not query:
             return []
 
+        turns = self._scope_turns(room_id=room_id, account_id=account_id)
+
         scored: list[tuple[float, int, SearchResult]] = []
-        for i, turn in enumerate(self._turns):
+        for turn in turns:
+            orig_idx = self._turns.index(turn)
             relevance = self._compute_relevance(query, turn)
-            content = turn.get("content", "")
-            if relevance == 0 and query.lower() not in content.lower():
+            text = self._turn_text(turn)
+            if relevance == 0 and query.lower() not in text.lower():
                 continue
 
             actual_relevance = relevance if relevance > 0 else 0.01
-            turn_copy: SearchResult = {**turn, "relevance": actual_relevance, "index": i}
+            turn_copy: SearchResult = {**turn, "relevance": actual_relevance, "index": orig_idx}
             scored.append((actual_relevance, turn.get("importance", 0), turn_copy))
 
         scored.sort(key=lambda x: (-x[0], -x[1]))
         return [s[2] for s in scored[:max_results]]
 
     def search_entities(self, entity_name: str) -> list[TurnData]:
-        """エンティティ名が含まれる会話ターンを検索する。"""
         entity_lower = entity_name.lower().strip()
-        results: list[TurnData] = [turn for turn in self._turns if entity_lower in turn.get("content", "").lower()]
+        results: list[TurnData] = [turn for turn in self._turns if entity_lower in self._turn_text(turn).lower()]
         return results[-5:]
 
-    def render_context(self, max_chars: int = _MAX_CONTEXT_CHARS, query: str | None = None) -> str:
-        """短期記憶の内容をプロンプト注入用のテキストフォーマットに整形する。"""
-        if not self._turns:
-            return ""
-        parts: list[str] = []
+    def render_context(
+        self, max_chars: int = MAX_CONTEXT_CHARS, query: str | None = None, room_id: str = "", account_id: str = ""
+    ) -> str:
+        turns = self._scope_turns(room_id=room_id, account_id=account_id)
+        return render_short_term_context(
+            turns=turns,
+            active_references=self._active_references,
+            search_fn=self.search,
+            max_chars=max_chars,
+            query=query,
+            active_users=self.get_active_users(),
+        )
 
-        if query:
-            parts.append("### 直近の会話（関連）")
-            relevant = self.search(query, max_results=3)
-            shown_indices = {r.get("index", -1) for r in relevant}
-            for r in relevant:
-                role = r.get("role", "system")
-                uid = r.get("user_identity", "")
-                label = uid or ("User" if role == "user" else "Iris")
-                prefix = "(思考) " if role == "thought" else ""
-                parts.append(f"- {label}: {prefix}「{r['content'][:100]}」(関連度 {r.get('relevance', 0):.2f})")
-            for t in reversed(self._turns[-4:]):
-                idx = self._turns.index(t)
-                if idx in shown_indices:
-                    continue
-                shown_indices.add(idx)
-                role = t.get("role", "system")
-                uid = t.get("user_identity", "")
-                label = uid or ("User" if role == "user" else "Iris")
-                prefix = "(思考) " if role == "thought" else ""
-                parts.append(f"- {label}: {prefix}「{t['content'][:100]}」")
-
-        if self._active_references:
-            refs = sorted(self._active_references, key=len, reverse=True)[:5]
-            parts.append("### 参照エンティティ")
-            parts.append(", ".join(refs))
-
-        if not parts:
-            return ""
-        text = "\n".join(parts)
-        if len(text) > max_chars:
-            text = text[: max_chars - 3] + "..."
-        return text
-
-    def get_recent_turns(self, n: int = 4) -> list[TurnData]:
+    def get_recent_turns(self, n: int = 4, room_id: str = "", account_id: str = "") -> list[TurnData]:
         """直近のNターンを取得する。"""
-        return self._turns[-n:]
+        turns = self._scope_turns(room_id=room_id, account_id=account_id)
+        return turns[-n:]
 
-    def get_unconsolidated_turns(self) -> list[TurnData]:
+    def get_unconsolidated_turns(self, room_id: str = "", account_id: str = "") -> list[TurnData]:
         """まだ圧縮（長期記憶化）されていないターンの一覧を取得する。"""
-        return [t for t in self._turns if not t.get("consolidated")]
+        turns = self._scope_turns(room_id=room_id, account_id=account_id)
+        return [t for t in turns if not t.get("consolidated")]
 
     def mark_consolidated(self, up_to_index: int | None = None) -> None:
         """指定されたインデックス（または全て）のターンを圧縮済みにマークする。"""
@@ -255,6 +209,8 @@ class ShortTermMemoryManager:
         self._turns.clear()
         self._current_topics.clear()
         self._active_references.clear()
+        self._active_users.clear()
+        self._room_users.clear()
 
     def should_consolidate(self) -> bool:
         """メモリの圧縮（要約化）が必要かどうかを判定する。
@@ -276,3 +232,6 @@ class ShortTermMemoryManager:
     def turn_count(self) -> int:
         """現在のターン数を取得する。"""
         return len(self._turns)
+
+
+__all__ = ["SearchResult", "ShortTermMemoryManager", "ShortTermMemoryProtocol", "TurnData"]

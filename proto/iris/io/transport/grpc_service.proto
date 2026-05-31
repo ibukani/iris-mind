@@ -12,6 +12,37 @@ enum Permission {
   PERMISSION_RECEIVE_LOG = 5;
   PERMISSION_INTERRUPT = 6;
   PERMISSION_EXECUTE_ACTION = 7;
+  PERMISSION_SEND_INHIBITION = 8;
+}
+
+// External identity of a user within a provider.
+message Identity {
+  // External identity provider, e.g. "discord".
+  string provider = 1;
+  // Stable user ID within the provider.
+  string subject = 2;
+  // Display name from the provider.
+  string provider_name = 3;
+  // Provider-specific metadata.
+  map<string, string> metadata = 4;
+}
+
+// Direction of a message within the Iris system.
+enum Direction {
+  DIRECTION_UNSPECIFIED = 0;
+  DIRECTION_REQUEST = 1;
+  DIRECTION_RESPONSE = 2;
+  DIRECTION_STREAM = 3;
+  DIRECTION_EVENT = 4;
+}
+
+// Processing state for streaming responses.
+enum StreamState {
+  STREAM_STATE_UNSPECIFIED = 0;
+  STREAM_STATE_THINKING = 1;
+  STREAM_STATE_SPEAKING = 2;
+  STREAM_STATE_DONE = 3;
+  STREAM_STATE_INTERRUPTED = 4;
 }
 
 // A message exchanged between roles in the Iris system.
@@ -26,8 +57,8 @@ message Message {
   string source_role = 4;
   // Role of the intended recipient, or "*" for broadcast.
   string target_role = 5;
-  // Direction of the message (request/response/stream/event).
-  string direction = 6;
+  // Direction of the message.
+  Direction direction = 6;
   // Message type (e.g. "chat", "command", "system").
   string msg_type = 7;
   // Message body content.
@@ -35,9 +66,15 @@ message Message {
   // MIME type of the content (default "text/plain").
   string content_type = 9;
   // Processing state for streaming responses.
-  string state = 10;
+  StreamState state = 10;
   // Arbitrary key-value metadata.
   map<string, string> metadata = 11;
+  // Speaker identity for group chat transports.
+  Identity speaker = 12;
+  // Conversation room, e.g. "discord:<guild_id>:<channel_id>".
+  string room_id = 13;
+  // Internal Iris account ID, resolved from speaker identity by the server.
+  string account_id = 14;
 }
 
 // A command input received from a client.
@@ -70,19 +107,41 @@ message CommandOutput {
   string state = 6;
 }
 
-// Client-to-server frame wrapping either a Message or a CommandInput.
+// A control message for account and presence protocol.
+message ControlMessage {
+  // Action type: "account.identify" / "account.profile" / "account.update" / "account.link" / "room.create" / "room.join" / etc.
+  string action = 1;
+  // Display name.
+  string display_name = 2;
+  // Human-readable response from server (server-to-client only).
+  string text = 3;
+  // Internal Iris account ID.
+  string account_id = 4;
+  // External identity.
+  Identity identity = 5;
+  // Profile fields to update.
+  map<string, string> profile = 6;
+  // Conversation room for account presence/control.
+  string room_id = 7;
+  // Action-specific metadata.
+  map<string, string> metadata = 8;
+}
+
+// Client-to-server frame wrapping either a Message, a CommandInput, or a ControlMessage.
 message BidirectionalStreamRequest {
   oneof frame {
     Message message = 1;
     CommandInput command = 2;
+    ControlMessage control = 3;
   }
 }
 
-// Server-to-client frame wrapping either a Message or a CommandOutput.
+// Server-to-client frame wrapping either a Message, a CommandOutput, or a ControlMessage.
 message BidirectionalStreamResponse {
   oneof frame {
     Message message = 1;
     CommandOutput command = 2;
+    ControlMessage control = 3;
   }
 }
 

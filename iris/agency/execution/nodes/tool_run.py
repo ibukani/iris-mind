@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import ToolMessage
 
-from iris.agency.execution.state import ExecutionState
+from iris.agency.execution.models import ExecutionState
 
 if TYPE_CHECKING:
     from iris.agency.execution.engine import ToolEngine
@@ -29,8 +29,6 @@ class ToolRunNode:
             return None
 
         results = self._tool_executor.run_tool_calls(state["messages"])
-        if self._consolidator:
-            self._consolidator.record_activity()
 
         logger.debug("Tool execution results: {} tools", len(results))
 

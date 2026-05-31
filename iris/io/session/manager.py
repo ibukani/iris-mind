@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-from dataclasses import dataclass
 from datetime import datetime
 import threading
 from typing import TYPE_CHECKING, Any
@@ -10,10 +9,7 @@ from uuid import uuid4
 from iris.io.auth.authenticator import Authenticator
 from iris.io.models import (
     AuthMessage,
-    CommandOutput,
-    ControlMessage,
-    Message,
-    Permission,
+    AuthResult,
     SessionInfo,
     SessionState,
 )
@@ -24,32 +20,9 @@ if TYPE_CHECKING:
 
 from loguru import logger
 
-
-@dataclass
-class SessionConfig:
-    host: str = "127.0.0.1"
-    port: int = 9876
-    access_token: str = ""
-
-
-_MSG_PERMISSION_MAP: dict[str, Permission] = {
-    "chat": Permission.PERMISSION_RECEIVE_CHAT,
-    "execute": Permission.PERMISSION_EXECUTE_ACTION,
-    "execute_result": Permission.PERMISSION_EXECUTE_ACTION,
-    "ack": Permission.PERMISSION_RECEIVE_CHAT,
-    "system": Permission.PERMISSION_RECEIVE_CHAT,
-    "error": Permission.PERMISSION_RECEIVE_CHAT,
-    "interrupt": Permission.PERMISSION_INTERRUPT,
-    "command": Permission.PERMISSION_RECEIVE_COMMAND,
-}
-
-_INPUT_PERMISSION_MAP: dict[str, Permission] = {
-    "chat": Permission.PERMISSION_SEND_CHAT,
-    "system": Permission.PERMISSION_SEND_CHAT,
-    "interrupt": Permission.PERMISSION_INTERRUPT,
-    "execute_result": Permission.PERMISSION_EXECUTE_ACTION,
-    "command": Permission.PERMISSION_SEND_COMMAND,
-}
+from .config import SessionConfig
+from .permissions import _INPUT_PERMISSION_MAP
+from .router import _SessionRouter
 
 
 class SessionManager:
@@ -61,42 +34,35 @@ class SessionManager:
         self._lock = threading.Lock()
         self._event_bus = event_bus
         self._last_disconnect_times: dict[str, datetime] = {}
+        self._router = _SessionRouter(self._sessions, self._lock, self._last_disconnect_times)
 
-    def authenticate(self, conn: Any, msg: AuthMessage) -> ControlMessage:
+    def authenticate(self, conn: Any, msg: AuthMessage) -> AuthResult:
         with self._lock:
             success, error = self._authenticator.authenticate(msg)
             if not success:
-                return ControlMessage(msg_type="auth_failure", error_message=error)
+                return AuthResult(msg_type="auth_failure", error_message=error)
 
-            self._replace_duplicate_session(msg.identity)
+            self._replace_duplicate_session(msg.session_tag)
 
             now = datetime.now()
             session = self._create_session(conn, msg, now)
             session_id = session.session_id
-            offline_duration = self._compute_offline_duration(session)
 
             logger.info("Session created: {} (role={})", session_id, msg.role)
 
-        self._publish_client_event(
-            action="connected",
-            session=session,
-            timestamp=now,
-            offline_duration=offline_duration,
-        )
+        return AuthResult(msg_type="auth_success", session_id=session_id)
 
-        return ControlMessage(msg_type="auth_success", session_id=session_id)
-
-    def _replace_duplicate_session(self, identity: str | None) -> None:
-        if not identity:
+    def _replace_duplicate_session(self, session_tag: str | None) -> None:
+        if not session_tag:
             return
         for sid, s in list(self._sessions.items()):
-            if s.identity == identity and s.state == SessionState.ACTIVE:
+            if s.session_tag == session_tag and s.state == SessionState.ACTIVE:
                 s.state = SessionState.CLOSED
                 if s.conn is not None:
                     with contextlib.suppress(Exception):
                         s.conn.close()
                 del self._sessions[sid]
-                logger.info("SessionManager: replaced duplicate session {} (identity={})", sid, identity)
+                logger.info("SessionManager: replaced duplicate session {} (session_tag={})", sid, session_tag)
 
     def _create_session(self, conn: Any, msg: AuthMessage, now: datetime) -> SessionInfo:
         session_id = uuid4().hex[:16]
@@ -105,7 +71,7 @@ class SessionManager:
             state=SessionState.ACTIVE,
             role=msg.role or "external",
             permissions=msg.permissions[:],
-            identity=msg.identity,
+            session_tag=msg.session_tag,
             description=msg.description,
             conn=conn,
             created_at=now,
@@ -114,112 +80,9 @@ class SessionManager:
         self._sessions[session_id] = session
         return session
 
-    def _compute_offline_duration(self, session: SessionInfo, now: datetime | None = None) -> str:
-        if now is None:
-            now = datetime.now()
-        key = f"{session.role}:{session.identity}" if session.identity else session.role
-        disc_time = self._last_disconnect_times.get(key)
-        if not disc_time:
-            return ""
-        diff = now - disc_time
-        secs = int(diff.total_seconds())
-        if secs < 60:
-            return "たった今"
-        if secs < 3600:
-            return f"{secs // 60}分間"
-        if secs < 86400:
-            return f"{secs // 3600}時間{(secs % 3600) // 60}分間"
-        return f"{secs // 86400}日間"
-
-    def _publish_client_event(
-        self,
-        action: str,
-        session: SessionInfo,
-        timestamp: datetime,
-        offline_duration: str = "",
-    ) -> None:
-        if not self._event_bus:
-            return
-        from iris.event.event_types import ClientSessionEvent
-
-        self._event_bus.publish(
-            ClientSessionEvent(
-                timestamp=timestamp,
-                source="session",
-                session_id=session.session_id,
-                action=action,
-                role=session.role,
-                identity=session.identity,
-                offline_duration=offline_duration,
-            )
-        )
-
-    def route_message(self, msg: Message) -> None:
-        session: SessionInfo | None = None
-        targets: list[SessionInfo] = []
-        skipped: list[str] = []
-
-        with self._lock:
-            if msg.session_id:
-                s = self._sessions.get(msg.session_id)
-                if s is not None and s.state == SessionState.ACTIVE and s.conn is not None:
-                    session = s
-                elif s is None:
-                    logger.debug("route_message: session {} not found", msg.session_id)
-                else:
-                    logger.debug("route_message: session {} not active or no conn", msg.session_id)
-            elif msg.target_role == "*":
-                targets = [s for s in self._sessions.values() if s.state == SessionState.ACTIVE and s.conn is not None]
-            else:
-                targets = [
-                    s
-                    for s in self._sessions.values()
-                    if s.state == SessionState.ACTIVE and s.role == msg.target_role and s.conn is not None
-                ]
-
-        if session is not None:
-            self._send_to_session(session, msg)
-            return
-
-        permission = _MSG_PERMISSION_MAP.get(msg.msg_type)
-        for s in targets:
-            if permission is not None and permission not in s.permissions:
-                skipped.append(s.session_id)
-                continue
-            self._send_to_session(s, msg)
-
-        if skipped:
-            logger.debug("route_message: skipped {} session(s) due to permission: {}", len(skipped), skipped)
-        if not targets:
-            logger.debug("route_message: no active sessions to route msg_type={}", msg.msg_type)
-
-    def route_command_output(self, session_id: str, msg: CommandOutput) -> None:
-        with self._lock:
-            session = self._sessions.get(session_id)
-
-        if session is None:
-            logger.warning("Command output route for unknown session: {}", session_id)
-            return
-        if session.state != SessionState.ACTIVE or session.conn is None:
-            return
-        if Permission.PERMISSION_RECEIVE_COMMAND not in session.permissions:
-            logger.warning("Command output denied for session={} (no receive_command)", session_id)
-            return
-        self._send_to_session(session, msg)
-
-    @staticmethod
-    def _send_to_session(session: SessionInfo, msg: Message | CommandOutput) -> None:
-        conn = session.conn
-        if conn is None:
-            return
-        raw = msg.model_dump_json().encode("utf-8")
-        try:
-            conn.send_bytes(raw)
-            session.last_activity = datetime.now()
-            logger.debug("Sent {} bytes to session={}", len(raw), session.session_id)
-        except (BrokenPipeError, ConnectionError, EOFError):
-            logger.warning("Connection lost for session: {}", session.session_id)
-            session.conn = None
+    @property
+    def router(self) -> _SessionRouter:
+        return self._router
 
     def update_activity(self, session_id: str | None) -> None:
         if session_id is None:
@@ -248,15 +111,24 @@ class SessionManager:
                     with contextlib.suppress(Exception):
                         session.conn.close()
                 logger.info("Session removed: {}", session_id)
-                key = f"{session.role}:{session.identity}" if session.identity else session.role
+                key = f"{session.role}:{session.session_tag}" if session.session_tag else session.role
                 self._last_disconnect_times[key] = now
 
-        if session:
-            self._publish_client_event(
-                action="disconnected",
-                session=session,
-                timestamp=now,
+        if session is not None and self._event_bus is not None:
+            from iris.io.events import SessionDisconnectEvent
+
+            self._event_bus.publish(
+                SessionDisconnectEvent(
+                    timestamp=None,
+                    source="session",
+                    session_id=session_id,
+                    session_tag=session.session_tag,
+                ),
             )
+
+    def has_active_sessions(self) -> bool:
+        with self._lock:
+            return any(s.state == SessionState.ACTIVE for s in self._sessions.values())
 
     def get_active_sessions(self) -> list[SessionInfo]:
         with self._lock:

@@ -1,89 +1,73 @@
 from __future__ import annotations
 
 import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import SystemMessage
 
+from iris.agency.modulation.prompt_guidance import prompt_lines
+
 if TYPE_CHECKING:
-    from iris.limbic.manager import LimbicManager
+    from iris.agency.modulation import ModulationState
     from iris.llm.prompt import Personality
     from iris.memory.long_term.stores import AgentsMdStore
     from iris.memory.manager import MemoryManager
-    from iris.memory.persona_profile import PersonaProfile
 
 
 class ProfileBuilder:
-    """人格・状態・静的情報の SystemMessage を構築する。
-
-    Dual SystemMessage の [0] として使われる Profile を担当。
-    """
-
     def __init__(
         self,
         personality: Personality,
         agents_md_store: AgentsMdStore | None = None,
-        persona_profile: PersonaProfile | None = None,
+        persona_profile: Any | None = None,
         memory: MemoryManager | None = None,
-        limbic: LimbicManager | None = None,
         governance_principles: str = "",
     ) -> None:
         self._personality = personality
         self._agents_md_store = agents_md_store
         self._persona_profile = persona_profile
         self._memory = memory
-        self._limbic = limbic
         self._governance_principles = governance_principles
 
     def build(
         self,
         response_style: str = "",
-        session_roles_summary: str = "",
-        current_user_identity: str = "",
+        current_display_name: str = "",
+        room_id: str = "",
+        account_id: str = "",
+        active_users: list[tuple[str, str]] | None = None,
+        modulation: ModulationState | None = None,
     ) -> SystemMessage:
-        """Profile SystemMessage を構築する。"""
         agents_md = self._load_agents_md()
-        speech_style = self._persona_profile.get_speech_style() if self._persona_profile else ""
-        personality_traits = self._persona_profile.get_traits() if self._persona_profile else ""
-        user_prefs = self._build_user_preferences_section()
-
-        current_state = ""
-        if self._persona_profile:
-            has_traits_in_tpl = "{personality_traits}" in self._personality.system_prompt_template
-            has_speech_in_tpl = "{speech_style}" in self._personality.system_prompt_template
-            if not has_traits_in_tpl and not has_speech_in_tpl:
-                current_state = self._persona_profile.get_current_state_section()
+        user_prefs = self._build_user_preferences_section(room_id=room_id, account_id=account_id)
+        affective_guidance = "\n".join(prompt_lines(modulation)) if modulation else ""
 
         base = self._personality.build_system_prompt(
             agents_md_content=agents_md,
             user_preferences=user_prefs,
-            session_roles=session_roles_summary,
             response_style=response_style,
-            speech_style=speech_style,
-            personality_traits=personality_traits,
             governance_principles=self._governance_principles,
+            affective_guidance=affective_guidance,
         )
 
         parts: list[str] = [base]
         parts.append(f"## 現在日時\n{self._build_time_string()}")
 
-        if self._limbic:
-            mood_desc = self._limbic.describe_mood() or "落ち着いた状態。特に強い感情はないよ。"
-            parts.append(f"## 現在の気分\n{mood_desc}")
-
-        if current_state:
-            parts.append(current_state)
-
-        if current_user_identity:
-            parts.append(f"## 現在の会話相手\n{current_user_identity}")
+        participants = self._build_participants_section(
+            room_id=room_id,
+            current_display_name=current_display_name,
+            active_users=active_users,
+        )
+        if participants:
+            parts.append(participants)
 
         return SystemMessage(content="\n\n".join(parts))
 
     def _load_agents_md(self) -> str:
         return self._agents_md_store.load() if self._agents_md_store else ""
 
-    def _build_user_preferences_section(self) -> str:
-        prefs_list = self._memory.get_user_preferences() if self._memory else []
+    def _build_user_preferences_section(self, room_id: str = "", account_id: str = "") -> str:
+        prefs_list = self._memory.get_user_preferences(room_id=room_id, account_id=account_id) if self._memory else []
         seen: set[str] = set()
         unique_prefs: list[str] = []
         for p in prefs_list:
@@ -92,6 +76,28 @@ class ProfileBuilder:
                 seen.add(c)
                 unique_prefs.append(f"- {c}")
         return "\n".join(unique_prefs)
+
+    def _build_participants_section(
+        self,
+        room_id: str = "",
+        current_display_name: str = "",
+        active_users: list[tuple[str, str]] | None = None,
+    ) -> str:
+        users = active_users or []
+        if not users and self._memory and room_id:
+            users = self._memory.short_term.get_users_by_room(room_id)
+
+        if not users:
+            if current_display_name:
+                return f"## 現在の会話相手\n{current_display_name}"
+            return ""
+
+        if len(users) == 1:
+            _, nick = users[0]
+            return f"## 現在の会話相手\n{nick}"
+
+        names = [nick for _, nick in users]
+        return "## ルームの参加者\n" + "\n".join(f"- {n}" for n in names)
 
     @staticmethod
     def _build_time_string() -> str:

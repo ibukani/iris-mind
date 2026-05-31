@@ -1,7 +1,7 @@
 from iris.event import EventBus
 from iris.io import CommandInput, CommandOutput, Direction, Message, Permission
-from iris.kernel.config import Config, ProactiveConfig
-from iris.kernel.manager import KernelManager
+from iris.kernel.config import Config, PluginConfig, ProactiveConfig
+from iris.kernel.manager import PluginManager
 
 __all__ = [
     "CommandInput",
@@ -9,8 +9,9 @@ __all__ = [
     "Config",
     "Direction",
     "EventBus",
-    "KernelManager",
     "Message",
     "Permission",
+    "PluginConfig",
+    "PluginManager",
     "ProactiveConfig",
 ]

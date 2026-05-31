@@ -1,25 +1,21 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-import datetime
 from typing import Any
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from loguru import logger
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 
-from iris.agency.execution.llm.modulator import EmotionTemperatureModulator
+from iris.agency.execution.llm.invocation_policy import ModelInvocationPolicy
 from iris.agency.execution.llm.prompt_builder import SystemPromptBuilder
-from iris.agency.planning.models import Plan
+from iris.agency.modulation import ModulationState, sampling_temperature
 from iris.kernel.config import ModelConfig
-from iris.kernel.debug_capture import CaptureEntry, DebugCapture
-from iris.limbic.manager import LimbicManager
+from iris.kernel.debug_capture import DebugCapture
 from iris.llm.bridge import LLMBridge
 from iris.llm.capability import CapabilityChecker
 from iris.llm.interrupt_token import InterruptToken
 from iris.llm.prompt import Personality
 from iris.memory.long_term.stores import AgentsMdStore
 from iris.memory.manager import MemoryManager
-from iris.memory.persona_profile import PersonaProfile
 
 
 class LLMGateway:
@@ -29,66 +25,60 @@ class LLMGateway:
         model_config: ModelConfig,
         personality: Personality,
         agents_md_store: AgentsMdStore | None = None,
-        persona_profile: PersonaProfile | None = None,
+        persona_profile: Any | None = None,
         memory: MemoryManager | None = None,
-        limbic: LimbicManager | None = None,
         capability_checker: CapabilityChecker | None = None,
         debug_capture: DebugCapture | None = None,
         prompts_dir: str | None = None,
+        account_provider: Any | None = None,
     ) -> None:
         self._llm = llm
         self._model_config = model_config
         self._personality = personality
-        self._limbic = limbic
         self._capability_checker = capability_checker
         self._debug_capture = debug_capture
-        self._session_roles_summary: str = ""
-        self._current_user_identity: str = ""
+        self._policy = ModelInvocationPolicy(capability_checker)
+
         self._last_system_prompt: str = ""
         self._last_call_model_role: str = "medium"
+        self._account_provider = account_provider
 
         self._prompt_builder = SystemPromptBuilder(
             personality=personality,
             agents_md_store=agents_md_store,
             persona_profile=persona_profile,
             memory=memory,
-            limbic=limbic,
             prompts_dir=prompts_dir,
         )
 
-    @staticmethod
-    def _build_full_prompt(msgs: list[BaseMessage]) -> str:
-        lines: list[str] = []
-        for m in msgs:
-            role = getattr(m, "type", "unknown")
-            content = str(m.content) if m.content else ""
-            lines.append(f"[{role}]\n{content}")
-        return "\n\n".join(lines)
-
-    def set_session_roles_summary(self, summary: str) -> None:
-        self._session_roles_summary = summary
-
-    def set_current_user_identity(self, identity: str) -> None:
-        self._current_user_identity = identity
+    def resolve_display_name(self, account_id: str) -> str:
+        if account_id and self._account_provider:
+            return str(self._account_provider.resolve_display_name(account_id))
+        return account_id
 
     def build_system_messages(
         self,
         context_hint: str,
         response_style: str = "",
-        situation: str = "",
         node_type: str = "general_task",
-        recent_turns: str = "",
         include_profile: bool = True,
+        chaos_level: float = 0.0,
+        room_id: str = "",
+        account_id: str = "",
+        modulation: ModulationState | None = None,
     ) -> list[BaseMessage]:
+        display_name = self.resolve_display_name(account_id)
+        mod = modulation or ModulationState(chaos_level=chaos_level)
         return self._prompt_builder.build(
             node_type=node_type,
             context_hint=context_hint,
             response_style=response_style,
-            session_roles_summary=self._session_roles_summary,
-            current_user_identity=self._current_user_identity,
-            situation=situation,
-            recent_turns=recent_turns,
+            current_display_name=display_name,
             include_profile=include_profile,
+            chaos_level=mod.chaos_level,
+            room_id=room_id,
+            account_id=account_id,
+            modulation=mod,
         )
 
     async def _call_llm(
@@ -108,23 +98,31 @@ class LLMGateway:
         self._last_system_prompt = "\n\n".join(str(m.content) for m in system_msgs) if system_msgs else ""
         self._last_call_model_role = model_role
 
+        effective_tools = self._policy.resolve_tools(tools, model_role)
+        effective_thinking = self._policy.resolve_thinking(enable_thinking, model_role)
+        effective_temp = self._policy.resolve_temperature(
+            temperature, None, None, self._model_config.get_effective_temperature(model_role)
+        )
+
         resp = await self._llm.chat(
             messages=msgs,
             model=self._model_config.get_model(model_role),
-            temperature=temperature or self._model_config.get_effective_temperature(model_role),
-            max_tokens=max_tokens or self._model_config.get_effective_max_tokens(model_role),
-            tools=tools,
+            temperature=effective_temp,
+            max_tokens=max_tokens
+            if max_tokens is not None
+            else self._model_config.get_effective_max_tokens(model_role),
+            tools=effective_tools,
             on_token=on_token,
             interrupt_token=interrupt_token,
             priority=priority,
-            reasoning=enable_thinking or None,
+            reasoning=effective_thinking or None,
         )
 
         self._capture_debug(
             model_role=model_role,
             system_prompt=self._last_system_prompt,
             messages=msgs,
-            tools=tools,
+            tools=effective_tools,
             response=str(resp.content) if isinstance(resp.content, str) else "",
         )
         return resp
@@ -142,93 +140,42 @@ class LLMGateway:
         max_tokens: int | None = None,
         priority: int = 0,
         show_thinking: bool = False,
+        modulation: ModulationState | None = None,
+        room_id: str = "",
+        account_id: str = "",
     ) -> AIMessage:
-        response_style = self._limbic.generate_response_style() if self._limbic else ""
+        mod = modulation or ModulationState()
         if system_msgs is None:
             system_msgs = self.build_system_messages(
                 context_hint=context_hint,
-                response_style=response_style,
+                chaos_level=mod.chaos_level,
+                room_id=room_id,
+                account_id=account_id,
+                modulation=mod,
             )
         if show_thinking and messages and isinstance(messages[-1], HumanMessage):
             last_msg = messages[-1]
             last_msg.content = self._personality.build_thinking_prompt(str(last_msg.content))
 
-        # Resolve temperature: node override → model config default → emotion modulation
-        if temperature is None:
-            temperature = self._model_config.get_effective_temperature(model_role)
-        # Resolve max_tokens: emotion modulation (reduce-only)
-        if self._limbic:
-            emotion = self._limbic.current_emotion()
-            temperature = EmotionTemperatureModulator.compute_temperature(emotion, temperature)
-            if max_tokens is not None:
-                max_tokens = EmotionTemperatureModulator.modulate_max_tokens(max_tokens, emotion)
+        effective_temp = self._policy.resolve_temperature(
+            temperature,
+            None,
+            sampling_temperature(mod),
+            self._model_config.get_effective_temperature(model_role),
+        )
 
         return await self._call_llm(
             system_msgs,
             messages,
             model_role,
             max_tokens,
-            temperature=temperature,
+            temperature=effective_temp,
             tools=tools,
             on_token=on_token,
             interrupt_token=interrupt_token,
             priority=priority,
             enable_thinking=show_thinking,
         )
-
-    async def chat_short(
-        self,
-        messages: list[BaseMessage],
-        plan: Plan,
-        model_role: str = "default",
-        max_tokens: int | None = None,
-        priority: int = 0,
-        interrupt_token: InterruptToken | None = None,
-    ) -> str:
-        context_hint = plan.context_hint
-        reason = plan.reason.value
-        content = plan.content
-
-        is_proactive = reason in ("proactive_curiosity", "proactive_escalation", "timer")
-        response_style = self._limbic.generate_response_style() if self._limbic and is_proactive else ""
-
-        system_msgs = self.build_system_messages(
-            context_hint=context_hint,
-            response_style=response_style,
-            situation="proactive" if is_proactive else "",
-        )
-
-        msgs: list[BaseMessage] = []
-        if messages and content:
-            msgs.extend(messages)
-        msgs.append(HumanMessage(content=content or "..."))
-
-        temperature = (
-            EmotionTemperatureModulator.compute_temperature(self._limbic.current_emotion())
-            if self._limbic
-            else EmotionTemperatureModulator.DEFAULT_TEMPERATURE
-        )
-        max_tok = max_tokens or 80
-
-        try:
-            resp = await self._call_llm(
-                system_msgs,
-                msgs,
-                model_role,
-                max_tok,
-                temperature=temperature,
-                interrupt_token=interrupt_token,
-                priority=priority,
-            )
-            text = str(resp.content).strip() if isinstance(resp.content, str) else ""
-        except Exception as e:
-            logger.debug("Short generation failed: {}", e)
-            text = ""
-
-        if not text:
-            text = "" if is_proactive else "…"
-
-        return text
 
     def _capture_debug(
         self,
@@ -239,31 +186,15 @@ class LLMGateway:
         response: str,
         tool_iterations: list[dict] | None = None,
     ) -> None:
-        dc = self._debug_capture
-        if not (dc and dc.enabled):
-            return
+        from .capture import capture_debug as _capture
 
-        model_name = self._model_config.get_model(model_role)
-        history_msgs = [m for m in messages if not isinstance(m, SystemMessage)]
-        tc = {
-            "system": dc.count_tokens(system_prompt),
-            "history": dc.count_tokens(" ".join(str(m.content) for m in history_msgs)),
-            "tools": dc.count_tokens(str(tools)) if tools else 0,
-            "response": dc.count_tokens(response),
-        }
-        tc["total"] = sum(tc.values())
-
-        dc.capture(
-            CaptureEntry(
-                id=0,
-                timestamp=datetime.datetime.now(),
-                model_name=model_name,
-                system_prompt=system_prompt,
-                messages=[{"role": m.type, "content": m.content} for m in history_msgs],
-                tools=tools,
-                response=response,
-                token_counts=tc,
-                tool_iterations=tool_iterations or [],
-                full_prompt=self._build_full_prompt(messages),
-            ),
+        _capture(
+            debug_capture=self._debug_capture,
+            model_config=self._model_config,
+            model_role=model_role,
+            system_prompt=system_prompt,
+            messages=messages,
+            response=response,
+            tools=tools,
+            tool_iterations=tool_iterations,
         )

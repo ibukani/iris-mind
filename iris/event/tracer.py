@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Any
 
-from iris.event.event_types import DebugSnapshotEvent, Event
+from iris.event.base import DebugSnapshotEvent, Event
 
 
 class EventTracer:

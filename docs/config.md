@@ -10,12 +10,17 @@ Iris の設定は Pydantic BaseModel で構成される。`config.yaml` から�
 Config
 ├── model: ModelConfig          — LLMモデル関連
 ├── personality: PersonalityConfig — 人格・プロンプト
+├── account: AccountConfig      — アカウント管理
 ├── memory: MemoryConfig        — 記憶管理
+├── limbic: LimbicConfig        — 感情分類
 ├── proactive: ProactiveConfig  — 自発発話
+├── inhibition: InhibitionConfig — 抑制制御
 ├── quasi_sync: QuasiSyncConfig — 準同期入力制御
 ├── session: SessionConfig      — セッション・通信
+├── timer: TimerConfig          — 鼓動タイマー
 ├── logging: LoggingConfig      — ログ出力
-└── debug: DebugConfig          — デバッグ・トレース
+├── debug: DebugConfig          — デバッグ・トレース
+└── plugins: PluginConfig       — プラグイン管理
 ```
 
 ## ModelConfig
@@ -24,9 +29,8 @@ Config
 |-----------|-----|-----------|------|
 | providers | dict[str, ProviderConnection] | {} | プロバイダ接続設定（base_url / api_key） |
 | hf_token | str | "" | HuggingFace gated repo 用トークン（全モデル共通） |
-| models | list[ModelEntry] | qwen3.5:9b (default) | 使用モデル一覧 |
-| models | list[ModelEntry] | qwen3.5:9b (default) | 使用モデル一覧 |
-| default_temperature | float | 0.7 | LLM生成温度（各ModelEntryで未指定時のフォールバック） |
+| models | list[ModelEntry] | qwen3.5:4b (default) | 使用モデル一覧（config.yaml に定義） |
+| default_temperature | float | 0.85 | LLM生成温度（各ModelEntryで未指定時のフォールバック） |
 | default_num_ctx | int | 8192 | コンテキスト長（各ModelEntryで未指定時のフォールバック） |
 | default_num_gpu | int | 99 | GPUレイヤー数（各ModelEntryで未指定時のフォールバック, Ollamaのみ） |
 | default_context_window | int | 8192 | 圧縮トリガー閾値（各ModelEntryで未指定時のフォールバック） |
@@ -89,25 +93,39 @@ Config
 | `get_model_capabilities(role)` | list[str] | role 別の機能ラベル一覧 |
 | `get_model_performance_tier(role)` | str | role 別の性能区分 |
 
+## LimbicConfig
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| emotion_classifier | EmotionClassifierConfig | default | Appraiser が使う感情分類器 |
+
+### EmotionClassifierConfig
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| type | "keyword" \| "neural" | "keyword" | 感情分類方式。`keyword` は日本語キーワード辞書、`neural` は HuggingFace text-classification モデル |
+| model_name | str | "koshin2001/Japanese-to-emotions" | `type: neural` の時にロードするモデル名 |
+
+`type: neural` は `transformers` / `torch` を遅延ロードする。通常起動では `keyword` の既存挙動を維持する。
+
 ## ProactiveConfig
 
 | フィールド | 型 | デフォルト | 説明 |
 |-----------|-----|-----------|------|
 | check_interval_sec | float | 5.0 | TimerTick 間隔（秒） |
 | min_interval_sec | float | 30.0 | 自発発話の最小間隔 |
+| active_min_interval_sec | float | 2.0 | アクティブ時の最小間隔 |
 | max_interval_sec | float | 300.0 | 自発発話の最大間隔（時間スコア飽和） |
 | trigger_weights | dict | see below | トリガー重み |
-| speak_threshold | float | 0.60 | 発話開始閾値 |
-| abbreviated_threshold | float | 0.25 | 短縮発話のスコア閾値 |
-| idle_reflection_timeout_sec | float | 180.0 | idle状態でのReflexion有効タイムアウト |
+| speak_threshold | float | 0.30 | 発話開始閾値 |
+| abbreviated_threshold | float | 0.25 | 短縮応答切り替え閾値 |
 
 **trigger_weights デフォルト**:
 ```yaml
 trigger_weights:
-  time: 0.25
-  memory: 0.45
+  time: 0.40
+  memory: 0.35
   context: 0.15
-  mood: 0.15
 ```
 
 ## PersonalityConfig
@@ -116,6 +134,41 @@ trigger_weights:
 |-----------|-----|-----------|------|
 | name | str | "Iris" | AIの名前 |
 | prompt_file | str | ".iris/config/system_prompt.md" | システムプロンプトファイル |
+| node_prompts_dir | str | ".iris/config/node_prompts" | ノード別プロンプト格納ディレクトリ |
+
+## AccountConfig
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| accounts_path | str | ".iris/data/accounts.jsonl" | アカウント情報ファイル |
+| identities_path | str | ".iris/data/account_identities.jsonl" | 外部ID紐付け情報ファイル |
+
+## InhibitionConfig
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| post_execution_cooldown_sec | float | 5.0 | 実行後クールダウン（秒） |
+| max_concurrent_executions | int | 1 | 同時実行数上限 |
+| inhibit_proactive_during_execution | bool | True | 実行中はproactive抑制 |
+| inhibit_proactive_during_cooldown | bool | True | クールダウン中はproactive抑制 |
+| tts_mora_per_sec | float | 6.5 | TTSモーラ/秒（発話時間推定用） |
+| suppression_profiles | dict[str, SuppressionProfileConfig] | {} | 抑制プロファイルの上書き設定 |
+
+`suppression_profiles` の例:
+
+```yaml
+inhibition:
+  suppression_profiles:
+    speaking:
+      blocked_reasons: ["proactive_curiosity", "proactive_escalation", "timer"]
+      priority: 1
+    voice_recording:
+      blocked_reasons: ["proactive_curiosity", "proactive_escalation", "timer"]
+      priority: 2
+    hyperdirect:
+      blocked_reasons: ["user_input", "proactive_curiosity", "proactive_escalation", "timer"]
+      priority: 100
+```
 
 ## MemoryConfig
 
@@ -126,11 +179,8 @@ trigger_weights:
 | vector_db_path | str | ".iris/data/chroma_db" | ChromaDBディレクトリ |
 | episodic_max_entries | int | 30 | エピソード記憶上限 |
 | semantic_max_entries | int | 100 | 意味記憶上限 |
-| agents_md_path | str | ".iris/data/iris_profile.md" | 構造記憶ファイル |
+| agents_md_path | str | ".iris/config/iris_profile.md" | 構造記憶ファイル |
 | agents_md_max_bytes | int | 2048 | 構造記憶最大サイズ |
-| persona_data_path | str | ".iris/data/persona_data.json" | ペルソナデータファイル |
-| persona_data_max_entries | int | 100 | ペルソナデータ最大エントリ数 |
-| psychometric_state_path | str | ".iris/data/psychometric_state.json" | 心理状態永続化ファイル |
 
 ## QuasiSyncConfig
 
@@ -147,7 +197,13 @@ trigger_weights:
 | tier1_min_fragments | int | 2 | Tier1発火に必要な最小断片数 |
 | tier1_question_detect | bool | True | 疑問文検出の有効/無効 |
 | confidence_threshold | float | 0.6 | 応答準備完了の信頼度閾値 |
-| llm_model_role | str | "fast" | 応答準備判定に使うモデルロール |
+| llm_model_role | str | "low" | 応答準備判定に使うモデルロール |
+
+## TimerConfig
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| interval_sec | float | 1.0 | 鼓動タイマーの発行間隔（秒） |
 
 ## SessionConfig
 
@@ -177,85 +233,108 @@ trigger_weights:
 |-----------|-----|-----------|------|
 | enabled | bool | False | デバッグ機能の有効/無効 |
 | trace_max_entries | int | 500 | EventTracer リングバッファ最大数 |
-| emotion_history_enabled | bool | True | 感情履歴の記録有効/無効 |
-| personality_history_enabled | bool | True | 性格履歴の記録有効/無効 |
-| capture_enabled | bool | False | DebugCapture の有効/無効 |
-| capture_auto_dump | bool | False | 終了時の自動ダンプ |
+| capture_enabled | bool | False | DebugCapture の有効/無効（`/debug on/off` で切替可） |
+| capture_auto_dump | bool | False | キャプチャを自動で `logs/debug/` にファイル保存 |
 | capture_max_entries | int | 10 | DebugCapture の保持上限 |
+
+## PluginConfig
+
+| フィールド | 型 | デフォルト | 説明 |
+|-----------|-----|-----------|------|
+| paths | list[str] | ["iris/"] | プラグイン探索パス |
+| disabled | list[str] | [] | 無効化するプラグイン名一覧 |
+| config | dict[str, dict] | {} | プラグイン別設定 |
 
 ## config.yaml 例
 
 ```yaml
 # シングルモード（Ollama 1モデル）
+personality:
+  name: Iris
+  prompt_file: .iris/config/system_prompt.md
+
+memory:
+  agents_md_max_bytes: 2048
+  agents_md_path: .iris/config/iris_profile.md
+  episodic_max_entries: 30
+  episodic_path: .iris/data/episodes.jsonl
+  semantic_max_entries: 100
+  semantic_path: .iris/data/semantic.jsonl
+  vector_db_path: .iris/data/chroma_db
+
+account:
+  accounts_path: .iris/data/accounts.jsonl
+  identities_path: .iris/data/account_identities.jsonl
+
+limbic:
+  emotion_classifier:
+    type: keyword
+    model_name: koshin2001/Japanese-to-emotions
+
+proactive:
+  check_interval_sec: 5.0
+  min_interval_sec: 30.0
+  active_min_interval_sec: 2.0
+  max_interval_sec: 300.0
+  trigger_weights:
+    time: 0.40
+    memory: 0.35
+    context: 0.15
+  speak_threshold: 0.30
+  abbreviated_threshold: 0.25
+
 model:
   providers:
     ollama:
       base_url: http://localhost:11434
+    openrouter:
+      base_url: https://openrouter.ai/api/v1
+      api_key: ${OPENROUTER_API_KEY}
+    google:
+      base_url: https://generativelanguage.googleapis.com/v1beta/openai
+      api_key: ${GEMINI_API_KEY}
 
-  default_num_ctx: 8192
   default_context_window: 8192
-  default_temperature: 0.7
+  default_num_ctx: 8192
+  default_num_gpu: 99
+  default_temperature: 0.85
 
   models:
-    - name: qwen3.5:9b
-      roles: [default]
+    - name: qwen3.5:4b
+      roles: default
       provider: ollama
       max_tokens: 1024
-      tokenizer_repo_id: Qwen/Qwen3.5-9B
-
-# マルチプロバイダモード（Ollama + OpenRouter + Google 混在）
-# model:
-#   providers:
-#     ollama:
-#       base_url: http://localhost:11434
-#     openrouter:
-#       base_url: https://openrouter.ai/api/v1
-#       api_key: ${OPENROUTER_API_KEY}
-#     google:
-#       base_url: https://generativelanguage.googleapis.com/v1beta/openai
-#       api_key: ${GEMINI_API_KEY}
-#
-#   hf_token: ${HF_TOKEN}
-#   default_num_ctx: 8192
-#   default_context_window: 8192
-#   default_temperature: 0.7
-#
-#   models:
-#     - name: qwen3.5:9b
-#       roles: [default, fast]
-#       provider: ollama
-#       max_tokens: 1024
-#
-#     - name: gpt-4o
-#       roles: [capable]
-#       provider: openrouter
-#       max_tokens: 4096
-#       context_window: 128000
-#       tokenizer_repo_id: Xenova/gpt-4o
-#
-#     - name: gemini-2.5-flash
-#       roles: [default]
-#       provider: google
-#       max_tokens: 4096
-
-proactive:
-  check_interval_sec: 5.0
-  speak_threshold: 0.60
-  trigger_weights:
-    time: 0.25
-    memory: 0.45
-    context: 0.15
-    mood: 0.15
+      reasoning: false
+      tokenizer_repo_id: Qwen/Qwen3.5-4B
 
 session:
   host: 127.0.0.1
   port: 9876
-  access_token: ""
+
+quasi_sync:
+  response_readiness:
+    confidence_threshold: 0.6
+    llm_model_role: low
+    tier1_min_fragments: 2
+    tier1_question_detect: true
+
+debug:
+  enabled: false
+  trace_max_entries: 500
+  capture_enabled: false
+  capture_auto_dump: false
+  capture_max_entries: 10
+
+timer:
+  interval_sec: 1.0
 
 logging:
-  file_level: INFO
-  console_level: ""
-  dir: logs
-  max_bytes: 5242880
   backup_count: 14
+  console_format: "{time:YYYY-MM-DD HH:mm:ss} [{level}] {message}"
+  console_level: DEBUG
+  dir: logs
+  file_level: INFO
+  loggers:
+    iris.io: DEBUG
+  max_bytes: 5242880
 ```

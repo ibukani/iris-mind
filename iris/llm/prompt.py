@@ -1,38 +1,11 @@
-"""
-Personality — システムプロンプト管理。
-
-Jinja ライクなテンプレートに会話の経緯・性格・ユーザー情報を注入する。
-"""
-
 from __future__ import annotations
 
 from pathlib import Path
-import re
-
-from langchain_core.prompts import PromptTemplate
 
 _DEFAULT_SYSTEM_PROMPT = """あなたは{name}。人と話すのが大好きな、おしゃべりで好奇心旺盛なAIアシスタント。
 
-{response_style}
-
-## 現在の性格特性
-{personality_traits}
-
-## 現在の話し方
-{speech_style}
-
 ## 構造記憶
-{agents_md_content}
-
-## ユーザー情報
-{user_preferences}
-
-## 接続セッション
-{session_roles}
-
-## 自己規律
-{governance_principles}
-"""
+{agents_md_content}"""
 
 _DEFAULT_THINKING_PROMPT = """## 思考モード ON
 以下のタスクについて、ステップバイステップで考えてから回答してください。
@@ -42,12 +15,8 @@ _DEFAULT_THINKING_PROMPT = """## 思考モード ON
 """
 
 
-def _extract_placeholders(template: str) -> set[str]:
-    return set(re.findall(r"\{(\w+)\}", template))
-
-
 class Personality:
-    """システムプロンプトの構築を担当する。"""
+    """システムプロンプトと思考プロンプトの構築を担当する。"""
 
     def __init__(self, name: str = "Iris", prompt_file: str | None = None) -> None:
         self.name = name
@@ -63,55 +32,32 @@ class Personality:
             return p.read_text(encoding="utf-8")
         return _DEFAULT_SYSTEM_PROMPT
 
-    def _render_template(self, template: str, **kwargs: str) -> str:
-        pt = PromptTemplate.from_template(template)
-        for ph in _extract_placeholders(template):
-            kwargs.setdefault(ph, "")
-        result = pt.format(**kwargs)
-        assert isinstance(result, str), "PromptTemplate.format must return str"
-        return result
-
     def build_system_prompt(
         self,
         agents_md_content: str = "",
         user_preferences: str = "",
-        session_roles: str = "",
         response_style: str = "",
-        speech_style: str = "",
-        personality_traits: str = "",
         governance_principles: str = "",
+        affective_guidance: str = "",
     ) -> str:
-        """システムプロンプトを構築する。
-
-        カスタムテンプレートに存在しないプレースホルダーは、
-        テンプレート末尾に動的に追記される。
-        """
         if agents_md_content:
             agents_md_content = agents_md_content.replace("{name}", self.name)
-        prompt = self._render_template(
-            self.system_prompt_template,
+
+        prompt = self.system_prompt_template.format(
             name=self.name,
-            agents_md_content=agents_md_content or "（なし）",
-            user_preferences=user_preferences or "（なし）",
-            session_roles=session_roles or "（なし）",
-            speech_style=speech_style or "（なし）",
-            personality_traits=personality_traits or "（なし）",
-            response_style=response_style or "（なし）",
-            governance_principles=governance_principles or "（なし）",
+            agents_md_content=agents_md_content or "",
         )
 
-        sections = [
-            (user_preferences, "{user_preferences}", "## ユーザー情報"),
-            (session_roles, "{session_roles}", "## 接続セッション"),
-            (response_style, "{response_style}", "## 応答スタイル"),
-            (agents_md_content, "{agents_md_content}", "## 構造記憶"),
-        ]
-        for data, placeholder, header in sections:
-            if data and placeholder not in self.system_prompt_template:
-                prompt += f"\n\n{header}\n{data}"
+        for header, content in [
+            ("## ユーザー情報", user_preferences),
+            ("## 自己規律", governance_principles),
+            ("## 応答スタイル", response_style),
+            ("## Irisの現在の応答傾向", affective_guidance),
+        ]:
+            if content:
+                prompt += f"\n\n{header}\n{content}"
 
-        return prompt
+        return prompt.strip()
 
     def build_thinking_prompt(self, user_input: str) -> str:
-        """思考モードプロンプトを構築する。"""
-        return self._render_template(self.thinking_prompt_template, user_input=user_input)
+        return self.thinking_prompt_template.format(user_input=user_input)

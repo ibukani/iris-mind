@@ -8,12 +8,27 @@ personality:
 # 記憶系 — 各記憶層の保存先と上限
 memory:
     agents_md_max_bytes: 2048
-    agents_md_path: .iris/data/iris_profile.md
+    agents_md_path: .iris/config/iris_profile.md
     episodic_max_entries: 30
     episodic_path: .iris/data/episodes.jsonl
     semantic_max_entries: 100
     semantic_path: .iris/data/semantic.jsonl
     vector_db_path: .iris/data/chroma_db
+
+# アカウント管理 — ユーザー識別・外部ID連携
+account:
+    accounts_path: .iris/data/accounts.jsonl
+    identities_path: .iris/data/account_identities.jsonl
+
+# ルーム管理 — ルームCRUD・メンバーシップ管理（インメモリ）
+room: {}
+
+# 辺縁系 — 感情分類器（既定は軽量なキーワード判定）
+limbic:
+    emotion_classifier:
+        type: neural # keyword / neural
+        model_name: YoichiTakenaka/deverta-v3-japanese-large-Anticipation
+        device: auto # auto / cuda / cpu / 0
 
 # 自発発話 — プロアクティブな割り込みの重み・閾値
 proactive:
@@ -50,11 +65,17 @@ model:
     # モデル定義（接続情報は providers に集約）
     # roles: モデルが担当する役割（low/medium/high）。fallbackとしてdefaultも使用可。
     models:
-        - name: qwen3.5:4b
+        - name: qwen3.5:9b
           roles: [default]
           provider: ollama
           max_tokens: 1024
-          tokenizer_repo_id: Qwen/Qwen3.5-4B
+          reasoning: false
+          tokenizer_repo_id: Qwen/Qwen3.5-9B
+        # - name: gemini-3.1-flash-lite
+        #   roles: [default]
+        #   provider: google
+        #   max_tokens: 4096
+        #   tokenizer_repo_id: Qwen/Qwen3.5-4B
 
 # TCP サーバー — 外部クライアント接続の listen 設定
 session:
@@ -79,14 +100,19 @@ debug:
     capture_auto_dump: true # キャプチャを自動で logs/debug/ にファイル保存
     capture_max_entries: 10 # メモリ内保持数
 
+# 鼓動タイマー — 自発発話のチェック間隔
+timer:
+    interval_sec: 5.0
+
 # ログ出力 — レベル・保存先・ローテーション
 logging:
     backup_count: 14
     console_format: "{time:YYYY-MM-DD HH:mm:ss} [{level}] {message}"
     console_level: DEBUG
     dir: logs
-    file_level: INFO
+    file_level: DEBUG
     # 特定ロガーのレベル上書き（例: iris.io: DEBUG）
     loggers:
         iris.io: DEBUG
+        iris.limbic: DEBUG
     max_bytes: 5242880

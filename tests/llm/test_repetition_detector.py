@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
 
@@ -20,8 +20,8 @@ def _make_bridge() -> LLMBridge:
                 "presence_penalty": 0.5,
                 "frequency_penalty": 0.5,
                 "repeat_penalty": 1.2,
-            }
-        ]
+            },
+        ],
     )
     return LLMBridge(config)
 
@@ -65,10 +65,15 @@ def test_trim_repetition_single() -> None:
 def test_chat_non_streaming_repetition() -> None:
     bridge = _make_bridge()
 
-    mock_provider = AsyncMock()
-    # ainvoke の戻り値に繰り返しを含めた AIMessage を設定
-    mock_provider.ainvoke.return_value = AIMessage(content="同じことを言います。全部、全部、全部、全部、")
-    bridge._providers = {next(iter(bridge._providers)): mock_provider}
+    model_name = next(iter(bridge._chat_models))
+
+    mock_model = AsyncMock()
+    mock_model.ainvoke.return_value = AIMessage(content="同じことを言います。全部、全部、全部、全部、")
+    bridge._chat_models[model_name] = mock_model
+
+    mock_provider = MagicMock()
+    mock_provider.build_call_kwargs.return_value = {}
+    bridge._model_providers[model_name] = mock_provider
 
     resp = asyncio.run(bridge.chat(messages=[HumanMessage(content="hello")]))
     content = resp.content
@@ -78,16 +83,21 @@ def test_chat_non_streaming_repetition() -> None:
 def test_chat_streaming_repetition() -> None:
     bridge = _make_bridge()
 
-    mock_provider = AsyncMock()
+    model_name = next(iter(bridge._chat_models))
 
-    # astream の非同期ジェネレータモック
+    mock_model = AsyncMock()
+
     async def mock_astream(*args, **kwargs):
         tokens = ["これは", "ストリーム", "です。", "全部、", "全部、", "全部、", "全部、", "全部、"]
         for t in tokens:
             yield AIMessageChunk(content=t)
 
-    mock_provider.astream = mock_astream
-    bridge._providers = {next(iter(bridge._providers)): mock_provider}
+    mock_model.astream = mock_astream
+    bridge._chat_models[model_name] = mock_model
+
+    mock_provider = MagicMock()
+    mock_provider.build_call_kwargs.return_value = {}
+    bridge._model_providers[model_name] = mock_provider
 
     captured_tokens = []
     interrupt_token = InterruptToken()
@@ -97,7 +107,7 @@ def test_chat_streaming_repetition() -> None:
             messages=[HumanMessage(content="hello")],
             on_token=captured_tokens.append,
             interrupt_token=interrupt_token,
-        )
+        ),
     )
 
     # 4回目の「全部、」の時点でキャンセルされ、それ以降のトークンは呼ばれない

@@ -5,7 +5,7 @@ import warnings
 
 from iris.io.transport import grpc_service_pb2 as iris_dot_io_dot_transport_dot_grpc__service__pb2
 
-GRPC_GENERATED_VERSION = '1.76.0'
+GRPC_GENERATED_VERSION = '1.80.0'
 GRPC_VERSION = grpc.__version__
 _version_not_supported = False
 

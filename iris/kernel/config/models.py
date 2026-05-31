@@ -1,0 +1,231 @@
+from __future__ import annotations
+
+import re
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator
+
+_ENV_REF_RE = re.compile(r"\$\{([^}]+)\}")
+_VALID_PERFORMANCE_TIERS = {"fast", "balanced", "capable"}
+
+
+def _default_models() -> list[ModelEntry]:
+    return [ModelEntry(name="qwen3.5:9b", roles=["default"], max_tokens=1024, provider="ollama")]
+
+
+def _default_trigger_weights() -> dict[str, float]:
+    return {
+        "memory": 0.55,
+        "context": 0.30,
+    }
+
+
+class ProviderConnection(BaseModel):
+    base_url: str = ""
+    api_key: str = ""
+
+
+class ModelEntry(BaseModel):
+    name: str
+    roles: list[str] = Field(default_factory=lambda: ["default"])
+    provider: str = "ollama"
+    max_tokens: int = 512
+    temperature: float | None = None
+    num_ctx: int | None = None
+    num_gpu: int | None = None
+    main_gpu: int | None = None
+    context_window: int | None = None
+    capabilities: list[str] | None = None
+    performance_tier: str = "balanced"
+    tokenizer_repo_id: str = ""
+    tokenizer_local_path: str = ""
+    keep_alive: str | None = None
+    presence_penalty: float | None = None
+    frequency_penalty: float | None = None
+    repeat_penalty: float | None = None
+    reasoning: bool = False
+
+    @field_validator("roles", mode="before")
+    @classmethod
+    def _coerce_roles(cls, v: object) -> list[str]:
+        if isinstance(v, str):
+            return [v]
+        if isinstance(v, list):
+            return v
+        return ["default"]
+
+    @field_validator("performance_tier")
+    @classmethod
+    def _validate_tier(cls, v: str) -> str:
+        if v not in _VALID_PERFORMANCE_TIERS:
+            raise ValueError(f"performance_tier must be one of {_VALID_PERFORMANCE_TIERS}, got '{v}'")
+        return v
+
+
+class ModelConfig(BaseModel):
+    providers: dict[str, ProviderConnection] = Field(default_factory=dict)
+    hf_token: str = ""
+    models: list[ModelEntry] = Field(default_factory=_default_models)
+    default_temperature: float = 0.7
+    default_num_ctx: int = 8192
+    default_num_gpu: int = 99
+    default_context_window: int = 8192
+
+    @property
+    def model_names(self) -> list[str]:
+        return [m.name for m in self.models]
+
+    def __init__(self, **data: object) -> None:
+        super().__init__(**data)
+        self._init_role_map()
+
+    def _init_role_map(self) -> None:
+        self._role_map: dict[str, ModelEntry] = {}
+        for m in self.models:
+            for role in m.roles:
+                self._role_map[role] = m
+        self._default_entry = self.models[0] if self.models else None
+
+    def get_model(self, role: str = "default") -> str:
+        m = self._role_map.get(role, self._default_entry)
+        return m.name if m else ""
+
+    def _find_model(self, role: str) -> ModelEntry | None:
+        return self._role_map.get(role, self._default_entry)
+
+    def get_effective_temperature(self, role: str = "default") -> float:
+        m = self._find_model(role)
+        if m is not None and m.temperature is not None:
+            return m.temperature
+        return self.default_temperature
+
+    def get_effective_num_ctx(self, role: str = "default") -> int:
+        m = self._find_model(role)
+        if m is not None and m.num_ctx is not None:
+            return m.num_ctx
+        return self.default_num_ctx
+
+    def get_effective_num_gpu(self, role: str = "default") -> int:
+        m = self._find_model(role)
+        if m is not None and m.num_gpu is not None:
+            return m.num_gpu
+        return self.default_num_gpu
+
+    def get_effective_context_window(self, role: str = "default") -> int:
+        m = self._find_model(role)
+        if m is not None and m.context_window is not None:
+            return m.context_window
+        return self.default_context_window
+
+    def get_model_capabilities(self, role: str = "default") -> list[str]:
+        m = self._find_model(role)
+        if m is not None and m.capabilities is not None:
+            return m.capabilities
+        return []
+
+    def get_model_performance_tier(self, role: str = "default") -> str:
+        m = self._find_model(role)
+        if m is not None:
+            return m.performance_tier
+        return "balanced"
+
+    def get_effective_max_tokens(self, role: str = "default") -> int:
+        m = self._find_model(role)
+        if m is not None:
+            return m.max_tokens
+        return 4096
+
+
+class SuppressionProfileConfig(BaseModel):
+    blocked_reasons: list[str] = Field(default_factory=list)
+    priority: int = 1
+
+
+class InhibitionConfig(BaseModel):
+    post_execution_cooldown_sec: float = 5.0
+    max_concurrent_executions: int = 1
+    inhibit_proactive_during_execution: bool = True
+    inhibit_proactive_during_cooldown: bool = True
+    tts_mora_per_sec: float = 6.5
+    suppression_profiles: dict[str, SuppressionProfileConfig] = Field(default_factory=dict)
+
+
+class ProactiveConfig(BaseModel):
+    check_interval_sec: float = 5.0
+    min_interval_sec: float = 30.0
+    active_min_interval_sec: float = 2.0
+    max_interval_sec: float = 300.0
+    trigger_weights: dict[str, float] = Field(default_factory=_default_trigger_weights)
+    speak_threshold: float = 0.30
+    abbreviated_threshold: float = 0.25
+
+
+class EmotionClassifierConfig(BaseModel):
+    type: Literal["keyword", "neural"] = "keyword"
+    model_name: str = "koshin2001/Japanese-to-emotions"
+    device: str = "auto"
+
+
+class LimbicConfig(BaseModel):
+    emotion_classifier: EmotionClassifierConfig = Field(default_factory=EmotionClassifierConfig)
+
+
+class PersonalityConfig(BaseModel):
+    name: str = "Iris"
+    prompt_file: str = ".iris/config/system_prompt.md"
+    node_prompts_dir: str = ".iris/config/node_prompts"
+
+
+class MemoryConfig(BaseModel):
+    episodic_path: str = ".iris/data/episodes.jsonl"
+    semantic_path: str = ".iris/data/semantic.jsonl"
+    vector_db_path: str = ".iris/data/chroma_db"
+    episodic_max_entries: int = 30
+    semantic_max_entries: int = 100
+    agents_md_path: str = ".iris/config/iris_profile.md"
+    agents_md_max_bytes: int = 2048
+
+
+class ResponseReadinessConfig(BaseModel):
+    tier1_min_fragments: int = 2
+    tier1_question_detect: bool = True
+    confidence_threshold: float = 0.6
+    llm_model_role: str = "low"
+
+
+class QuasiSyncConfig(BaseModel):
+    response_readiness: ResponseReadinessConfig = Field(default_factory=ResponseReadinessConfig)
+
+
+class SessionConfig(BaseModel):
+    host: str = "127.0.0.1"
+    port: int = 9876
+    access_token: str = ""
+
+
+class LoggingConfig(BaseModel):
+    file_level: str = "INFO"
+    console_level: str = ""
+    dir: str = "logs"
+    max_bytes: int = 5_242_880
+    backup_count: int = 14
+    loggers: dict[str, str] = Field(default_factory=dict)
+    console_format: str = ""
+
+
+class DebugConfig(BaseModel):
+    enabled: bool = False
+    trace_max_entries: int = 500
+    capture_enabled: bool = False
+    capture_auto_dump: bool = False
+    capture_max_entries: int = 10
+
+
+class TimerConfig(BaseModel):
+    interval_sec: float = 1.0
+
+
+class PluginConfig(BaseModel):
+    paths: list[str] = Field(default_factory=lambda: ["iris/"])
+    disabled: list[str] = Field(default_factory=list)
+    config: dict[str, dict] = Field(default_factory=dict)

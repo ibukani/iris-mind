@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from iris.agency.inhibition.controller import GateVerdict, InhibitionController
+from iris.agency.inhibition.manager import InhibitionManager
 
-__all__ = [
-    "GateVerdict",
-    "InhibitionController",
-]
+__all__ = ["InhibitionManager"]

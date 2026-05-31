@@ -209,7 +209,7 @@ def test_discover_modules_registers_decorated_tools(tmp_path, monkeypatch) -> No
             @tool()
             def hello() -> str:
                 return 'hi'
-            """
+            """,
         ).lstrip(),
         encoding="utf-8",
     )

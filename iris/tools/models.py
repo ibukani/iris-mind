@@ -19,7 +19,7 @@ class ToolDef:
         return self.to_openai_tool()["function"]["parameters"]  # type: ignore[no-any-return]
 
     def to_openai_tool(self) -> dict:
-        return convert_to_openai_tool(self.tool)  # type: ignore[no-any-return]
+        return convert_to_openai_tool(self.tool)
 
     def execute(self, **kwargs: object) -> str:
         result = self.tool.invoke(input=kwargs)

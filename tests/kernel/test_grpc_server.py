@@ -3,9 +3,10 @@ import time
 import grpc
 import pytest
 
-from iris.io.session.manager import SessionConfig, SessionManager
+from iris.io.session.config import SessionConfig
+from iris.io.session.manager import SessionManager
 from iris.io.transport import grpc_service_pb2, grpc_service_pb2_grpc
-from iris.io.transport.grpc_server import GrpcListener
+from iris.io.transport.grpc_listener import GrpcListener
 
 
 def test_grpc_server_lifecycle():
@@ -52,7 +53,7 @@ def test_grpc_server_auth_and_communication():
             # 1. チャットメッセージ送信
             msg = grpc_service_pb2.Message(
                 id="msg_1",
-                direction="request",
+                direction=grpc_service_pb2.DIRECTION_REQUEST,
                 msg_type="chat",
                 content="Hello World",
             )

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from typing import Any, Protocol, runtime_checkable
+
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from loguru import logger
 
-from .bridge import LLMBridge
-from .tokenizer import TokenizerManager
+from .token_utils import estimate_messages_tokens
+
+_SESSION_SUMMARY_HEADER = "## Session Summary"
 
 _COMPACT_PROMPT = """これまでの会話要約（もしあれば）と、新規の会話履歴を統合し、最新の会話要約を更新・作成してください。
 作業継続に必要な情報のみを網羅し、冗長な内容は省いてください。
@@ -17,22 +20,22 @@ _COMPACT_PROMPT = """これまでの会話要約（もしあれば）と、新�
 日本語で簡潔に。"""
 
 
-def estimate_tokens(text: str, tokenizer_mgr: TokenizerManager | None = None) -> int:
-    """テキストのトークン数を概算する。
+@runtime_checkable
+class SummarizerProtocol(Protocol):
+    """LLMContextWindowManager が要約に使用する LLM の最小インターフェース。
 
-    TokenizerManagerが提供されていればそれを使用し、無ければ日本語マルチバイト文字を考慮した近似式を使用する。
+    LLMBridge はこのプロトコルを満たすため、そのまま依存対象として使用できる。
+    テスト時は任意のモックで置き換え可能。
     """
-    if not text:
-        return 0
-    if tokenizer_mgr is not None:
-        return int(tokenizer_mgr.estimate_tokens(text))
-    # 日本語等のマルチバイトを考慮し、安全側に倒す (1文字あたり約1.3トークン)
-    return int(len(text) * 1.3)
 
-
-def estimate_messages_tokens(messages: list[BaseMessage], tokenizer_mgr: TokenizerManager | None = None) -> int:
-    """メッセージ履歴全体の合計トークン数を概算する。"""
-    return sum(estimate_tokens(str(m.content), tokenizer_mgr) for m in messages)
+    async def chat(
+        self,
+        messages: list[BaseMessage],
+        model: str | None = None,
+        temperature: float = 0.7,
+        max_tokens: int = 4096,
+        **kwargs: Any,
+    ) -> AIMessage: ...
 
 
 class LLMContextWindowManager:
@@ -48,7 +51,7 @@ class LLMContextWindowManager:
 
     def __init__(
         self,
-        llm: LLMBridge | None = None,
+        llm: SummarizerProtocol | None = None,
         compact_model: str | None = None,
         tokenizers: dict[str, TokenizerManager] | None = None,
         default_model_name: str | None = None,
@@ -145,8 +148,9 @@ class LLMContextWindowManager:
         previous_summary = ""
         new_messages: list[BaseMessage] = []
         for m in messages:
-            if m.type == "system" and str(m.content).startswith("## Session Summary"):
-                previous_summary = str(m.content).replace("## Session Summary\n", "", 1).strip()
+            content = str(m.content)
+            if m.type == "system" and content.startswith(_SESSION_SUMMARY_HEADER):
+                previous_summary = content.removeprefix(_SESSION_SUMMARY_HEADER).lstrip("\n").strip()
             else:
                 new_messages.append(m)
         return previous_summary or self._summary, new_messages
@@ -169,3 +173,6 @@ class LLMContextWindowManager:
 
     async def compact(self, messages: list[BaseMessage]) -> str:
         return await self._compact(messages)
+
+
+from .tokenizer import TokenizerManager  # noqa: E402

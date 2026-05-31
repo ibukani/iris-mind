@@ -9,8 +9,7 @@ if TYPE_CHECKING:
     from iris.event.event_bus import EventBus
     from iris.event.tracer import EventTracer
     from iris.io.manager import IOManager
-    from iris.kernel.manager import KernelManager
-    from iris.limbic.manager import LimbicManager
+    from iris.kernel.manager import PluginManager
     from iris.memory.manager import MemoryManager
 
 
@@ -38,7 +37,7 @@ def _flatten(tree: dict, prefix: str = "") -> dict[str, Any]:
     return result
 
 
-_LAYER_NAMES = ("kernel", "io", "memory", "limbic", "agency")
+_LAYER_NAMES = ("kernel", "io", "memory", "agency")
 
 
 class SystemDiagnostics:
@@ -46,10 +45,9 @@ class SystemDiagnostics:
         self,
         event_bus: EventBus | None = None,
         tracer: EventTracer | None = None,
-        kernel: KernelManager | None = None,
+        kernel: PluginManager | None = None,
         io: IOManager | None = None,
         memory: MemoryManager | None = None,
-        limbic: LimbicManager | None = None,
         agency: AgencyManager | None = None,
     ) -> None:
         self._event_bus = event_bus
@@ -57,7 +55,6 @@ class SystemDiagnostics:
         self._kernel = kernel
         self._io = io
         self._memory = memory
-        self._limbic = limbic
         self._agency = agency
 
     def _layer_objects(self) -> Iterator[tuple[str, Any]]:

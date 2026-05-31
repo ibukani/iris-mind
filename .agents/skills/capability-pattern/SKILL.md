@@ -1,8 +1,9 @@
 ---
 name: capability-pattern
-description: Iris capability 追加の最小ワークフロー
+description: |
+  Use ONLY when adding a new Tool/capability (new @tool decorated function with register function).
+  Do NOT use: creating plugins, adding hooks, adding LLM providers, adding store backends.
 license: MIT
-compatibility: opencode
 metadata:
   audience: developers
   workflow: iris-extension
@@ -10,17 +11,16 @@ metadata:
 
 ## Purpose
 
-新規 capability（ツール）を Iris に追加するときだけ読む。
-詳細調査は既存 capability と `iris/tools/` の実装を一次情報にする。
+Read this only when adding a new capability / tool to Iris. Treat existing capabilities and the implementation under `iris/tools/` as the source of truth.
 
 ## Steps
 
-1. 配置を決める
+1. Decide where to place it.
 
-- 通常: `iris/tools/builtins/<name>/server.py`
-- 自動発見: `discover_modules()` が `iris/tools/builtins/` 配下の `server.py` を探して自動登録
+- Standard location: `iris/tools/builtins/<name>/server.py`
+- Auto-discovery: `discover_modules()` scans for `server.py` under `iris/tools/builtins/` and registers it automatically.
 
-2. `@tool()` で定義する
+2. Define it with `@tool()`.
 
 ```python
 from iris.tools.decorator import tool
@@ -28,49 +28,66 @@ from iris.tools.decorator import tool
 
 @tool(allowed_roles={"base", "smart"})
 def my_tool(param: str) -> str:
-    """日本語の説明。この docstring が tool description になる。"""
+    """Tool description. This docstring becomes the tool description."""
     return f"Result: {param}"
 ```
 
-- 型ヒントから JSON Schema が生成される
-- デフォルト値なしは required、ありは optional
-- パラメータ説明が必要な場合は `descriptions={...}` を使う
-- 会話に結果を戻さない作用系ツールは `side_effect=True` を使う
+- JSON Schema is generated from type hints.
+- Parameters without default values are required; parameters with default values are optional.
+- Use `descriptions={...}` when parameter descriptions are needed.
+- Use `side_effect=True` for action tools whose result should not be returned to the conversation.
 
-3. 自動発見用 `register()` を置く
+3. Add `register()` for auto-discovery.
 
 ```python
 def register(registry):
     registry.register_decorated(my_tool)
 ```
 
-複数ツールの場合は `iris.tools.decorator.register_decorated_tools` の既存利用例を参照する。
+For multiple tools, refer to existing examples using `iris.tools.decorator.register_decorated_tools`.
 
-4. テストを追加する
+4. Add tests.
 
-- `tests/tools/` または関連領域の既存テストに追加
-- 最低限、`get_tool_def()` で name / schema / `side_effect` / `allowed_roles` を確認する
-- 実行時の副作用がある場合は Fake や一時ディレクトリで検証する
+- Add tests under `tests/tools/` or the existing relevant test area.
+- At minimum, verify name / schema / `side_effect` / `allowed_roles` through `get_tool_def()`.
+- For tools with runtime side effects, test with fakes or temporary directories.
 
-5. ドキュメントと構造記憶を更新する
+5. Update documentation and structural memory.
 
-- `.iris/data/iris_profile.md` の該当セクション
-- 必要なら `docs/` または `docs/adr/`
-- ドキュメント更新漏れ確認は `.agents/skills/doc-sync/SKILL.md`
+- Update `.iris/config/iris_profile.md` only when the change affects Iris self-recognition, available capabilities, or behavior.
+- Do not update `.iris/config/iris_profile.md` for purely internal implementation changes.
+- Update `docs/` or `docs/adr/` when needed.
+- Use `.agents/skills/doc-sync/SKILL.md` to check for missed documentation updates.
 
-6. 検証してコミットする
+6. Validate.
 
-```powershell
-ruff check .
-mypy .
-pytest tests/ -q
+```bash
+uv run pytest tests/ -q
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy .
+```
+
+When fixes are allowed:
+
+```bash
+uv run ruff check --fix .
+uv run ruff format .
+```
+
+7. Commit.
+
+Commit only when the user explicitly asks.
+
+```bash
 git add .
-git commit -m "feat: <ツール名> capability を追加"
+git commit -m "feat: add <tool-name> capability"
 ```
 
 ## Rules
 
-- 新規追加は `@tool()` を使う。
-- `__init__.py` を必要なパッケージに置く。
-- 戻り値は基本 `str`。
-- `allowed_roles` を指定しない場合は全ロール利用可。
+- Use `@tool()` for new additions.
+- Add `__init__.py` to packages that need it.
+- Prefer `str` return values.
+- If `allowed_roles` is omitted, all roles may use the tool.
+- Do not create a new top-level Plugin for a capability / tool addition.

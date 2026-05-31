@@ -1,16 +1,24 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-import time
+from pathlib import Path
 
-from iris.agency import InhibitionController, LLMGateway, ProactiveScoring
+from iris.account.dispatcher import AccountDispatcher
+from iris.account.manager import AccountManager
+from iris.account.models import Provider
+from iris.account.store import AccountStore
+from iris.agency import LLMGateway
 from iris.event.event_bus import EventBus
-from iris.event.event_types import ClientSessionEvent
+from iris.io.events import ControlMessageEvent
 from iris.io.models import AuthMessage
 from iris.io.session.manager import SessionManager
-from iris.kernel.config import Config, SessionConfig
+from iris.kernel.config import SessionConfig
 from iris.llm.prompt import Personality
+from iris.memory.handler import _MemoryEventHandler
 from iris.memory.manager import MemoryManager
+from iris.memory.models import system_event_block
+from iris.room.dispatcher import _RoomDispatcher
+from iris.room.manager import RoomManager
+from iris.room.store import RoomStore
 
 
 class DummyConnection:
@@ -18,98 +26,255 @@ class DummyConnection:
         pass
 
 
-def test_session_manager_disconnect_time_and_events():
+def _make_handlers(event_bus: EventBus, memory_mgr: MemoryManager, tmp_path: Path):
+    account_store = AccountStore(
+        accounts_path=str(tmp_path / "accounts.jsonl"),
+        identities_path=str(tmp_path / "identities.jsonl"),
+    )
+    account_provider = AccountManager(store=account_store, event_bus=event_bus)
+
+    room_store = RoomStore()
+    room_provider = RoomManager(store=room_store, event_bus=event_bus, account_manager=account_provider)
+
+    account_dispatcher = AccountDispatcher(account_manager=account_provider)
+    room_dispatcher = _RoomDispatcher(room_manager=room_provider, account_manager=account_provider)
+
+    from iris.room.handler import _RoomEventHandler
+
+    _RoomEventHandler(event_bus=event_bus, store=room_store, room_manager=room_provider)
+
+    _MemoryEventHandler(
+        event_bus,
+        memory_mgr.sensory,
+        None,
+        short_term=memory_mgr.short_term,
+        account_dispatcher=account_dispatcher,
+        room_provider=room_provider,
+    )
+    return account_dispatcher, room_dispatcher, account_provider, room_provider
+
+
+def test_session_manager_disconnect_publishes_session_disconnect_event():
     event_bus = EventBus()
     session_mgr = SessionManager(config=SessionConfig(access_token="test_token"), event_bus=event_bus)
 
-    events = []
-    event_bus.subscribe("ClientSessionEvent", lambda ev: events.append(ev))
+    disconnect_events = []
+    event_bus.subscribe("SessionDisconnectEvent", lambda ev: disconnect_events.append(ev))
 
-    # 1. 最初の接続
     conn = DummyConnection()
-    msg = AuthMessage(access_token="test_token", role="user", identity="test_user")
+    msg = AuthMessage(access_token="test_token", role="user", session_tag="test_user")
     resp = session_mgr.authenticate(conn, msg)
     assert resp.msg_type == "auth_success"
     session_id = resp.session_id
 
-    assert len(events) == 1
-    assert events[0].action == "connected"
-    assert events[0].offline_duration == ""
-
-    # 2. 切断
-    events.clear()
     session_mgr.remove_session(session_id)
-    assert len(events) == 1
-    assert events[0].action == "disconnected"
 
-    # 3. 過去の切断時間を細工して、1時間10分後に再接続したことにする
-    key = "user:test_user"
-    session_mgr._last_disconnect_times[key] = datetime.now() - timedelta(hours=1, minutes=10)
-
-    events.clear()
-    resp = session_mgr.authenticate(conn, msg)
-    assert resp.msg_type == "auth_success"
-    assert len(events) == 1
-    assert events[0].action == "connected"
-    assert events[0].offline_duration == "1時間10分間"
+    assert len(disconnect_events) == 1
+    assert disconnect_events[0].session_id == session_id
+    assert disconnect_events[0].session_tag == "test_user"
 
 
-def test_memory_manager_subscribes_client_session_event():
+def test_handle_account_identify(tmp_path):
     event_bus = EventBus()
-    memory_mgr = MemoryManager(event_bus=event_bus)
-    assert memory_mgr is not None
+    memory_mgr = MemoryManager()
+    account_handler, _, account_provider, _ = _make_handlers(event_bus, memory_mgr, tmp_path)
+
+    resp = account_handler.handle_control_message(
+        ControlMessageEvent(
+            action="account.identify",
+            identity={"provider": Provider.DISCORD, "subject": "123", "provider_name": "John"},
+            source="test",
+            timestamp=None,
+        ),
+    )
+
+    assert resp is not None
+    assert resp.action == "account.identified"
+    assert len(resp.account_id) == 16
+    assert resp.display_name == "John"
+    account = account_provider.resolve(resp.account_id)
+    assert account is not None
+    assert account.display_name == "John"
+
+
+def test_handle_account_profile(tmp_path):
+    event_bus = EventBus()
+    memory_mgr = MemoryManager()
+    account_handler, _, account_provider, _ = _make_handlers(event_bus, memory_mgr, tmp_path)
+
+    account = account_provider.resolve_or_create_identity(Provider.DISCORD, "123", provider_name="John")
+
+    resp = account_handler.handle_control_message(
+        ControlMessageEvent(
+            action="account.profile",
+            account_id=account.account_id,
+            source="test",
+            timestamp=None,
+        ),
+    )
+
+    assert resp is not None
+    assert resp.action == "account.profile"
+    assert resp.display_name == "John"
+
+
+def test_room_join_creates_system_event(tmp_path):
+    event_bus = EventBus()
+    memory_mgr = MemoryManager()
+    _, room_handler, account_provider, room_provider = _make_handlers(event_bus, memory_mgr, tmp_path)
+
+    room = room_provider.create_room("test")
+    account = account_provider.resolve_or_create_identity(Provider.DISCORD, "123", provider_name="John")
 
     inputs_ready = []
     event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
 
-    # クライアント接続イベント発行
-    ev = ClientSessionEvent(
-        timestamp=datetime.now(),
-        source="session",
-        session_id="session_123",
-        action="connected",
-        role="user",
-        identity="test_user",
-        offline_duration="2時間",
+    resp = room_handler.handle_control_message(
+        ControlMessageEvent(
+            action="room.join",
+            room_id=room.room_id,
+            account_id=account.account_id,
+            source="test",
+            timestamp=None,
+        ),
+        session_id="s1",
     )
-    event_bus.publish(ev)
+
+    assert resp is not None
+    assert resp.action == "room.joined"
 
     assert len(inputs_ready) == 1
-    ir = inputs_ready[0]
-    assert ir.session_id == "session_123"
-    assert ir.context.get("system_event") == "connected"
-    assert ir.context.get("offline_duration") == "2時間"
-    assert ir.context.get("role") == "user"
+    assert "入室" in inputs_ready[0].content or "Joined" in inputs_ready[0].content
 
 
-def test_inhibition_controller_cooldown_and_planning_scoring():
+def test_room_leave_creates_system_event(tmp_path):
     event_bus = EventBus()
-    inhibition = InhibitionController()
-    assert inhibition is not None
+    memory_mgr = MemoryManager()
+    _, room_handler, account_provider, room_provider = _make_handlers(event_bus, memory_mgr, tmp_path)
 
-    # ProactiveConfigのspeak_thresholdは0.5と仮定
-    cfg = Config()
-    cfg.proactive.speak_threshold = 0.5
-    memory_mgr = MemoryManager(event_bus=event_bus, proactive_config=cfg.proactive)
-    scoring = ProactiveScoring(config=cfg.proactive, memory=memory_mgr)
+    room = room_provider.create_room("test")
+    account = account_provider.resolve_or_create_identity(Provider.DISCORD, "123", provider_name="John")
+    room_provider.join_room(room.room_id, account.account_id, session_id="s1")
 
-    # 接続イベント付きの評価
-    context = {"system_event": "connected", "role": "user", "offline_duration": "3時間"}
+    inputs_ready = []
+    event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
 
-    from iris.agency import ScoreContext
-
-    total, _ = scoring.compute(
-        ScoreContext(
-            now=time.time(),
-            last_proactive_time=0.0,
-            last_user_activity=0.0,
-            negative_mood_score=0.0,
-            context=context,
-            ignore_count=0,
-        )
+    resp = room_handler.handle_control_message(
+        ControlMessageEvent(
+            action="room.leave",
+            room_id=room.room_id,
+            account_id=account.account_id,
+            source="test",
+            timestamp=None,
+        ),
+        session_id="s1",
     )
-    # 接続イベント時は強制的に speak_threshold + 0.1 を超える
-    assert total >= 0.6
+
+    assert resp is not None
+    assert resp.action == "room.left"
+
+    assert len(inputs_ready) == 1
+    assert "退室" in inputs_ready[0].content or "Left" in inputs_ready[0].content
+
+
+def test_account_update(tmp_path):
+    event_bus = EventBus()
+    memory_mgr = MemoryManager()
+    account_handler, _, account_provider, _ = _make_handlers(event_bus, memory_mgr, tmp_path)
+
+    account = account_provider.register("John")
+
+    resp = account_handler.handle_control_message(
+        ControlMessageEvent(
+            action="account.update",
+            account_id=account.account_id,
+            display_name="Jane",
+            source="test",
+            timestamp=None,
+        ),
+    )
+
+    assert resp is not None
+    assert resp.action == "account.updated"
+    assert resp.display_name == "Jane"
+
+    updated = account_provider.resolve(account.account_id)
+    assert updated is not None
+    assert updated.display_name == "Jane"
+
+
+def test_session_disconnect_triggers_auto_user_left(tmp_path):
+    event_bus = EventBus()
+    memory_mgr = MemoryManager()
+    _, _, account_provider, room_provider = _make_handlers(event_bus, memory_mgr, tmp_path)
+
+    room = room_provider.create_room("test")
+    account = account_provider.register("Alice")
+    account_id = account.account_id
+    room_provider.join_room(room.room_id, account_id, session_id="sess1")
+
+    inputs_ready = []
+    event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
+
+    from iris.io.events import SessionDisconnectEvent
+
+    event_bus.publish(
+        SessionDisconnectEvent(timestamp=None, source="session", session_id="sess1", session_tag="alice@example.com"),
+    )
+
+    assert len(inputs_ready) == 1
+    text = inputs_ready[0].content
+    assert "退室" in text
+    assert "Alice" in text
+
+
+def test_session_disconnect_no_users_no_error(tmp_path):
+    event_bus = EventBus()
+    memory_mgr = MemoryManager()
+    _make_handlers(event_bus, memory_mgr, tmp_path)
+
+    inputs_ready = []
+    event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
+
+    from iris.io.events import SessionDisconnectEvent
+
+    event_bus.publish(
+        SessionDisconnectEvent(timestamp=None, source="session", session_id="empty_sess", session_tag="nobody"),
+    )
+
+    assert len(inputs_ready) == 0
+
+
+def test_system_event_block_has_metadata():
+    block = system_event_block(
+        "[system] Bob が入室しました",
+        event_type="room.joined",
+        account_id="u123",
+        display_name="Bob",
+    )
+    assert block["type"] == "system_event"
+    assert block["text"] == "[system] Bob が入室しました"
+    meta = block["metadata"]
+    assert meta is not None
+    assert meta["event_type"] == "room.joined"
+    assert meta["account_id"] == "u123"
+    assert meta["display_name"] == "Bob"
+
+
+def test_short_term_room_user_mapping():
+    memory_mgr = MemoryManager()
+    memory_mgr.short_term.add_user("u1", "Alice", room_id="room-a")
+    memory_mgr.short_term.add_user("u2", "Bob", room_id="room-a")
+    memory_mgr.short_term.add_user("u3", "Carol", room_id="room-b")
+
+    assert len(memory_mgr.short_term.get_users_by_room("room-a")) == 2
+    assert len(memory_mgr.short_term.get_users_by_room("room-b")) == 1
+    assert len(memory_mgr.short_term.get_users_by_room("room-c")) == 0
+
+    memory_mgr.short_term.remove_user("u1", room_id="room-a")
+    room_a_users = memory_mgr.short_term.get_users_by_room("room-a")
+    assert len(room_a_users) == 1
+    assert room_a_users[0][0] == "u2"
 
 
 def test_pipeline_injects_datetime():
@@ -118,7 +283,6 @@ def test_pipeline_injects_datetime():
         model_config=None,  # type: ignore
         personality=Personality(),
         memory=None,
-        limbic=None,
     )
     sys_msgs = pipeline._prompt_builder.build(context_hint="テストコンテキスト")
     combined = "\n\n".join(str(m.content) for m in sys_msgs)

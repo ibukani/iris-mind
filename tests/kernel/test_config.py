@@ -153,24 +153,41 @@ def test_default_values() -> None:
     assert config.model.providers == {}
     assert config.model.hf_token == ""
     assert config.personality.name == "Iris"
+    assert config.limbic.emotion_classifier.type == "keyword"
+    assert config.limbic.emotion_classifier.model_name == "koshin2001/Japanese-to-emotions"
+
+
+def test_limbic_emotion_classifier_config_loads() -> None:
+    config = Config(
+        limbic={
+            "emotion_classifier": {
+                "type": "neural",
+                "model_name": "example/model",
+            },
+        },  # pyright: ignore[reportArgumentType]
+    )
+
+    assert config.limbic.emotion_classifier.type == "neural"
+    assert config.limbic.emotion_classifier.model_name == "example/model"
 
 
 def test_proactive_config_defaults() -> None:
     config = ProactiveConfig()
     assert config.check_interval_sec == 5.0
     assert config.min_interval_sec == 30.0
-    assert config.speak_threshold == 0.6
-    assert config.trigger_weights["time"] == 0.25
+    assert config.speak_threshold == 0.3
+    assert config.trigger_weights["memory"] == 0.55
+    assert config.trigger_weights["context"] == 0.30
 
 
 def test_config_mutable_defaults_are_independent() -> None:
     first = Config()
     second = Config()
 
-    first.proactive.trigger_weights["time"] = 0.99
+    first.proactive.trigger_weights["memory"] = 0.99
     first.logging.loggers["iris"] = "DEBUG"
 
-    assert second.proactive.trigger_weights["time"] == 0.25
+    assert second.proactive.trigger_weights["memory"] == 0.55
     assert second.logging.loggers == {}
 
 
@@ -285,3 +302,29 @@ def test_get_model_performance_tier_default() -> None:
         ),
     )
     assert config.model.get_model_performance_tier("default") == "balanced"
+
+
+def test_env_var_missing_raises() -> None:
+    with tempfile.NamedTemporaryFile(suffix=".yaml", mode="w", delete=False) as f:
+        yaml.dump(
+            {
+                "model": {
+                    "providers": {
+                        "openrouter": {
+                            "api_key": "${NONEXISTENT_ENV_VAR_XYZ}",
+                        },
+                    },
+                    "models": [
+                        {"name": "m", "roles": ["default"], "provider": "openrouter"},
+                    ],
+                },
+            },
+            f,
+        )
+        path = f.name
+
+    try:
+        with pytest.raises(ValueError, match="Environment variable NONEXISTENT_ENV_VAR_XYZ is not set"):
+            Config.load(path)
+    finally:
+        os.unlink(path)

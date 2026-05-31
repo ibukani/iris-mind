@@ -1,31 +1,45 @@
 # .agents
 
-`.agents/` はコーディングエージェント向けの補助コンテキストを置く場所です。
-恒久的なプロジェクト事実はここに重複保持せず、一次情報への導線だけを置きます。
+`.agents/` contains auxiliary context for coding agents. Do not duplicate permanent project facts here. Prefer links and routes to the source of truth.
 
 ## Context Budget
 
-- 常時読むのは `AGENTS.md` とこのファイルだけにする
-- `project.md` はアーキテクチャや責務境界を確認するときだけ読む
-- `skills/*/SKILL.md` は該当作業を行うときだけ読む
-- `docs/` は関連する設計判断が必要なときに対象ファイルだけ読む
-- Git 履歴やテスト結果は必要な範囲だけ取得し、過去ログを `.agents/` に複製しない
+- Only `AGENTS.md` should be read by default.
+- Read this file only when you need to confirm the role of `.agents/`.
+- Read `project.md` only when you need a project summary or responsibility boundaries.
+- Read `skills/*/SKILL.md` only when the current task matches that skill.
+- When multiple skills apply, prefer the most specific skill.
+- Read only the relevant files under `docs/` when a design decision is needed.
+- Retrieve only the necessary Git history or test results. Do not copy past logs into `.agents/`.
+
+## Skill Priority
+
+When responsibilities overlap, use this priority order:
+
+1. Capability / tool addition: `skills/capability-pattern/SKILL.md`
+2. LLM provider / store backend / sub-plugin addition: `skills/iris-plugin-provider/SKILL.md`
+3. Hook or HookPoint addition: `skills/iris-plugin-hook/SKILL.md`
+4. New top-level Plugin creation: `skills/iris-plugin-create/SKILL.md`
+5. Existing Plugin structure cleanup: `skills/iris-plugin-structure/SKILL.md`
+6. Ordinary development: `skills/iris-dev-workflow/SKILL.md`
+7. Documentation update check: `skills/doc-sync/SKILL.md`
 
 ## Files
 
-- `project.md` : エージェント向けの最小プロジェクト要約。詳細は設計文書へのリンクで辿る。
-- `skills/` : 繰り返し作業を標準化する Skill 定義。
+- `project.md`: Minimal project summary for agents. Follow links to design documents for details.
+- `skills/`: Skill definitions that standardize repeated work.
 
-## Source of truth
+## Source of Truth
 
-- プロジェクトルール: `AGENTS.md`
-- アーキテクチャと設計判断: `docs/architecture.md`, `docs/adr/`
-- 実装の履歴: Git commit / PR / Issue
-- 一時的な作業メモ: 常設しない。必要時のみユーザーまたは作業ブランチ上で管理する。
+- Agent entry point: `AGENTS.md`
+- Ordinary development rules: `skills/iris-dev-workflow/SKILL.md`
+- Architecture and design decisions: `docs/architecture.md`
+- Implementation history: Git commits / PRs / Issues
+- Temporary work notes: Do not keep them permanently here. Manage them only with the user or inside the working branch when needed.
 
 ## Rules
 
-- `.agents/` に進捗ログやブランチ状態を常設しない
-- ADR に残すべき決定は `docs/adr/` に記録する
-- 運用手順の変更は対応する Skill と `AGENTS.md` を更新する
-- 要約よりも参照先を優先し、同じ事実を複数ファイルに書かない
+- Do not keep progress logs or branch status permanently in `.agents/`.
+- Record design decisions in `docs/architecture.md`; create `docs/adr/` when needed.
+- If an operational procedure changes, update the corresponding Skill. Keep `AGENTS.md` limited to minimal references.
+- Prefer references over summaries. Do not write the same fact in multiple files.

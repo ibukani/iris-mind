@@ -3,7 +3,8 @@ from __future__ import annotations
 from langchain_core.messages import AIMessage, HumanMessage
 import pytest
 
-from iris.llm.context import LLMContextWindowManager, estimate_messages_tokens, estimate_tokens
+from iris.llm.context import LLMContextWindowManager
+from iris.llm.token_utils import estimate_messages_tokens, estimate_tokens
 from tests.conftest import FakeLLMProvider
 
 

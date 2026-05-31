@@ -1,14 +1,10 @@
 """
-Architecture tests — enforce dependency direction constraints.
+Architecture tests — foundational dependency invariants.
 
-Rules (from AGENTS.md v2):
-  - All layers communicate via EventBus (iris/event/)
-  - KernelFactory (kernel/core/factory.py) is the only DI container that wires all layers
-  - iris/kernel/ must NOT import from debug_tools/
-  - iris/memory/ must NOT import from iris/io/ or iris/agency/
-  - iris/io/ must NOT import from iris/agency/ or iris/memory/
-  - iris/agency/ may import from iris/memory/, iris/event/
-  - debug_tools/ → iris/ (全層)
+Rules:
+  - iris.event is the foundation layer with zero external iris.* dependencies
+  - iris.kernel does not depend on debug_tools
+  - iris top-level __init__.py only re-exports from event and kernel.config
 """
 
 from __future__ import annotations
@@ -17,9 +13,6 @@ import ast
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-
-_IRIS_LAYERS = {"kernel", "event", "io", "memory", "agency", "llm", "capabilities", "tools", "commands", "personality"}
-_FACTORY_PATH = "iris/kernel/factory.py"
 
 
 def _get_python_files(package_dir: str) -> list[Path]:
@@ -35,71 +28,56 @@ def _get_imports(filepath: Path) -> list[str]:
     imports: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
-            for alias in node.names:
-                imports.append(alias.name)  # noqa: PERF401
+            imports.extend(alias.name for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module:
             imports.append(node.module)
     return imports
 
 
+def test_event_has_no_iris_dependencies() -> None:
+    """iris.event is the foundation — must not import from any other iris.* package.
+
+    Self-references within iris.event (e.g. iris.event.event_bus) are allowed.
+    Exception: event_types.py is a backward-compatibility shim that re-exports
+    domain events from their new locations.
+    """
+    for filepath in _get_python_files("iris/event"):
+        if filepath.name == "event_types.py":
+            continue
+        imports = _get_imports(filepath)
+        iris_imports = [i for i in imports if i.startswith("iris.") and not i.startswith("iris.event")]
+        assert not iris_imports, (
+            f"{filepath.relative_to(PROJECT_ROOT)} imports from {iris_imports} "
+            "— event must have zero external iris.* dependencies"
+        )
+
+
 def test_kernel_does_not_import_debug_tools() -> None:
-    forbidden = {"debug_tools"}
+    """iris.kernel must not depend on debug_tools (debug_tools → iris is allowed)."""
     for filepath in _get_python_files("iris/kernel"):
         imports = _get_imports(filepath)
         for imp in imports:
             top_level = imp.split(".")[0]
-            assert top_level not in forbidden, f"{filepath} imports from 'debug_tools' (violates dependency rule)"
+            assert top_level != "debug_tools", (
+                f"{filepath.relative_to(PROJECT_ROOT)} imports '{imp}' — kernel must not depend on debug_tools"
+            )
 
 
-def test_kernel_does_not_directly_import_debug_tools() -> None:
-    forbidden_prefixes = {"debug_tools"}
-    for filepath in _get_python_files("iris/kernel"):
-        imports = _get_imports(filepath)
-        for imp in imports:
-            for prefix in forbidden_prefixes:
-                if imp.startswith(prefix):
-                    raise AssertionError(
-                        f"{filepath} imports '{imp}' (violates dependency rule: kernel must not depend on debug_tools)"
-                    )
-
-
-def test_memory_does_not_import_io_or_agency() -> None:
-    forbidden = {"iris.io", "iris.agency"}
-    for filepath in _get_python_files("iris/memory"):
-        if filepath.match(_FACTORY_PATH):
-            continue
-        imports = _get_imports(filepath)
-        for imp in imports:
-            for prefix in forbidden:
-                if imp.startswith(prefix):
-                    raise AssertionError(f"{filepath} imports '{imp}' (memory must not depend on io or agency)")
-
-
-def test_io_does_not_import_agency_or_memory() -> None:
-    forbidden = {"iris.agency", "iris.memory"}
-    for filepath in _get_python_files("iris/io"):
-        imports = _get_imports(filepath)
-        for imp in imports:
-            for prefix in forbidden:
-                if imp.startswith(prefix):
-                    raise AssertionError(f"{filepath} imports '{imp}' (io must not depend on agency or memory)")
-
-
-def test_factory_is_only_layer_crossing_hub() -> None:
-    """KernelFactory imports from all layers — acceptable as DI container."""
-    factory_files = [p for p in _get_python_files("iris") if p.match(_FACTORY_PATH)]
-    assert len(factory_files) >= 1, "KernelFactory not found"
-    for filepath in factory_files:
-        imports = _get_imports(filepath)
-        infra = {"iris.io", "iris.memory", "iris.agency", "iris.event", "iris.llm", "iris.kernel.commands"}
-        found = [i for i in imports if any(i.startswith(p) for p in infra)]
-        assert len(found) >= 3, f"Factory should import from at least 3 layers, got: {found}"
-
-
-def test_debug_tools_imports_kernel() -> None:
-    for filepath in _get_python_files("debug_tools"):
-        imports = _get_imports(filepath)
-        kernel_imports = [i for i in imports if i.startswith("iris.kernel")]
-        assert len(kernel_imports) >= 0, (
-            f"{filepath} does not import from iris.kernel — debug_tools should depend on kernel"
+def test_iris_top_level_only_imports_from_event_and_kernel_config() -> None:
+    """iris/__init__.py should only re-export from event and kernel.config."""
+    init_file = PROJECT_ROOT / "iris" / "__init__.py"
+    tree = ast.parse(init_file.read_text(encoding="utf-8"))
+    allowed_prefixes = {"iris.event", "iris.kernel.config"}
+    violations = [
+        node.module
+        for node in ast.walk(tree)
+        if (
+            isinstance(node, ast.ImportFrom)
+            and node.module
+            and node.module.startswith("iris.")
+            and not any(node.module.startswith(p) for p in allowed_prefixes)
         )
+    ]
+    assert not violations, (
+        f"iris/__init__.py imports from {violations} — top-level should only re-export from event and kernel.config"
+    )

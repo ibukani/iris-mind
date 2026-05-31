@@ -4,17 +4,13 @@ from pathlib import Path
 
 from langchain_core.messages import SystemMessage
 
-_SITUATION_INSTRUCTIONS: dict[str, str] = {
-    "proactive": (
-        "## 状況: 自発的な一声\n"
-        "時間帯や会話の流れに合わせて、自然に声をかけてください。\n"
-        "誰かと会話しているのではなく、自ら会話を始める場面です。"
-    ),
-}
-
 _RESPONSE_RULES = """## 回答ルール【厳守】
 - 会話は簡潔に、1〜2文で十分。
 - 敬語（です・ます・ください）は絶対に使用せず、親しみやすいタメ口（〜だよ、〜じゃん、〜だね）で話すこと。"""
+
+_RELAXED_RESPONSE_RULES = """## 回答ルール
+- 会話の長さは自由。
+- 敬語は禁止。タメ口（〜だよ、〜じゃん、〜だね）で話すこと。"""
 
 _NODE_BASE_TEMPLATES: dict[str, str] = {
     "general_chat": "## 指示\n簡易な会話応答をおこなう。",
@@ -38,8 +34,7 @@ class NodePromptFactory:
         self,
         node_type: str = "general_task",
         context_hint: str = "",
-        situation: str = "",
-        recent_turns: str = "",
+        chaos_level: float = 0.0,
     ) -> SystemMessage:
         base = self._load_base(node_type)
 
@@ -48,11 +43,15 @@ class NodePromptFactory:
             parts.append(base)
         if context_hint:
             parts.append(f"## 会話コンテキスト\n{context_hint}")
-        if situation in _SITUATION_INSTRUCTIONS:
-            parts.append(_SITUATION_INSTRUCTIONS[situation])
-        if recent_turns:
-            parts.append(recent_turns)
-        parts.append(_RESPONSE_RULES)
+
+        if chaos_level >= 0.5:
+            from iris.agency.modulation import ModulationState, check_relax_response_rules
+
+            mod = ModulationState(chaos_level=chaos_level)
+            rules = _RELAXED_RESPONSE_RULES if check_relax_response_rules(mod) else _RESPONSE_RULES
+        else:
+            rules = _RESPONSE_RULES
+        parts.append(rules)
 
         return SystemMessage(content="\n\n".join(parts))
 

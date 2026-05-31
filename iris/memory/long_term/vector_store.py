@@ -19,16 +19,16 @@ class _ONNXEmbeddings(Embeddings):
         self._ef = cast(ef.EmbeddingFunction, ef.ONNXMiniLM_L6_V2())
 
     def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return self._ef(texts)  # type: ignore[return-value,no-any-return]
+        return self._ef(texts)  # type: ignore[return-value]
 
     def embed_query(self, text: str) -> list[float]:
-        return self._ef([text])[0]  # type: ignore[return-value,no-any-return]
+        return self._ef([text])[0]  # type: ignore[return-value]
 
 
 class VectorStore:
     """ChromaDB + BM25 ハイブリッド検索エンジン (LangChain統合)"""
 
-    def __init__(self, path: str = ".iris/data/chroma_db"):
+    def __init__(self, path: str = ".iris/data/chroma_db") -> None:
         self._embedding = _ONNXEmbeddings()
         self._lock = threading.Lock()
         self._db = Chroma(
@@ -42,7 +42,7 @@ class VectorStore:
 
     # ---- CRUD ----
 
-    def add(self, entry: dict) -> None:
+    def add(self, entry: dict, account_id: str = "") -> None:
         with self._lock:
             eid = entry.get("id", str(hash(entry.get("content", ""))))
             content = entry.get("content", "")
@@ -51,12 +51,13 @@ class VectorStore:
                 "type": entry.get("type", "lesson"),
                 "tags": ",".join(entry.get("tags", [])),
                 "timestamp": entry.get("timestamp", ""),
+                "account_id": account_id,
             }
             self._db.add_texts(texts=[content], metadatas=[metadata], ids=[eid])
             self._rebuild_bm25()
             logger.info("VectorStore: added doc id={} type={}", eid, metadata["type"])
 
-    def update(self, entry: dict) -> None:
+    def update(self, entry: dict, account_id: str = "") -> None:
         with self._lock:
             eid = entry.get("id", "")
             if not eid:
@@ -67,6 +68,7 @@ class VectorStore:
                 "type": entry.get("type", "lesson"),
                 "tags": ",".join(entry.get("tags", [])),
                 "timestamp": entry.get("timestamp", ""),
+                "account_id": account_id,
             }
             self._db.update_document(
                 document_id=eid,
@@ -94,14 +96,19 @@ class VectorStore:
 
     # ---- Search ----
 
-    def search(self, query: str, max_results: int = 3, min_score: float = 0.2) -> list[dict]:
+    def search(self, query: str, max_results: int = 3, min_score: float = 0.2, account_id: str = "") -> list[dict]:
         with self._lock:
             if len(self._db.get()["ids"]) == 0:
                 return []
             if self._bm25 is None:
                 self._rebuild_bm25()
 
-            dense_results = self._db.similarity_search_with_score(query, k=max_results * 2)
+            if account_id:
+                dense_results = self._db.similarity_search_with_score(
+                    query, k=max_results * 2, filter={"account_id": account_id}
+                )
+            else:
+                dense_results = self._db.similarity_search_with_score(query, k=max_results * 2)
             bm25_scores = self._bm25_score(query)
 
         merged: dict[str, dict] = {}
@@ -127,6 +134,20 @@ class VectorStore:
                     "_vector_score": 0.0,
                     "_bm25_score": bscore,
                 }
+
+        bm25_only_ids = [eid for eid, d in merged.items() if not d["content"]]
+        if bm25_only_ids:
+            try:
+                fetched = self._db.get(ids=bm25_only_ids)
+                for i, eid in enumerate(fetched["ids"]):
+                    docs = fetched.get("documents") or []
+                    if i < len(docs) and docs[i]:
+                        merged[eid]["content"] = docs[i]
+                        meta = (fetched.get("metadatas") or [None])[i]
+                        if meta:
+                            merged[eid]["type"] = meta.get("type", "lesson")
+            except Exception:
+                logger.debug("VectorStore: failed to fetch BM25-only docs by ID")
 
         scored = [(data["_vector_score"] * 0.6 + data["_bm25_score"] * 0.4, data) for data in merged.values()]
         results = [(s, d) for s, d in scored if s >= min_score]

@@ -73,7 +73,7 @@ def test_side_effect_tool_does_not_add_to_ctx() -> None:
         {
             "role": "assistant",
             "tool_calls": [{"id": "1", "type": "function", "function": {"name": "noop_tool", "arguments": "{}"}}],
-        }
+        },
     ]
     results = engine.execute_all(ctx)
     assert len(results) == 1
@@ -91,7 +91,7 @@ def test_mixed_side_effect_and_normal() -> None:
                 {"id": "1", "type": "function", "function": {"name": "side_tool", "arguments": "{}"}},
                 {"id": "2", "type": "function", "function": {"name": "normal_tool", "arguments": "{}"}},
             ],
-        }
+        },
     ]
     results = engine.execute_all(ctx)
     assert len(results) == 2

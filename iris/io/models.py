@@ -5,7 +5,7 @@ from enum import Enum, StrEnum
 from typing import Any
 from uuid import uuid4
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 HOST = "127.0.0.1"
 PORT = 9876
@@ -19,6 +19,7 @@ class Permission(Enum):
     PERMISSION_RECEIVE_LOG = "receive_log"
     PERMISSION_INTERRUPT = "interrupt"
     PERMISSION_EXECUTE_ACTION = "execute_action"
+    PERMISSION_SEND_INHIBITION = "send_inhibition"
 
 
 class Direction(Enum):
@@ -45,14 +46,34 @@ class AuthMessage(BaseModel):
     access_token: str | None = None
     role: str = "external"
     permissions: list[Permission] = []
-    identity: str = ""
+    session_tag: str = ""
     description: str = ""
 
 
-class ControlMessage(BaseModel):
+class AuthResult(BaseModel):
     msg_type: str
     session_id: str | None = None
     error_message: str | None = None
+
+
+class TransportIdentity(BaseModel):
+    provider: str = ""
+    subject: str = ""
+    provider_name: str = ""
+    metadata: dict[str, str] = Field(default_factory=dict)
+
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, v: str) -> str:
+        from iris.account.models import Provider
+
+        if not v:
+            return v
+        try:
+            Provider(v)
+        except ValueError:
+            raise ValueError(f"Unknown provider: {v}") from None
+        return v
 
 
 class Message(BaseModel):
@@ -61,13 +82,15 @@ class Message(BaseModel):
     session_id: str = ""
     source_role: str = ""
     target_role: str = "*"
-    user_identity: str = ""
+    account_id: str = ""
     direction: Direction
     msg_type: str
     content: str
     content_type: str = "text/plain"
     state: str | None = None
     metadata: dict = Field(default_factory=dict)
+    speaker: TransportIdentity | None = None  # Inbound では必須。Outbound（response/ack/error/stream）は None 可
+    room_id: str = ""
 
 
 class CommandInput(BaseModel):
@@ -76,6 +99,17 @@ class CommandInput(BaseModel):
     session_id: str = ""
     source_role: str = ""
     content: str
+
+
+class ControlMessage(BaseModel):
+    action: str = ""
+    account_id: str = ""
+    room_id: str = ""
+    display_name: str = ""
+    text: str = ""
+    identity: TransportIdentity | None = None
+    profile: dict[str, str] = Field(default_factory=dict)
+    metadata: dict[str, str] = Field(default_factory=dict)
 
 
 class CommandOutput(BaseModel):
@@ -100,7 +134,7 @@ class SessionInfo(BaseModel):
     state: SessionState
     role: str = "external"
     permissions: list[Permission] = []
-    identity: str = ""
+    session_tag: str = ""
     description: str = ""
     conn: Any | None = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

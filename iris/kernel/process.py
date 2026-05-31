@@ -1,14 +1,11 @@
 from __future__ import annotations
 
-import threading
 from typing import Protocol
 
 from loguru import logger
 
-from iris.event.event_types import TimerTick
-
 from .config import Config
-from .factory import KernelContext, KernelFactory
+from .manager import PluginManager
 
 
 class KernelProcessProtocol(Protocol):
@@ -23,75 +20,60 @@ class KernelProcess:
     def __init__(self, config: Config, debug: bool = False) -> None:
         self._config = config
         self._debug = debug
-        self._ctx: KernelContext | None = None
-        self._timer_thread: threading.Thread | None = None
+        self._manager: PluginManager | None = None
 
     @property
     def shutdown_requested(self) -> bool:
-        return self._ctx is not None and self._ctx.shutdown_requested
+        return self._manager is not None and self._manager.shutdown_requested
 
     @property
     def cmd_handler(self) -> object | None:
-        return self._ctx.cmd_handler if self._ctx else None
+        return self._manager.cmd_handler if self._manager else None
 
     def start(self) -> None:
         logger.info("KernelProcess: starting")
 
-        self._ctx = KernelFactory.build(self._config, debug=self._debug)
+        self._manager = PluginManager(self._config, debug=self._debug)
+        try:
+            self._manager.discover_and_build_all()
 
-        host = self._config.session.host
-        port = self._config.session.port
-        self._ctx.io.start(host=host, port=port)
+            from iris.io.manager import IOManager
 
-        self._start_timer()
+            host = self._config.session.host
+            port = self._config.session.port
+            io_mgr = self._manager.resolve(IOManager)
+            io_mgr.start(host=host, port=port)
+
+            self._manager.start_all()
+        except Exception:
+            logger.exception("KernelProcess: start failed, cleaning up")
+            self._cleanup()
+            raise
         logger.info("KernelProcess: started")
+
+    def _cleanup(self) -> None:
+        manager = self._manager
+        if manager is None:
+            return
+        try:
+            manager.stop_all()
+        except Exception:
+            logger.exception("KernelProcess: cleanup error")
+        self._manager = None
 
     def shutdown(self) -> None:
         logger.info("KernelProcess: shutting down")
 
-        ctx = self._ctx
-        if ctx is None:
+        manager = self._manager
+        if manager is None:
             logger.info("KernelProcess: shutdown complete (was not started)")
             return
 
-        ctx.shutdown_requested = True
-        if ctx.agency is not None:
-            ctx.agency.shutdown()
-        if ctx.limbic is not None:
-            ctx.limbic.flush_state()
-        ctx.io.stop()
+        manager.request_shutdown()
+        from iris.agency.manager import AgencyManager
 
+        agency = manager.resolve_optional(AgencyManager)
+        if agency is not None and hasattr(agency, "shutdown"):
+            agency.shutdown()
+        self._cleanup()
         logger.info("KernelProcess: shutdown complete")
-
-    def _start_timer(self) -> None:
-        ctx = self._ctx
-        if ctx is None:
-            return
-        interval = self._config.proactive.check_interval_sec
-        tick_count: list[int] = [0]
-
-        def _loop() -> None:
-            while not ctx.shutdown_requested:
-                ctx.event_bus.publish(
-                    TimerTick(
-                        timestamp=None,
-                        source="kernel",
-                        tick_count=tick_count[0],
-                    )
-                )
-                tick_count[0] += 1
-                sleep_time = interval
-                if ctx.agency is not None:
-                    import time
-
-                    now = time.time()
-                    last_active = ctx.agency.inhibition.last_user_activity
-                    if last_active > 0:
-                        elapsed = now - last_active
-                        if elapsed < 60.0:
-                            sleep_time = getattr(self._config.proactive, "active_min_interval_sec", 2.0)
-                threading.Event().wait(sleep_time)
-
-        self._timer_thread = threading.Thread(target=_loop, daemon=True, name="kernel-timer")
-        self._timer_thread.start()
-        logger.info("KernelProcess: timer started (interval={:.1f}s)", interval)

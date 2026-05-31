@@ -1,409 +1,363 @@
-# Iris Limbic 層（大脳辺縁系）
+# Iris Limbic 層
 
 > **注記**: 脳科学・神経科学の用語との対応付けは設計指針であり、厳密な解剖学的正確性を保証するものではありません。
 
-**脳科学対応**: 大脳辺縁系 — 扁桃体・前帯状皮質・島皮質
+**脳科学対応**: 大脳辺縁系（扁桃体・帯状回・海馬傍回）
 
 ## 責務
 
-- 入力の感情評価（この入力は喜ばしいか？脅威か？）
-- 感情状態の動的維持（PAD 3次元モデルによる表現）
-- 感情の自然減衰（時間経過による感情の薄れ）
-- 感情制御・葛藤調整（感情をそのまま表出するか抑制するか）
-- 記憶への感情タグ付け（感情を伴った記憶の強調・検索）
-- 感情状態のテキスト表現生成（システムプロンプトへの注入用）
+- Appraisal（認知的評価）: Lazarus 2段階理論に基づくイベントの意味づけ
+- 感情生成: Appraisal次元 → Plutchik 8基本感情への変換
+- Mood dynamics: 会話の累積影響による slow-moving baseline、時間減衰
+- 関係性管理: Bowlby attachment theory に基づく3段階関係性構築
+- Reappraisal: 強いネガティブ感情時の認知的再評価提案
 
-## 脳部位マッピング
-
-| 部位 | ファイル | 機能 |
-|------|----------|------|
-| **扁桃体（Amygdala）** | `amygdala/evaluator.py` | 入力テキストの感情価を評価。キーワード+ONNX MiniLM埋め込みのハイブリッド。conflict（葛藤度）も出力。stateful適応で繰り返し刺激に慣れる。 |
-| **前帯状皮質（ACC）** | `cingulate/regulator.py` | 感情制御。扁桃体からの感情シグナルと行動計画（PFC由来）の間の葛藤を検出し、抑制信号を調整。メタ認知的再評価（efficacy履歴）+ 慣れの性格変調あり。 |
-| **島皮質（Insula）** | `manager.py` に統合 / `mood.py` | 内部状態の認識。現在の感情状態を言語化し、「今どんな気分か」の説明文を生成。自己認識的な感情表現。不確実性に応じて粒度可変。 |
-| **扁桃体-海馬相互作用** | `hippocampus/binder.py` | EpisodicStore のエントリに感情タグ（valence, arousal, dominance）を付与。感情強度の高い記憶を検索・強調。気分一致効果・想起誘発効果あり。 |
-
-## 感情状態モデル
-
-### PAD (Pleasure-Arousal-Dominance) 3次元
-
-| 次元 | 範囲 | 説明 |
-|------|------|------|
-| **Valence (Pleasure)** | -1.0 ~ 1.0 | 快-不快。ポジティブ/ネガティブの方向。 |
-| **Arousal** | 0.0 ~ 1.0 | 覚醒度。興奮/鎮静の強度。 |
-| **Dominance** | 0.0 ~ 1.0 | 支配性。制御感/無力感。 |
+## Manager 定義
 
 ```python
-@dataclass
-class EmotionState:
-    valence: float = 0.0       # -1.0 (不快) 〜 1.0 (快)
-    arousal: float = 0.0       # 0.0 (鎮静) 〜 1.0 (興奮)
-    dominance: float = 0.5     # 0.0 (無力) 〜 1.0 (支配)
-    valence_uncertainty: float = 0.0  # 量子認知拡張: 各軸の不確実性 0.0〜1.0
-    arousal_uncertainty: float = 0.0
-    dominance_uncertainty: float = 0.0
-    updated_at: float          # 最終更新時刻（field(default_factory=time.time)）
-
-    overall_uncertainty: float  # computed: 3軸平均の不確実性
-
-    def decay(self, dt: float | None = None) -> None  # 指数減衰（不確実性も減衰）
-    def apply(self, delta: EmotionDelta, intensity: float = 1.0) -> None  # conflict→uncertainty反映
-    def to_dict(self) -> dict[str, float]
-```
-
-### 基本感情へのマッピング
-
-PAD 座標は以下の基本感情に大別できる:
-
-| 感情 | Valence | Arousal | Dominance |
-|------|---------|---------|-----------|
-| 喜び | +0.8 | +0.6 | +0.5 |
-| 悲しみ | -0.7 | -0.4 | -0.3 |
-| 怒り | -0.5 | +0.8 | +0.7 |
-| 恐れ | -0.6 | +0.7 | -0.6 |
-| 驚き | 0.0 | +0.8 | -0.2 |
-| 信頼 | +0.7 | -0.1 | +0.4 |
-| 期待 | +0.4 | +0.6 | +0.2 |
-| 平静 | +0.3 | -0.6 | +0.1 |
-
-### 基本感情辞書 (BASIC_EMOTIONS)
-
-`EmotionDelta` のプリセットとして `iris/limbic/models.py` に定義:
-
-| 感情 | Valence | Arousal | Dominance |
-|------|---------|---------|-----------|
-| joy | +0.8 | +0.6 | +0.5 |
-| sadness | -0.7 | -0.4 | -0.3 |
-| anger | -0.5 | +0.8 | +0.7 |
-| fear | -0.6 | +0.7 | -0.6 |
-| surprise | 0.0 | +0.8 | -0.2 |
-| trust | +0.7 | -0.1 | +0.4 |
-| anticipation | +0.4 | +0.6 | +0.2 |
-| calmness | +0.3 | -0.6 | +0.1 |
-
-### DriveState（動機づけモデル）
-
-PSI理論に基づく欲求（動機）モデル。時間経過で自然蓄積し、行動で解消される。
-
-```python
-@dataclass
-class DriveState:
-    curiosity: float      # 情報探索欲求（検索等で低下）
-    social_need: float    # 対話欲求（発話で低下）
-    maintenance: float    # 記憶整理欲求（Reflexionで低下）
-    updated_at: float
-
-    def accumulate(self, dt: float | None = None, big_five: dict[str, float] | None = None) -> None   # 時間蓄積（BigFiveで変調）
-    def satisfy(self, need_type: str, amount: float) -> None # 行動充足
-    def get_dominant_needs(self) -> list[tuple[str, float]]  # 欲求順位
-```
-
-`LimbicManager` は `DriveState` を保持し、`apply_limbic_modulation()` 経由で
-`InhibitionController` にムード変調を適用する。`PlanningManager` の自発発話スコアリングにも利用される。
-
-### 減衰モデル (Decay)
-
-感情は時間経過とともに中立状態へ自然減衰する。
-
-```
-EmotionState(t) = EmotionState(0) · exp(-λ · Δt)
-```
-
-- λ (decay factor): 次元ごとに異なる。Arousal は早く減衰、Valence は比較的持続。
-- モード別減速率:
-  - 通常: λ_valence=0.02, λ_arousal=0.04, λ_dominance=0.01 (per minute)
-  - 睡眠中: λ を 1/10 に低減（感情の持続）
-
-## コンポーネント詳細設計
-
-### LimbicManager
-
-```python
-class LimbicManager:
-    """大脳辺縁系全体の統括。
-    EventBus から MessageEvent / TimerTick / MonitorFeedback を購読し、
-    感情評価・制御・タグ付けをオーケストレーションする。
+class LimbicOrchestrator:
+    """Appraisal → Emotion → Relationship パイプライン統合。
+    hooks.py が MessageEvent (direction=inbound) を購読し、process() を呼び出す。
     """
 
-    # === 購読イベント ===
-    # subscribe: MessageEvent      → _on_message_event() → 感情評価
-    # subscribe: TimerTick         → _on_timer_tick() → decay()
-    # subscribe: MonitorFeedback   → _on_monitor_event() → 感情変調
-    # subscribe: ProactiveResultEvent → _on_proactive_result()
-
-    def __init__(self, event_bus: EventBus | None = None,
-                 amygdala: Amygdala | None = None,
-                 acc: AnteriorCingulateCortex | None = None,
-                 emotional_memory: EmotionalMemory | None = None):
-        # None の場合はデフォルトインスタンス生成
-        ...
-
-    def current_emotion(self) -> EmotionState
-        """現在の感情状態を返す（減衰適用済み）。"""
-
-    def describe_mood(self, style: str = "full") -> str
-        """島皮質相当: 現在の感情状態から自然言語での気分説明を生成。
-        例: 「穏やかな気分です」「少しイライラしています」
-        style: "full" / "short" で粒度切替。"""
-
-    def _on_message_event(self, event: MessageEvent) -> None
-        """メッセージ受信時の感情評価。"""
-        delta = self._amygdala.assess(event.content)
-        adjusted = self._acc.modulate(delta, self._emotion, big_five_scores)
-        self._emotion.apply(adjusted)
-        self._emotional_memory.encode(event.content, self._emotion)
+    def process(
+        self,
+        text: str,
+        context: dict[str, Any] | None = None,
+        user_profile: dict[str, Any] | None = None,
+    ) -> EmotionResult:
+        # 1. Appraiser.appraise_primary(text, ctx)
+        # 2. Appraiser.appraise_secondary(primary, profile)
+        # 3. Appraiser.compute_dimensions(primary, secondary)
+        # 4. EmotionGenerator.generate(dimensions, mood)
+        # 5. MoodDynamics.update(emotion)
+        # 6. RelationshipManager.update(emotion, context_type, profile)
+        # 7. EmotionStateManager.update(result)
 ```
 
-### EmotionDelta
+## 処理フロー
+
+```mermaid
+sequenceDiagram
+    participant EB as Global EventBus
+    participant HOOK as hooks.py
+    participant ORCH as LimbicOrchestrator
+    participant APP as Appraiser
+    participant GEN as EmotionGenerator
+    participant MOOD as MoodDynamics
+    participant REL as RelationshipManager
+    participant ST as EmotionStateManager
+
+    EB-->>HOOK: MessageEvent(direction=inbound, content)
+    HOOK->>ORCH: process(text, context)
+
+    ORCH->>APP: appraise_primary(text)
+    APP-->>ORCH: PrimaryAppraisal
+
+    ORCH->>APP: appraise_secondary(primary, profile)
+    APP-->>ORCH: SecondaryAppraisal
+
+    ORCH->>APP: compute_dimensions(primary, secondary)
+    APP-->>ORCH: AppraisalDimensions
+
+    ORCH->>GEN: generate(dimensions, mood)
+    GEN-->>ORCH: CompanionEmotion
+
+    ORCH->>MOOD: update(emotion)
+    MOOD-->>ORCH: Mood
+
+    ORCH->>REL: update(emotion, context_type)
+    REL-->>ORCH: RelationshipState
+
+    ORCH->>ST: update(EmotionResult)
+    ORCH-->>ORCH: check_reappraisal_needed()
+    ORCH-->>HOOK: EmotionResult
+```
+
+## コンポーネント詳細
+
+### appraiser.py — 2段階Appraisal
 
 ```python
+class Appraiser:
+    """Lazarus 2段階評価 (Primary + Secondary) + CAPE 6次元"""
+
+    def appraise_primary(self, text: str, context: dict | None = None) -> PrimaryAppraisal
+    def appraise_secondary(self, primary: PrimaryAppraisal, user_profile: dict | None = None) -> SecondaryAppraisal
+    def compute_dimensions(self, primary: PrimaryAppraisal, secondary: SecondaryAppraisal) -> AppraisalDimensions
+    def detect_word_emotions(self, text: str) -> dict[str, float]
+    def detect_context_type(self, text: str) -> str | None
+```
+
+**PrimaryAppraisal** — イベントの個人的意味づけ:
+
+| 次元 | 範囲 | 意味 |
+|------|------|------|
+| novelty | 0.0–1.0 | 新規性（新話題=0.8, 話題変更=0.6, 継続=0.3） |
+| pleasantness | -1.0–1.0 | 快不快（感情分類結果でスコア） |
+| goal_relevance | 0.0–1.0 | 目標関連性（文脈パターンから判定） |
+| agency | 0.0–1.0 | 自己主体性 |
+| coping_potential | 0.0–1.0 | 対処可能性（trust × familiarity から算出） |
+
+**SecondaryAppraisal** — 自己の対処能力評価:
+
+| 次元 | 範囲 | 意味 |
+|------|------|------|
+| accountability | 0.0–1.0 | 責任帰属（trust + familiarity） |
+| control | 0.0–1.0 | 統制可能性（coping_potential + trust） |
+| controllability | 0.0–1.0 | 可制御性（coping_potential + familiarity） |
+| social_norms | 0.0–1.0 | 社会的規範一致度 |
+
+**CAPE 6 次元**（`AppraisalDimensions`）:
+
+| 次元 | 算出元 |
+|------|---------|
+| unpleasantness | max(0, -primary.pleasantness) |
+| control | secondary.control |
+| responsibility | secondary.accountability |
+| certainty | 1.0 - primary.novelty |
+| effort | 1.0 - primary.coping_potential |
+| attention | primary.goal_relevance |
+
+**感情分類**: `detect_word_emotions()` は既定で日本語キーワード辞書を使い、joy/sadness/anticipation/surprise/anger/fear/disgust/trust を正規表現マッチでスコアリングする。`config.yaml` の `limbic.emotion_classifier.type: neural` では `NeuralEmotionClassifier` を使い、HuggingFace text-classification モデルの出力を Plutchik 8感情へマッピングする。ニューラル分類器は初回分類時に `transformers` / `torch` を遅延ロードする。
+
+**文脈パターン**: self_disclosure / support_seeking / positive_feedback / negative_feedback の4種。`detect_context_type()` が正規表現で最マッチを返す。
+
+### generator.py — Emotion 生成
+
+```python
+class EmotionGenerator:
+    """AppraisalDimensions → Plutchik 8基本感情への変換"""
+
+    def generate(self, appraisal: AppraisalDimensions, mood: Mood | None = None) -> CompanionEmotion
+```
+
+- 6次元 × 8感情の重み行列で各感情スコアを算出
+- 最高スコアを primary、次点を secondary とする
+- VAD座標は Plutchik 既定値に mood を 30% 混入
+
+### mood.py — Mood Dynamics
+
+```python
+class MoodDynamics:
+    """slow-moving baseline: 会話による感情の累積影響と時間減衰"""
+```
+
+- 半減期 600秒（10分）の指数減衰
+- 新しい感情が発生するたびに `update(emotion)` でバイアス更新
+- 時間経過でベースライン (VAD=全て0) に復帰
+
+### relationship.py — 関係性管理
+
+```python
+class RelationshipManager:
+    """Bowlby attachment theory ベースの関係性管理"""
+```
+
+**3段階関係性**:
+
+| 段階 | trust 閾値 | 特徴 |
+|------|-----------|------|
+| ACQUAINTANCE | 0.1–0.3 | 初期接触、探索的 |
+| FAMILIAR | 0.3–0.7 | 信頼形成、自己開示の開始 |
+| BONDED | 0.7–1.0 | 強い愛着、安定的関係 |
+
+**感情 → 関係性影響マップ**:
+
+| 感情 | trust 影響 | familiarity 影響 |
+|------|-----------|-----------------|
+| JOY | +0.02 | +0.03 |
+| TRUST | +0.04 | +0.02 |
+| ANGER | -0.03 | -0.01 |
+| DISGUST | -0.04 | -0.02 |
+
+**Bowlby Attachment Styles**: SECURE / ANXIOUS / AVOIDANT / DISORGANIZED（ユーザープロフィールから設定可能）
+
+### state.py — 状態管理
+
+```python
+class EmotionStateManager:
+    """Limbic system の統合状態管理"""
+```
+
+- 最新 `EmotionResult` の保持
+- 履歴（最大50件）のリングバッファ
+- `get_emotion_for_prompt()` で LLM プロンプト用データを提供
+
+### orchestrator.py — パイプライン統合
+
+```python
+class LimbicOrchestrator:
+    """全コンポーネントの統合"""
+```
+
+`get_modulation_state()` は最新の `EmotionResult` から agency 層向けの `ModulationState` を生成する。VAD は sampling や抑制判定の内部制御に使い、prompt へは自然語の応答傾向だけが渡る。
+
+Reappraisal 判定条件:
+- anger/fear/disgust かつ intensity > 0.6
+- または unpleasantness > 0.7 かつ control < 0.3
+
+### hooks.py — EventBus 統合
+
+- `MessageEvent`（`direction=inbound`）を購読
+- 例外発生時は `logger.exception` で捕捉、EventBus 全体に影響しない
+
+## Plugin 定義
+
+- **カテゴリ**: `LAYER`
+- **フェーズ**: `LAYER`（phase=20、memory と agency の間）
+- **依存関係**: `{EventBus}`
+- **提供**: `LimbicOrchestrator`
+- **state**: `get_state()` → 最新の emotion / mood / relationship を返す
+
+## 関連モデル
+
+```python
+# iris/limbic/models.py
+
 @dataclass
-class EmotionDelta:
-    """扁桃体が出力する感情変化量。"""
+class PrimaryAppraisal:
+    novelty: float = 0.0
+    pleasantness: float = 0.0
+    goal_relevance: float = 0.0
+    agency: float = 0.0
+    coping_potential: float = 0.0
+
+@dataclass
+class SecondaryAppraisal:
+    accountability: float = 0.0
+    control: float = 0.0
+    controllability: float = 0.0
+    social_norms: float = 0.0
+
+@dataclass
+class AppraisalDimensions:
+    unpleasantness: float = 0.0
+    control: float = 0.0
+    responsibility: float = 0.0
+    certainty: float = 0.0
+    effort: float = 0.0
+    attention: float = 0.0
+
+class PlutchikEmotion(Enum):
+    JOY / SADNESS / ANTICIPATION / SURPRISE / ANGER / FEAR / DISGUST / TRUST
+
+class RelationshipLevel(IntEnum):
+    ACQUAINTANCE = 0 / FAMILIAR = 1 / BONDED = 2
+
+class AttachmentStyle(Enum):
+    SECURE / ANXIOUS / AVOIDANT / DISORGANIZED
+
+@dataclass
+class CompanionEmotion:
+    primary: PlutchikEmotion
+    intensity: float
+    valence: float
+    arousal: float
+    dominance: float
+    secondary: PlutchikEmotion | None
+    secondary_intensity: float
+
+@dataclass
+class Mood:
     valence: float = 0.0
     arousal: float = 0.0
     dominance: float = 0.0
-    conflict: float = 0.0  # 葛藤度 0.0〜1.0（量子認知: 重ね合わせの指標）
+    last_updated: float = 0.0
 
-    def scale(self, factor: float) -> EmotionDelta
-```
-
-### Amygdala
-
-```python
-class Amygdala:
-    """扁桃体: 入力テキストの感情評価。
-    キーワード + ONNX MiniLM埋め込みのハイブリッド評価。
-    状態維持: 累積キーワード数に応じた慣れ（stateful適応）。
-    """
-
-    def assess(self, text: str) -> EmotionDelta
-        """テキストを分析し、感情変化量+葛藤度を返す。
-
-        実装戦略:
-        Phase 1: キーワードベース（高速、軽量）
-        Phase 2: ONNX MiniLM埋め込み（セマンティック、低速）
-        両者を信号エネルギー比でハイブリッド統合。
-        """
-        # キーワード評価（常時実行）
-        keyword_delta = self._keyword_assess(text)
-
-        # 埋め込み評価（初回のみ遅延初期化）
-        embedding_delta = self._embedding_scorer.score(text)
-
-        # 信号エネルギー比でブレンド
-        kw_w = kw_energy / (kw_energy + emb_energy + 0.01)
-        emb_w = 1.0 - kw_w
-        return EmotionDelta(valence=kw*0.8 + emb*0.2, ...)
-
-    def _keyword_assess(self, text: str) -> EmotionDelta
-        """キーワード辞書による感情価推定 + 扁桃体stateful適応。"""
-        # ポジティブ語彙: ありがとう、嬉しい、楽しい、素晴らしい ...
-        # ネガティブ語彙: 残念、つまらない、ひどい、悲しい ...
-        # 葛藤度(conflict) = 2*min(pos, neg)/max(total, 1)
-        # stateful適応: cumulative_keywords > 10 から最大60%減衰
-
-    def classify_emotion(self, text: str) -> str | None
-        """assess() → BASIC_EMOTIONSの最近傍（コサイン×ユークリッドハイブリッド距離）。"""
-
-    def contagion(self, text: str) -> EmotionDelta
-        """感情伝染: ユーザの感情を15%ミラーリング（ACC bypass推奨）。"""
-```
-
-### AnteriorCingulateCortex
-
-```python
-class AnteriorCingulateCortex:
-    """前帯状皮質: 感情制御・葛藤調整。
-    扁桃体からの感情シグナルと現在の状況の間に葛藤がある場合、
-    抑制信号を調整する。Big Five の Neuroticism が高いほど
-    感情反応が強調される。
-
-    メタ認知的再評価: 過去の調整効率履歴から強いdeltaを追加抑制。
-    慣れ: 刺激の繰り返しで制御強度が低下（habituation_rate）。
-    慣れ率は Neuroticism で変調（高N→慣れが遅い）。
-    """
-
-    def modulate(self, delta: EmotionDelta, current: EmotionState,
-                 big_five: dict[str, float] | None = None) -> EmotionDelta
-        """感情変化量を調整する。
-
-        制御則:
-        - Neuroticism 高 → ネガティブな delta を増幅
-        - Agreeableness 高 → ポジティブな delta を増幅
-        - 現在の arousal が high → delta を抑制（過剰反応防止）
-        - 現在の valence が極端 → delta を減衰
-        - efficacy履歴が低い→強いdeltaを余分に抑制（メタ認知的再評価）
-        - encounter_count > 10→habituation rateで制御緩和
-        """
-```
-
-### EmotionalMemory
-
-```python
-class EmotionalMemory:
-    """扁桃体-海馬相互作用: 記憶への感情タグ付け。
-    EpisodicStore/SemanticStore のエントリに感情タグを付与し、
-    感情強度に基づく記憶検索・強調を可能にする。
-
-    気分一致効果: 現在のvalence符号と記憶のvalenceが一致→スコア1.2倍。
-    """
-
-    def encode(self, content: str, emotion: EmotionState) -> None
-        """感情タグを付けてエピソード+意味記憶に永続化。
-        強度 = |valence| * arousal。0.15超のみ保存。"""
-
-    def retrieve_by_affect(self, target: EmotionState, max_results: int = 5) -> list[dict]
-        """感情類似度で記憶を検索。
-        距離: コサイン×ユークリッドハイブリッド距離。
-        気分一致バイアス: 符号一致→スコア1.2倍。
-        想起誘発効果: 検索結果の平均valenceが現在の感情にv*0.05波及。
-        """
-
-    def get_recent_tags(self, n: int = 5) -> list[EmotionTag]
-        """直近の感情タグを強度降順で返す。"""
-```
-
-## 最近の機能拡張
-
-| 拡張 | 追加バージョン | ファイル | 概要 |
-|------|-------------|---------|------|
-| コサイン類似度 | 2026-05 | binder.py, evaluator.py | PAD距離にコサイン方向一致度を乗算 |
-| 量子認知(不確実性) | 2026-05 | models.py, mood.py, manager.py | 不確実性フィールド+干渉項+文脈依存崩壊 |
-| 感情慣性+性格変調 | 2026-05 | manager.py | inertiaのNeuroticism/Conscientiousness変調 |
-| ACC慣れ率変調 | 2026-05 | regulator.py | habituation_rateのNeuroticism変調 |
-| 扁桃体stateful適応 | 2026-05 | evaluator.py | 累積キーワード慣れ |
-| 応答スタイル粒度 | 2026-05 | mood.py | 低不確実性→自己開示、高→中和 |
-| ONNX埋め込み扁桃体 | 2026-05 | evaluator.py | キーワード+埋め込みハイブリッド |
-| 感情伝染 | 2026-05 | evaluator.py, manager.py | ユーザ感情15%ミラーリング |
-| 想起誘発感情 | 2026-05 | manager.py | 記憶検索のvalence波及効果 |
-| 感情ラベリング | 2026-05 | manager.py | 感情語明示→反応抑制(0.85x) |
-| 感情→PEM更新 | 2026-05 | manager.py | |valence|>0.75で性格更新 |
-| 欲求-感情-性格連携 | 2026-05 | models.py, manager.py | Drive蓄積×BigFive→感情影響 |
-
-## イベントフロー
-
-```mermaid
-sequenceDiagram
-    participant EB as Global EventBus
-    participant LM as LimbicManager
-    participant AMY as 扁桃体
-    participant ACC as 前帯状皮質
-    participant EM as 感情記憶
-    participant AG as Agency層
-    participant SP as システムプロンプト
-
-    Note over EB,SP: ユーザー入力時の感情処理
-
-    EB-->>LM: InputReceived(content)
-    LM->>AMY: evaluate(content)
-    AMY-->>LM: EmotionDelta(valence, arousal, dominance)
-    LM->>ACC: regulate(delta, current, big_five)
-    ACC-->>LM: adjusted_delta
-    LM->>LM: _emotion.apply(delta)
-    LM->>EM: tag(content, emotion)
-
-    Note over LM,SP: 応答生成時の感情注入
-
-    AG->>LM: get_mood_description()
-    LM-->>AG: "穏やかな気分です"
-    AG->>SP: build_system_prompt(mood_description)
-```
-
-```mermaid
-sequenceDiagram
-    participant EB as Global EventBus
-    participant LM as LimbicManager
-    participant AMY as 扁桃体
-
-    Note over EB,LM: 時間経過による感情減衰
-
-    loop 定期タイマー
-        EB-->>LM: TimerTick
-        LM->>LM: _emotion.decay(dt)
-    end
-```
-
-## 既存層との統合
-
-### LimbicManager → inhibition（InhibitionController）
-
-`InhibitionController.apply_limbic_modulation()` が感情状態から抑制変調を計算する:
-
-```python
-# agency/inhibition/controller.py
-class InhibitionController:
-    def apply_limbic_modulation(self, emotion: EmotionState) -> None
-        # valence < -0.3 → negative_mood_score 増加（抑制）
-        # arousal > 0.6  → negative_mood_score 減少（活性）
-        # dominance < 0.3 → negative_mood_score 増加（抑制）
-        # → 結果を _state.negative_mood_score に反映
-```
-
-### LimbicManager → Personality（システムプロンプト）
-
-```python
-# システムプロンプトに動的に注入される感情説明
-# system_prompt.md に「## 現在の気分」セクションを追加（予定）
-```
-
-### EmotionalMemory → EpisodicStore
-
-EpisodicStore のエントリ形式に `emotion` フィールドを追加:
-
-```json
-{
-  "summary": "ユーザーが新しい機能を提案した",
-  "emotion": {"valence": 0.6, "arousal": 0.5, "dominance": 0.3},
-  "timestamp": "2026-05-18T10:00:00"
-}
-```
-
-### LimbicManager → ProactiveScoring
-
-ProactiveScoring の mood 因子を LimbicManager の感情状態から算出:
-
-```python
-# agency/planning/scoring.py 内での利用イメージ
-def _compute_mood_score(self, limbic: LimbicManager | None) -> float:
-    if not limbic:
-        return 1.0
-    e = limbic.current_emotion()
-    # valence 高 + arousal 高 → 自発的になりやすい
-    return max(0.0, (e.valence + 1.0) / 2.0 * e.arousal)
-```
-
-## Big Five 性格特性モデル
-
-`iris/limbic/prefrontal/personality.py` で管理（前頭前野が性格特性を管理）。
-
-```python
 @dataclass
-class BigFiveProfile:
-    openness: float          # 0-100 開放性
-    conscientiousness: float # 0-100 誠実性
-    extraversion: float      # 0-100 外向性
-    agreeableness: float     # 0-100 協調性
-    neuroticism: float       # 0-100 神経症的傾向
+class RelationshipState:
+    level: RelationshipLevel
+    trust: float
+    familiarity: float
+    attachment_style: AttachmentStyle
+    interaction_count: int
+    disclosure_depth: float
 
-    evolution_history: list[dict]  # 変更履歴
+@dataclass
+class EmotionResult:
+    appraisal: AppraisalDimensions
+    emotion: CompanionEmotion
+    mood: Mood
+    relationship: RelationshipState
+    reappraisal_needed: bool
+    reappraisal_suggestion: str
 ```
 
-### Personality Evolution (PEM)
+## VAD 座標
 
-```
-p_new = λ · p_old + (1-λ) · p_turn
-```
+各 Plutchik 基本感情の Valence/Arousal/Dominance マッピング:
 
-- `p_old`: 現在のスコア
-- `p_turn`: Reflexion が推定した会話内発現性格
-- `λ`: 更新率（0.95 程度、緩やかに変化）
+| 感情 | V | A | D |
+|------|---|---|---|
+| JOY | 0.8 | 0.6 | 0.6 |
+| SADNESS | -0.6 | -0.4 | -0.3 |
+| ANTICIPATION | 0.4 | 0.7 | 0.3 |
+| SURPRISE | 0.2 | 0.9 | -0.2 |
+| ANGER | -0.7 | 0.8 | 0.5 |
+| FEAR | -0.7 | 0.8 | -0.6 |
+| DISGUST | -0.6 | 0.3 | 0.1 |
+| TRUST | 0.5 | 0.2 | 0.3 |
 
-閾値超の変化が発生した場合、「性格変化イベント」として
-EpisodicStore に記録し、システムプロンプトに反映する。
+既存の `memory.manager.search_emotional()`（`_pad_distance`）と互換性あり。
 
-## 永続化
+## 設計指針
 
-| ファイル | 内容 |
-|----------|------|
-| `.iris/data/emotion_state.json` | 現在の感情状態スナップショット（任意） |
-| `.iris/data/big_five.json` | Big Five スコアと進化履歴 |
+### 一貫性優先の原則
+
+AIコンパニオン（Neuro-sama等）の研究において、ユーザーが最も重視するのは「人間らしさ」ではなく「一貫性 (consistency)」である。
+感情シミュレーションはその一貫性を支える「色付け」であり、目的ではない。真の目的は Bowlby attachment theory に基づく関係性 (relationship) の構築である。
+
+- Neuro-sama研究 (2509.10427): 「authenticity is reconstructed around systemic reliability」
+- ユーザー調査: 72%が技術プロジェクトと認識しつつ、70%が virtual friend として関係性を構築
+- 感情は関係性への「手段」、attachment形成が「目的」
+
+本実装ではこの設計原則に基づき、感情生成よりも関係性管理を主軸に置いている。
+
+## 研究参照
+
+### 採用した理論と論文
+
+| 理論 | 出典 | 実装箇所 |
+|------|------|---------|
+| Lazarus 2段階Appraisal | Lazarus, R.S. (1991). *Emotion and Adaptation*. Oxford University Press. | `appraiser.py` |
+| Plutchik 8基本感情 | Plutchik, R. (2001). *The Nature of Emotions*. American Scientist. | `models.py` (PlutchikEmotion) |
+| CAPE 6次元 Appraisal | CAT-BEAR framework, CAPE/NAAACL 2025 | `models.py` (AppraisalDimensions) |
+| VAD (Valence-Arousal-Dominance) | Mehrabian, A. (1995). *Framework for a comprehensive description of emotions.* | `models.py` (PLUTCHIK_VAD) |
+| Bowlby Attachment Theory | Bowlby, J. (1969). *Attachment and Loss*. | `relationship.py` |
+| 3段階関係性モデル | Skjuve, M. et al. (2021). *Social Penetration Theory in HAI.* | `relationship.py` |
+| HAIA 3段階モデル | Frontiers in Psychology (2026). *Human-AI Interaction Attachment.* | `relationship.py` |
+| 時間減衰 Mood | Cognitiv Architecture, Blaniel 8-stage pipeline | `mood.py` |
+| Reappraisal | Third-Person Appraisal Agent, EMNLP 2025 | `orchestrator.py` |
+| WRIME日本語感情データセット | Kajiwara, T. et al. (2021). *WRIME: Emotional Intensity Estimation for Japanese.* NAACL. | `appraiser.py` (キーワード辞書) |
+
+### 関連研究
+
+- **AI-RP Framework** (arXiv 2601): 関係性は layered psychological processes で形成。communication → attachment → companionship
+- **EHARS** (2025): attachment anxiety/avoidance が human-AI relationships を形づくる
+- **Neural Steering** (2512): relationship-seeking AI は hedonic appeal 低下するが attachment markers 増加
+- **Self-disclosure研究** (2505): 「gradual self-disclosure significantly enhances perceived social intimacy」
+- **EmoLLM** (2025): Appraisal Reasoning Graph — Contextual Facts → User Needs → Appraisal → Emotion → Response Strategy
+- **CoRE benchmark** (2025): LLMs が人間と整合した appraisal 構造を持つことを確認
+- **Blaniel**: 8段階パイプライン — Event → Appraisal (OCC) → Emotion (Plutchik) → Decay → Behavior → Response → LLM → Memory
+- **Designed Relationality** (Springer 2026): 5段階 (Novelty → Disclosure → Feedback → Rhythm → Attachment)
+
+## グループチャット対応
+
+### 現状
+
+現在の limbic 層は 1対1（dyadic）対話のみを前提としている。グループチャットで複数ユーザーが存在する場合、以下の問題がある：
+
+| 問題 | 詳細 |
+|------|------|
+| 関係性が全ユーザーで共有 | `RelationshipManager._state` が1インスタンス。ユーザーAの対話で形成した信頼がユーザーBにも適用される |
+| 話者認識の欠如 | `orchestrator.process()` は `account_id` を受け取るが全く利用しない。誰が話したかで感情応答が変わらない |
+| Mood のみグローバルで正しい | AI自身の「機嫌」は全ユーザーとの対話累積で決まるため、これは意図通り |
+
+### 研究根拠
+
+- **SA-LLM** (Sun et al., 2025): speaker-attributed input encoding がマルチパーティ対話生成の核心。話者ロールの暗黙的学習がSOTA
+- **Relational AI** (Claggett et al., CHI 2025): 参加者ごとに異なる social distance に応じた LLM instruction が必要。「マルチパーティでは参加者間の社会的距離が介入効果を規定する」
+- **Multi-Party Chat** (Wei et al., Meta 2023): pairwise-trained モデルが欠く2スキル — (1) いつ話すかの判断、(2) 複数キャラクターに基づいた一貫発話
+- **Quan et al.** (IEEE 2023): マルチパーティ会話では感情のダイナミクスが参加者間で伝播
+- **Grassi et al.** (2025): グループ全体の望ましいダイナミクス達成のための会話フロー制御

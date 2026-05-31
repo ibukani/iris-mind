@@ -1,0 +1,29 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+from typing import Any
+
+from iris.account.models import Provider
+from iris.event.base import Event
+
+
+@dataclass
+class AccountCreatedEvent(Event):
+    account_id: str = ""
+    display_name: str = ""
+
+
+@dataclass
+class AccountUpdatedEvent(Event):
+    account_id: str = ""
+    field_name: str = ""
+    old_value: Any = None
+    new_value: Any = None
+
+
+@dataclass
+class AccountIdentityLinkedEvent(Event):
+    account_id: str = ""
+    provider: Provider = Provider.LOCAL
+    subject: str = ""
+    provider_name: str = ""

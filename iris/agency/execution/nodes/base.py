@@ -5,16 +5,16 @@ from typing import TYPE_CHECKING, Any
 
 from langchain_core.messages import BaseMessage
 
-from iris.agency.execution.node_types import NODE_TYPES, ROUTING_TOOLS
-from iris.agency.execution.state import DynamicState, ExecutionState
+from iris.agency.execution.models import DynamicState, ExecutionState
+from iris.agency.execution.node_type import NODE_TYPES, ROUTING_TOOLS
 from iris.agency.planning.models import Plan
 from iris.agency.task_level import TASK_LEVELS, TaskLevel
+from iris.memory.models import text_block
 
 if TYPE_CHECKING:
     from iris.agency.execution.engine import ToolEngine
     from iris.agency.execution.llm.gateway import LLMGateway
     from iris.event.event_bus import EventBus
-    from iris.llm.capability import CapabilityChecker
     from iris.memory.manager import MemoryManager
 
 from loguru import logger
@@ -37,14 +37,12 @@ class BaseLLMNode(ABC):
         self,
         pipeline: LLMGateway,
         tool_executor: ToolEngine | None = None,
-        capability_checker: CapabilityChecker | None = None,
         dynamic: DynamicState | None = None,
         event_bus: EventBus | None = None,
         memory: MemoryManager | None = None,
     ) -> None:
         self._pipeline = pipeline
         self._tool_executor = tool_executor
-        self._capability_checker = capability_checker
         self._dynamic = dynamic or DynamicState()
         self._event_bus = event_bus
         self._memory = memory
@@ -69,14 +67,9 @@ class BaseLLMNode(ABC):
         allow_side_effects = plan.overrides.get("allow_side_effects", True)
         if names is not None:
             return self._tool_executor.list_tools_by_name(names, allow_side_effects) or None
-        tools = self._tool_executor.registry.list_tools(allow_side_effects=allow_side_effects)
-        if tools and self._capability_checker:
-            level = TASK_LEVELS[level_name]
-            if not self._capability_checker.supports_tools(level.model_role):
-                return None
-        return tools or None
+        return self._tool_executor.registry.list_tools(allow_side_effects=allow_side_effects) or None
 
-    def _build_routing_tools(self, state: ExecutionState) -> list[dict[str, Any]]:
+    def _build_routing_tools(self, state: ExecutionState, level: TaskLevel) -> list[dict[str, Any]]:
         nt = NODE_TYPES[self.node_type_name]
         if state["chain_depth"] >= nt.max_chain_depth:
             targets = [t for t in nt.routing_targets if t != nt.name]
@@ -93,25 +86,11 @@ class BaseLLMNode(ABC):
         return self._pipeline.build_system_messages(
             context_hint=plan.context_hint,
             node_type=self.node_type_name,
-            recent_turns=self._get_recent_turns(),
+            chaos_level=plan.modulation.chaos_level,
+            room_id=plan.room_id,
+            account_id=plan.account_id,
+            modulation=plan.modulation,
         )
-
-    def _get_recent_turns(self) -> str:
-        if not self._memory:
-            return ""
-        turns = self._memory.short_term.get_recent_turns(3)
-        if not turns:
-            return ""
-        ctx_lines: list[str] = []
-        for t in turns:
-            content = t.get("content", "")
-            if content:
-                uid = t.get("user_identity", "")
-                label = uid or t["role"]
-                ctx_lines.append(f"{label}: {content}")
-        if not ctx_lines:
-            return ""
-        return "## 直近の会話\n" + "\n".join(ctx_lines)
 
     def _build_chat_params(
         self,
@@ -125,6 +104,7 @@ class BaseLLMNode(ABC):
             "max_tokens": level.max_tokens or None,
             "priority": level.priority,
             "show_thinking": level.show_thinking,
+            "modulation": plan.modulation,
         }
 
     def _resolve_chat_params(
@@ -134,17 +114,8 @@ class BaseLLMNode(ABC):
         plan: Plan,
     ) -> dict[str, Any]:
         params = self._build_chat_params(state, level, plan)
-        # Talkative adjustments override
-        adj = state.get("talkative_adjustments")
-        if adj:
-            if adj.max_tokens is not None:
-                params["max_tokens"] = adj.max_tokens
-            if adj.show_thinking is not None:
-                params["show_thinking"] = adj.show_thinking
-        # Planning overrides
         if "priority" in plan.overrides:
             params["priority"] = plan.overrides["priority"]
-        # TaskLevel caps: can only reduce, never exceed TaskLevel
         if params.get("max_tokens") is not None and level.max_tokens > 0:
             params["max_tokens"] = min(params["max_tokens"], level.max_tokens)
         if params.get("temperature") is not None and level.temperature is not None:
@@ -162,7 +133,7 @@ class BaseLLMNode(ABC):
         try:
             system_msgs = self._build_system_prompt(state, level, plan)
             tools = self._get_tools(level_name, plan)
-            routing_tools = self._build_routing_tools(state)
+            routing_tools = self._build_routing_tools(state, level)
 
             all_tools: list[dict[str, Any]] | None = None
             if tools or routing_tools:
@@ -177,14 +148,19 @@ class BaseLLMNode(ABC):
                 **self._resolve_chat_params(state, level, plan),
             )
 
+            if self._dynamic.interrupt_token and self._dynamic.interrupt_token.is_cancelled:
+                state["interrupted"] = True
+                return {"response_text": "", "interrupted": True}
+
             state["messages"].append(resp)
 
             raw = resp.content
             response_text = raw.strip() if isinstance(raw, str) else ""
 
             if response_text and self._memory:
-                role = "thought" if plan.silent else "assistant"
-                self._memory.short_term.add_turn(role, response_text, plan.user_identity)
+                self._memory.short_term.add_turn(
+                    "assistant", [text_block(response_text)], plan.account_id, plan.room_id
+                )
 
             return {"response_text": response_text}
         except Exception:

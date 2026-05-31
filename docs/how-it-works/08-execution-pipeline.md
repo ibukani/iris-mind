@@ -31,8 +31,7 @@ sequenceDiagram
     end
 
     ORCH->>ORCH: FinalizeNode → DONE
-    ORCH->>CON: PostProcessNode
-    CON->>CON: reflexion (必要時)
+    ORCH->>CON: Consolidation
     CON->>CON: compression (必要時)
 ```
 
@@ -48,7 +47,7 @@ OutputTracker が検出した talkative_degree に応じて計画属性を上書
 |--------|---------------|
 | >= 1 | task_level = "chat"（最短応答） |
 | >= 2 | max_tokens = min(current, 256) |
-| >= 3 | run_reflexion=False, run_compression=False |
+| >= 3 | run_compression=False |
 | >= 5 | show_thinking=False |
 
 ### 自発発話抑制 (talkative)
@@ -99,9 +98,8 @@ FlowExecutor._on_plan(PlanDecided)
 │   │   ├── on_token によるストリーミング（SetupNode設定）
 │   │   ├── OutputTracker / FeedbackCoordinator 記録
 │   │   └── MessageEvent(DONE)
-│   └── PostProcessNode (silent 以外)
-│       ├── reflexion (run_reflexion=True)
-│       └── compression (run_compression=True)
+    │   └── Consolidation
+    │       └── compression (run_compression=True)
 ```
 
 ## LLMGateway
@@ -114,8 +112,8 @@ LLM 呼出とツール実行のゲートウェイ。
 
 1. Personality.build_system_prompt() — 基底プロンプト
 2. 現在日時
-3. 現在の気分 (limbic.build_mood_description())
-4. 自己状態 (persona_profile.get_current_state_section())
+3. 直近の記憶コンテキスト (MemoryManager.get_recent())
+4. 会話状態 (short_term.render_context())
 5. 会話コンテキスト (context_hint)
 6. 状況指示 (proactive 時は自発発話用指示)
 
@@ -153,7 +151,7 @@ START → SetupNode → GeneralChatNode (fixed entry)
 | パラメータ | ソース |
 |-----------|--------|
 | model | `ModelConfig.get_model(plan.model_role)` |
-| temperature | `ModelConfig.get_effective_temperature(role)` + 感情変調 |
+| temperature | `ModelConfig.get_effective_temperature(role)` |
 | max_tokens | plan.max_tokens or `get_effective_max_tokens(role)` |
 | tools | ToolRegistry.list_tools() |
 | on_token | SetupNode 設定（常時有効） |
@@ -166,7 +164,7 @@ START → SetupNode → GeneralChatNode (fixed entry)
 
 - `record_user_input()`: ユーザー入力時にカウンタリセット
 - `record_output()`: 出力後に frequency / talkative を評価。フラグリストを返す
-- `set_emotion_state(v, a, d)`: 現在の感情状態を監視に反映
+
 
 ### フラグ
 
@@ -177,16 +175,12 @@ START → SetupNode → GeneralChatNode (fixed entry)
 
 ## Consolidator
 
-実行後の後処理（Reflexion / ContextWindow圧縮）を管理:
+実行後の後処理（ContextWindow圧縮）を管理:
 
 ```python
-Consolidator.run(plan, run_reflexion, run_compression):
-    if run_reflexion:
-        hippocampal.maybe_run(messages, msg_count_since_reflect)
-    if run_compression:
-        context_window.check_and_summarize(messages)
+Consolidator.run():
+    context_window.check_and_summarize(messages)
 ```
 
 - `flush_memory()`: 長期記憶への保存
 - `compact_context()`: 会話履歴の圧縮（ContextWindowManager）
-- `_on_timer_tick()`: idle反射チェック

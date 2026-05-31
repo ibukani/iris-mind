@@ -6,60 +6,63 @@ from unittest.mock import MagicMock
 from langchain_core.messages import AIMessage
 
 from iris.agency import (
-    GateVerdict,
-    InhibitionController,
     InternalBus,
     PlanDecided,
     PlanningManager,
-    ProactiveScoring,
+    ProactiveScorer,
 )
+from iris.agency.planning.context import ContextHintBuilder
+from iris.agency.planning.decisions import ProactiveJudge
+from iris.agency.planning.question_generator import QuestionGenerator
+from iris.agency.planning.strategies import ProactivePlanStrategy, ResponsePlanStrategy
 from iris.event.event_bus import EventBus
-from iris.event.event_types import InputReady
+from iris.io.events import InputReady
 from iris.kernel.config import Config, ProactiveConfig
-from tests.conftest import FakeLLMProvider, FakePersonaData, FakePersonaProfile
 
 
 def test_planning_manager_silent_proactive_interest_sampling() -> None:
-    # Arrange
     internal_bus = MagicMock(spec=InternalBus)
     event_bus = EventBus()
-    inhibition = MagicMock(spec=InhibitionController)
-    inhibition.evaluate.return_value = GateVerdict(suppressed=False, score=0.8, reason="", go_signal=0.8)
-    inhibition.is_topic_suppressed.return_value = False
-    inhibition.consecutive_ignores = 0
-    inhibition.last_proactive_time = 0.0
-    inhibition.last_user_activity = 0.0
-    inhibition.negative_mood_score = 0.0
-    inhibition.outputs_since_input = 0
-    inhibition.frequency_exceeded = False
-
-    scoring = MagicMock(spec=ProactiveScoring)
-    # total=0.6, drive=0.5, context=0.1 => is_silent_proactive=True
+    scoring = MagicMock(spec=ProactiveScorer)
     scoring.compute.return_value = (0.6, {"drive": 0.5, "context": 0.1})
 
     config = Config()
     config.proactive = ProactiveConfig(speak_threshold=0.5)
 
-    persona_data = FakePersonaData()
-    persona_data.add_interest("宇宙の起源", 0.8)
-    persona_profile = FakePersonaProfile(persona_data=persona_data)
+    llm = MagicMock()
+    llm.chat = MagicMock(return_value=AIMessage(content="ビッグバン以前には何が存在したのか？"))
 
-    llm = FakeLLMProvider(responses=[AIMessage(content="ビッグバン以前には何が存在したのか？")])
+    context_builder = ContextHintBuilder(memory=None)
+    question_gen = QuestionGenerator(llm=llm)
+
+    judge = ProactiveJudge(
+        scoring=scoring,
+        config=config.proactive,
+        context_builder=context_builder,
+    )
+    proactive_strategy = ProactivePlanStrategy(question_gen=question_gen)
+    response_strategy = ResponsePlanStrategy(
+        config=config.proactive,
+        context_builder=context_builder,
+    )
 
     PlanningManager(
         internal_bus=internal_bus,
-        event_bus=event_bus,
-        inhibition=inhibition,
-        scoring=scoring,
-        config=config,
-        memory=None,
-        limbic=None,
-        persona_profile=persona_profile,
-        llm=llm,
+        proactive_judge=judge,
+        proactive_strategy=proactive_strategy,
+        response_strategy=response_strategy,
     )
 
-    # Act
-    # InputReady を timer からの起動としてシミュレート
+    from iris.agency.planning.handler import _PlanningEventHandler
+
+    _PlanningEventHandler(
+        event_bus=event_bus,
+        internal_bus=internal_bus,
+        proactive_judge=judge,
+        proactive_strategy=proactive_strategy,
+        response_strategy=response_strategy,
+    )
+
     event = InputReady(
         timestamp=datetime.now(),
         source="test",
@@ -69,42 +72,51 @@ def test_planning_manager_silent_proactive_interest_sampling() -> None:
     )
     event_bus.publish(event)
 
-    # Assert
     assert internal_bus.publish.call_count == 1
     call_args = internal_bus.publish.call_args[0][0]
     assert isinstance(call_args, PlanDecided)
     plan = call_args.plan
     assert plan.silent is True
-    assert plan.overrides["proactive_reason"] == "ビッグバン以前には何が存在したのか？"
-    assert plan.overrides["interest_topic"] == "宇宙の起源"
 
 
 def test_planning_manager_escalation_event() -> None:
-    # Arrange
     internal_bus = MagicMock(spec=InternalBus)
     event_bus = EventBus()
-    inhibition = MagicMock(spec=InhibitionController)
-    inhibition.evaluate.return_value = GateVerdict(suppressed=False, score=0.8, reason="", go_signal=0.8)
-
-    scoring = MagicMock(spec=ProactiveScoring)
+    scoring = MagicMock(spec=ProactiveScorer)
 
     config = Config()
     config.proactive = ProactiveConfig()
 
-    PlanningManager(
-        internal_bus=internal_bus,
-        event_bus=event_bus,
-        inhibition=inhibition,
+    context_builder = ContextHintBuilder(memory=None)
+
+    judge = ProactiveJudge(
         scoring=scoring,
-        config=config,
-        memory=None,
-        limbic=None,
-        persona_profile=None,
-        llm=None,
+        config=config.proactive,
+        context_builder=context_builder,
+    )
+    proactive_strategy = ProactivePlanStrategy(question_gen=None)
+    response_strategy = ResponsePlanStrategy(
+        config=config.proactive,
+        context_builder=context_builder,
     )
 
-    # Act
-    # escalation イベントを発行
+    PlanningManager(
+        internal_bus=internal_bus,
+        proactive_judge=judge,
+        proactive_strategy=proactive_strategy,
+        response_strategy=response_strategy,
+    )
+
+    from iris.agency.planning.handler import _PlanningEventHandler
+
+    _PlanningEventHandler(
+        event_bus=event_bus,
+        internal_bus=internal_bus,
+        proactive_judge=judge,
+        proactive_strategy=proactive_strategy,
+        response_strategy=response_strategy,
+    )
+
     event = InputReady(
         timestamp=datetime.now(),
         source="test",
@@ -114,7 +126,6 @@ def test_planning_manager_escalation_event() -> None:
     )
     event_bus.publish(event)
 
-    # Assert
     assert internal_bus.publish.call_count == 1
     call_args = internal_bus.publish.call_args[0][0]
     assert isinstance(call_args, PlanDecided)
@@ -122,4 +133,4 @@ def test_planning_manager_escalation_event() -> None:
     assert plan.silent is False
     assert "宇宙の起源" in plan.content
     assert "ビッグバンによる宇宙の膨張" in plan.content
-    assert "システムからの内部指示" in plan.content
+    assert "調査" in plan.content

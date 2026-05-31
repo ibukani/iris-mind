@@ -1,6 +1,6 @@
 # Iris Memory 層
 
-**脳科学対応**: 感覚野 + 海馬 + 皮質記憶系（3層構造）
+**脳科学対応**: 感覚野 + 皮質記憶系（3層構造）
 
 ## 責務
 
@@ -8,7 +8,6 @@
 - ワーキングメモリ（ターン・話題・エンティティの保持） — 短期記憶
 - エピソード記憶の保存と検索（JSONL）
 - 意味記憶の保存と検索（ChromaDB + BM25 ハイブリッド）
-- **海馬による記憶整理**: ShortTermMemory consolidation + Reflexion（自己反省）を実行し長期記憶へ統合
 - 全層からのクエリ受付
 
 ## Manager 定義
@@ -20,14 +19,13 @@ class MemoryManager:
     """
 
     # === EventBus subscribers ===
-    # subscribe: InputReceived → sensory.store_raw() + pending dict
-    # subscribe: TimerTick     → pending pop → InputReady / proactive InputReady(from_timer=True)
+    # subscribe: InputReady(source=memory) → sensory.take_raw() からの再送受信
+    # subscribe: TimerTick → sensory.take_raw() → InputReady(source=memory) / proactive InputReady(from_timer=True)
 
     # === 公開 I/F（汎用） ===
     def store(self, stream: str, data: Any) -> None
     def retrieve(self, stream: str, **filters) -> list[dict]
     def search(self, query: str, stream: str | None = None, **kwargs) -> list[dict]
-    def search_emotional(self, current_emotion, max_results: int = 5) -> list[dict]
     def clear(self, stream: str | None = None) -> None
 
     # === 後方互換 API ===
@@ -52,6 +50,8 @@ class MemoryManager:
 
 ### sensory/ — 感覚記憶
 
+`sensory/manager.py` + `sensory/readiness.py`（ReadinessEvaluator）
+
 ```python
 class SensoryMemoryManager:
     """生の入力を処理前に一時保持する。
@@ -67,11 +67,10 @@ class SensoryMemoryManager:
     def set_readiness_evaluator(self, evaluator) -> None
     @property
     def has_pending_raw(self) -> bool
-    @property
-    def last_raw_input(self) -> str
 ```
 
 `store_raw()` は `MemoryManager._on_input_received()` から呼ばれる。確定した入力を保持し、ProactiveScoringの sensory 因子として利用される。
+`raw_timestamp` は `store_raw()` 実行時に記録され、`retrieve()` で同じ値を返す。
 
 ### short_term/ — 短期記憶（ワーキングメモリ）
 
@@ -80,7 +79,7 @@ class ShortTermMemoryManager:
     """現在処理中の会話内容（ターン・話題・参照エンティティ）を保持。
     長期記憶への転送（consolidation）を担う。
     脳科学対応: 前頭前野 (PFC) のワーキングメモリ。"""
-    def add_turn(self, role: str, content: str, user_identity: str = "") -> None
+    def add_turn(self, role: str, content: str, account_id: str = "") -> None
     def search(self, query: str, max_results: int = 5) -> list[dict]
     def search_entities(self, entity_name: str) -> list[dict]
     def render_context(self, max_chars: int = 600, query: str | None = None) -> str
@@ -96,9 +95,9 @@ class ShortTermMemoryManager:
 ```
 
 **add_turn のタイミング**:
-- `FlowExecutor._on_plan()` Plan決定後、LLM呼出直前に `add_turn("user", content, user_identity)`
-- LLM応答受信直後に `add_turn("assistant", response_text, user_identity)`
-- `user_identity` は `Plan.user_identity` から伝搬される。グループチャット時は発話者の識別子、それ以外は空文字
+    - `FlowExecutor._on_plan()` Plan決定後、LLM呼出直前に `add_turn("user", content, account_id)`
+- LLM応答受信直後に `add_turn("assistant", response_text, account_id)`
+- `account_id` は `Plan.account_id` から伝搬される。グループチャット時は発話者の識別子、それ以外は空文字
 - Planning段階では short_term に最新ターンは存在しない（Planの `content` フィールド経由でアクセスする）
 
 **render_context(query=None)**:
@@ -113,7 +112,7 @@ class ShortTermMemoryManager:
 ```python
 class LongTermMemoryManager:
     """エピソード記憶 (EpisodicStore) + 意味記憶 (SemanticStore) を統合管理。
-    脳科学対応: 海馬体 + 大脳皮質連合野。"""
+    脳科学対応: 大脳皮質連合野。"""
     def store_episodic(self, data: Any, kind: str = "") -> None
     def get_episodic_recent(self, n: int = 5) -> list[dict]
     def clear_episodic(self) -> None
@@ -121,7 +120,6 @@ class LongTermMemoryManager:
     def search_semantic(self, query: str, max_results: int = 3) -> list[dict]
     def clear_semantic(self) -> None
     def search_vector(self, query: str, max_results: int = 3) -> list[dict]
-    def search_emotional(self, current_emotion, max_results: int = 5) -> list[dict]
 ```
 
 ### long_term/stores.py — EpisodicStore + SemanticStore + AgentsMdStore
@@ -142,17 +140,9 @@ class SemanticStore:
     def sync(self) -> None
 
 class AgentsMdStore:
-    """構造記憶。.iris/data/iris_profile.md の読み書き（上限2KB）。"""
+    """構造記憶。.iris/config/iris_profile.md の読み書き（上限2KB）。"""
     def load(self) -> str
     def update(self, new_content: str) -> None
-
-class PersonaData:
-    """ペルソナの現在状態データ（話し方、性格特性、興味）をJSONで管理。
-    interestsは重み付きで管理され、自然減衰(decay_interests)および内省や調査納得度による加重更新に対応。"""
-    def add_entry(self, category: str, text: str, source: str = "reflection") -> None
-    def add_interest(self, topic: str, weight_delta: float) -> None
-    def decay_interests(self, decay_rate: float = 0.05) -> None
-    def get_interests(self) -> list[dict]
 
 ```
 
@@ -165,7 +155,7 @@ class LongTermGoal(BaseModel):
 
 class GoalStore:
     """LongTermGoal をインメモリ管理。永続化は MemoryManager 経由で定期的にダンプ/ロード。
-    目標は時間経過や Reflexion で weight が減衰し、閾値未満で忘却される。"""
+    目標は時間経過で weight が減衰し、閾値未満で忘却される。"""
     def add_goal(self, description: str, weight: float = 1.0) -> str
     def remove_goal(self, goal_id: str) -> bool
     def get_goals(self) -> list[LongTermGoal]
@@ -192,31 +182,6 @@ class VectorStore:
 
 SemanticStore が内部で VectorStore を利用する。
 
-### hippocampal/ — 海馬による記憶整理
-
-```python
-class HippocampalManager:
-    """Reflexion のスケジューリングと結果の永続化。
-    FlowExecutor 発話後カウンタに応じて quick_reflect を実行。
-    ShortTermMemory の consolidation も担当。
-    自律調査結果の自己納得度評価 (process_proactive_result) も行う。"""
-    def maybe_run(self, messages: list[dict], counter: int) -> int
-    def run_session(self, messages: list[dict]) -> None
-    def process_proactive_result(self, topic: str, success: bool, content: str) -> None
-
-
-class Reflexion:
-    """完了した会話を分析し、話し方・性格・教訓・好みを抽出 → 意味記憶へ格納。"""
-    def reflect(self, conversation_history: list[dict]) -> dict
-    def quick_reflect(self, conversation_slice: list[dict]) -> dict
-```
-
-**consolidation フロー:**
-1. ShortTermMemory が `max_turns` に達したら `should_consolidate() == True`
-2. `_maybe_consolidate_short_term()` が未consolidateターンのuser発言を結合し EpisodicStore に保存
-3. 現在の話題を SemanticStore に保存
-4. `mark_consolidated()` で全ターンをconsolidated状態に
-
 ## データフロー
 
 ```mermaid
@@ -228,31 +193,41 @@ sequenceDiagram
     participant LTM as long_term
 
     alt ユーザー入力
-        EB-->>MGR: InputReceived(msg)
-        MGR->>SEN: store_raw(content)
-        MGR->>MGR: pending_dict[session_id].append((content, user_identity))
-        MGR->>EB: TimerTick → InputReady(content)
-        MGR->>EB: publish InputReady
-
-        Note over EB,STM: PlanningManager が Plan 決定後に FlowExecutor が add_turn
+        EB-->>MGR: InputReady(source="io", content, account_id)
+        Note over MGR: 二重処理防止のため sensory には保存しない
+        Note over EB,STM: PlanningHandler が直接 Plan 決定後に FlowExecutor が add_turn
         EB-->>MGR: (FlowExecutor) short_term.add_turn("user", content)
     else 自発発話トリガー
-        EB-->>MGR: TimerTick（pending なし）
-        MGR->>EB: publish InputReady(from_timer=True)
+        EB-->>MGR: TimerTick（sensory 未処理なし）
+        Note over MGR: _voice_active が空でなければ Proactive 抑制
+        MGR->>EB: publish InputReady(content="", context={from_timer: True})
+    else 音声録音中
+        EB-->>MGR: InputReady(msg_type=inhibition, content="reason:true[:duration]")
+        MGR->>MGR: InhibitionEvent publish（sensory/pending非保存）
+    else クライアント再接続
+        EB-->>MGR: ClientSessionEvent(action=connected)
+        MGR->>EB: InputReady(content="", context={system_event, offline_duration})
     end
 
     Note over STM,LTM: 応答後
     MGR->>STM: (FlowExecutor) short_term.add_turn("assistant", response)
-    MGR->>LTM: Hippocampal consolidation（必要時）
 ```
 
 ## EventBus 購読
 
 | イベント | ハンドラ | 処理 |
 |----------|----------|------|
-| `InputReceived` | `_on_input_received` | sensory.store_raw + pending保存 |
-| `TimerTick` | `_on_timer_tick` | pending pop → InputReady または proactive InputReady |
+| `InputReady` | `_on_input_ready` | source="io" の入力 → 二重処理防止のため sensory には保存しない（PlanningHandler が直接処理） |
+| `MessageEvent` | `_on_message_event` | pending保存（direction=request / event, msg_type=chat / system）。msg_type=inhibition は制御信号として別処理 |
+| `TimerTick` | `_on_timer_tick` | sensory.take_raw() → 未処理入力があれば InterruptEvent + InputReady(source="memory")。なければ proactive InputReady |
+| `ClientSessionEvent` | `_on_client_session_event` | 再接続時に escalation InputReady を発行 |
 
 MemoryManager は **Completed イベントを購読しない**。
-Reflexion は FlowExecutor が応答後に直接 HippocampalManager.maybe_run() を呼ぶ。
-ContextWindow 圧縮は LLMContextWindowManager（iris/llm/context_window.py）が担当する。
+ContextWindow 圧縮は LLMContextWindowManager（iris/llm/context.py の `LLMContextWindowManager`）が担当する。
+
+### publish するイベント
+
+| イベント | タイミング | フィールド |
+|----------|-----------|-----------|
+| `InputReady` | 入力確定時 / TimerTick / 再接続時 | content, session_id, account_id, context |
+| `InterruptEvent` | 入力確定時 | session_id |

@@ -1,4 +1,4 @@
-# 記憶システム: 3層構造 + 海馬 + GoalStore
+# 記憶システム: 3層構造 + GoalStore
 
 ```mermaid
 flowchart LR
@@ -23,11 +23,6 @@ flowchart LR
         SEM["SemanticStore<br/>JSONL+ChromaDB 上限100"]
     end
 
-    subgraph HIPPO["海馬"]
-        CONSOL["Consolidation<br/>short_term→long_term"]
-        REFLEX["Reflexion<br/>特性抽出"]
-    end
-
     subgraph GOALS["GoalStore"]
         G["LongTermGoal<br/>weight 減衰・忘却"]
     end
@@ -37,14 +32,8 @@ flowchart LR
     FBUF -->|flush_callback| RBUF
     RBUF -->|TimerTick pop| TURNS
 
-    TURNS -->|consolidation| CONSOL
-    CONSOL --> EPI
-    CONSOL --> SEM
     TURNS -->|話題抽出| TOPICS
     TURNS -->|entity extract| ENTITIES
-
-    REFLEX --> SEM
-    REFLEX --> G
 ```
 
 ## 感覚記憶 (SensoryMemoryManager)
@@ -64,11 +53,11 @@ flush 時は `flush_callback(session_id, content)` が呼ばれる。
 
 ### 系統2: 生入力保持 (raw mode)
 
-`store_raw(content)` で完全な入力を保持。`retrieve()` で取得可能。
+`store_raw(content, account_id, room_id, session_id)` で完全な入力を保持。`retrieve()` で取得可能。
 
 - `has_pending_raw`: 未処理の raw 入力有無
-- `last_raw_input`: 最新の raw 入力内容
-- MemoryManager の TimerTick 処理で pop され、`InputReady` として再 publish
+- `take_raw()`: 未処理 raw を原子的に取得しクリア
+- MemoryManager の TimerTick が `take_raw()` で pop し、`InputReady` として再 publish
 
 ### 状態管理
 
@@ -77,7 +66,8 @@ flush 時は `flush_callback(session_id, content)` が呼ばれる。
 | `fragment_count` | int | 蓄積中の断片数 |
 | `accumulated_text` | str | 未 flush の全断片連結 |
 | `has_pending_raw` | bool | 未処理 raw 入力あり |
-| `last_raw_input` | str | 最新 raw 入力 |
+| `raw` / `raw_block` | str / dict | 最新 raw 入力とブロック本体 |
+| `raw_timestamp` | str | `store_raw()` 時点の記録時刻 |
 
 ## 短期記憶 (ShortTermMemoryManager)
 
@@ -154,14 +144,14 @@ flush 時は `flush_callback(session_id, content)` が呼ばれる。
 
 - 保存形式: JSONL (`.iris/data/episodes.jsonl`)
 - 上限: 30 エントリ
-- 構造: `{"content": str, "kind": str, "timestamp": str, "emotion": dict}`
+- 構造: `{"content": str, "kind": str, "timestamp": str}`
 - 上限超過時: 古いエントリ同士をマージ圧縮（LLM要約）
 
 ### 意味記憶 (SemanticStore + VectorStore)
 
 - 保存形式: JSONL (`.iris/data/semantic.jsonl`) + ChromaDB
 - 上限: 100 エントリ
-- 保存要素: `{content, type, tags, timestamp, emotion, embedding}`
+- 保存要素: `{content, type, tags, timestamp, embedding}`
 
 #### ハイブリッド検索スコア
 
@@ -172,10 +162,6 @@ flush 時は `flush_callback(session_id, content)` が呼ばれる。
 vector_score は ChromaDB のコサイン類似度、bm25_score は BM25 アルゴリズムによるキーワード一致度。
 
 Embedding 生成: ONNX MiniLM (`all-MiniLM-L6-v2`) が初回使用時に自動ダウンロード。
-
-## 海馬 (HippocampalManager)
-
-短期→長期の定着（Consolidation）と自己反省（Reflexion）を統括。詳細は `09-reflexion.md` 参照。
 
 ## GoalStore: 長期目標管理
 
@@ -208,9 +194,9 @@ goal.weight = max(0.0, goal.weight - decay_rate)
 if goal.weight < remove_threshold (0.1): 削除
 ```
 
-Reflexion 処理で `add_goal()` が呼ばれ新規目標が追加される一方、`decay_goals()` が定期的に呼ばれ不要な目標が忘却される。
+`decay_goals()` が定期的に呼ばれ不要な目標が忘却される。
 
 ### 永続化
 
-現在はインメモリ管理。`save(path)` / `load(path)` で JSON ファイルにダンプ可能。
+インメモリ管理。`save(path)` / `load(path)` で JSON ファイルにダンプ可能。
 MemoryManager から定期的に呼ばれる想定。

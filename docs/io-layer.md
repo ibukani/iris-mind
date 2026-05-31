@@ -19,6 +19,7 @@ iris/io/
 ├── __init__.py
 ├── manager.py         IOManager
 ├── models.py          Message, CommandInput, CommandOutput, Permission, Direction
+├── hooks.py           Plugin Hook登録
 ├── transport/
 │   ├── __init__.py
 │   ├── iris_service.proto    ← gRPC サービス・メッセージ定義 (proto/iris/io/)
@@ -108,16 +109,17 @@ class Direction(Enum): REQUEST / RESPONSE / STREAM / EVENT
 class SessionState(Enum): ACTIVE / CLOSED
 
 class AuthMessage(BaseModel)      # access_token, role, permissions
-class ControlMessage(BaseModel)   # auth_success/failure
-class Message(BaseModel)          # 統一言語: source_role, target_role, direction, msg_type, content, user_identity
+class AuthResult(BaseModel)       # auth_success/failure
+class ControlMessage(BaseModel)   # account / presence 制御
+class Message(BaseModel)          # source_role, target_role, direction, msg_type, content, speaker, room_id
 class CommandInput(BaseModel)     # システムコマンド入力（fast-path）
 class CommandOutput(BaseModel)    # コマンド応答（fast-path）
-class SessionInfo(BaseModel)      # session_id, role, permissions, conn
+class SessionInfo(BaseModel)      # session_id, session_tag, account_id, role, permissions, conn
 ```
 
 **Message の方向制御**: `direction` フィールド (`request`/`response`/`stream`/`event`) でメッセージの意味を区別。`target_role` で配送先を指定（`*` = 全セッションにブロードキャスト）。
 
-**グループチャット対応**: `user_identity` フィールドでメッセージごとのユーザー識別子を保持する。gRPC 接続時は `metadata["user_identity"]` として受け渡され、Iris の応答にも同一の `user_identity` が設定される。クライアントが空文字を送信した場合は従来通りのセッション単位識別となる。
+**グループチャット対応**: `speaker` フィールドで発話者Identityを、`room_id` で会話ルームを保持する。Iris の応答にも同一の `room_id` が設定される。
 
 ## transport/
 
@@ -133,10 +135,11 @@ class GrpcListener:
 ```
 
 双方向ストリームを通じて `ClientFrame` を受信し、`WhichOneof` に応じてディスパッチ:
-- `message` → Message として処理（`source_role` は認証済みセッションの role で上書き）。`metadata["user_identity"]` があれば `Message.user_identity` に設定
+- `message` → Message として処理（`source_role` は認証済みセッションの role で上書き）。`speaker` があればAccountを自動解決
 - `command` → CommandInput として処理
+- `control` → ControlMessage として処理
 
-出力時は `Message.user_identity` が空でなければ `metadata["user_identity"]` に書き込んで送信する。
+出力時は `Message.room_id` が空でなければ `metadata["room_id"]` に書き込んで送信する。
 
 ## session/
 
@@ -160,6 +163,7 @@ class SessionManager:
 | execute | EXECUTE_ACTION |
 | execute_result | SEND_CHAT |
 | interrupt | INTERRUPT |
+| inhibition | SEND_INHIBITION |
 
 ## auth/
 
@@ -175,6 +179,7 @@ class Authenticator:
 | 方向 | 通信相手 | Event／型 | 説明 |
 |------|----------|-----------|------|
 | Inbound | gRPC → IO | `MessageEvent` via EventBus | Message 入力（`direction=request`, `target_role=mind`） |
+| Inbound | gRPC → IO | `MessageEvent(msg_type=inhibition)` via EventBus | 抑制制御信号（direction=event, msg_type=inhibition） |
 | Inbound | gRPC → IO | `CommandInput` → CommandHandler | コマンド入力、EventBus を経由せず直接処理 |
 | Outbound | IO ← EventBus | `MessageEvent(session_id, msg_type, content)` | 出力要求（mind→client） |
 | Outbound | IO → gRPC | `CommandOutput` | コマンド応答、EventBus を経由せず直接送出 |

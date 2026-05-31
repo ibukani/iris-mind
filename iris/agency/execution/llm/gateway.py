@@ -52,9 +52,9 @@ class LLMGateway:
     def set_session_roles_summary(self, summary: str) -> None:
         self._session_roles_summary = summary
 
-    def _resolve_display_name(self, account_id: str) -> str:
+    def resolve_display_name(self, account_id: str) -> str:
         if account_id and self._account_provider:
-            return self._account_provider.resolve_display_name(account_id)
+            return str(self._account_provider.resolve_display_name(account_id))
         return account_id
 
     def build_system_messages(
@@ -67,7 +67,7 @@ class LLMGateway:
         room_id: str = "",
         account_id: str = "",
     ) -> list[BaseMessage]:
-        display_name = self._resolve_display_name(account_id)
+        display_name = self.resolve_display_name(account_id)
         return self._prompt_builder.build(
             node_type=node_type,
             context_hint=context_hint,

@@ -44,10 +44,15 @@ class SetupNode:
         self._dynamic.current_plan = plan
         self._set_on_token_callback()
 
+        is_system = False
         if content:
+            is_system = content.startswith("[system]")
+            if not is_system and plan.account_id:
+                display_name = self._pipeline.resolve_display_name(plan.account_id)
+                if display_name:
+                    content = f"{display_name}: {content}"
             state["messages"].append(HumanMessage(content=content))
         if content and self._memory:
-            is_system = content.startswith("[system]")
             self._memory.short_term.add_turn(
                 "system" if is_system else "user",
                 [text_block(content)],

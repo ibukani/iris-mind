@@ -8,7 +8,7 @@ personality:
 # 記憶系 — 各記憶層の保存先と上限
 memory:
     agents_md_max_bytes: 2048
-    agents_md_path: .iris/data/iris_profile.md
+    agents_md_path: .iris/config/iris_profile.md
     episodic_max_entries: 30
     episodic_path: .iris/data/episodes.jsonl
     semantic_max_entries: 100

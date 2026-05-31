@@ -820,10 +820,6 @@ dependencies = [
     { name = "rich" },
     { name = "tenacity" },
     { name = "tokenizers" },
-]
-
-[package.optional-dependencies]
-emotion = [
     { name = "transformers" },
 ]
 
@@ -861,9 +857,8 @@ requires-dist = [
     { name = "rich", specifier = ">=13" },
     { name = "tenacity", specifier = ">=9.0" },
     { name = "tokenizers", specifier = ">=0.21" },
-    { name = "transformers", marker = "extra == 'emotion'", specifier = ">=4.57" },
+    { name = "transformers", specifier = ">=4.57" },
 ]
-provides-extras = ["emotion"]
 
 [package.metadata.requires-dev]
 dev = [

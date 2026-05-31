@@ -1,67 +1,30 @@
-"""LangGraph routing logic — LLM応答後のノード遷移を決定する。"""
+"""LangGraph routing logic — LLM応答後のノード遷移を決定する。
+
+責務分割:
+  routing_decision.py — 純粋な経路決定（state 読み取りのみ）
+  state_transition.py — 決定に基づく状態変異（state 書き込みのみ）
+  router.py          — 両者を合成し LangGraph 条件付きエッジ関数として公開
+"""
 
 from __future__ import annotations
 
 from loguru import logger
 
 from iris.agency.execution.models import ExecutionState
-from iris.agency.execution.node_type import NODE_TYPES
-from iris.agency.task_level import TASK_LEVELS
+from iris.agency.execution.routing_decision import decide_after_tools, decide_next_route
+from iris.agency.execution.state_transition import apply_route_transition
 
 
 def route_after_llm(state: ExecutionState) -> str:
-    if state.get("interrupted") or state.get("error"):
-        return "finalize"
-
-    messages = state.get("messages", [])
-    if not messages:
-        return "finalize"
-
-    last = messages[-1]
-    tcs = getattr(last, "tool_calls", None) or []
-
-    for tc in tcs:
-        name = tc["name"]
-
-        if name == "general_chat":
-            state["chain_depth"] += 1
-            state["current_node_type"] = "general_chat"
-            logger.debug("ROUTE: general_chat (chain depth={})", state["chain_depth"])
-            return "general_chat"
-
-        if name == "general_task":
-            state["chain_depth"] = 0
-            state["current_node_type"] = "general_task"
-            nt = NODE_TYPES["general_task"]
-            state["current_level_idx"] = nt.available_levels.index(nt.entry_level)
-            logger.debug("ROUTE: general_task")
-            return "general_task"
-
-        if name == "deep_task":
-            state["chain_depth"] = 0
-            nt = NODE_TYPES.get(state["current_node_type"]) or NODE_TYPES["general_task"]
-            next_idx = state["current_level_idx"] + 1
-            if next_idx < len(nt.available_levels):
-                state["current_level_idx"] = next_idx
-                logger.debug(
-                    "ROUTE: deep_task level={}",
-                    nt.available_levels[state["current_level_idx"]],
-                )
-            return state["current_node_type"]
-
-        if name == "finish":
-            logger.debug("ROUTE: finish")
-            return "finalize"
-
-    if tcs:
-        return "execute_tools"
-
-    return "finalize"
+    decision = decide_next_route(state)
+    apply_route_transition(state, decision)
+    logger.debug("ROUTE: {} (chain_depth={})", decision.next_node, state["chain_depth"])
+    return decision.next_node
 
 
 def route_after_tools(state: ExecutionState) -> str:
-    max_iters = TASK_LEVELS[state["plan"].task_level].max_tool_iterations
-    if state.get("tool_iterations", 0) >= max_iters:
-        logger.debug("Tool iteration limit reached ({})", max_iters)
-        return "finalize"
-    return state["current_node_type"]
+    decision = decide_after_tools(state)
+    apply_route_transition(state, decision)
+    if decision.next_node == "finalize":
+        logger.debug("Tool iteration limit reached")
+    return decision.next_node

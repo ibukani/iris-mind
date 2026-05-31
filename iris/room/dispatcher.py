@@ -6,7 +6,7 @@ from loguru import logger
 import orjson
 
 from iris.account.models import parse_identity
-from iris.event.event_types import ControlMessageEvent
+from iris.io.events import ControlMessageEvent
 
 
 class _RoomDispatcher:

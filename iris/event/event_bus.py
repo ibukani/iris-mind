@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Protocol, TypeVar, overload, runtime_checkable
 
 from loguru import logger
 
-from iris.event.event_types import Event, new_trace_id
+from iris.event.base import Event, new_trace_id
 
 if TYPE_CHECKING:
     from iris.event.tracer import EventTracer

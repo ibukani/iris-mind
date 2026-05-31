@@ -7,7 +7,7 @@ from loguru import logger
 from iris.agency.inhibition import InhibitionManager
 from iris.agency.internal_bus import PlanDecided
 from iris.agency.planning.models import Plan
-from iris.event.event_types import InterruptEvent
+from iris.io.events import InterruptEvent
 
 if TYPE_CHECKING:
     from iris.agency.internal_bus import InternalBus

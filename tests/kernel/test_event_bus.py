@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from iris.event import (
+from iris.event.base import (
     AgentAnomalyEvent,
     AgentStateChangeEvent,
     Event,
-    EventBus,
     MemoryUpdateEvent,
     TimerTick,
 )
+from iris.event.event_bus import EventBus
 
 
 def test_publish_calls_handler() -> None:

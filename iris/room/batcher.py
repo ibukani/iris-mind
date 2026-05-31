@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 import threading
 from typing import Any
 
-from iris.event.event_types import RoomJoinedBatchEvent, RoomJoinedEvent
+from iris.room.events import RoomJoinedBatchEvent, RoomJoinedEvent
 
 
 class RoomJoinBatcher:

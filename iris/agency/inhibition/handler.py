@@ -4,7 +4,8 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from iris.event.event_types import InhibitionAction, InhibitionEvent, MessageEvent
+from iris.agency.inhibition.events import InhibitionAction, InhibitionEvent
+from iris.io.events import MessageEvent
 
 if TYPE_CHECKING:
     from iris.agency.inhibition import InhibitionManager

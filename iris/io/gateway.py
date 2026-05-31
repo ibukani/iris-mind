@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from iris.event.event_types import ControlMessageEvent, InputReady
-from iris.io.models import CommandInput, CommandOutput, ControlMessage, Direction, Identity, Message
+from iris.io.events import ControlMessageEvent, InputReady
+from iris.io.models import CommandInput, CommandOutput, ControlMessage, Direction, Message, TransportIdentity
 
 if TYPE_CHECKING:
     from iris.io.session.manager import SessionManager
@@ -45,7 +45,7 @@ class _IOGateway:
             room_id=getattr(response, "room_id", ""),
             display_name=getattr(response, "display_name", ""),
             text=getattr(response, "text", ""),
-            identity=Identity(**identity) if isinstance(identity, dict) else identity,
+            identity=TransportIdentity(**identity) if isinstance(identity, dict) else identity,
             profile=getattr(response, "profile", None) or {},
             metadata=getattr(response, "metadata", None) or {},
         )

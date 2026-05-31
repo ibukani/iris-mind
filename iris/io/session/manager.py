@@ -115,7 +115,7 @@ class SessionManager:
                 self._last_disconnect_times[key] = now
 
         if session is not None and self._event_bus is not None:
-            from iris.event.event_types import SessionDisconnectEvent
+            from iris.io.events import SessionDisconnectEvent
 
             self._event_bus.publish(
                 SessionDisconnectEvent(

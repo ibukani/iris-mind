@@ -16,7 +16,7 @@ class ProactiveTrigger:
         self._room_provider = room_provider
 
     def publish(self) -> None:
-        from iris.event.event_types import InputReady
+        from iris.io.events import InputReady
 
         room_id = self._select_room()
         self._event_bus.publish(

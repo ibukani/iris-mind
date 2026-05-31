@@ -4,13 +4,9 @@ from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from iris.event.event_types import (
-    DebugSnapshotEvent,
-    MessageEvent,
-    RoomJoinedBatchEvent,
-    RoomJoinedEvent,
-    RoomLeftEvent,
-)
+from iris.event.base import DebugSnapshotEvent
+from iris.io.events import MessageEvent
+from iris.room.events import RoomJoinedBatchEvent, RoomJoinedEvent, RoomLeftEvent
 
 if TYPE_CHECKING:
     from iris.account.manager import AccountManager

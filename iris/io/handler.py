@@ -4,8 +4,9 @@ from typing import TYPE_CHECKING
 
 from loguru import logger
 
-from iris.event.event_types import MessageEvent, RoomJoinedBatchEvent, RoomJoinedEvent, RoomLeftEvent
+from iris.io.events import MessageEvent
 from iris.io.models import ControlMessage, Direction, Message
+from iris.room.events import RoomJoinedBatchEvent, RoomJoinedEvent, RoomLeftEvent
 
 if TYPE_CHECKING:
     from iris.event.event_bus import EventBus

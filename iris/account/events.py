@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from iris.account.models import Provider
-from iris.event.event_types import Event
+from iris.event.base import Event
 
 
 @dataclass

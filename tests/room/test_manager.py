@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from iris.event.base import TimerTick
 from iris.event.event_bus import EventBus
-from iris.event.event_types import SessionDisconnectEvent, TimerTick
+from iris.io.events import SessionDisconnectEvent
 from iris.room.handler import _RoomEventHandler
 from iris.room.manager import RoomManager
 from iris.room.models import RoomMember

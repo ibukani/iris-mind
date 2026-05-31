@@ -56,7 +56,7 @@ class AuthResult(BaseModel):
     error_message: str | None = None
 
 
-class Identity(BaseModel):
+class TransportIdentity(BaseModel):
     provider: str = ""
     subject: str = ""
     provider_name: str = ""
@@ -89,7 +89,7 @@ class Message(BaseModel):
     content_type: str = "text/plain"
     state: str | None = None
     metadata: dict = Field(default_factory=dict)
-    speaker: Identity | None = None  # Inbound では必須。Outbound（response/ack/error/stream）は None 可
+    speaker: TransportIdentity | None = None  # Inbound では必須。Outbound（response/ack/error/stream）は None 可
     room_id: str = ""
 
 
@@ -107,7 +107,7 @@ class ControlMessage(BaseModel):
     room_id: str = ""
     display_name: str = ""
     text: str = ""
-    identity: Identity | None = None
+    identity: TransportIdentity | None = None
     profile: dict[str, str] = Field(default_factory=dict)
     metadata: dict[str, str] = Field(default_factory=dict)
 

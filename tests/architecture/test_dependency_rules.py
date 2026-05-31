@@ -38,8 +38,12 @@ def test_event_has_no_iris_dependencies() -> None:
     """iris.event is the foundation — must not import from any other iris.* package.
 
     Self-references within iris.event (e.g. iris.event.event_bus) are allowed.
+    Exception: event_types.py is a backward-compatibility shim that re-exports
+    domain events from their new locations.
     """
     for filepath in _get_python_files("iris/event"):
+        if filepath.name == "event_types.py":
+            continue
         imports = _get_imports(filepath)
         iris_imports = [i for i in imports if i.startswith("iris.") and not i.startswith("iris.event")]
         assert not iris_imports, (

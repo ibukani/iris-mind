@@ -16,7 +16,7 @@ from iris.agency.planning.decisions import ProactiveJudge
 from iris.agency.planning.question_generator import QuestionGenerator
 from iris.agency.planning.strategies import ProactivePlanStrategy, ResponsePlanStrategy
 from iris.event.event_bus import EventBus
-from iris.event.event_types import InputReady
+from iris.io.events import InputReady
 from iris.kernel.config import Config, ProactiveConfig
 
 

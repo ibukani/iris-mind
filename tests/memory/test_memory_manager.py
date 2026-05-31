@@ -5,7 +5,8 @@ from typing import Any
 import pytest
 
 from iris.event import Event, EventBus
-from iris.event.event_types import InputReady, MessageEvent, TimerTick
+from iris.event.base import TimerTick
+from iris.io.events import InputReady, MessageEvent
 from iris.memory.handler import _MemoryEventHandler
 from iris.memory.manager import MemoryManager
 from iris.memory.short_term.manager import ShortTermMemoryManager

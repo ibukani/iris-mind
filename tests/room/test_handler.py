@@ -4,7 +4,7 @@ from iris.account.manager import AccountManager
 from iris.account.models import Provider
 from iris.account.store import AccountStore
 from iris.event.event_bus import EventBus
-from iris.event.event_types import Identity, MessageEvent
+from iris.io.events import MessageEvent, SpeakerIdentity
 from iris.room.handler import _RoomEventHandler
 from iris.room.manager import RoomManager
 from iris.room.store import RoomStore
@@ -32,7 +32,7 @@ class TestRoomEventHandler:
             msg_type="chat",
             content="hello",
             room_id=room.room_id,
-            speaker=Identity(provider=Provider.DISCORD.value, subject="123", provider_name="John"),
+            speaker=SpeakerIdentity(provider=Provider.DISCORD.value, subject="123", provider_name="John"),
         )
 
         handler = _RoomEventHandler(

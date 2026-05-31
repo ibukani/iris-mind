@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from iris.io.models import Identity
+from iris.io.models import TransportIdentity
 
 from . import grpc_service_pb2 as _pb2
 
@@ -97,10 +97,10 @@ def parse_message_metadata(metadata_proto: Any) -> dict[str, Any]:
     return metadata
 
 
-def parse_identity(identity_proto: Any) -> Identity | None:
+def parse_identity(identity_proto: Any) -> TransportIdentity | None:
     if not identity_proto.provider and not identity_proto.subject:
         return None
-    return Identity(
+    return TransportIdentity(
         provider=identity_proto.provider,
         subject=identity_proto.subject,
         provider_name=identity_proto.provider_name,

@@ -8,7 +8,7 @@ from iris.account.models import Provider
 from iris.account.store import AccountStore
 from iris.agency import LLMGateway
 from iris.event.event_bus import EventBus
-from iris.event.event_types import ControlMessageEvent
+from iris.io.events import ControlMessageEvent
 from iris.io.models import AuthMessage
 from iris.io.session.manager import SessionManager
 from iris.kernel.config import SessionConfig
@@ -216,7 +216,7 @@ def test_session_disconnect_triggers_auto_user_left(tmp_path):
     inputs_ready = []
     event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
 
-    from iris.event.event_types import SessionDisconnectEvent
+    from iris.io.events import SessionDisconnectEvent
 
     event_bus.publish(
         SessionDisconnectEvent(timestamp=None, source="session", session_id="sess1", session_tag="alice@example.com"),
@@ -236,7 +236,7 @@ def test_session_disconnect_no_users_no_error(tmp_path):
     inputs_ready = []
     event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
 
-    from iris.event.event_types import SessionDisconnectEvent
+    from iris.io.events import SessionDisconnectEvent
 
     event_bus.publish(
         SessionDisconnectEvent(timestamp=None, source="session", session_id="empty_sess", session_tag="nobody"),

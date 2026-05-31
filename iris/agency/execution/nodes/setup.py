@@ -7,7 +7,7 @@ from langchain_core.messages import HumanMessage
 from iris.agency.execution.models import DynamicState, ExecutionState
 from iris.agency.planning.models import Plan
 from iris.agency.task_level import TASK_LEVELS
-from iris.event.event_types import MessageEvent
+from iris.io.events import MessageEvent
 from iris.io.models import StreamState
 from iris.memory.models import text_block
 

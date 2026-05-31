@@ -39,6 +39,36 @@ EXCEPTIONS: list[tuple[str, str, str, str]] = [
         "iris.agency",
         "TYPE_CHECKING + deferred ModulationState import — read-only reference",
     ),
+    (
+        "iris/memory",
+        "iris/memory/handler.py",
+        "iris.io.events",
+        "IO domain event types moved from iris.event.event_types to iris.io.events — lightweight event definitions, no io runtime dependency",
+    ),
+    (
+        "iris/memory",
+        "iris/memory/events/proactive_trigger.py",
+        "iris.io.events",
+        "IO domain event types moved from iris.event.event_types to iris.io.events — lightweight event definitions, no io runtime dependency",
+    ),
+    (
+        "iris/room",
+        "iris/room/dispatcher.py",
+        "iris.io.events",
+        "IO domain event types moved from iris.event.event_types to iris.io.events — lightweight event definitions, no io runtime dependency",
+    ),
+    (
+        "iris/room",
+        "iris/room/handler.py",
+        "iris.io.events",
+        "IO domain event types moved from iris.event.event_types to iris.io.events — lightweight event definitions, no io runtime dependency",
+    ),
+    (
+        "iris/account",
+        "iris/account/dispatcher.py",
+        "iris.io.events",
+        "IO domain event types moved from iris.event.event_types to iris.io.events — lightweight event definitions, no io runtime dependency",
+    ),
 ]
 
 

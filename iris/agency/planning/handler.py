@@ -9,7 +9,7 @@ from iris.agency.internal_bus import InternalBus, PlanDecided
 from iris.agency.planning.decisions import ProactiveJudge
 from iris.agency.planning.models import Plan
 from iris.agency.planning.strategies import ProactivePlanStrategy, ResponsePlanStrategy
-from iris.event.event_types import InputReady
+from iris.io.events import InputReady
 
 if TYPE_CHECKING:
     from iris.event.event_bus import EventBus

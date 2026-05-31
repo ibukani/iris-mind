@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from iris.agency.planning.context_hint_builder import ContextHintBuilder
     from iris.agency.planning.decisions.scorer import ProactiveScorer, ScoreContext
-    from iris.event.event_types import InputReady
+    from iris.io.events import InputReady
     from iris.kernel.config import ProactiveConfig
 
 from loguru import logger

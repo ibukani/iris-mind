@@ -5,8 +5,8 @@ import time
 
 from loguru import logger
 
+from iris.event.base import TimerTick
 from iris.event.event_bus import EventBus
-from iris.event.event_types import TimerTick
 
 
 class TimerService:

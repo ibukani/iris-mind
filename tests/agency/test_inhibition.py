@@ -13,7 +13,7 @@ from iris.agency.inhibition.models import (
 from iris.agency.inhibition.striatum import _Striatum
 from iris.agency.planning.models import Plan, PlanReason
 from iris.event.event_bus import EventBus
-from iris.event.event_types import MessageEvent
+from iris.io.events import MessageEvent
 from iris.kernel.config import InhibitionConfig
 
 

@@ -5,7 +5,8 @@ from typing import Any
 
 from loguru import logger
 
-from iris.event.event_types import InputReady, InterruptEvent, MessageEvent, TimerTick
+from iris.event.base import TimerTick
+from iris.io.events import InputReady, InterruptEvent, MessageEvent
 from iris.memory.events import ProactiveTrigger, RoomEventHandler
 from iris.memory.models import ContentBlock
 from iris.room.events import RoomJoinedBatchEvent, RoomJoinedEvent, RoomLeftEvent

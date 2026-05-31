@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from iris.agency.execution.models import ExecutionState
 from iris.agency.planning.models import Plan
-from iris.event.event_types import MessageEvent
+from iris.io.events import MessageEvent
 from iris.io.models import StreamState
 
 if TYPE_CHECKING:

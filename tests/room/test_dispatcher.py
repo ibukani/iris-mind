@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from iris.event.event_types import ControlMessageEvent
+from iris.io.events import ControlMessageEvent
 from iris.room.dispatcher import _RoomDispatcher
 from iris.room.manager import RoomManager
 from iris.room.models import RoomState

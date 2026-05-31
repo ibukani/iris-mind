@@ -4,7 +4,7 @@ from datetime import datetime
 
 import pytest
 
-from iris.event import (
+from iris.event.base import (
     AgentAnomalyEvent,
     AgentStateChangeEvent,
     Event,

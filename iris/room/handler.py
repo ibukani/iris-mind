@@ -5,7 +5,8 @@ from typing import TYPE_CHECKING, Any
 from loguru import logger
 
 from iris.account.models import Provider
-from iris.event.event_types import MessageEvent, SessionDisconnectEvent, TimerTick
+from iris.event.base import TimerTick
+from iris.io.events import MessageEvent, SessionDisconnectEvent
 
 if TYPE_CHECKING:
     from iris.event.event_bus import EventBus

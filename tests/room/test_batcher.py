@@ -3,8 +3,8 @@ from __future__ import annotations
 import time
 
 from iris.event.event_bus import EventBus
-from iris.event.event_types import RoomJoinedBatchEvent, RoomJoinedEvent
 from iris.room.batcher import RoomJoinBatcher
+from iris.room.events import RoomJoinedBatchEvent, RoomJoinedEvent
 
 
 class TestRoomJoinBatcher:

@@ -28,29 +28,12 @@ def _message_event(session_id: str = "", content: str = "", account_id: str = ""
     )
 
 
-def _memory_with_handler(event_bus: EventBus, proactive_config: Any = None) -> MemoryManager:
-    mgr = MemoryManager()
-    mgr.sensory.event_bus = event_bus
-    from iris.memory.events.proactive_trigger import ProactiveTrigger
-    from iris.memory.sensory.handler import SensoryEventHandler
-    from iris.memory.short_term.handler import ShortTermEventHandler
-
-    sensory_handler = SensoryEventHandler(event_bus, mgr.sensory)
-    ShortTermEventHandler(event_bus, mgr.short_term)
-    proactive_trigger = ProactiveTrigger(event_bus, None)
-
-    _MemoryEventHandler(
-        event_bus=event_bus,
-        sensory_handler=sensory_handler,
-        proactive_trigger=proactive_trigger,
-        proactive_config=proactive_config,
-    )
-    return mgr
-
-
-def _memory_with_handler_pair(
-    event_bus: EventBus, proactive_config: Any = None
-) -> tuple[_MemoryEventHandler, MemoryManager]:
+def _memory_with_handler(
+    event_bus: EventBus,
+    proactive_config: Any = None,
+    *,
+    return_handler: bool = False,
+) -> MemoryManager | tuple[_MemoryEventHandler, MemoryManager]:
     mgr = MemoryManager()
     mgr.sensory.event_bus = event_bus
     from iris.memory.events.proactive_trigger import ProactiveTrigger
@@ -67,7 +50,9 @@ def _memory_with_handler_pair(
         proactive_trigger=proactive_trigger,
         proactive_config=proactive_config,
     )
-    return handler, mgr
+    if return_handler:
+        return handler, mgr
+    return mgr
 
 
 @pytest.fixture
@@ -281,7 +266,7 @@ class TestInputReadySubscription:
     def test_input_ready_does_not_store_to_sensory(self, event_bus: EventBus) -> None:
         """PlanningHandler が InputReady(source="io") を直接処理するため、
         MemoryHandler は sensory に保存しない（二重処理防止）。"""
-        _, mgr = _memory_with_handler_pair(event_bus)
+        _, mgr = _memory_with_handler(event_bus, return_handler=True)
 
         event = InputReady(
             timestamp=None,
@@ -678,7 +663,7 @@ class TestRoomId:
         assert "退室" in ready_events[0].content
 
     def test_pending_input_tracks_room_id(self, event_bus: EventBus) -> None:
-        _, mgr = _memory_with_handler_pair(event_bus)
+        _, mgr = _memory_with_handler(event_bus, return_handler=True)
 
         event_bus.publish(
             _message_event(account_id="a1", content="hello"),
@@ -690,7 +675,7 @@ class TestRoomId:
             assert PendingInputKey("a1", "") in mgr.sensory.pending_input
 
     def test_pending_input_room_id_keyed(self, event_bus: EventBus) -> None:
-        _, mgr = _memory_with_handler_pair(event_bus)
+        _, mgr = _memory_with_handler(event_bus, return_handler=True)
 
         event_bus.publish(
             _message_event(account_id="a1", content="msg1"),

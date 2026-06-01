@@ -6,13 +6,11 @@ from iris.account.dispatcher import AccountDispatcher
 from iris.account.manager import AccountManager
 from iris.account.models import Provider
 from iris.account.store import AccountStore
-from iris.agency import LLMGateway
 from iris.event.event_bus import EventBus
 from iris.io.events import ControlMessageEvent
 from iris.io.models import AuthMessage
 from iris.io.session.manager import SessionManager
 from iris.kernel.config import SessionConfig
-from iris.llm.prompt import Personality
 from iris.memory.handler import _MemoryEventHandler
 from iris.memory.manager import MemoryManager
 from iris.memory.models import system_event_block
@@ -125,6 +123,32 @@ def test_handle_account_profile(tmp_path):
     assert resp.display_name == "John"
 
 
+def test_account_update(tmp_path):
+    event_bus = EventBus()
+    memory_mgr = MemoryManager()
+    account_handler, _, account_provider, _ = _make_handlers(event_bus, memory_mgr, tmp_path)
+
+    account = account_provider.register("John")
+
+    resp = account_handler.handle_control_message(
+        ControlMessageEvent(
+            action="account.update",
+            account_id=account.account_id,
+            display_name="Jane",
+            source="test",
+            timestamp=None,
+        ),
+    )
+
+    assert resp is not None
+    assert resp.action == "account.updated"
+    assert resp.display_name == "Jane"
+
+    updated = account_provider.resolve(account.account_id)
+    assert updated is not None
+    assert updated.display_name == "Jane"
+
+
 def test_room_join_creates_system_event(tmp_path):
     event_bus = EventBus()
     memory_mgr = MemoryManager()
@@ -182,32 +206,6 @@ def test_room_leave_creates_system_event(tmp_path):
 
     assert len(inputs_ready) == 1
     assert "退室" in inputs_ready[0].content or "Left" in inputs_ready[0].content
-
-
-def test_account_update(tmp_path):
-    event_bus = EventBus()
-    memory_mgr = MemoryManager()
-    account_handler, _, account_provider, _ = _make_handlers(event_bus, memory_mgr, tmp_path)
-
-    account = account_provider.register("John")
-
-    resp = account_handler.handle_control_message(
-        ControlMessageEvent(
-            action="account.update",
-            account_id=account.account_id,
-            display_name="Jane",
-            source="test",
-            timestamp=None,
-        ),
-    )
-
-    assert resp is not None
-    assert resp.action == "account.updated"
-    assert resp.display_name == "Jane"
-
-    updated = account_provider.resolve(account.account_id)
-    assert updated is not None
-    assert updated.display_name == "Jane"
 
 
 def test_session_disconnect_triggers_auto_user_left(tmp_path):
@@ -282,16 +280,3 @@ def test_short_term_room_user_mapping():
     room_a_users = memory_mgr.short_term.get_users_by_room("room-a")
     assert len(room_a_users) == 1
     assert room_a_users[0].account_id == "u2"
-
-
-def test_pipeline_injects_datetime():
-    pipeline = LLMGateway(
-        llm=None,  # type: ignore
-        model_config=None,  # type: ignore
-        personality=Personality(),
-        memory=None,
-    )
-    sys_msgs = pipeline._prompt_builder.build(context_hint="テストコンテキスト")
-    combined = "\n\n".join(str(m.content) for m in sys_msgs)
-    assert "## 現在日時" in combined
-    assert "テストコンテキスト" in combined

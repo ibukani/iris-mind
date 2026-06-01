@@ -62,6 +62,16 @@ def test_system_prompt_builder_wires_modulation() -> None:
     assert "valence" not in profile
 
 
+def test_system_prompt_builder_injects_datetime_and_context_hint() -> None:
+    builder = SystemPromptBuilder(personality=Personality())
+
+    messages = builder.build(context_hint="テストコンテキスト")
+    combined = "\n\n".join(str(m.content) for m in messages)
+
+    assert "## 現在日時" in combined
+    assert "テストコンテキスト" in combined
+
+
 def test_relax_response_rules_deterministic_with_seed() -> None:
     mod = ModulationState(chaos_level=0.8)
     rng = SeedableRandom(seed=42)

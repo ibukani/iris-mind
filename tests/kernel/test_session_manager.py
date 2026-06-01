@@ -41,19 +41,6 @@ class TestSessionManager:
         assert response.msg_type == "auth_failure"
         assert response.error_message is not None
 
-    def test_authenticate_stores_conn(self, manager: SessionManager) -> None:
-        conn = MagicMock()
-        msg = AuthMessage(role="cli", permissions=[Permission.PERMISSION_RECEIVE_CHAT])
-        response = manager.authenticate(conn, msg)
-        assert response.session_id is not None
-
-        session_id = response.session_id
-        assert manager.is_session_active(session_id) is True
-
-    def test_session_active_immediately_after_auth(self, manager: SessionManager) -> None:
-        session_id = _get_session_id(manager)
-        assert manager.is_session_active(session_id) is True
-
     def test_remove_session_cleans_up(self, manager: SessionManager) -> None:
         session_id = _get_session_id(manager)
 
@@ -140,12 +127,14 @@ class TestSessionManager:
 
     def test_update_activity_touches_last_activity(self, manager: SessionManager) -> None:
         session_id = _get_session_id(manager)
-        old = manager._sessions[session_id].last_activity
+        old = manager.get_session_info(session_id)
+        assert old is not None
+        old_time = old.last_activity
 
         manager.update_activity(session_id)
-        new = manager._sessions[session_id].last_activity
-
-        assert new > old
+        new = manager.get_session_info(session_id)
+        assert new is not None
+        assert new.last_activity > old_time
 
     def test_update_activity_unknown_session(self, manager: SessionManager) -> None:
         manager.update_activity("nonexistent")
@@ -177,7 +166,8 @@ class TestSessionManager:
         response = manager.authenticate(conn, msg)
         assert response.session_id is not None
 
-        info = manager._sessions[response.session_id]
+        info = manager.get_session_info(response.session_id)
+        assert info is not None
         assert info.role == "cli"
         assert info.permissions == [Permission.PERMISSION_RECEIVE_LOG]
 
@@ -192,7 +182,8 @@ class TestSessionManager:
         response = manager.authenticate(conn, msg)
         assert response.session_id is not None
 
-        info = manager._sessions[response.session_id]
+        info = manager.get_session_info(response.session_id)
+        assert info is not None
         assert info.session_tag == "debug-console"
         assert info.description == "Debug console on Mac mini"
 

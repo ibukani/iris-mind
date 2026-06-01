@@ -208,7 +208,7 @@ Reappraisal 判定条件:
 - **フェーズ**: `LAYER`（phase=20、memory と agency の間）
 - **依存関係**: `{EventBus}`
 - **提供**: `LimbicOrchestrator`
-- **state**: `get_state()` → 最新の emotion / mood / relationship を返す
+- **state**: `get_state()` → `EmotionFullState` TypedDict（`emotion` / `mood` / `relationship` / `history_count`）、`get_emotion_for_prompt()` → `EmotionPromptData` TypedDict（`emotion` / `emotion_intensity` / `valence` / `arousal` / `dominance` / `mood_valence` / `mood_arousal` / `relationship_level` / `trust` / `familiarity`）
 
 ## 関連モデル
 

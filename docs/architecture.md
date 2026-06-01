@@ -201,11 +201,11 @@ iris/
 │
 ├── room/                      # ルーム管理: ルームCRUD・メンバーシップ・アカウント連携
 │   ├── __init__.py            RoomPlugin (STORE phase)
-│   ├── models.py              Room, RoomMember, RoomState
+│   ├── models.py              Room, RoomMember, RoomState, RoomUpdate, RoomMetadata
 │   ├── store.py               RoomStore（インメモリ）
-│   ├── manager.py             RoomManager（コアサービス）
+│   ├── manager.py             RoomManager（コアサービス・create_room/update_room/update_room_from_update）
 │   ├── events.py              RoomCreated/Updated/Deleted/Joined/Left
-│   ├── dispatcher.py          _RoomDispatcher（ControlMessage処理）
+│   ├── dispatcher.py          _RoomDispatcher（ControlMessage処理・RoomUpdate 経由）
 │   └── hooks.py               EventBus Hook登録
 │
 ├── heartbeat/                 # TimerTick heartbeat Plugin
@@ -335,8 +335,8 @@ iris/
 ├── tools/                     # @tool, ToolRegistry
 │   ├── __init__.py
 │   ├── decorator.py           @tool デコレータ
-│   ├── models.py              ToolDef, ToolCall
-│   ├── registry.py            ToolRegistry
+│   ├── models.py              ToolDef, ToolResult, ToolSchema (TypedDict)
+│   ├── registry.py            ToolRegistry（list_tools は list[ToolSchema] 返却）
 │   └── builtins/              組み込みツール
 │
 └── admin/                     # CLI管理

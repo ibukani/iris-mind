@@ -40,28 +40,28 @@ class AccountDispatcher:
         self,
         identity: dict[str, Any] | None,
     ) -> tuple[str, str]:
-        provider, subject, provider_name, metadata = parse_identity(identity)
-        if provider is None or not subject:
+        resolved = parse_identity(identity)
+        if resolved.provider is None or not resolved.subject:
             return "", ""
 
         account = self._account_manager.resolve_or_create_identity(
-            provider,
-            subject,
-            provider_name=provider_name,
-            metadata=metadata,
+            resolved.provider,
+            resolved.subject,
+            provider_name=resolved.provider_name,
+            metadata=resolved.metadata,
         )
         return account.account_id, account.display_name
 
     def _handle_identify(self, msg: ControlMessageEvent) -> ControlMessageEvent:
-        provider, subject, provider_name, metadata = parse_identity(msg.identity)
-        if provider is None or not subject:
+        resolved = parse_identity(msg.identity)
+        if resolved.provider is None or not resolved.subject:
             return self._error("account.identify", "identity.provider and identity.subject required")
 
         account = self._account_manager.resolve_or_create_identity(
-            provider,
-            subject,
-            provider_name=provider_name or msg.display_name,
-            metadata=metadata,
+            resolved.provider,
+            resolved.subject,
+            provider_name=resolved.provider_name or msg.display_name,
+            metadata=resolved.metadata,
         )
 
         return ControlMessageEvent(
@@ -116,16 +116,16 @@ class AccountDispatcher:
         if account is None:
             return self._error("account.link", "not identified")
 
-        provider, subject, provider_name, metadata = parse_identity(msg.identity)
-        if provider is None or not subject:
+        resolved = parse_identity(msg.identity)
+        if resolved.provider is None or not resolved.subject:
             return self._error("account.link", "identity.provider and identity.subject required")
 
         if not self._account_manager.link_identity(
             account.account_id,
-            provider,
-            subject,
-            provider_name=provider_name,
-            metadata=metadata,
+            resolved.provider,
+            resolved.subject,
+            provider_name=resolved.provider_name,
+            metadata=resolved.metadata,
         ):
             return self._error("account.link", "identity already linked")
 
@@ -136,7 +136,7 @@ class AccountDispatcher:
             account_id=account.account_id,
             display_name=account.display_name,
             identity=msg.identity,
-            text=f"Linked identity: {provider.value}:{subject}",
+            text=f"Linked identity: {resolved.provider.value}:{resolved.subject}",
         )
 
     def _resolve_target_account(self, msg: ControlMessageEvent) -> Any:
@@ -145,9 +145,9 @@ class AccountDispatcher:
             if account is not None:
                 return account
 
-        provider, subject, _provider_name, _metadata = parse_identity(msg.identity)
-        if provider is not None and subject:
-            account = self._account_manager.get_account_by_identity(provider, subject)
+        resolved = parse_identity(msg.identity)
+        if resolved.provider is not None and resolved.subject:
+            account = self._account_manager.get_account_by_identity(resolved.provider, resolved.subject)
             if account is not None:
                 return account
 

@@ -7,22 +7,32 @@ from typing import Any, cast
 from uuid import uuid4
 
 
-def parse_identity(identity: dict[str, Any] | None) -> tuple[Provider | None, str, str, dict[str, object]]:
-    """identity dictを Provider + subject + provider_name + metadata に変換する。"""
+@dataclass(frozen=True, slots=True)
+class ResolvedIdentity:
+    """parse_identity の結果。"""
+
+    provider: Provider | None
+    subject: str = ""
+    provider_name: str = ""
+    metadata: dict[str, object] = field(default_factory=dict)
+
+
+def parse_identity(identity: dict[str, Any] | None) -> ResolvedIdentity:
+    """identity dict を ResolvedIdentity に変換する。"""
     if not identity:
-        return None, "", "", {}
+        return ResolvedIdentity(provider=None)
     raw_metadata = identity.get("metadata", {})
     metadata: dict[str, object] = raw_metadata if isinstance(raw_metadata, dict) else {}
     raw_provider = str(identity.get("provider", ""))
     try:
         provider = Provider(raw_provider)
     except ValueError:
-        return None, "", "", {}
-    return (
-        provider,
-        str(identity.get("subject", "")),
-        str(identity.get("provider_name", "")),
-        metadata,
+        return ResolvedIdentity(provider=None, metadata=metadata)
+    return ResolvedIdentity(
+        provider=provider,
+        subject=str(identity.get("subject", "")),
+        provider_name=str(identity.get("provider_name", "")),
+        metadata=metadata,
     )
 
 
@@ -128,3 +138,13 @@ class AccountIdentity:
             last_seen=last_seen,
             metadata=metadata,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class ProfileUpdate:
+    """アカウントプロフィール更新要求。"""
+
+    fields: dict[str, object] = field(default_factory=dict)
+
+    def is_empty(self) -> bool:
+        return not self.fields

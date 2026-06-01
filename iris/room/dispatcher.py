@@ -253,14 +253,14 @@ class _RoomDispatcher:
     def _resolve_or_create_account(self, msg: ControlMessageEvent) -> Any:
         if not self._account_manager:
             return None
-        provider, subject, provider_name, metadata = parse_identity(msg.identity)
-        if provider is None or not subject:
+        resolved = parse_identity(msg.identity)
+        if resolved.provider is None or not resolved.subject:
             return None
         return self._account_manager.resolve_or_create_identity(
-            provider,
-            subject,
-            provider_name=provider_name or msg.display_name,
-            metadata=metadata,
+            resolved.provider,
+            resolved.subject,
+            provider_name=resolved.provider_name or msg.display_name,
+            metadata=resolved.metadata,
         )
 
     @staticmethod

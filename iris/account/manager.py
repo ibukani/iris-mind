@@ -10,7 +10,7 @@ from iris.account.events import (
     AccountIdentityLinkedEvent,
     AccountUpdatedEvent,
 )
-from iris.account.models import Account, AccountIdentity, Provider
+from iris.account.models import Account, AccountIdentity, ProfileUpdate, Provider
 from iris.account.store import AccountStore
 
 
@@ -158,14 +158,23 @@ class AccountManager:
         account.last_seen = datetime.now(UTC).isoformat()
         self._store.update_account(account)
 
-    def update_profile(self, account_id: str, **fields: Any) -> None:
+    def update_profile(self, account_id: str, **fields: object) -> None:
         """プロフィールフィールドを更新する。"""
+        self._apply_profile_update(account_id, ProfileUpdate(fields=dict(fields)))
+
+    def update_profile_from_update(self, account_id: str, update: ProfileUpdate) -> None:
+        """ProfileUpdate データクラス経由でプロフィールを更新する。"""
+        self._apply_profile_update(account_id, update)
+
+    def _apply_profile_update(self, account_id: str, update: ProfileUpdate) -> None:
+        if update.is_empty():
+            return
         account = self.resolve(account_id)
         if not account:
             logger.warning("AccountManager: account not found: {}", account_id)
             return
 
-        for key, value in fields.items():
+        for key, value in update.fields.items():
             old = account.profile.get(key)
             account.profile[key] = value
             if self._event_bus:

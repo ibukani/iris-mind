@@ -69,7 +69,8 @@ class AccountIdentity:
 | `link_identity(account_id, provider, subject, provider_name="", metadata=None)` | 外部ID紐付け |
 | `update_display_name(account_id, display_name)` | 表示名更新 |
 | `update_last_seen(account_id)` | last_seen 更新 |
-| `update_profile(account_id, **fields)` | プロフィール更新 |
+| `update_profile(account_id, **fields)` | プロフィール更新（kwargs 形式） |
+| `update_profile_from_update(account_id, ProfileUpdate)` | プロフィール更新（ProfileUpdate dataclass 経由） |
 | `list_accounts()` | 全アカウント一覧 |
 | `get_identities(account_id)` | 紐付いた外部ID一覧 |
 
@@ -80,6 +81,16 @@ class AccountIdentity:
 | `AccountCreatedEvent` | アカウント作成時 |
 | `AccountUpdatedEvent` | プロフィール/表示名更新時 |
 | `AccountIdentityLinkedEvent` | 外部ID紐付け時 |
+
+## ドメインオブジェクト
+
+| 名前 | 種類 | 用途 |
+|------|------|------|
+| `Provider` | `StrEnum` | `local` / `discord` 等の外部IDプロバイダ |
+| `Account` | `@dataclass` | 表示名・作成時刻・最終接続・プロフィール |
+| `AccountIdentity` | `@dataclass` | `(provider, subject, account_id, metadata)` の紐付け |
+| `ResolvedIdentity` | `@dataclass(frozen=True, slots=True)` | `parse_identity()` の戻り値（`(Provider | None, subject, provider_name, metadata)`） |
+| `ProfileUpdate` | `@dataclass(frozen=True, slots=True)` | プロフィール更新のペイロード（dispatcher → manager 境界で使用） |
 
 ## ControlMessage 処理
 

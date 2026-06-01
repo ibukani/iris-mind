@@ -78,13 +78,15 @@ class SensoryMemoryManager:
 class ShortTermMemoryManager:
     """現在処理中の会話内容（ターン・話題・参照エンティティ）を保持。
     長期記憶への転送（consolidation）を担う。
-    脳科学対応: 前頭前野 (PFC) のワーキングメモリ。"""
+    脳科学対応: 前頭前野 (PFC) のワーキングメモリ。
+    内部モデル: ShortTermTurn / ShortTermSearchResult / ShortTermScope / ActiveUser
+    （全て @dataclass(slots=True)）"""
     def add_turn(self, role: str, content: str, account_id: str = "") -> None
-    def search(self, query: str, max_results: int = 5) -> list[dict]
-    def search_entities(self, entity_name: str) -> list[dict]
+    def search(self, query: str, max_results: int = 5) -> list[ShortTermSearchResult]
+    def search_entities(self, entity_name: str) -> list[ShortTermSearchResult]
     def render_context(self, max_chars: int = 600, query: str | None = None) -> str
-    def get_recent_turns(self, n: int = 4) -> list[dict]
-    def get_unconsolidated_turns(self) -> list[dict]
+    def get_recent_turns(self, n: int = 4) -> list[ShortTermTurn]
+    def get_unconsolidated_turns(self) -> list[ShortTermTurn]
     def mark_consolidated(self, up_to_index: int | None = None) -> None
     def should_consolidate(self) -> bool
     def clear(self) -> None
@@ -126,16 +128,22 @@ class LongTermMemoryManager:
 
 ```python
 class EpisodicStore:
-    """エピソード記憶。JSONL 永続化、上限30エントリ。"""
-    def add(self, summary: str, metadata: dict | None = None) -> None
+    """エピソード記憶。JSONL 永続化、上限30エントリ。
+    内部モデル: EpisodicEntry (@dataclass(slots=True))"""
+    def add(self, summary: str, metadata: dict | None = None) -> EpisodicEntry | None
     def get_recent(self, n: int = 5) -> list[dict]
+    def get_recent_entries(self, n: int = 5, room_id: str = "", account_id: str = "") -> list[EpisodicEntry]
+    def list_by_scope(self, scope: EpisodicScope) -> list[dict]
+    def list_all_entries(self) -> list[EpisodicEntry]
     def clear(self) -> None
 
 class SemanticStore:
     """意味記憶。JSONL 永続化 + ChromaDB + BM25 ハイブリッド検索。
-    上限100エントリ。統合スコア = vector * 0.6 + bm25 * 0.4"""
-    def add(self, entry: dict) -> None
+    上限100エントリ。統合スコア = vector * 0.6 + bm25 * 0.4
+    内部モデル: SemanticEntry (@dataclass(slots=True))"""
+    def add(self, entry: dict) -> SemanticEntry | None
     def search(self, query: str, max_results: int = 3) -> list[dict]
+    def search_entries(self, query: str, max_results: int = 3) -> list[SemanticEntry]
     def clear(self) -> None
     def sync(self) -> None
 

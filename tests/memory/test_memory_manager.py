@@ -673,7 +673,7 @@ class TestRoomId:
         with mgr.sensory.pending_lock:
             from iris.memory.sensory.models import PendingInputKey
 
-            assert PendingInputKey("a1", "") in mgr.sensory.pending_input
+            assert PendingInputKey(account_id="a1", room_id="") in mgr.sensory.pending_input
 
     def test_pending_input_room_id_keyed(self, event_bus: EventBus) -> None:
         _, mgr = _memory_with_handler(event_bus, return_handler=True)
@@ -689,8 +689,8 @@ class TestRoomId:
             from iris.memory.sensory.models import PendingInputKey
 
             keys = set(mgr.sensory.pending_input.keys())
-            assert PendingInputKey("a1", "") in keys
-            assert PendingInputKey("a2", "") in keys
+            assert PendingInputKey(account_id="a1", room_id="") in keys
+            assert PendingInputKey(account_id="a2", room_id="") in keys
 
     def test_handler_user_tracking_add_room(self, event_bus: EventBus) -> None:
         st = ShortTermMemoryManager()

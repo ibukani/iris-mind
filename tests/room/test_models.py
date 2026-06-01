@@ -12,8 +12,8 @@ class TestRoomModel:
 
     def test_to_dict_roundtrip(self) -> None:
         r = Room(name="general", description="General channel", topic="General discussion")
-        d = r.to_dict()
-        restored = Room.from_dict(d)
+        d = r.model_dump(mode="json")
+        restored = Room.model_validate(d)
         assert restored.room_id == r.room_id
         assert restored.name == "general"
         assert restored.description == "General channel"
@@ -22,8 +22,8 @@ class TestRoomModel:
 
     def test_archived_state(self) -> None:
         r = Room(name="old", state=RoomState.ARCHIVED)
-        d = r.to_dict()
-        restored = Room.from_dict(d)
+        d = r.model_dump(mode="json")
+        restored = Room.model_validate(d)
         assert restored.state == RoomState.ARCHIVED
 
 
@@ -35,8 +35,8 @@ class TestRoomMemberModel:
 
     def test_to_dict_roundtrip(self) -> None:
         m = RoomMember(room_id="r1", account_id="a1", role="owner")
-        d = m.to_dict()
-        restored = RoomMember.from_dict(d)
+        d = m.model_dump(mode="json")
+        restored = RoomMember.model_validate(d)
         assert restored.room_id == "r1"
         assert restored.account_id == "a1"
         assert restored.role == "owner"

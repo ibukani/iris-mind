@@ -179,8 +179,8 @@ class TestActiveUsers:
         stm.add_user("u1", "Alice", room_id="room-a")
         stm.add_user("u2", "Bob", room_id="room-b")
 
-        assert stm.get_users_by_room("room-a") == [ActiveUser("u1", "Alice")]
-        assert stm.get_users_by_room("room-b") == [ActiveUser("u2", "Bob")]
+        assert stm.get_users_by_room("room-a") == [ActiveUser(account_id="u1", display_name="Alice")]
+        assert stm.get_users_by_room("room-b") == [ActiveUser(account_id="u2", display_name="Bob")]
 
     def test_remove_user_from_room(self, stm: ShortTermMemoryManager) -> None:
         stm.add_user("u1", "Alice", room_id="room-a")
@@ -189,7 +189,7 @@ class TestActiveUsers:
         stm.remove_user("u1", room_id="room-a")
 
         assert stm.get_users_by_room("room-a") == []
-        assert stm.get_users_by_room("room-b") == [ActiveUser("u1", "Alice")]
+        assert stm.get_users_by_room("room-b") == [ActiveUser(account_id="u1", display_name="Alice")]
 
     def test_remove_user_all_rooms(self, stm: ShortTermMemoryManager) -> None:
         stm.add_user("u1", "Alice", room_id="room-a")

@@ -100,7 +100,7 @@ class EpisodicStore(_JsonlStore):
             entry_dict["metadata"] = metadata
         self._add_entry(entry_dict, self.max_entries)
         logger.info("EpisodicStore: added entry")
-        return EpisodicEntry.from_dict(entry_dict)
+        return EpisodicEntry.model_validate(entry_dict)
 
     def get_recent(
         self,
@@ -117,10 +117,10 @@ class EpisodicStore(_JsonlStore):
         room_id: str = "",
         account_id: str = "",
     ) -> list[EpisodicEntry]:
-        return [EpisodicEntry.from_dict(r) for r in self.get_recent(n, room_id=room_id, account_id=account_id)]
+        return [EpisodicEntry.model_validate(r) for r in self.get_recent(n, room_id=room_id, account_id=account_id)]
 
     def list_by_scope(self, scope: EpisodicScope) -> list[EpisodicEntry]:
-        return [EpisodicEntry.from_dict(r) for r in _scope_filter(self.load_all(), scope)]
+        return [EpisodicEntry.model_validate(r) for r in _scope_filter(self.load_all(), scope)]
 
 
 class SemanticStore(_JsonlStore):
@@ -152,7 +152,7 @@ class SemanticStore(_JsonlStore):
         with self._lock:
             entries = self.load_all()
             if self._is_duplicate(entry.get("content", ""), entries):
-                return SemanticEntry.from_dict(entries[-1]) if entries else SemanticEntry(content="")
+                return SemanticEntry.model_validate(entries[-1]) if entries else SemanticEntry(content="")
             entry["id"] = f"lesson_{len(entries) + 1:03d}"
             entry.setdefault("timestamp", "")
             entry.setdefault("tags", [])
@@ -166,7 +166,7 @@ class SemanticStore(_JsonlStore):
             self.vector.add(entry, account_id=account_id)
             self._synced_count = len(entries)
             logger.info("SemanticStore: added entry, type={}", entry.get("type", "unknown"))
-            return SemanticEntry.from_dict(entry)
+            return SemanticEntry.model_validate(entry)
 
     def clear(self) -> None:
         if self.path.exists():
@@ -184,10 +184,12 @@ class SemanticStore(_JsonlStore):
         max_results: int = 3,
         account_id: str = "",
     ) -> list[SemanticEntry]:
-        return [SemanticEntry.from_dict(r) for r in self.search(query, max_results=max_results, account_id=account_id)]
+        return [
+            SemanticEntry.model_validate(r) for r in self.search(query, max_results=max_results, account_id=account_id)
+        ]
 
     def list_all_entries(self) -> list[SemanticEntry]:
-        return [SemanticEntry.from_dict(r) for r in self.load_all()]
+        return [SemanticEntry.model_validate(r) for r in self.load_all()]
 
     def _is_duplicate(self, content: str, entries: list[dict]) -> bool:
         return any(e.get("content") == content for e in entries)

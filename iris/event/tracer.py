@@ -52,7 +52,7 @@ class EventTracer:
             entry["trigger"] = event.trigger
             idx = len(self._buffer)
             self._category_index[event.category].append(idx)
-        entry["raw"] = event.to_dict()
+        entry["raw"] = event.model_dump(mode="json")
         self._buffer.append(entry)
         if len(self._buffer) > self._max_entries:
             self._buffer.pop(0)

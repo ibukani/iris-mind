@@ -45,9 +45,9 @@ class EmotionStateManager:
         self._latest = result
         self._history.append(
             {
-                "emotion": result.emotion.to_dict(),
-                "mood": result.mood.to_dict(),
-                "relationship": result.relationship.to_dict(),
+                "emotion": result.emotion.model_dump(),
+                "mood": result.mood.model_dump(),
+                "relationship": result.relationship.model_dump(),
             },
         )
         if len(self._history) > self._max_history:
@@ -80,8 +80,8 @@ class EmotionStateManager:
         if self._latest is None:
             return EmotionFullState(emotion=None, mood=None, relationship=None)
         return EmotionFullState(
-            emotion=self._latest.emotion.to_dict(),
-            mood=self._latest.mood.to_dict(),
-            relationship=self._latest.relationship.to_dict(),
+            emotion=self._latest.emotion.model_dump(),
+            mood=self._latest.mood.model_dump(),
+            relationship=self._latest.relationship.model_dump(),
             history_count=len(self._history),
         )

@@ -173,7 +173,7 @@ class _IOGateway:
             try:
                 provider = Provider(msg.speaker.provider)
                 speaker_meta = msg.speaker.metadata
-                metadata_obj: dict[str, object] | None = dict(speaker_meta) if isinstance(speaker_meta, dict) else None
+                metadata_obj: dict[str, object] | None = dict(speaker_meta)
                 account = self._account_manager.resolve_or_create_identity(
                     provider,
                     msg.speaker.subject,

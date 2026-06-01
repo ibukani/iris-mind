@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TypedDict
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class Pathway(StrEnum):
@@ -11,23 +12,22 @@ class Pathway(StrEnum):
     HYPERDIRECT = "hyperdirect"
 
 
-@dataclass
-class GateDecision:
+class GateDecision(BaseModel):
     allow: bool
     pathway: Pathway
     reason: str | None = None
 
 
-@dataclass(frozen=True)
-class SuppressionProfile:
+class SuppressionProfile(BaseModel):
     """抑制プロファイル: 特定の理由で有効化されたとき、どの PlanReason を持つ Plan をブロックするかを定義する。"""
+
+    model_config = ConfigDict(frozen=True)
 
     blocked_reasons: frozenset[str]
     priority: int = 1
 
 
-@dataclass
-class SuppressionEntry:
+class SuppressionEntry(BaseModel):
     """実際に登録されている抑制エントリ。"""
 
     reason: str
@@ -36,24 +36,14 @@ class SuppressionEntry:
     expiry: float = 0.0  # time.monotonic() の絶対時刻。0.0 は永続
 
 
-@dataclass
-class ActiveSuppression:
+class ActiveSuppression(BaseModel):
     """現在アクティブな抑制状態のスナップショット。"""
 
     reason: str
     room_id: str | None
     priority: int
-    blocked_reasons: list[str] = field(default_factory=list)
+    blocked_reasons: list[str] = Field(default_factory=list)
     remaining: float | str = 0.0
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "reason": self.reason,
-            "room_id": self.room_id,
-            "priority": self.priority,
-            "blocked_reasons": list(self.blocked_reasons),
-            "remaining": self.remaining,
-        }
 
 
 class SuppressionStateEntry(TypedDict):

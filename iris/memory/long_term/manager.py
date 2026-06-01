@@ -99,7 +99,7 @@ class LongTermMemoryManager(LongTermMemoryProtocol):
             payload.room_id = room_id
         if not payload.account_id and account_id:
             payload.account_id = account_id
-        self._semantic.add(payload.to_dict(), room_id=payload.room_id, account_id=payload.account_id)
+        self._semantic.add(payload.model_dump(), room_id=payload.room_id, account_id=payload.account_id)
 
     def search_semantic(
         self,
@@ -133,7 +133,7 @@ class LongTermMemoryManager(LongTermMemoryProtocol):
             room_id=scope.room_id,
             account_id=scope.account_id,
         )
-        return [SearchHit.from_dict(r) for r in rows]
+        return [SearchHit.model_validate(r) for r in rows]
 
     def clear_semantic(self) -> None:
         if self._semantic is not None:
@@ -148,7 +148,7 @@ class LongTermMemoryManager(LongTermMemoryProtocol):
         return format_search_result(results)
 
     def search_vector_typed(self, query: str, max_results: int = 3) -> list[SearchHit]:
-        return [SearchHit.from_dict(r) for r in self.search_vector(query, max_results=max_results)]
+        return [SearchHit.model_validate(r) for r in self.search_vector(query, max_results=max_results)]
 
     # ---- 感情タグ検索 ----
 
@@ -163,7 +163,7 @@ class LongTermMemoryManager(LongTermMemoryProtocol):
             max_results=max_results,
             room_id=room_id,
         )
-        return [r.to_dict() for r in results]
+        return [r.model_dump() for r in results]
 
     def search_emotional_typed(
         self,

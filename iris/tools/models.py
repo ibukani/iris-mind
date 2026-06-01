@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Any, TypedDict
 
 from langchain_core.tools import StructuredTool
 from langchain_core.utils.function_calling import convert_to_openai_tool
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ToolFunctionSpec(TypedDict, total=False):
@@ -21,11 +21,12 @@ class ToolSchema(TypedDict, total=False):
     function: ToolFunctionSpec
 
 
-@dataclass
-class ToolDef:
+class ToolDef(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True, extra="allow")
+
     name: str
     description: str
-    tool: StructuredTool = field(repr=False)
+    tool: StructuredTool = Field(repr=False)
     side_effect: bool = False
     allowed_roles: set[str] | None = None
 
@@ -33,15 +34,14 @@ class ToolDef:
     def parameters(self) -> dict[str, Any]:
         schema = self.to_openai_tool()
         func = schema.get("function") or {}
-        params = func.get("parameters") if isinstance(func, dict) else None
+        params = func.get("parameters")
         return params if isinstance(params, dict) else {}
 
     def to_openai_tool(self) -> ToolSchema:
         raw = convert_to_openai_tool(self.tool)
-        raw_dict = raw if isinstance(raw, dict) else {}
         return ToolSchema(
-            type=raw_dict.get("type", "function"),
-            function=raw_dict.get("function", {}),
+            type=raw.get("type", "function"),
+            function=raw.get("function", {}),
         )
 
     def execute(self, **kwargs: object) -> str:
@@ -51,8 +51,7 @@ class ToolDef:
         return str(result)
 
 
-@dataclass
-class ToolResult:
+class ToolResult(BaseModel):
     success: bool = True
     data: object = None
     error: str | None = None

@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, NotRequired, TypedDict
+from typing import NotRequired, TypedDict
 
 from langchain_core.messages import BaseMessage
+from pydantic import BaseModel, ConfigDict
 
 from iris.agency.planning.models import Plan
-
-if TYPE_CHECKING:
-    from iris.llm.interrupt_token import InterruptToken
+from iris.llm.interrupt_token import InterruptToken
 
 
 class ExecutionState(TypedDict):
@@ -29,8 +27,9 @@ class ExecutionStateInfo(TypedDict):
     msg_count: int
 
 
-@dataclass
-class DynamicState:
+class DynamicState(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
     on_token: Callable[[str], None] | None = None
     interrupt_token: InterruptToken | None = None
     current_plan: Plan | None = None

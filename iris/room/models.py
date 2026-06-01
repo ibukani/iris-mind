@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Any
 from uuid import uuid4
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class RoomState(StrEnum):
@@ -15,8 +16,7 @@ class RoomState(StrEnum):
 RoomMetadata = dict[str, object]
 
 
-@dataclass
-class Room:
+class Room(BaseModel):
     """ルーム情報。"""
 
     room_id: str = ""
@@ -27,110 +27,51 @@ class Room:
     created_by: str = ""
     created_at: str = ""
     updated_at: str | None = None
-    metadata: RoomMetadata = field(default_factory=dict)
+    metadata: RoomMetadata = Field(default_factory=dict)
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def set_defaults(self) -> Room:
         if not self.room_id:
             self.room_id = uuid4().hex[:16]
         if not self.created_at:
             self.created_at = datetime.now(UTC).isoformat()
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "room_id": self.room_id,
-            "name": self.name,
-            "description": self.description,
-            "topic": self.topic,
-            "state": self.state.value,
-            "created_by": self.created_by,
-            "created_at": self.created_at,
-            "updated_at": self.updated_at,
-            "metadata": self.metadata,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, object]) -> Room:
-        updated_at_raw = data.get("updated_at")
-        updated_at = updated_at_raw if isinstance(updated_at_raw, str) else None
-        raw_metadata = data.get("metadata", {})
-        metadata: RoomMetadata = dict(raw_metadata) if isinstance(raw_metadata, dict) else {}
-        state_str = str(data.get("state", RoomState.ACTIVE.value))
-        try:
-            state = RoomState(state_str)
-        except ValueError:
-            state = RoomState.ACTIVE
-        return cls(
-            room_id=str(data.get("room_id", "")),
-            name=str(data.get("name", "")),
-            description=str(data.get("description", "")),
-            topic=str(data.get("topic", "")),
-            state=state,
-            created_by=str(data.get("created_by", "")),
-            created_at=str(data.get("created_at", "")),
-            updated_at=updated_at,
-            metadata=metadata,
-        )
+        return self
 
 
-@dataclass
-class RoomMember:
+class RoomMember(BaseModel):
     """ルームメンバー情報。"""
 
     room_id: str
     account_id: str
-    session_ids: list[str] = field(default_factory=list)
+    session_ids: list[str] = Field(default_factory=list)
     role: str = "member"
     joined_at: str = ""
     last_active: str | None = None
     disconnected_at: str | None = None
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="before")
+    @classmethod
+    def convert_session_id(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "session_ids" not in data and "session_id" in data:
+            val = data["session_id"]
+            data["session_ids"] = [str(val)] if val else []
+        return data
+
+    @model_validator(mode="after")
+    def set_defaults(self) -> RoomMember:
         if not self.joined_at:
             self.joined_at = datetime.now(UTC).isoformat()
+        return self
 
     @property
     def is_active(self) -> bool:
         return self.disconnected_at is None
 
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "room_id": self.room_id,
-            "account_id": self.account_id,
-            "session_ids": self.session_ids,
-            "role": self.role,
-            "joined_at": self.joined_at,
-            "last_active": self.last_active,
-            "disconnected_at": self.disconnected_at,
-        }
 
-    @classmethod
-    def from_dict(cls, data: dict[str, object]) -> RoomMember:
-        last_active_val = data.get("last_active")
-        last_active = last_active_val if isinstance(last_active_val, str) else None
-        disconnected_at_val = data.get("disconnected_at")
-        disconnected_at = disconnected_at_val if isinstance(disconnected_at_val, str) else None
-        raw_session_ids = data.get("session_ids", [])
-        session_ids: list[str] = (
-            [str(s) for s in raw_session_ids]
-            if isinstance(raw_session_ids, list)
-            else (
-                [str(data["session_id"])] if isinstance(data.get("session_id"), str) and data.get("session_id") else []
-            )
-        )
-        return cls(
-            room_id=str(data.get("room_id", "")),
-            account_id=str(data.get("account_id", "")),
-            session_ids=session_ids,
-            role=str(data.get("role", "member")),
-            joined_at=str(data.get("joined_at", "")),
-            last_active=last_active,
-            disconnected_at=disconnected_at,
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class RoomUpdate:
+class RoomUpdate(BaseModel):
     """ルーム更新要求。"""
+
+    model_config = ConfigDict(frozen=True)
 
     name: str | None = None
     description: str | None = None

@@ -39,8 +39,8 @@ def test_event_roundtrip_to_dict_and_back() -> None:
         ),
     ]
     for original in events:
-        data = original.to_dict()
-        restored = Event.from_dict(data)
+        data = original.model_dump(mode="json")
+        restored = Event.model_validate(data)
         assert type(restored) is type(original), f"type mismatch for {type(original).__name__}"
         assert restored == original, f"content mismatch for {type(original).__name__}"
 
@@ -53,7 +53,7 @@ def test_to_dict_includes_type_and_all_fields() -> None:
         severity="critical",
         detail="timeout",
     )
-    data = event.to_dict()
+    data = event.model_dump(mode="json")
     assert data["type"] == "AgentAnomalyEvent"
     assert data["source"] == "test"
     assert data["anomaly_type"] == "latency"
@@ -69,7 +69,7 @@ def test_from_dict_resolves_correct_type() -> None:
         "previous_state": "idle",
         "new_state": "processing",
     }
-    restored = Event.from_dict(data)
+    restored = Event.model_validate(data)
     assert isinstance(restored, AgentStateChangeEvent)
     assert restored.previous_state == "idle"
     assert restored.new_state == "processing"
@@ -83,11 +83,11 @@ def test_new_trace_id_generates_non_empty_strings() -> None:
 
 def test_unknown_event_type_raises_value_error() -> None:
     with pytest.raises(ValueError, match="Unknown event type"):
-        Event.from_dict({"type": "NonExistentEvent", "timestamp": None, "source": "test"})
+        Event.model_validate({"type": "NonExistentEvent", "timestamp": None, "source": "test"})
 
 
 def test_trace_id_roundtrips_through_from_dict() -> None:
     event = TimerTick(timestamp=None, source="test", tick_count=1, trace_id="custom-trace")
-    data = event.to_dict()
-    restored = Event.from_dict(data)
+    data = event.model_dump(mode="json")
+    restored = Event.model_validate(data)
     assert restored.trace_id == "custom-trace"

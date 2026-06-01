@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import Any
+
+from pydantic import BaseModel, ConfigDict, model_serializer
 
 from iris.memory.models import ContentBlock
 
 
-@dataclass
-class RawInput:
+class RawInput(BaseModel):
     block: ContentBlock
     room_id: str = ""
     account_id: str = ""
@@ -28,13 +28,13 @@ class RawInput:
         return result
 
 
-@dataclass
-class SensorySnapshot:
+class SensorySnapshot(BaseModel):
     room_id: str
     fragments: list[ContentBlock]
     raw: RawInput | None
 
-    def to_dict(self) -> dict[str, Any]:
+    @model_serializer(mode="wrap")
+    def serialize_model(self, handler: Any) -> dict[str, Any]:
         result: dict[str, Any] = {"room_id": self.room_id}
         if self.fragments:
             result["fragments"] = list(self.fragments)
@@ -44,14 +44,14 @@ class SensorySnapshot:
         return result
 
 
-@dataclass(frozen=True)
-class PendingInputKey:
+class PendingInputKey(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     account_id: str
     room_id: str
 
 
-@dataclass
-class PendingInputEntry:
+class PendingInputEntry(BaseModel):
     content: str
     account_id: str
     room_id: str

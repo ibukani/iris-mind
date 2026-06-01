@@ -79,8 +79,8 @@ class AccountDispatcher:
         if account is None:
             return self._error("account.profile", "not identified")
 
-        identities = [i.to_dict() for i in self._account_manager.get_identities(account.account_id)]
-        data = account.to_dict()
+        identities = [i.model_dump() for i in self._account_manager.get_identities(account.account_id)]
+        data = account.model_dump()
         data["identities"] = identities
         return ControlMessageEvent(
             timestamp=None,

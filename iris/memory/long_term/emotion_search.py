@@ -52,7 +52,7 @@ def search_emotional_typed(
         )[:max_results]
         return [
             EmotionMemory(
-                entry=EpisodicEntry.from_dict(e),
+                entry=EpisodicEntry.model_validate(e),
                 intensity=(e.get("metadata") or {}).get("intensity", 0),
             )
             for e in ordered
@@ -70,7 +70,7 @@ def search_emotional_typed(
     scored.sort(key=lambda x: x[0], reverse=True)
     return [
         EmotionMemory(
-            entry=EpisodicEntry.from_dict(e),
+            entry=EpisodicEntry.model_validate(e),
             score=score,
             intensity=float((e.get("metadata") or {}).get("intensity", 0)),
         )

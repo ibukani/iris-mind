@@ -120,7 +120,7 @@ class _Striatum:
                     blocked_reasons=list(entry.profile.blocked_reasons),
                     remaining=remaining,
                 )
-                result.append(snapshot.to_dict())
+                result.append(snapshot.model_dump())
         return result
 
     def evaluate(self, plan: Plan) -> GateDecision:

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-from dataclasses import replace
 from typing import Any
 
 from loguru import logger
@@ -85,13 +84,13 @@ class RelationshipManager:
             state.familiarity,
         )
 
-        return replace(state)
+        return state.model_copy()
 
     def get_state(self, account_id: str = "") -> RelationshipState:
-        return replace(self._get_state(account_id))
+        return self._get_state(account_id).model_copy()
 
     def get_all_states(self) -> dict[str, RelationshipState]:
-        return {k: replace(v) for k, v in self._states.items()}
+        return {k: v.model_copy() for k, v in self._states.items()}
 
     def _update_level(self, state: RelationshipState) -> None:
         if state.trust >= _TRUST_THRESHOLDS[RelationshipLevel.FAMILIAR]:

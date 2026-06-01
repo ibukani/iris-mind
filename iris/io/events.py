@@ -1,21 +1,19 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any
+
+from pydantic import BaseModel, Field
 
 from iris.event.base import Event
 
 
-@dataclass
-class SpeakerIdentity:
+class SpeakerIdentity(BaseModel):
     provider: str = ""
     subject: str = ""
     provider_name: str = ""
-    metadata: dict[str, str] = field(default_factory=dict)
+    metadata: dict[str, str] = Field(default_factory=dict)
 
 
-@dataclass
 class MessageEvent(Event):
     session_id: str = ""
     source_role: str = ""
@@ -30,7 +28,6 @@ class MessageEvent(Event):
     speaker: SpeakerIdentity | None = None
 
 
-@dataclass
 class ControlMessageEvent(Event):
     action: str = ""
     account_id: str = ""
@@ -43,10 +40,7 @@ class ControlMessageEvent(Event):
     metadata: dict[str, str] | None = None
 
 
-@dataclass
 class InputReady(Event):
-    timestamp: datetime | None = None
-    source: str = ""
     session_id: str = ""
     content: str = ""
     account_id: str = ""
@@ -54,18 +48,15 @@ class InputReady(Event):
     context: dict | None = None
 
 
-@dataclass
 class InterruptEvent(Event):
     room_id: str = ""
 
 
-@dataclass
 class SessionDisconnectEvent(Event):
     session_id: str = ""
     session_tag: str = ""
 
 
-@dataclass
 class InhibitionRequestEvent(Event):
     """クライアントからの抑制制御信号。
 

@@ -1,20 +1,27 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Any, cast
+from typing import Any
 from uuid import uuid4
 
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-@dataclass(frozen=True, slots=True)
-class ResolvedIdentity:
+
+class Provider(StrEnum):
+    LOCAL = "local"
+    DISCORD = "discord"
+
+
+class ResolvedIdentity(BaseModel):
     """parse_identity の結果。"""
+
+    model_config = ConfigDict(frozen=True)
 
     provider: Provider | None
     subject: str = ""
     provider_name: str = ""
-    metadata: dict[str, object] = field(default_factory=dict)
+    metadata: dict[str, object] = Field(default_factory=dict)
 
 
 def parse_identity(identity: dict[str, Any] | None) -> ResolvedIdentity:
@@ -36,56 +43,25 @@ def parse_identity(identity: dict[str, Any] | None) -> ResolvedIdentity:
     )
 
 
-class Provider(StrEnum):
-    LOCAL = "local"
-    DISCORD = "discord"
-
-
-@dataclass
-class Account:
+class Account(BaseModel):
     """アカウント情報。"""
 
     account_id: str = ""
     display_name: str = ""
     created_at: str = ""
     last_seen: str | None = None
-    profile: dict[str, object] = field(default_factory=dict)
+    profile: dict[str, object] = Field(default_factory=dict)
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def set_defaults(self) -> Account:
         if not self.account_id:
             self.account_id = uuid4().hex[:16]
         if not self.created_at:
             self.created_at = datetime.now(UTC).isoformat()
-
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "account_id": self.account_id,
-            "display_name": self.display_name,
-            "created_at": self.created_at,
-            "last_seen": self.last_seen,
-            "profile": self.profile,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, object]) -> Account:
-        last_seen: str | None = None
-        if isinstance(data.get("last_seen"), str):
-            last_seen = cast(str, data["last_seen"])
-        raw_profile = data.get("profile", {})
-        profile: dict[str, object] = {}
-        if isinstance(raw_profile, dict):
-            profile = cast("dict[str, object]", raw_profile)
-        return cls(
-            account_id=str(data.get("account_id", "")),
-            display_name=str(data.get("display_name", "")),
-            created_at=str(data.get("created_at", "")),
-            last_seen=last_seen,
-            profile=profile,
-        )
+        return self
 
 
-@dataclass
-class AccountIdentity:
+class AccountIdentity(BaseModel):
     """外部IDとアカウントの紐付け。"""
 
     provider: Provider
@@ -94,57 +70,25 @@ class AccountIdentity:
     provider_name: str = ""
     linked_at: str = ""
     last_seen: str | None = None
-    metadata: dict[str, object] = field(default_factory=dict)
+    metadata: dict[str, object] = Field(default_factory=dict)
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def set_defaults(self) -> AccountIdentity:
         if not self.linked_at:
             self.linked_at = datetime.now(UTC).isoformat()
+        return self
 
     @property
     def key(self) -> tuple[str, str]:
         return self.provider.value, self.subject
 
-    def to_dict(self) -> dict[str, object]:
-        return {
-            "provider": self.provider.value,
-            "subject": self.subject,
-            "account_id": self.account_id,
-            "provider_name": self.provider_name,
-            "linked_at": self.linked_at,
-            "last_seen": self.last_seen,
-            "metadata": self.metadata,
-        }
 
-    @classmethod
-    def from_dict(cls, data: dict[str, object]) -> AccountIdentity:
-        last_seen: str | None = None
-        if isinstance(data.get("last_seen"), str):
-            last_seen = cast(str, data["last_seen"])
-        raw_metadata = data.get("metadata", {})
-        metadata: dict[str, object] = {}
-        if isinstance(raw_metadata, dict):
-            metadata = cast("dict[str, object]", raw_metadata)
-        raw_provider = str(data.get("provider", ""))
-        try:
-            provider = Provider(raw_provider)
-        except ValueError:
-            provider = Provider.LOCAL
-        return cls(
-            provider=provider,
-            subject=str(data.get("subject", "")),
-            account_id=str(data.get("account_id", "")),
-            provider_name=str(data.get("provider_name", "")),
-            linked_at=str(data.get("linked_at", "")),
-            last_seen=last_seen,
-            metadata=metadata,
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class ProfileUpdate:
+class ProfileUpdate(BaseModel):
     """アカウントプロフィール更新要求。"""
 
-    fields: dict[str, object] = field(default_factory=dict)
+    model_config = ConfigDict(frozen=True)
+
+    fields: dict[str, object] = Field(default_factory=dict)
 
     def is_empty(self) -> bool:
         return not self.fields

@@ -138,4 +138,4 @@ __all__ = ["ShortTermScope", "ShortTermSearchResult", "ShortTermStore"]
 
 
 def _legacy_to_dict(turn: ShortTermTurn) -> dict[str, Any]:
-    return turn.to_dict()
+    return turn.model_dump()

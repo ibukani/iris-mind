@@ -29,17 +29,17 @@ class AccountStore:
 
     def load_accounts(self) -> list[Account]:
         raw = self._load_jsonl(self._accounts_path, "_accounts_cache")
-        return [Account.from_dict(e) for e in raw]
+        return [Account.model_validate(e) for e in raw]
 
     def load_identities(self) -> list[AccountIdentity]:
         raw = self._load_jsonl(self._identities_path, "_identities_cache")
-        return [AccountIdentity.from_dict(e) for e in raw]
+        return [AccountIdentity.model_validate(e) for e in raw]
 
     def save_accounts(self, accounts: list[Account]) -> None:
-        self._write_jsonl(self._accounts_path, [a.to_dict() for a in accounts], "_accounts_cache")
+        self._write_jsonl(self._accounts_path, [a.model_dump() for a in accounts], "_accounts_cache")
 
     def save_identities(self, identities: list[AccountIdentity]) -> None:
-        self._write_jsonl(self._identities_path, [i.to_dict() for i in identities], "_identities_cache")
+        self._write_jsonl(self._identities_path, [i.model_dump() for i in identities], "_identities_cache")
 
     def add_account(self, account: Account) -> None:
         with self._lock:

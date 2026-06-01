@@ -62,4 +62,4 @@ class MoodDynamics:
 
     def get_state(self) -> dict[str, float]:
         mood = self.get_mood()
-        return mood.to_dict()
+        return mood.model_dump()

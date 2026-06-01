@@ -84,7 +84,9 @@ class SystemDiagnostics:
                 tree[name] = {"error": "no get_state"}
         if self._kernel is not None and hasattr(self._kernel, "get_state"):
             try:
-                tree["kernel"] = self._kernel.get_state()
+                from typing import cast
+
+                tree["kernel"] = cast(_StateLike, self._kernel).get_state()
             except Exception as e:
                 tree["kernel"] = {"error": str(e)}
         if self._tracer is not None:

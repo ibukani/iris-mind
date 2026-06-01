@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from iris.agency.execution.executor import FlowExecutor
 from iris.agency.inhibition import InhibitionManager
+from iris.agency.inhibition.models import AgencyState
 from iris.agency.planning.manager import PlanningManager
 
 
@@ -16,11 +17,11 @@ class AgencyManager:
         self.execution = execution
         self._inhibition = inhibition
 
-    def get_state(self) -> dict:
-        state: dict = {
-            "planning": self.planning.get_state(),
-            "execution": self.execution.get_state(),
-        }
+    def get_state(self) -> AgencyState:
+        state = AgencyState(
+            planning=self.planning.get_state(),
+            execution=self.execution.get_state(),
+        )
         if self._inhibition:
             state["inhibition"] = self._inhibition.get_state()
         return state

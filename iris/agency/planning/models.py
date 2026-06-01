@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, TypedDict
 
 from iris.agency.modulation import ModulationState
 
@@ -12,6 +12,11 @@ class PlanReason(StrEnum):
     PROACTIVE_CURIOSITY = "proactive_curiosity"
     PROACTIVE_ESCALATION = "proactive_escalation"
     TIMER_EVENT = "timer"
+
+
+class PlanningState(TypedDict):
+    strategy_type: str
+    proactive_judge_available: bool
 
 
 @dataclass

@@ -4,7 +4,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from iris.agency.inhibition.gate import _Gate
-from iris.agency.inhibition.models import GateDecision, SuppressionProfile
+from iris.agency.inhibition.models import GateDecision, InhibitionState, SuppressionProfile
 from iris.agency.inhibition.striatum import _Striatum
 
 if TYPE_CHECKING:
@@ -98,8 +98,8 @@ class InhibitionManager:
 
     # ---- Diagnostics ----
 
-    def get_state(self) -> dict:
-        return {
-            "gate": self._gate.get_state(),
-            "striatum": self._striatum.get_state(),
-        }
+    def get_state(self) -> InhibitionState:
+        return InhibitionState(
+            gate=self._gate.get_state(),
+            striatum=self._striatum.get_state(),
+        )

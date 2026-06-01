@@ -77,6 +77,26 @@ class GateState(TypedDict):
     rooms: dict[str, RoomGateState]
 
 
+class InhibitionState(TypedDict):
+    gate: GateState
+    striatum: SuppressionState
+
+
+class PlanningState(TypedDict):
+    strategy_type: str
+    proactive_judge_available: bool
+
+
+class ExecutionStateInfo(TypedDict):
+    msg_count: int
+
+
+class AgencyState(TypedDict, total=False):
+    planning: PlanningState
+    execution: ExecutionStateInfo
+    inhibition: InhibitionState
+
+
 def _proactive_only() -> frozenset[str]:
     from iris.agency.planning.models import PlanReason
 

@@ -25,6 +25,10 @@ class ExecutionState(TypedDict):
     chain_depth: int
 
 
+class ExecutionStateInfo(TypedDict):
+    msg_count: int
+
+
 @dataclass
 class DynamicState:
     on_token: Callable[[str], None] | None = None

@@ -7,6 +7,7 @@ from langchain_core.messages import BaseMessage, SystemMessage
 from iris.agency.execution.builder import build_execution_state
 from iris.agency.execution.engine import ToolEngine
 from iris.agency.execution.llm.gateway import LLMGateway
+from iris.agency.execution.models import ExecutionStateInfo
 from iris.agency.execution.orchestrator import ExecutionOrchestrator
 from iris.agency.execution.worker import AsyncWorker
 from iris.agency.inhibition import InhibitionManager
@@ -47,10 +48,10 @@ class FlowExecutor(AsyncWorker):
             memory=memory,
         )
 
-    def get_state(self) -> dict:
-        return {
-            "msg_count": len(self._messages),
-        }
+    def get_state(self) -> ExecutionStateInfo:
+        return ExecutionStateInfo(
+            msg_count=len(self._messages),
+        )
 
     def cancel_execution(self) -> None:
         if self._interrupt_token and not self._interrupt_token.is_cancelled:

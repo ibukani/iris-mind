@@ -1,0 +1,59 @@
+from __future__ import annotations
+
+import re
+from typing import TYPE_CHECKING
+
+from iris.memory.short_term.models import ShortTermSearchResult, ShortTermTurn
+
+if TYPE_CHECKING:
+    from iris.memory.short_term.store import ShortTermStore
+
+
+class Searcher:
+    """関連度検索・entity検索。"""
+
+    def __init__(self, store: ShortTermStore) -> None:
+        self._store = store
+
+    def _compute_relevance(self, query: str, turn: ShortTermTurn) -> float:
+        if not query:
+            return 0.0
+        text = self._store.turn_text(turn)
+        if not text:
+            return 0.0
+        q_words = set(re.findall(r"\w+", query.lower()))
+        t_words = set(re.findall(r"\w+", text.lower()))
+        if not q_words or not t_words:
+            return 0.0
+        overlap = len(q_words & t_words)
+        return overlap / len(q_words)
+
+    def search(
+        self, query: str, max_results: int = 5, room_id: str = "", account_id: str = ""
+    ) -> list[ShortTermSearchResult]:
+        if not query:
+            return []
+
+        turns = self._store.scope_turns(room_id=room_id, account_id=account_id)
+
+        scored: list[tuple[float, int, ShortTermSearchResult]] = []
+        for turn in turns:
+            orig_idx = self._store.turns.index(turn)
+            relevance = self._compute_relevance(query, turn)
+            text = self._store.turn_text(turn)
+            if relevance == 0 and query.lower() not in text.lower():
+                continue
+
+            actual_relevance = relevance if relevance > 0 else 0.01
+            turn_copy: ShortTermSearchResult = {**turn, "relevance": actual_relevance, "index": orig_idx}
+            scored.append((actual_relevance, turn.get("importance", 0), turn_copy))
+
+        scored.sort(key=lambda x: (-x[0], -x[1]))
+        return [s[2] for s in scored[:max_results]]
+
+    def search_entities(self, entity_name: str) -> list[ShortTermTurn]:
+        entity_lower = entity_name.lower().strip()
+        results: list[ShortTermTurn] = [
+            turn for turn in self._store.turns if entity_lower in self._store.turn_text(turn).lower()
+        ]
+        return results[-5:]

@@ -281,7 +281,7 @@ def test_short_term_room_user_mapping():
     memory_mgr.short_term.remove_user("u1", room_id="room-a")
     room_a_users = memory_mgr.short_term.get_users_by_room("room-a")
     assert len(room_a_users) == 1
-    assert room_a_users[0][0] == "u2"
+    assert room_a_users[0].account_id == "u2"
 
 
 def test_pipeline_injects_datetime():

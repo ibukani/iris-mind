@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from iris.llm.prompt import Personality
     from iris.memory.long_term.stores import AgentsMdStore
     from iris.memory.manager import MemoryManager
+    from iris.memory.short_term.models import ActiveUser
 
 
 class ProfileBuilder:
@@ -35,7 +36,7 @@ class ProfileBuilder:
         current_display_name: str = "",
         room_id: str = "",
         account_id: str = "",
-        active_users: list[tuple[str, str]] | None = None,
+        active_users: list[ActiveUser] | None = None,
         modulation: ModulationState | None = None,
     ) -> SystemMessage:
         agents_md = self._load_agents_md()
@@ -81,9 +82,9 @@ class ProfileBuilder:
         self,
         room_id: str = "",
         current_display_name: str = "",
-        active_users: list[tuple[str, str]] | None = None,
+        active_users: list[ActiveUser] | None = None,
     ) -> str:
-        users = active_users or []
+        users: list[ActiveUser] = active_users or []
         if not users and self._memory and room_id:
             users = self._memory.short_term.get_users_by_room(room_id)
 
@@ -93,10 +94,10 @@ class ProfileBuilder:
             return ""
 
         if len(users) == 1:
-            _, nick = users[0]
+            nick = users[0].display_name
             return f"## 現在の会話相手\n{nick}"
 
-        names = [nick for _, nick in users]
+        names = [u.display_name for u in users]
         return "## ルームの参加者\n" + "\n".join(f"- {n}" for n in names)
 
     @staticmethod

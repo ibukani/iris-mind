@@ -724,7 +724,8 @@ class TestRoomId:
 
         users = st.get_users_by_room("room1")
         assert len(users) == 1
-        assert users[0] == ("user1", "Alice")
+        assert users[0].account_id == "user1"
+        assert users[0].display_name == "Alice"
 
     def test_handler_user_tracking_remove_room(self, event_bus: EventBus) -> None:
         st = ShortTermMemoryManager()

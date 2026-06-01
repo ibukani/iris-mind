@@ -1,41 +1,25 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
-import re
-
 from loguru import logger
 
 from iris.memory.models import ContentBlock, blocks_text
 from iris.memory.short_term.extractor import EntityExtractor, RegexEntityExtractor
-from iris.memory.short_term.models import MAX_CONTEXT_CHARS, MAX_TURN_LENGTH, SearchResult, TurnData
+from iris.memory.short_term.models import MAX_CONTEXT_CHARS, ActiveUser, ShortTermSearchResult, ShortTermTurn
+from iris.memory.short_term.presence import PresenceTracker
 from iris.memory.short_term.protocol import ShortTermMemoryProtocol
+from iris.memory.short_term.reference_tracker import ReferenceTracker
 from iris.memory.short_term.renderer import render_short_term_context
 from iris.memory.short_term.scorer import DefaultImportanceScorer, ImportanceScorer
-
-
-def _truncate_blocks(blocks: list[ContentBlock], max_chars: int) -> list[ContentBlock]:
-    total = 0
-    result: list[ContentBlock] = []
-    for b in blocks:
-        txt = b.get("text", "")
-        available = max_chars - total
-        if available <= 0:
-            break
-        if not txt or len(txt) <= available:
-            result.append(b)
-            total += len(txt)
-        else:
-            tb: ContentBlock = {"type": b.get("type", "text")}
-            tb["text"] = txt[:available]
-            result.append(tb)
-            total += available
-    return result
+from iris.memory.short_term.searcher import Searcher
+from iris.memory.short_term.store import ShortTermStore
+from iris.memory.short_term.topic_tracker import TopicTracker
 
 
 class ShortTermMemoryManager(ShortTermMemoryProtocol):
-    """短期記憶（ワーキングメモリ）の管理を行うクラス。
+    """短期記憶（ワーキングメモリ）の管理を行うFacade。
 
     直近の会話履歴（ターン数制限あり）、現在の話題、参照されたエンティティを保持する。
+    内部で store / presence / searcher / topic_tracker / reference_tracker を構成する。
     """
 
     def __init__(
@@ -46,192 +30,104 @@ class ShortTermMemoryManager(ShortTermMemoryProtocol):
         importance_scorer: ImportanceScorer | None = None,
         entity_extractor: EntityExtractor | None = None,
     ) -> None:
-        self._turns: list[TurnData] = []
-        self._current_topics: list[str] = []
-        self._active_references: set[str] = set()
-        self._max_turns = max_turns
-        self._max_topics = max_topics
+        self._store = ShortTermStore(max_turns=max_turns, max_topics=max_topics)
+        self._presence = PresenceTracker()
+        self._searcher = Searcher(self._store)
+        self._topic_tracker = TopicTracker(self._store)
+        self._reference_tracker = ReferenceTracker(
+            self._store,
+            entity_extractor or RegexEntityExtractor(),
+        )
         self._importance_scorer = importance_scorer or DefaultImportanceScorer()
-        self._entity_extractor = entity_extractor or RegexEntityExtractor()
-        self._active_users: dict[str, str] = {}
-        self._room_users: dict[str, list[str]] = {}
+
+    # ── Presence ──
 
     def add_user(self, account_id: str, display_name: str, room_id: str = "") -> None:
-        self._active_users[account_id] = display_name
-        if room_id:
-            self._add_room_user(room_id, account_id)
+        self._presence.add_user(account_id, display_name, room_id=room_id)
 
     def remove_user(self, account_id: str, room_id: str = "") -> None:
-        if room_id:
-            self._remove_room_user(room_id, account_id)
-        else:
-            for uid_list in self._room_users.values():
-                while account_id in uid_list:
-                    uid_list.remove(account_id)
+        self._presence.remove_user(account_id, room_id=room_id)
 
-        still_present = any(account_id in users for users in self._room_users.values())
-        if not still_present:
-            self._active_users.pop(account_id, None)
+    def get_active_users(self) -> list[ActiveUser]:
+        return self._presence.get_active_users()
 
-    def get_active_users(self) -> list[tuple[str, str]]:
-        return list(self._active_users.items())
+    def get_users_by_room(self, room_id: str) -> list[ActiveUser]:
+        return self._presence.get_users_by_room(room_id)
 
-    def get_users_by_room(self, room_id: str) -> list[tuple[str, str]]:
-        uid_list = self._room_users.get(room_id, [])
-        return [(uid, self._active_users.get(uid, uid)) for uid in uid_list if uid in self._active_users]
-
-    def _add_room_user(self, room_id: str, account_id: str) -> None:
-        uid_list = self._room_users.setdefault(room_id, [])
-        if account_id not in uid_list:
-            uid_list.append(account_id)
-
-    def _remove_room_user(self, room_id: str, account_id: str) -> None:
-        uid_list = self._room_users.get(room_id, [])
-        if account_id in uid_list:
-            uid_list.remove(account_id)
-
-    def _scope_turns(self, room_id: str = "", account_id: str = "") -> list[TurnData]:
-        turns = self._turns
-        if account_id:
-            turns = [t for t in turns if t.get("account_id") == account_id]
-        if room_id:
-            turns = [t for t in turns if t.get("room_id") == room_id]
-        return turns
+    # ── Turn ──
 
     def add_turn(self, role: str, blocks: list[ContentBlock], account_id: str = "", room_id: str = "") -> None:
         if not blocks:
             return
-        truncated_blocks = _truncate_blocks(blocks, MAX_TURN_LENGTH)
-        text = blocks_text(truncated_blocks)
-        entry: TurnData = {
-            "role": role,
-            "blocks": truncated_blocks,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "consolidated": False,
-            "importance": self._importance_scorer.score(text),
-            "account_id": account_id,
-            "room_id": room_id,
-        }
-        self._turns.append(entry)
-        if len(self._turns) > self._max_turns:
-            self._turns.pop(0)
-        self._extract_from_content(text)
-        logger.debug("ShortTerm: added {} turn, total={}", role, len(self._turns))
+        text = blocks_text(blocks)
+        importance = self._importance_scorer.score(text)
+        self._store.append_turn(role, blocks, text, importance, account_id=account_id, room_id=room_id)
+        self._reference_tracker.extract_references(text)
+        self._topic_tracker.extract_topics(text)
+        logger.debug("ShortTerm: added {} turn, total={}", role, self._store.turn_count)
 
-    def _extract_from_content(self, content: str) -> None:
-        """発話内容からエンティティの抽出と話題の更新を行う。"""
-        for entity in self._entity_extractor.extract(content):
-            self._active_references.add(entity)
-        sentences = re.split(r"[。！？\.\!\?]", content)
-        for s in sentences[:2]:
-            s = s.strip()
-            if len(s) > 5 and len(s) < 80 and s not in self._current_topics:
-                self._current_topics.append(s)
-        if len(self._current_topics) > self._max_topics:
-            self._current_topics = self._current_topics[-self._max_topics :]
+    # ── Search ──
 
-    def _turn_text(self, turn: TurnData) -> str:
-        return blocks_text(turn.get("blocks", []))
+    def search(
+        self, query: str, max_results: int = 5, room_id: str = "", account_id: str = ""
+    ) -> list[ShortTermSearchResult]:
+        return self._searcher.search(query, max_results=max_results, room_id=room_id, account_id=account_id)
 
-    def _compute_relevance(self, query: str, turn: TurnData) -> float:
-        if not query:
-            return 0.0
-        text = self._turn_text(turn)
-        if not text:
-            return 0.0
-        q_words = set(re.findall(r"\w+", query.lower()))
-        t_words = set(re.findall(r"\w+", text.lower()))
-        if not q_words or not t_words:
-            return 0.0
-        overlap = len(q_words & t_words)
-        return overlap / len(q_words)
+    def search_entities(self, entity_name: str) -> list[ShortTermTurn]:
+        return self._searcher.search_entities(entity_name)
 
-    def search(self, query: str, max_results: int = 5, room_id: str = "", account_id: str = "") -> list[SearchResult]:
-        if not query:
-            return []
-
-        turns = self._scope_turns(room_id=room_id, account_id=account_id)
-
-        scored: list[tuple[float, int, SearchResult]] = []
-        for turn in turns:
-            orig_idx = self._turns.index(turn)
-            relevance = self._compute_relevance(query, turn)
-            text = self._turn_text(turn)
-            if relevance == 0 and query.lower() not in text.lower():
-                continue
-
-            actual_relevance = relevance if relevance > 0 else 0.01
-            turn_copy: SearchResult = {**turn, "relevance": actual_relevance, "index": orig_idx}
-            scored.append((actual_relevance, turn.get("importance", 0), turn_copy))
-
-        scored.sort(key=lambda x: (-x[0], -x[1]))
-        return [s[2] for s in scored[:max_results]]
-
-    def search_entities(self, entity_name: str) -> list[TurnData]:
-        entity_lower = entity_name.lower().strip()
-        results: list[TurnData] = [turn for turn in self._turns if entity_lower in self._turn_text(turn).lower()]
-        return results[-5:]
+    # ── Context ──
 
     def render_context(
-        self, max_chars: int = MAX_CONTEXT_CHARS, query: str | None = None, room_id: str = "", account_id: str = ""
+        self,
+        max_chars: int = MAX_CONTEXT_CHARS,
+        query: str | None = None,
+        room_id: str = "",
+        account_id: str = "",
     ) -> str:
-        turns = self._scope_turns(room_id=room_id, account_id=account_id)
+        turns = self._store.scope_turns(room_id=room_id, account_id=account_id)
+        relevant_results = (
+            self._searcher.search(query, max_results=3, room_id=room_id, account_id=account_id) if query else None
+        )
         return render_short_term_context(
             turns=turns,
-            active_references=self._active_references,
-            search_fn=self.search,
+            active_references=self._store.active_references,
+            relevant_results=relevant_results,
             max_chars=max_chars,
-            query=query,
-            active_users=self.get_active_users(),
+            active_users=self._presence.get_active_users(),
+            room_id=room_id,
         )
 
-    def get_recent_turns(self, n: int = 4, room_id: str = "", account_id: str = "") -> list[TurnData]:
-        """直近のNターンを取得する。"""
-        turns = self._scope_turns(room_id=room_id, account_id=account_id)
-        return turns[-n:]
+    # ── Turn queries ──
 
-    def get_unconsolidated_turns(self, room_id: str = "", account_id: str = "") -> list[TurnData]:
-        """まだ圧縮（長期記憶化）されていないターンの一覧を取得する。"""
-        turns = self._scope_turns(room_id=room_id, account_id=account_id)
-        return [t for t in turns if not t.get("consolidated")]
+    def get_recent_turns(self, n: int = 4, room_id: str = "", account_id: str = "") -> list[ShortTermTurn]:
+        return self._store.get_recent_turns(n=n, room_id=room_id, account_id=account_id)
 
-    def mark_consolidated(self, up_to_index: int | None = None) -> None:
-        """指定されたインデックス（または全て）のターンを圧縮済みにマークする。"""
-        if up_to_index is None:
-            for t in self._turns:
-                t["consolidated"] = True
-        else:
-            for t in self._turns[:up_to_index]:
-                t["consolidated"] = True
+    def get_unconsolidated_turns(self, room_id: str = "", account_id: str = "") -> list[ShortTermTurn]:
+        return self._store.get_unconsolidated_turns(room_id=room_id, account_id=account_id)
 
-    def clear(self) -> None:
-        """短期記憶のすべての状態をクリアする。"""
-        self._turns.clear()
-        self._current_topics.clear()
-        self._active_references.clear()
-        self._active_users.clear()
-        self._room_users.clear()
+    def mark_consolidated(self, room_id: str = "", account_id: str = "") -> None:
+        self._store.mark_consolidated(room_id=room_id, account_id=account_id)
 
-    def should_consolidate(self) -> bool:
-        """メモリの圧縮（要約化）が必要かどうかを判定する。
+    def should_consolidate(self, room_id: str = "", account_id: str = "") -> bool:
+        max_turns = self._store.max_turns
+        threshold = max(3, max_turns // 2)
+        if threshold > max_turns:
+            threshold = max_turns
+        return len(self._store.scope_turns(room_id=room_id, account_id=account_id)) >= threshold
 
-        ターン数が上限（max_turns）の半分、または3ターン以上のいずれか大きい方に達した場合にTrueを返す。
-        ただし、max_turns自体が小さい場合はmax_turnsを超えないように閾値を調整する。
-        """
-        threshold = max(3, self._max_turns // 2)
-        if threshold > self._max_turns:
-            threshold = self._max_turns
-        return len(self._turns) >= threshold
+    # ── Properties ──
 
     @property
     def current_topics(self) -> list[str]:
-        """現在の話題の一覧を取得する。"""
-        return list(self._current_topics)
+        return self._store.current_topics
 
     @property
     def turn_count(self) -> int:
-        """現在のターン数を取得する。"""
-        return len(self._turns)
+        return self._store.turn_count
 
+    # ── Lifecycle ──
 
-__all__ = ["SearchResult", "ShortTermMemoryManager", "ShortTermMemoryProtocol", "TurnData"]
+    def clear(self) -> None:
+        self._store.clear()
+        self._presence.clear()

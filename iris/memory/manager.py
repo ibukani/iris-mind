@@ -120,7 +120,7 @@ class MemoryManager(MemoryManagerProtocol):
                 account_id=account_id,
             )
 
-        self.short_term.mark_consolidated()
+        self.short_term.mark_consolidated(room_id=room_id, account_id=account_id)
         logger.info("MemoryManager: flushed {} turns, {} topics", len(unconsolidated), len(topics))
 
     def get_user_preferences(self, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:

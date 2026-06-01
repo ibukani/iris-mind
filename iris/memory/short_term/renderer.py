@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from iris.memory.models import ContentBlock, block_tag
-from iris.memory.short_term.models import SearchResult, TurnData
+from iris.memory.short_term.models import ActiveUser, ShortTermSearchResult, ShortTermTurn
 
 
 def _render_blocks(blocks: list[ContentBlock], max_chars: int = 100) -> str:
@@ -22,14 +20,14 @@ def _render_blocks(blocks: list[ContentBlock], max_chars: int = 100) -> str:
 
 
 def render_short_term_context(
-    turns: list[TurnData],
+    turns: list[ShortTermTurn],
     active_references: set[str],
-    search_fn: Callable[..., list[SearchResult]],
+    relevant_results: list[ShortTermSearchResult] | None = None,
     max_chars: int = 600,
-    query: str | None = None,
-    active_users: list[tuple[str, str]] | None = None,
+    active_users: list[ActiveUser] | None = None,
     room_id: str = "",
 ) -> str:
+    """LLM向け短期記憶コンテキストを整形する（純粋関数、検索は呼び出し元で解決済み）。"""
     if not turns:
         return ""
     if room_id:
@@ -37,9 +35,9 @@ def render_short_term_context(
     parts: list[str] = []
 
     chat_turns = [t for t in turns if t.get("role") not in ("system",)]
-    if not chat_turns and not query:
+    if not chat_turns and not relevant_results:
         if active_users:
-            user_lines = [f"- {nick}" for _, nick in active_users]
+            user_lines = [f"- {u.display_name}" for u in active_users]
             parts.append("### 現在の参加者")
             parts.extend(user_lines)
             text = "\n".join(parts)
@@ -48,11 +46,11 @@ def render_short_term_context(
             return text
         return ""
 
-    if query:
+    if relevant_results:
         parts.append("### 直近の会話（関連）")
-        relevant = search_fn(query, max_results=3)
-        shown_indices = {r.get("index", -1) for r in relevant}
-        for r in relevant:
+        shown_ids: set[int] = set()
+        for r in relevant_results:
+            shown_ids.add(id(r))
             role = r.get("role", "system")
             uid = r.get("account_id", "")
             label = uid or ("User" if role == "user" else "Iris")
@@ -60,10 +58,8 @@ def render_short_term_context(
             text = _render_blocks(r.get("blocks", []), max_chars=100)
             parts.append(f"- {label}: {prefix}「{text}」(関連度 {r.get('relevance', 0):.2f})")
         for t in reversed(chat_turns[-4:]):
-            idx = turns.index(t)
-            if idx in shown_indices:
+            if id(t) in shown_ids:
                 continue
-            shown_indices.add(idx)
             role = t.get("role", "system")
             uid = t.get("account_id", "")
             label = uid or ("User" if role == "user" else "Iris")
@@ -77,7 +73,7 @@ def render_short_term_context(
         parts.append(", ".join(refs))
 
     if active_users:
-        user_lines = [f"- {nick}" for _, nick in active_users]
+        user_lines = [f"- {u.display_name}" for u in active_users]
         if user_lines:
             parts.append("### 現在の参加者")
             parts.extend(user_lines)

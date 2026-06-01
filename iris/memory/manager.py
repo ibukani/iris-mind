@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -16,6 +16,10 @@ from iris.memory.long_term.protocol import LongTermMemoryProtocol
 from iris.memory.protocol import MemoryManagerProtocol
 from iris.memory.sensory.protocol import SensoryMemoryProtocol
 from iris.memory.short_term.protocol import ShortTermMemoryProtocol
+
+if TYPE_CHECKING:
+    from iris.memory.archive.store import RawConversationArchiveStore
+    from iris.memory.langmem.pipeline import MemoryPipeline
 
 
 class MemoryManager(MemoryManagerProtocol):
@@ -38,6 +42,8 @@ class MemoryManager(MemoryManagerProtocol):
         sensory: SensoryMemoryProtocol | None = None,
         short_term: ShortTermMemoryProtocol | None = None,
         long_term: LongTermMemoryProtocol | None = None,
+        archive: RawConversationArchiveStore | None = None,
+        pipeline: MemoryPipeline | None = None,
     ) -> None:
         from iris.memory.long_term.manager import LongTermMemoryManager
         from iris.memory.sensory.manager import SensoryMemoryManager
@@ -47,6 +53,8 @@ class MemoryManager(MemoryManagerProtocol):
         self.short_term: ShortTermMemoryProtocol = short_term or ShortTermMemoryManager()
         self.long_term: LongTermMemoryProtocol = long_term or LongTermMemoryManager()
         self.goals: GoalStore = GoalStore()
+        self.archive = archive
+        self.pipeline = pipeline
 
         self._store_handlers: dict[str, Callable[[Any], None]] = build_store_handlers(
             self.sensory,
@@ -97,7 +105,11 @@ class MemoryManager(MemoryManagerProtocol):
         dispatch_clear(stream, self.sensory, self.short_term, self.long_term)
 
     def flush(self, room_id: str = "", account_id: str = "") -> None:
-        """未定着の短期記憶を長期記憶に書き出してからクリアする。"""
+        """未定着の短期記憶を長期記憶に書き出してからクリアする。
+
+        LangMem pipeline が設定されていれば、``batch_min_turns`` を超えるターン数が
+        未定着のときバックグラウンド的に抽出を試みる。失敗しても会話を止めない。
+        """
         unconsolidated = self.short_term.get_unconsolidated_turns(account_id=account_id)
         if not unconsolidated:
             return
@@ -121,6 +133,84 @@ class MemoryManager(MemoryManagerProtocol):
 
         self.short_term.mark_consolidated(room_id=room_id, account_id=account_id)
         logger.info("MemoryManager: flushed {} turns, {} topics", len(unconsolidated), len(topics))
+
+        self._maybe_run_pipeline(len(unconsolidated), room_id=room_id, account_id=account_id)
+
+    def archive_inbound(
+        self,
+        content: str,
+        *,
+        account_id: str = "",
+        room_id: str = "",
+        session_id: str = "",
+        source: str = "",
+        message_type: str = "chat",
+    ) -> None:
+        """入力メッセージをアーカイブするショートカット。"""
+        if self.archive is None:
+            return
+        from iris.memory.archive.models import ConversationRecord
+
+        self.archive.append(
+            ConversationRecord(
+                direction="inbound",
+                role="user",
+                content=content,
+                account_id=account_id,
+                room_id=room_id,
+                session_id=session_id,
+                source=source,
+                message_type=message_type,
+            )
+        )
+
+    def archive_outbound(
+        self,
+        content: str,
+        *,
+        account_id: str = "",
+        room_id: str = "",
+        session_id: str = "",
+        source: str = "assistant",
+    ) -> None:
+        """アシスタント応答をアーカイブするショートカット。"""
+        if self.archive is None:
+            return
+        from iris.memory.archive.models import ConversationRecord
+
+        self.archive.append(
+            ConversationRecord(
+                direction="outbound",
+                role="assistant",
+                content=content,
+                account_id=account_id,
+                room_id=room_id,
+                session_id=session_id,
+                source=source,
+                message_type="chat",
+            )
+        )
+
+    def _maybe_run_pipeline(
+        self,
+        turn_count: int,
+        *,
+        room_id: str = "",
+        account_id: str = "",
+    ) -> None:
+        pipeline = self.pipeline
+        if pipeline is None or not getattr(pipeline, "enabled", False):
+            return
+        try:
+            min_turns = int(pipeline._config.batch_min_turns)
+        except Exception:
+            min_turns = 6
+        if turn_count < min_turns:
+            return
+        try:
+            pipeline.run_full_cycle()
+        except Exception as e:
+            logger.warning("MemoryManager: pipeline crashed in flush: {}", e)
 
     def get_user_preferences(self, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:
         return self.long_term.search_semantic(

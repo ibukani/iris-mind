@@ -30,10 +30,31 @@ class MemoryManagerProtocol(Protocol):
     def search_emotional(
         self, current_emotion: Any | None = None, max_results: int = 5, room_id: str = ""
     ) -> list[dict[str, Any]]: ...
+    def archive_inbound(
+        self,
+        content: str,
+        *,
+        account_id: str = "",
+        room_id: str = "",
+        session_id: str = "",
+        source: str = "",
+        message_type: str = "chat",
+    ) -> None: ...
+    def archive_outbound(
+        self,
+        content: str,
+        *,
+        account_id: str = "",
+        room_id: str = "",
+        session_id: str = "",
+        source: str = "assistant",
+    ) -> None: ...
 
     short_term: Any
     long_term: Any
     goals: Any
+    archive: Any
+    pipeline: Any
 
 
 def safe_count(store: Any | None) -> int:

@@ -201,6 +201,19 @@ class LLMBridge:
         if provider and chat_model:
             provider.unload(model_name, chat_model)
 
+    def get_chat_model_for_role(self, role: str) -> BaseChatModel | None:
+        """指定ロールに紐づく LangChain 互換 ChatModel インスタンスを返す。
+
+        LangMem など、LangChain 互換のモデルオブジェクトを直接必要とする統合箇所で利用する。
+        ロール未定義 / モデル未登録の場合は ``None`` を返し、呼び出し側でフォールバックできるようにする。
+        """
+        if not role:
+            return None
+        model_name = self._model_config.get_model(role)
+        if not model_name:
+            return None
+        return self._chat_models.get(model_name)
+
     def _resolve_chat_model(self, model_name: str) -> BaseChatModel:
         """モデル名から対応する ChatModel インスタンスを解決する。"""
         chat_model = self._chat_models.get(model_name)

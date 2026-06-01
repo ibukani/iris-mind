@@ -9,11 +9,33 @@ personality:
 memory:
     agents_md_max_bytes: 2048
     agents_md_path: .iris/config/iris_profile.md
+    archive_dir: .iris/data/conversations
+    archive_max_per_file_bytes: 4000000
+    appraisal_episode_path: .iris/data/appraisal_episodes.jsonl
+    candidate_path: .iris/data/memory_candidates.jsonl
+    consolidation_log_path: .iris/data/memory_consolidation.jsonl
     episodic_max_entries: 30
     episodic_path: .iris/data/episodes.jsonl
+    job_path: .iris/data/memory_jobs.jsonl
+    persona_patch_path: .iris/data/persona_patches.jsonl
+    relationship_state_path: .iris/data/relationship_states.jsonl
     semantic_max_entries: 100
     semantic_path: .iris/data/semantic.jsonl
+    style_memory_path: .iris/data/style_memory.jsonl
     vector_db_path: .iris/data/chroma_db
+    # LangMem ベースの長期記憶抽出 (ローカル LLM 利用)
+    langmem:
+        enabled: false
+        model_role: memory
+        batch_min_turns: 6
+        batch_max_chars: 8000
+        temperature: 0.1
+        max_tokens: 1024
+        enable_updates: false
+        enable_deletes: false
+        auto_promote_min_confidence: 0.75
+        max_retry_count: 2
+        style_max_in_prompt: 4
 
 # アカウント管理 — ユーザー識別・外部ID連携
 account:
@@ -66,7 +88,7 @@ model:
     # roles: モデルが担当する役割（low/medium/high）。fallbackとしてdefaultも使用可。
     models:
         - name: qwen3.5:9b
-          roles: [default]
+          roles: [default, memory]
           provider: ollama
           max_tokens: 1024
           reasoning: false

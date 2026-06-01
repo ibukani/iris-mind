@@ -236,6 +236,102 @@ ContextWindow 圧縮は LLMContextWindowManager（iris/llm/context.py の `LLMCo
 ### publish するイベント
 
 | イベント | タイミング | フィールド |
-|----------|-----------|-----------|
+|----------|-----------|------------|
 | `InputReady` | 入力確定時 / TimerTick / 再接続時 | content, session_id, account_id, context |
 | `InterruptEvent` | 入力確定時 | session_id |
+
+## LangMem ベースの長期記憶抽出 (ローカル LLM)
+
+`iris/memory/langmem/` はローカル LLM (Qwen3.5-9B + Ollama) を使い、LangMem を「候補抽出エンジン」としてのみ用いるパイプライン。**最終的な記憶の確定・保存・関係性更新は必ず Iris 側ロジックが行う。**
+
+### 設計原則
+
+- LangMem は SoT (Source of Truth) ではない。`MemoryCandidateStore` を経由する中間層である。
+- ローカル LLM は fallible 前提。スキーマは小さく・enum 中心・confidence と evidence を必須にする。
+- 抽出は **flush / idle / background** 経路でのみ起動する。チャット応答ホットパスからは外す。
+- チャットフローは抽出失敗で壊れない。失敗は job を `failed` にするだけで例外を伝播しない。
+- Persona ファイル (`iris_profile.md`) は **自動変更しない**。変更は `PersonaPatchCandidateStore` に必ず候補として保存し、`PersonaPatchPolicy.apply_approved()` 経由でのみ適用する。
+
+### データフロー
+
+```mermaid
+flowchart LR
+    ME[MessageEvent] --> ASensory[sensory.handler]
+    ASensory --> RAW[RawConversationArchiveStore<br/>JSONL append-only]
+    ASensory --> STM[ShortTermMemory]
+    STM --> FLUSH[MemoryManager.flush]
+    FLUSH --> PIPE[MemoryPipeline]
+    PIPE --> LJ[LangMemExtractor<br/>local Qwen3.5-9B]
+    LJ --> CAND[MemoryCandidateStore]
+    CAND --> PROM[PromotionPolicy]
+    PROM --> SEM[long_term.semantic]
+    PROM --> EPI[long_term.episodic]
+    PROM --> STY[StyleMemoryStore]
+    PROM --> LOG[MemoryConsolidationLogStore]
+    PIPE --> JOB[MemoryExtractionJobStore]
+    REL[RelationshipStateStore] --> LIM[LimbicOrchestrator]
+    APP[AppraisalEpisodeStore] --> LIM
+```
+
+### パス別スキーマ (small focused passes)
+
+| pass_type | target_store | スキーマ |
+|-----------|--------------|---------|
+| semantic | semantic | `UserPreferenceMemory` (category / content / evidence / confidence / scope) |
+| episodic | episodic | `EpisodicInteractionMemory` (situation / user_intent / assistant_action / result / lesson / confidence) |
+| style | style | `StyleMemory` (kind: tone_preference / successful_pattern / running_gag / avoidance_rule / chaos_preference / conversation_strategy) |
+| relationship | relationship | `RelationshipMemoryCandidate` (signal / evidence / suggested_delta / confidence) |
+| appraisal | appraisal | `AppraisalMemoryCandidate` (dimension / estimated_delta / reason / confidence) |
+
+### Promotion ルール (PromotionPolicy)
+
+- `confidence >= auto_promote_min_confidence` (default 0.75) のみ昇格
+- evidence 必須、content 空・短すぎ・危険ワード (`住所/電話/メール/パスワード/SSN/マイナンバー`) は拒否
+- `avoidance` カテゴリは confidence 0.85 必須
+- relationship / appraisal の delta は保守的範囲 (例: -0.1〜0.1) にクランプ
+- target_store 未実装 (`needs_review`)、job 失敗 (`failed`) は promotion log に書く
+
+### ローカルモデルとの接続
+
+`LLMBridge.get_chat_model_for_role("memory")` が `BaseChatModel` (ChatOllama) を返し、それを `langmem.create_thread_extractor` に直接渡す。クラウド推論は使われない。`config.yaml` で `models[0].roles: [default, memory]` として同じ Qwen3.5-9B を参照する。
+
+### Style memory のプロンプト統合
+
+`Personality.build_system_prompt(style_hints=...)` が `## 動的スタイル記憶` セクションを追加する。`MemoryPipeline` の直後にレンダリングされ、最大 4 件 / 800 文字でプロンプトへ注入される。
+
+### テスト戦略
+
+- すべての抽出器 / ストアはローカル Ollama を必要としない
+- `tests.fakes.llm.FakeChatModelForLangMem` + `make_fake_thread_extractor` で LangMem の `Runnable` をスタブ化
+- 抽出器→候補→promotion→最終記憶の経路はユニットテストで網羅
+- 失敗系 (LLM 例外、ジョブ失敗、空 records、corrupt JSONL) もテストする
+
+### 設定 (config.yaml)
+
+```yaml
+memory:
+  langmem:
+    enabled: false       # デフォルト無効。明示で有効化する
+    model_role: memory
+    batch_min_turns: 6
+    batch_max_chars: 8000
+    temperature: 0.1
+    max_tokens: 1024
+    enable_updates: false
+    enable_deletes: false
+    auto_promote_min_confidence: 0.75
+    max_retry_count: 2
+    style_max_in_prompt: 4
+```
+
+### データ種類の区別 (重要)
+
+| 種類 | 場所 | 用途 |
+|------|------|------|
+| Raw Archive | `iris/memory/archive/` (JSONL) | 永続ログ・再抽出・障害解析用。意味記憶ではない |
+| Memory Candidate | `iris/memory/langmem/stores.py` (JSONL) | LangMem 出力の**中間**。最終記憶ではない |
+| Semantic / Episodic | `iris/memory/long_term/stores.py` (JSONL+Chroma) | 昇格後の意味・エピソード記憶 |
+| Relationship Snapshot | `iris/limbic/stores/relationship_store.py` | Limbic 計算結果の永続化。LangMem は触らない |
+| Appraisal Episode | `iris/limbic/stores/appraisal_store.py` | limbic 1 ターン履歴。LangMem は触らない |
+| Style Memory | `iris/memory/procedural/` | 応答スタイルを継続最適化。プロンプトに注入 |
+| Persona Patch | `iris/memory/procedural/persona_patch_store.py` | persona ファイルへの変更案。**自動適用禁止** |

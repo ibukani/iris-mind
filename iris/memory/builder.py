@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Any, TypedDict
 
 if TYPE_CHECKING:
     from iris.kernel.manager import PluginManager
+    from iris.memory.archive.store import RawConversationArchiveStore
     from iris.memory.handler import _MemoryEventHandler
+    from iris.memory.langmem.pipeline import MemoryPipeline
     from iris.memory.long_term.manager import LongTermMemoryManager
     from iris.memory.long_term.stores import EpisodicStore, SemanticStore
     from iris.memory.long_term.vector_store import VectorStore
@@ -23,11 +25,15 @@ class MemoryComponents(TypedDict):
     vector_store: VectorStore
     episodic: EpisodicStore
     semantic: SemanticStore
+    archive: RawConversationArchiveStore
+    pipeline: MemoryPipeline | None
     event_handler: _MemoryEventHandler
 
 
 def build_memory(manager: PluginManager) -> MemoryComponents:
     """Memoryレイヤーの全コンポーネントを生成する。"""
+    from iris.memory.archive.policy import ArchivePolicy
+    from iris.memory.archive.store import RawConversationArchiveStore
     from iris.memory.long_term.manager import LongTermMemoryManager
     from iris.memory.long_term.stores import EpisodicStore, SemanticStore
     from iris.memory.long_term.vector_store import VectorStore
@@ -58,10 +64,21 @@ def build_memory(manager: PluginManager) -> MemoryComponents:
     event_bus = manager.resolve_optional(EventBus)
     sensory = SensoryMemoryManager(event_bus=event_bus)
 
+    archive = RawConversationArchiveStore(
+        policy=ArchivePolicy(
+            archive_dir=mem_cfg.archive_dir,
+            max_per_file_bytes=mem_cfg.archive_max_per_file_bytes,
+        )
+    )
+
+    pipeline = _build_pipeline(manager, archive, long_term, mem_cfg)
+
     mem = MemoryManager(
         sensory=sensory,
         short_term=short_term,
         long_term=long_term,
+        archive=archive,
+        pipeline=pipeline,
     )
 
     readiness = ReadinessEvaluator(
@@ -86,6 +103,11 @@ def build_memory(manager: PluginManager) -> MemoryComponents:
     ShortTermEventHandler(event_bus, short_term) if short_term else None
     proactive_trigger = ProactiveTrigger(event_bus, room_provider)
 
+    # アーカイブハンドラ (失敗しても本体フローに影響しない)
+    from iris.memory.archive.handler import ArchiveEventHandler
+
+    ArchiveEventHandler(event_bus, archive)
+
     event_handler = _MemoryEventHandler(
         event_bus=event_bus,
         sensory_handler=sensory_handler,
@@ -101,5 +123,57 @@ def build_memory(manager: PluginManager) -> MemoryComponents:
         "vector_store": vector_store,
         "episodic": episodic,
         "semantic": semantic,
+        "archive": archive,
+        "pipeline": pipeline,
         "event_handler": event_handler,
     }
+
+
+def _build_pipeline(
+    manager: PluginManager,
+    archive: RawConversationArchiveStore,
+    long_term: Any,
+    mem_cfg: Any,
+) -> MemoryPipeline | None:
+    """``langmem.enabled`` のときだけ ``MemoryPipeline`` を構築する。"""
+    from iris.llm.bridge import LLMBridge
+    from iris.memory.consolidation.log_store import MemoryConsolidationLogStore
+    from iris.memory.langmem.extractor import LangMemExtractor
+    from iris.memory.langmem.pipeline import MemoryPipeline
+    from iris.memory.langmem.promotion import PromotionPolicy
+    from iris.memory.langmem.stores import MemoryCandidateStore, MemoryExtractionJobStore
+
+    langmem_cfg = mem_cfg.langmem
+    if not langmem_cfg.enabled:
+        return None
+    bridge = manager.resolve_optional(LLMBridge)
+    if bridge is None:
+        from loguru import logger
+
+        logger.warning("LangMem: enabled but LLMBridge is not available; pipeline disabled.")
+        return None
+    chat_model = bridge.get_chat_model_for_role(langmem_cfg.model_role)
+    if chat_model is None:
+        from loguru import logger
+
+        logger.warning("LangMem: no chat model for role={}", langmem_cfg.model_role)
+        return None
+    candidate_store = MemoryCandidateStore(mem_cfg.candidate_path)
+    job_store = MemoryExtractionJobStore(mem_cfg.job_path)
+    consolidation_log = MemoryConsolidationLogStore(mem_cfg.consolidation_log_path)
+    extractor = LangMemExtractor(chat_model=chat_model, candidate_store=candidate_store)
+    promotion = PromotionPolicy(
+        long_term=long_term,
+        consolidation_log=consolidation_log,
+        min_confidence=langmem_cfg.auto_promote_min_confidence,
+    )
+    return MemoryPipeline(
+        config=langmem_cfg,
+        memory_config=mem_cfg,
+        archive=archive,
+        job_store=job_store,
+        candidate_store=candidate_store,
+        extractor=extractor,
+        promotion_policy=promotion,
+        consolidation_log=consolidation_log,
+    )

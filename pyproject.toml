@@ -31,6 +31,7 @@ dependencies = [
     "langchain-ollama>=1.1",
     "langchain-openai>=1.2",
     "langchain-chroma>=1.1",
+    "langmem>=0.0.30",
 
     "rank-bm25>=0.2",
     "instructor>=1.0",

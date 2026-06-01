@@ -7,7 +7,7 @@ from contextlib import suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import threading
-from typing import TYPE_CHECKING, Protocol, TypeVar, overload, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from loguru import logger
 
@@ -15,8 +15,6 @@ from iris.event.base import Event, new_trace_id
 
 if TYPE_CHECKING:
     from iris.event.tracer import EventTracer
-
-E = TypeVar("E", bound=Event)
 
 
 @dataclass
@@ -48,17 +46,9 @@ class EventBusMetrics:
 class EventBusProtocol(Protocol):
     def publish(self, event: Event, *, strict: bool = False) -> None: ...
 
-    @overload
-    def subscribe(self, event_type: type[E], handler: Callable[[E], None]) -> None: ...
-    @overload
-    def subscribe(self, event_type: str, handler: Callable[[Event], None]) -> None: ...
-    def subscribe(self, event_type: type[Event] | str, handler: Callable[[Event], None]) -> None: ...  # type: ignore[misc]
+    def subscribe[E: Event](self, event_type: type[E], handler: Callable[[E], None]) -> None: ...
 
-    @overload
-    def unsubscribe(self, event_type: type[E], handler: Callable[[E], None]) -> None: ...
-    @overload
-    def unsubscribe(self, event_type: str, handler: Callable[[Event], None]) -> None: ...
-    def unsubscribe(self, event_type: type[Event] | str, handler: Callable[[Event], None]) -> None: ...  # type: ignore[misc]
+    def unsubscribe[E: Event](self, event_type: type[E], handler: Callable[[E], None]) -> None: ...
 
 
 class EventBus:
@@ -70,8 +60,6 @@ class EventBus:
 
     型安全な登録:
         bus.subscribe(TimerTick, my_handler)  # 型推論が効く
-    文字列による後方互換:
-        bus.subscribe("TimerTick", my_handler)  # 旧コードも動作
 
     strict モード:
         bus.publish(event, strict=True)  # ハンドラ例外を再 raise
@@ -128,41 +116,25 @@ class EventBus:
                     event_type,
                 )
 
-    @overload
-    def subscribe(self, event_type: type[E], handler: Callable[[E], None]) -> None: ...
-    @overload
-    def subscribe(self, event_type: str, handler: Callable[[Event], None]) -> None: ...
-    def subscribe(self, event_type: type[Event] | str, handler: Callable[[Event], None]) -> None:  # type: ignore[misc]
+    def subscribe[E: Event](self, event_type: type[E], handler: Callable[[E], None]) -> None:
         """イベント型に対するハンドラを登録する。
 
-        型安全な登録:
-            bus.subscribe(TimerTick, my_handler)  # E = TimerTick と推論される
-
-        後方互換（文字列）:
-            bus.subscribe("TimerTick", my_handler)
-
         Args:
-            event_type: 購読するイベント型（クラスまたは文字列）。
+            event_type: 購読するイベント型（クラス）。
             handler: イベント発生時に呼び出される関数。
         """
-        key = event_type.__name__ if isinstance(event_type, type) else event_type
         with self._lock:
-            self._subscribers[key].append(handler)
+            self._subscribers[event_type.__name__].append(handler)
 
-    @overload
-    def unsubscribe(self, event_type: type[E], handler: Callable[[E], None]) -> None: ...
-    @overload
-    def unsubscribe(self, event_type: str, handler: Callable[[Event], None]) -> None: ...
-    def unsubscribe(self, event_type: type[Event] | str, handler: Callable[[Event], None]) -> None:  # type: ignore[misc]
+    def unsubscribe[E: Event](self, event_type: type[E], handler: Callable[[E], None]) -> None:
         """ハンドラの登録を解除する。
 
         Args:
-            event_type: 対象のイベント型（クラスまたは文字列）。
+            event_type: 対象のイベント型（クラス）。
             handler: 登録解除するハンドラ関数。
         """
-        key = event_type.__name__ if isinstance(event_type, type) else event_type
         with self._lock, suppress(ValueError):
-            self._subscribers[key].remove(handler)
+            self._subscribers[event_type.__name__].remove(handler)
 
     async def publish_async(self, event: Event, *, strict: bool = False) -> None:
         """イベントを非同期的に全購読者に配信する。

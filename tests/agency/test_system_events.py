@@ -1,22 +1,13 @@
 from __future__ import annotations
 
-from pathlib import Path
-
-from iris.account.dispatcher import AccountDispatcher
-from iris.account.manager import AccountManager
 from iris.account.models import Provider
-from iris.account.store import AccountStore
 from iris.event.event_bus import EventBus
-from iris.io.events import ControlMessageEvent
+from iris.io.events import ControlMessageEvent, InputReady, SessionDisconnectEvent
 from iris.io.models import AuthMessage
 from iris.io.session.manager import SessionManager
 from iris.kernel.config import SessionConfig
-from iris.memory.handler import _MemoryEventHandler
 from iris.memory.manager import MemoryManager
 from iris.memory.models import system_event_block
-from iris.room.dispatcher import _RoomDispatcher
-from iris.room.manager import RoomManager
-from iris.room.store import RoomStore
 
 
 class DummyConnection:
@@ -24,47 +15,12 @@ class DummyConnection:
         pass
 
 
-def _make_handlers(event_bus: EventBus, memory_mgr: MemoryManager, tmp_path: Path):
-    memory_mgr.sensory.event_bus = event_bus
-    account_store = AccountStore(
-        accounts_path=str(tmp_path / "accounts.jsonl"),
-        identities_path=str(tmp_path / "identities.jsonl"),
-    )
-    account_provider = AccountManager(store=account_store, event_bus=event_bus)
-
-    room_store = RoomStore()
-    room_provider = RoomManager(store=room_store, event_bus=event_bus, account_manager=account_provider)
-
-    account_dispatcher = AccountDispatcher(account_manager=account_provider)
-    room_dispatcher = _RoomDispatcher(room_manager=room_provider, account_manager=account_provider)
-
-    from iris.room.handler import _RoomEventHandler
-
-    _RoomEventHandler(event_bus=event_bus, store=room_store, room_manager=room_provider)
-
-    from iris.memory.events.proactive_trigger import ProactiveTrigger
-    from iris.memory.sensory.handler import SensoryEventHandler
-    from iris.memory.short_term.handler import ShortTermEventHandler
-
-    sensory_handler = SensoryEventHandler(event_bus, memory_mgr.sensory)
-    ShortTermEventHandler(event_bus, memory_mgr.short_term)
-    proactive_trigger = ProactiveTrigger(event_bus, room_provider)
-
-    _MemoryEventHandler(
-        event_bus=event_bus,
-        sensory_handler=sensory_handler,
-        proactive_trigger=proactive_trigger,
-        proactive_config=None,
-    )
-    return account_dispatcher, room_dispatcher, account_provider, room_provider
-
-
 def test_session_manager_disconnect_publishes_session_disconnect_event():
     event_bus = EventBus()
     session_mgr = SessionManager(config=SessionConfig(access_token="test_token"), event_bus=event_bus)
 
     disconnect_events = []
-    event_bus.subscribe("SessionDisconnectEvent", lambda ev: disconnect_events.append(ev))
+    event_bus.subscribe(SessionDisconnectEvent, lambda ev: disconnect_events.append(ev))
 
     conn = DummyConnection()
     msg = AuthMessage(access_token="test_token", role="user", session_tag="test_user")
@@ -79,10 +35,8 @@ def test_session_manager_disconnect_publishes_session_disconnect_event():
     assert disconnect_events[0].session_tag == "test_user"
 
 
-def test_handle_account_identify(tmp_path):
-    event_bus = EventBus()
-    memory_mgr = MemoryManager()
-    account_handler, _, account_provider, _ = _make_handlers(event_bus, memory_mgr, tmp_path)
+def test_handle_account_identify(event_bus: EventBus, wired_handlers) -> None:
+    account_handler, _, account_provider, _ = wired_handlers
 
     resp = account_handler.handle_control_message(
         ControlMessageEvent(
@@ -102,10 +56,9 @@ def test_handle_account_identify(tmp_path):
     assert account.display_name == "John"
 
 
-def test_handle_account_profile(tmp_path):
-    event_bus = EventBus()
-    memory_mgr = MemoryManager()
-    account_handler, _, account_provider, _ = _make_handlers(event_bus, memory_mgr, tmp_path)
+def test_handle_account_profile(event_bus: EventBus, wired_handlers) -> None:
+    _, _, account_provider, _ = wired_handlers
+    account_handler = wired_handlers[0]
 
     account = account_provider.resolve_or_create_identity(Provider.DISCORD, "123", provider_name="John")
 
@@ -123,10 +76,8 @@ def test_handle_account_profile(tmp_path):
     assert resp.display_name == "John"
 
 
-def test_account_update(tmp_path):
-    event_bus = EventBus()
-    memory_mgr = MemoryManager()
-    account_handler, _, account_provider, _ = _make_handlers(event_bus, memory_mgr, tmp_path)
+def test_account_update(event_bus: EventBus, wired_handlers) -> None:
+    account_handler, _, account_provider, _ = wired_handlers
 
     account = account_provider.register("John")
 
@@ -149,16 +100,14 @@ def test_account_update(tmp_path):
     assert updated.display_name == "Jane"
 
 
-def test_room_join_creates_system_event(tmp_path):
-    event_bus = EventBus()
-    memory_mgr = MemoryManager()
-    _, room_handler, account_provider, room_provider = _make_handlers(event_bus, memory_mgr, tmp_path)
+def test_room_join_creates_system_event(event_bus: EventBus, wired_handlers) -> None:
+    _, room_handler, account_provider, room_provider = wired_handlers
 
     room = room_provider.create_room("test")
     account = account_provider.resolve_or_create_identity(Provider.DISCORD, "123", provider_name="John")
 
-    inputs_ready = []
-    event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
+    inputs_ready: list[InputReady] = []
+    event_bus.subscribe(InputReady, lambda ev: inputs_ready.append(ev))
 
     resp = room_handler.handle_control_message(
         ControlMessageEvent(
@@ -178,17 +127,15 @@ def test_room_join_creates_system_event(tmp_path):
     assert "入室" in inputs_ready[0].content or "Joined" in inputs_ready[0].content
 
 
-def test_room_leave_creates_system_event(tmp_path):
-    event_bus = EventBus()
-    memory_mgr = MemoryManager()
-    _, room_handler, account_provider, room_provider = _make_handlers(event_bus, memory_mgr, tmp_path)
+def test_room_leave_creates_system_event(event_bus: EventBus, wired_handlers) -> None:
+    _, room_handler, account_provider, room_provider = wired_handlers
 
     room = room_provider.create_room("test")
     account = account_provider.resolve_or_create_identity(Provider.DISCORD, "123", provider_name="John")
     room_provider.join_room(room.room_id, account.account_id, session_id="s1")
 
-    inputs_ready = []
-    event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
+    inputs_ready: list[InputReady] = []
+    event_bus.subscribe(InputReady, lambda ev: inputs_ready.append(ev))
 
     resp = room_handler.handle_control_message(
         ControlMessageEvent(
@@ -208,20 +155,16 @@ def test_room_leave_creates_system_event(tmp_path):
     assert "退室" in inputs_ready[0].content or "Left" in inputs_ready[0].content
 
 
-def test_session_disconnect_triggers_auto_user_left(tmp_path):
-    event_bus = EventBus()
-    memory_mgr = MemoryManager()
-    _, _, account_provider, room_provider = _make_handlers(event_bus, memory_mgr, tmp_path)
+def test_session_disconnect_triggers_auto_user_left(event_bus: EventBus, wired_handlers) -> None:
+    _, _, account_provider, room_provider = wired_handlers
 
     room = room_provider.create_room("test")
     account = account_provider.register("Alice")
     account_id = account.account_id
     room_provider.join_room(room.room_id, account_id, session_id="sess1")
 
-    inputs_ready = []
-    event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
-
-    from iris.io.events import SessionDisconnectEvent
+    inputs_ready: list[InputReady] = []
+    event_bus.subscribe(InputReady, lambda ev: inputs_ready.append(ev))
 
     event_bus.publish(
         SessionDisconnectEvent(timestamp=None, source="session", session_id="sess1", session_tag="alice@example.com"),
@@ -233,15 +176,11 @@ def test_session_disconnect_triggers_auto_user_left(tmp_path):
     assert "Alice" in text
 
 
-def test_session_disconnect_no_users_no_error(tmp_path):
-    event_bus = EventBus()
-    memory_mgr = MemoryManager()
-    _make_handlers(event_bus, memory_mgr, tmp_path)
+def test_session_disconnect_no_users_no_error(event_bus: EventBus, wired_handlers) -> None:
+    _ = wired_handlers
 
-    inputs_ready = []
-    event_bus.subscribe("InputReady", lambda ev: inputs_ready.append(ev))
-
-    from iris.io.events import SessionDisconnectEvent
+    inputs_ready: list[InputReady] = []
+    event_bus.subscribe(InputReady, lambda ev: inputs_ready.append(ev))
 
     event_bus.publish(
         SessionDisconnectEvent(timestamp=None, source="session", session_id="empty_sess", session_tag="nobody"),

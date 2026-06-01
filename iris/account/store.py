@@ -57,6 +57,11 @@ class AccountStore:
                     break
             self.save_accounts(accounts)
 
+    def delete_account(self, account_id: str) -> None:
+        with self._lock:
+            accounts = [a for a in self.load_accounts() if a.account_id != account_id]
+            self.save_accounts(accounts)
+
     def add_identity(self, identity: AccountIdentity) -> None:
         with self._lock:
             identities = self.load_identities()

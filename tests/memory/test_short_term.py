@@ -20,11 +20,11 @@ class TestAddTurn:
     def test_add_turn_user(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("こんにちは"))
         assert stm.turn_count == 1
-        assert stm._store.turns[0].role == "user"
+        assert stm.turns[0].role == "user"
 
     def test_add_turn_assistant(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("assistant", _blocks("はい、こちらです"))
-        assert stm._store.turns[0].role == "assistant"
+        assert stm.turns[0].role == "assistant"
 
     def test_add_turn_empty(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", [])
@@ -33,7 +33,7 @@ class TestAddTurn:
     def test_add_turn_truncates_long(self, stm: ShortTermMemoryManager) -> None:
         long = "a" * 1000
         stm.add_turn("user", _blocks(long))
-        assert len(blocks_text(stm._store.turns[0].blocks)) == 500
+        assert len(blocks_text(stm.turns[0].blocks)) == 500
 
     def test_add_turn_fifo_eviction(self, stm: ShortTermMemoryManager) -> None:
         stm2 = ShortTermMemoryManager(max_turns=2)
@@ -41,46 +41,46 @@ class TestAddTurn:
         stm2.add_turn("user", _blocks("second"))
         stm2.add_turn("user", _blocks("third"))
         assert stm2.turn_count == 2
-        assert blocks_text(stm2._store.turns[0].blocks) == "second"
-        assert blocks_text(stm2._store.turns[1].blocks) == "third"
+        assert blocks_text(stm2.turns[0].blocks) == "second"
+        assert blocks_text(stm2.turns[1].blocks) == "third"
 
     def test_add_turn_importance_marker(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("This is important"))
-        assert stm._store.turns[0].importance >= 3
+        assert stm.turns[0].importance >= 3
 
     def test_add_turn_importance_normal(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("hello"))
-        assert stm._store.turns[0].importance == 0
+        assert stm.turns[0].importance == 0
 
 
 class TestExtractEntities:
     def test_url(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("check https://example.com/path"))
-        assert "https://example.com/path" in stm._store.active_references
+        assert "https://example.com/path" in stm.active_references
 
     def test_file_path(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("see /home/user/file.txt"))
-        assert "/home/user/file.txt" in stm._store.active_references
+        assert "/home/user/file.txt" in stm.active_references
 
     def test_hashtag(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("topic #python"))
-        assert "#python" in stm._store.active_references
+        assert "#python" in stm.active_references
 
     def test_mention(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("ask @admin"))
-        assert "@admin" in stm._store.active_references
+        assert "@admin" in stm.active_references
 
     def test_japanese_quote(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("「設定ファイル」を確認"))
-        assert "設定ファイル" in stm._store.active_references
+        assert "設定ファイル" in stm.active_references
 
     def test_camel_case(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("use ShortTermMemoryManager"))
-        assert "ShortTermMemoryManager" in stm._store.active_references
+        assert "ShortTermMemoryManager" in stm.active_references
 
     def test_quoted_string(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks('called "extract function"'))
-        assert "extract function" in stm._store.active_references
+        assert "extract function" in stm.active_references
 
 
 class TestSearch:
@@ -207,21 +207,21 @@ class TestConsolidation:
         stm.add_turn("user", _blocks("a"))
         stm.add_turn("user", _blocks("b"))
         stm.mark_consolidated()
-        assert all(t.consolidated for t in stm._store.turns)
+        assert all(t.consolidated for t in stm.turns)
 
     def test_mark_consolidated_by_room(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("a"), room_id="room-a")
         stm.add_turn("user", _blocks("b"), room_id="room-b")
         stm.mark_consolidated(room_id="room-a")
-        assert stm._store.turns[0].consolidated
-        assert not stm._store.turns[1].consolidated
+        assert stm.turns[0].consolidated
+        assert not stm.turns[1].consolidated
 
     def test_mark_consolidated_by_account(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("a"), account_id="u1")
         stm.add_turn("user", _blocks("b"), account_id="u2")
         stm.mark_consolidated(account_id="u1")
-        assert stm._store.turns[0].consolidated
-        assert not stm._store.turns[1].consolidated
+        assert stm.turns[0].consolidated
+        assert not stm.turns[1].consolidated
 
     def test_get_unconsolidated(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("a"), room_id="room-a")
@@ -253,8 +253,8 @@ class TestClear:
         stm.add_turn("user", _blocks("world"))
         stm.clear()
         assert stm.turn_count == 0
-        assert len(stm._store.current_topics) == 0
-        assert len(stm._store.active_references) == 0
+        assert len(stm.current_topics) == 0
+        assert len(stm.active_references) == 0
 
 
 class TestTopics:

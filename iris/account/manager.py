@@ -257,3 +257,7 @@ class AccountManager:
     def get_identities(self, account_id: str) -> list[AccountIdentity]:
         """アカウントに紐づく外部ID一覧を取得する。"""
         return self._store.find_identities_by_account(account_id)
+
+    def delete_account(self, account_id: str) -> None:
+        """アカウントを削除する。"""
+        self._store.delete_account(account_id)

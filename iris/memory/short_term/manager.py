@@ -135,6 +135,14 @@ class ShortTermMemoryManager(ShortTermMemoryProtocol):
     def turn_count(self) -> int:
         return self._store.turn_count
 
+    @property
+    def turns(self) -> list[ShortTermTurn]:
+        return self._store.turns
+
+    @property
+    def active_references(self) -> set[str]:
+        return self._store.active_references
+
     # ── Lifecycle ──
 
     def clear(self) -> None:

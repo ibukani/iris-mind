@@ -36,7 +36,6 @@ class Supervisor:
         self._kernel = kernel
         kernel.start()
 
-        # Wire up cmd_handler for mgmt-console command routing
         handler = getattr(kernel, "cmd_handler", None)
         if handler is not None and hasattr(handler, "handle"):
             self._cmd_handler = handler.handle

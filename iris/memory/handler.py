@@ -19,7 +19,7 @@ class _MemoryEventHandler:
     設計:
     - control メッセージは KernelManager で room.* と account.* に分岐し、
       Memory 層には届かない。Memory 層は Room イベント経由で間接的に処理する。
-    - msg_type="inhibition" は InhibitionEventHandler が処理し、Memory 層には届かない。
+    - InhibitionRequestEvent は InhibitionEventHandler が処理し、Memory 層には届かない。
     """
 
     def __init__(

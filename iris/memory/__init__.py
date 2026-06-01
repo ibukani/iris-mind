@@ -43,9 +43,6 @@ class MemoryPlugin(PluginProtocol):
         components = self._build_components(manager)
         self._provide_components(manager, components)
         self._wire_event_handler(manager, components)
-        from .hooks import register_hooks
-
-        register_hooks(manager)
 
     def _build_components(self, manager: PluginManager) -> MemoryComponents:
         from iris.memory.builder import build_memory

@@ -1,16 +1,27 @@
+"""Kernel 全体の状態スナップショットとヘルスチェック。
+
+各 plugin (io/memory/agency) は `get_state()` または `health()` メソッドを公開する。
+`SystemDiagnostics` は `attach_layer_providers` 経由でそれらを受け取り、
+ツリー状の state 取得・履歴クエリ・レポート生成を提供する。
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol, runtime_checkable
 
-if TYPE_CHECKING:
-    from iris.agency import AgencyManager
-    from iris.event.event_bus import EventBus
-    from iris.event.tracer import EventTracer
-    from iris.io.manager import IOManager
-    from iris.kernel.manager import PluginManager
-    from iris.memory.manager import MemoryManager
+from loguru import logger
+
+
+@runtime_checkable
+class _StateLike(Protocol):
+    def get_state(self) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class _HealthLike(Protocol):
+    def health(self) -> str: ...
 
 
 def _resolve_path(tree: dict, path: str) -> Any:
@@ -37,45 +48,50 @@ def _flatten(tree: dict, prefix: str = "") -> dict[str, Any]:
     return result
 
 
-_LAYER_NAMES = ("kernel", "io", "memory", "agency")
-
-
 class SystemDiagnostics:
+    """Kernel / 各層の state を集約し、ツリー状のクエリとレポートを提供する。"""
+
     def __init__(
         self,
-        event_bus: EventBus | None = None,
-        tracer: EventTracer | None = None,
-        kernel: PluginManager | None = None,
-        io: IOManager | None = None,
-        memory: MemoryManager | None = None,
-        agency: AgencyManager | None = None,
+        event_bus: object | None = None,
+        tracer: object | None = None,
+        kernel: object | None = None,
     ) -> None:
         self._event_bus = event_bus
         self._tracer = tracer
         self._kernel = kernel
-        self._io = io
-        self._memory = memory
-        self._agency = agency
+        self._layer_providers: dict[str, object] = {}
+
+    def attach_layer_providers(self, providers: dict[str, object]) -> None:
+        """各 layer の state/health を提供するオブジェクトを後から登録する。"""
+        self._layer_providers.update(providers)
 
     def _layer_objects(self) -> Iterator[tuple[str, Any]]:
-        for name in _LAYER_NAMES:
-            yield name, getattr(self, f"_{name}")
+        yield from self._layer_providers.items()
 
     def get_state(self) -> dict[str, Any]:
         tree: dict[str, Any] = {}
         for name, obj in self._layer_objects():
-            if obj is not None and hasattr(obj, "get_state"):
+            if obj is None:
+                continue
+            if hasattr(obj, "get_state"):
                 try:
                     tree[name] = obj.get_state()
-                except Exception:
-                    tree[name] = {"error": "get_state failed"}
-            elif obj is not None:
+                except Exception as e:
+                    logger.debug("SystemDiagnostics: get_state failed for {}", name)
+                    tree[name] = {"error": str(e)}
+            else:
                 tree[name] = {"error": "no get_state"}
+        if self._kernel is not None and hasattr(self._kernel, "get_state"):
+            try:
+                tree["kernel"] = self._kernel.get_state()
+            except Exception as e:
+                tree["kernel"] = {"error": str(e)}
         if self._tracer is not None:
             tree["eventbus"] = {
-                "subscribers": self._tracer.subscriber_count,
-                "total_published": self._tracer.publish_count,
-                "errors": self._tracer.error_count,
+                "subscribers": getattr(self._tracer, "subscriber_count", 0),
+                "total_published": getattr(self._tracer, "publish_count", 0),
+                "errors": getattr(self._tracer, "error_count", 0),
             }
         return tree
 
@@ -87,7 +103,11 @@ class SystemDiagnostics:
     def _query_history(self, path: str, n: int = 10) -> list[dict[str, Any]] | None:
         if self._tracer is None:
             return None
-        return self._tracer.find(category=path, n=n)
+        find = getattr(self._tracer, "find", None)
+        if find is None:
+            return None
+        result = find(category=path, n=n)
+        return list(result) if result else None
 
     def health(self) -> dict[str, str]:
         result: dict[str, str] = {}
@@ -102,10 +122,9 @@ class SystemDiagnostics:
             else:
                 result[name] = "OK (no health check)"
         if self._tracer is not None:
-            err = self._tracer.error_count
-            result["eventbus"] = (
-                f"OK (published={self._tracer.publish_count}, errors={err})" if err == 0 else f"WARN: {err} errors"
-            )
+            err = getattr(self._tracer, "error_count", 0)
+            pub = getattr(self._tracer, "publish_count", 0)
+            result["eventbus"] = f"OK (published={pub}, errors={err})" if err == 0 else f"WARN: {err} errors"
         return result
 
     def generate_report(self) -> str:
@@ -128,7 +147,7 @@ class SystemDiagnostics:
             lines.append(f"- **{k}**: {v}")
 
         if self._tracer is not None:
-            recent = self._tracer.recent(5)
+            recent: list[dict[str, Any]] = list(getattr(self._tracer, "recent", lambda n: [])(5))
             lines.extend(["", "## Recent Events (last 5)"])
             for e in recent:
                 ts = e.get("timestamp", "")
@@ -139,3 +158,6 @@ class SystemDiagnostics:
                 lines.append(f"- [{ts}] {et} <{src}>{extra}")
 
         return "\n".join(lines)
+
+
+__all__ = ["SystemDiagnostics"]

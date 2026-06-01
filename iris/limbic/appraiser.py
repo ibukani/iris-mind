@@ -1,155 +1,33 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Protocol
+from typing import Any
 
+from .lexicon import CONTEXT_PATTERNS, KEYWORD_MAP, EmotionClassifierProtocol
 from .models import (
     AppraisalDimensions,
     PrimaryAppraisal,
     SecondaryAppraisal,
 )
 
-# 感情キーワード辞書 (Plutchik 8感情)
-_KEYWORD_MAP: dict[str, list[str]] = {
-    "joy": [
-        "嬉しい",
-        "楽しい",
-        "幸せ",
-        "うれしい",
-        "たのしい",
-        "わくわく",
-        "良かった",
-        "やった",
-        "最高",
-        "素晴らしい",
-        "良い",
-    ],
-    "sadness": [
-        "悲しい",
-        "残念",
-        "寂しい",
-        "つらい",
-        "辛い",
-        "落ち込む",
-        "淋しい",
-        "虚しい",
-        "悔しい",
-        "惜しい",
-    ],
-    "anticipation": [
-        "楽しみ",
-        "期待",
-        "待っている",
-        "欲しい",
-        "いつか",
-        "これから",
-        "将来",
-        "未来",
-        "予定",
-        "計画",
-    ],
-    "surprise": [
-        "驚いた",
-        "びっくり",
-        "まさか",
-        "信じられない",
-        "すごい",
-        "驚き",
-        "意外",
-        "想定外",
-        "予期せぬ",
-    ],
-    "anger": [
-        "腹が立つ",
-        "腹立つ",
-        "怒り",
-        "イライラ",
-        "むかつく",
-        "許せない",
-        "ひどい",
-        "最悪",
-        "怒る",
-        "怒らせる",
-    ],
-    "fear": [
-        "怖い",
-        "恐い",
-        "不安",
-        "心配",
-        "おびえる",
-        "怯える",
-        "危ない",
-        "リスク",
-        "恐怖",
-    ],
-    "disgust": [
-        "嫌い",
-        "気持ち悪い",
-        "不快",
-        "うんざり",
-        "嫌",
-        "嫌悪",
-        "吐き気",
-    ],
-    "trust": [
-        "信頼",
-        "頼れる",
-        "安心",
-        "大丈夫",
-        "信じる",
-        "任せる",
-        "頼もしい",
-    ],
-}
-
-# 文脈パターン (regex)
-_CONTEXT_PATTERNS: dict[str, list[str]] = {
-    "self_disclosure": [
-        r"私[はが].*思う",
-        r"私の.*経験",
-        r"実は.*",
-        r"正直.*",
-        r"隠し事.*",
-    ],
-    "support_seeking": [
-        r"助けて",
-        r"相談.*",
-        r"困[っり]た",
-        r"どうしよ",
-        r"アドバイス",
-    ],
-    "positive_feedback": [
-        r"ありがとう",
-        r"助かった",
-        r"良い.*感じ",
-        r"満足",
-        r"嬉しい",
-    ],
-    "negative_feedback": [
-        r"悪い.*感じ",
-        r"不満",
-        r"がっかり",
-        r"期待外れ",
-        r"ひどい",
-    ],
-}
-
-
-class EmotionClassifierProtocol(Protocol):
-    def classify(self, text: str) -> dict[str, float]: ...
-
 
 class Appraiser:
-    """2段階Appraisal (Lazarus: Primary + Secondary)"""
+    """2段階Appraisal (Lazarus: Primary + Secondary)
+
+    責務:
+    - 第一次評価: novelty / pleasantness / goal_relevance / agency / coping_potential
+    - 第二次評価: accountability / control / controllability / social_norms
+    - CAPE 6次元 (AppraisalDimensions) の算出
+    """
 
     def __init__(self, emotion_classifier: EmotionClassifierProtocol | None = None) -> None:
         self._emotion_classifier = emotion_classifier
-        self._keyword_compiled: dict[str, list[re.Pattern[str]]] = {}
-        for emotion, keywords in _KEYWORD_MAP.items():
-            self._keyword_compiled[emotion] = [re.compile(re.escape(kw)) for kw in keywords]
-        self._context_compiled: dict[str, list[re.Pattern[str]]] = {}
-        for ctx, patterns in _CONTEXT_PATTERNS.items():
-            self._context_compiled[ctx] = [re.compile(p) for p in patterns]
+        self._keyword_compiled: dict[str, list[re.Pattern[str]]] = {
+            emotion: [re.compile(re.escape(kw)) for kw in keywords] for emotion, keywords in KEYWORD_MAP.items()
+        }
+        self._context_compiled: dict[str, list[re.Pattern[str]]] = {
+            ctx: [re.compile(p) for p in patterns] for ctx, patterns in CONTEXT_PATTERNS.items()
+        }
 
     def appraise_primary(
         self,
@@ -278,3 +156,6 @@ class Appraiser:
         trust = float(ctx.get("trust_level", 0.5))
         familiarity = float(ctx.get("familiarity", 0.0))
         return min(1.0, trust * 0.6 + familiarity * 0.4)
+
+
+__all__ = ["Appraiser"]

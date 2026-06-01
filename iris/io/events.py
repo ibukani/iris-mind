@@ -65,8 +65,26 @@ class SessionDisconnectEvent(Event):
     session_tag: str = ""
 
 
+@dataclass
+class InhibitionRequestEvent(Event):
+    """クライアントからの抑制制御信号。
+
+    IO 層が gRPC の `Message(msg_type="inhibition", content="reason:action[:duration]")`
+    を受信したとき、内部表現として型付きイベントに変換して publish する。
+    action フィールドは文字列で受け取り、handler 側で Boolean 風表記
+    ("true" / "false" / "suppress" / "unsuppress" / "hyperdirect") に解決する。
+    """
+
+    action: str = "suppress"
+    reason: str = ""
+    duration: float = 0.0
+    room_id: str = ""
+    session_id: str = ""
+
+
 __all__ = [
     "ControlMessageEvent",
+    "InhibitionRequestEvent",
     "InputReady",
     "InterruptEvent",
     "MessageEvent",

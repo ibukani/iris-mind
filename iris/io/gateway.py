@@ -1,42 +1,45 @@
+"""IO層のアダプタ。gRPC と内部レイヤーの橋渡しを行う。
+
+責務:
+- gRPC メッセージを内部表現に変換し、EventBus に publish する
+- ControlMessage / CommandInput は DispatcherRegistry 経由でルーティング
+
+設計:
+- 通常メッセージ: EventBus.publish(InputReady) のみ（send-only）
+- control / command メッセージ: DispatcherRegistry で優先度順にルーティング
+- 抑制制御 (msg_type="inhibition") は専用ハンドラで InhibitionRequestEvent に変換
+"""
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
-from iris.io.events import ControlMessageEvent, InputReady
+from iris.io.dispatcher import DispatcherRegistry
+from iris.io.events import ControlMessageEvent, InhibitionRequestEvent, InputReady
 from iris.io.models import CommandInput, CommandOutput, ControlMessage, Direction, Message, TransportIdentity
 
 if TYPE_CHECKING:
+    from iris.account.manager import AccountManager
     from iris.io.session.manager import SessionManager
-    from iris.kernel.plugin.hooks import HookRegistry
+    from iris.room.store import RoomStore
 
 
 class _IOGateway:
-    """IO層のアダプタ。gRPC と内部レイヤーの橋渡しを行う。
-
-    責務:
-    - gRPC メッセージを内部表現に変換し、EventBus に publish する
-    - command / control メッセージは io.dispatch Hook 経由でルーティング
-
-    設計:
-    - 通常メッセージ: EventBus.publish(InputReady) のみ（send-only）
-    - command / control メッセージ: io.dispatch Hook で同期ルーティング
-    """
-
     def __init__(
         self,
         session_manager: SessionManager,
         event_bus: Any,
-        hook_registry: HookRegistry,
-        manager: Any | None = None,
+        dispatcher: DispatcherRegistry,
+        room_store: RoomStore | None = None,
+        account_manager: AccountManager | None = None,
     ) -> None:
         self._session_mgr = session_manager
         self._event_bus = event_bus
-        self._hook_registry = hook_registry
-        self._manager = manager
-        self._room_store: Any = None
-        self._account_manager: Any = None
+        self._dispatcher = dispatcher
+        self._room_store = room_store
+        self._account_manager = account_manager
 
     def _build_control_message(self, response: Any) -> ControlMessage:
         identity = getattr(response, "identity", None)
@@ -50,20 +53,6 @@ class _IOGateway:
             profile=getattr(response, "profile", None) or {},
             metadata=getattr(response, "metadata", None) or {},
         )
-
-    def _get_room_store(self) -> Any:
-        if self._room_store is None and self._manager is not None:
-            from iris.room.store import RoomStore
-
-            self._room_store = self._manager.resolve_optional(RoomStore)
-        return self._room_store
-
-    def _get_account_manager(self) -> Any:
-        if self._account_manager is None and self._manager is not None:
-            from iris.account.manager import AccountManager
-
-            self._account_manager = self._manager.resolve_optional(AccountManager)
-        return self._account_manager
 
     def _send_error(self, orig: Message, text: str) -> None:
         session_info = self._session_mgr.get_session_info(orig.session_id)
@@ -81,6 +70,45 @@ class _IOGateway:
             ),
         )
 
+    def _publish_inhibition_request(self, msg: Message) -> None:
+        """msg_type="inhibition" の Message を InhibitionRequestEvent に変換して publish する。
+
+        content フォーマット: "reason:action[:duration]"
+          - "voice_recording:true"     → suppress
+          - "voice_recording:false"    → unsuppress
+          - "speaking:true:30.0"       → suppress（30秒間）
+          - "hyperdirect:true"         → 緊急停止
+        """
+        parts = msg.content.split(":")
+        if len(parts) < 2:
+            logger.warning(
+                "IOGateway: invalid inhibition content '{}', expected 'reason:action[:duration]'",
+                msg.content,
+            )
+            return
+
+        reason = parts[0]
+        action = parts[1]
+        duration = 0.0
+        if len(parts) >= 3:
+            try:
+                duration = float(parts[2])
+            except ValueError:
+                logger.warning("IOGateway: invalid inhibition duration '{}', ignoring", parts[2])
+                return
+
+        self._event_bus.publish(
+            InhibitionRequestEvent(
+                timestamp=None,
+                source="io",
+                action=action,
+                reason=reason,
+                duration=duration,
+                room_id=msg.room_id,
+                session_id=msg.session_id,
+            )
+        )
+
     def on_grpc_control(self, control_msg: ControlMessage, session_id: str, session_role: str) -> None:
         evt = ControlMessageEvent(
             timestamp=None,
@@ -96,8 +124,13 @@ class _IOGateway:
             metadata=control_msg.metadata,
         )
 
-        ctx: dict[str, Any] = {"msg": evt, "type": "control", "session_id": session_id, "response": None}
-        result = self._hook_registry.execute_sync("io.dispatch", ctx)
+        ctx: dict[str, Any] = {
+            "msg": evt,
+            "type": "control",
+            "session_id": session_id,
+            "response": None,
+        }
+        result = self._dispatcher.dispatch_control(ctx)
 
         self._event_bus.publish(evt)
 
@@ -108,12 +141,7 @@ class _IOGateway:
         self._session_mgr.router.route_control_message(self._build_control_message(response), session_id)
 
     def on_grpc_message(self, msg: Message) -> None:
-        """通常メッセージを EventBus に publish する（send-only）。
-
-        IO ルーティング: target_role ≠ mind は直接セッションに転送。
-        mind 対象のメッセージは InputReady イベントとして publish し、
-        memory 層が subscribe して処理する。
-        """
+        """通常メッセージを EventBus に publish する（send-only）。"""
         if msg.direction != Direction.REQUEST:
             self._send_error(msg, f"unexpected direction from client: {msg.direction}. use 'request'")
             return
@@ -126,6 +154,10 @@ class _IOGateway:
             self._send_error(msg, "speaker is required for inbound messages")
             return
 
+        if msg.msg_type == "inhibition":
+            self._publish_inhibition_request(msg)
+            return
+
         if msg.msg_type == "chat" and not msg.content:
             self._send_error(msg, "content is required for chat messages")
             return
@@ -135,25 +167,24 @@ class _IOGateway:
             return
 
         account_id = msg.account_id
-        if not account_id and msg.speaker:
-            account_mgr = self._get_account_manager()
-            if account_mgr:
-                from iris.account.models import Provider
+        if not account_id and msg.speaker and self._account_manager is not None:
+            from iris.account.models import Provider
 
-                try:
-                    provider = Provider(msg.speaker.provider)
-                    account = account_mgr.resolve_or_create_identity(
-                        provider,
-                        msg.speaker.subject,
-                        provider_name=msg.speaker.provider_name,
-                        metadata=msg.speaker.metadata,
-                    )
-                    account_id = str(account.account_id)
-                except Exception as e:
-                    logger.error("IOGateway: failed to resolve account: {}", e)
+            try:
+                provider = Provider(msg.speaker.provider)
+                speaker_meta = msg.speaker.metadata
+                metadata_obj: dict[str, object] | None = dict(speaker_meta) if isinstance(speaker_meta, dict) else None
+                account = self._account_manager.resolve_or_create_identity(
+                    provider,
+                    msg.speaker.subject,
+                    provider_name=msg.speaker.provider_name,
+                    metadata=metadata_obj,
+                )
+                account_id = str(account.account_id)
+            except Exception as e:
+                logger.error("IOGateway: failed to resolve account: {}", e)
 
-        store = self._get_room_store()
-        if store is not None and not store.find_room_by_id(msg.room_id):
+        if self._room_store is not None and not self._room_store.find_room_by_id(msg.room_id):
             self._send_error(msg, f"room not found: {msg.room_id}")
             return
 
@@ -189,11 +220,11 @@ class _IOGateway:
     def on_grpc_command(self, msg: CommandInput) -> None:
         content = msg.content
         if not content.startswith("/"):
-            result = "Commands start with /"
+            err = "Commands start with /"
             logger.debug("IOGateway: command missing slash session={}", msg.session_id)
             self._session_mgr.router.route_command_output(
                 msg.session_id,
-                CommandOutput(content=result, session_id=msg.session_id, correlation_id=msg.id),
+                CommandOutput(content=err, session_id=msg.session_id, correlation_id=msg.id),
             )
             return
 
@@ -211,7 +242,7 @@ class _IOGateway:
             "session_id": msg.session_id,
             "response": None,
         }
-        result = self._hook_registry.execute_sync("io.dispatch", ctx)
+        result: dict[str, Any] = self._dispatcher.dispatch_command(ctx)
 
         response = result.get("response") or f"No command handler: /{name}"
 
@@ -220,3 +251,6 @@ class _IOGateway:
             msg.session_id,
             CommandOutput(content=response, session_id=msg.session_id, correlation_id=msg.id),
         )
+
+
+__all__ = ["_IOGateway"]

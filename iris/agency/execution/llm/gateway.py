@@ -10,6 +10,7 @@ from iris.agency.execution.llm.prompt_builder import SystemPromptBuilder
 from iris.agency.modulation import ModulationState, sampling_temperature
 from iris.kernel.config import ModelConfig
 from iris.kernel.debug_capture import DebugCapture
+from iris.kernel.protocols import DisplayNameResolverProtocol
 from iris.llm.bridge import LLMBridge
 from iris.llm.capability import CapabilityChecker
 from iris.llm.interrupt_token import InterruptToken
@@ -30,7 +31,7 @@ class LLMGateway:
         capability_checker: CapabilityChecker | None = None,
         debug_capture: DebugCapture | None = None,
         prompts_dir: str | None = None,
-        account_provider: Any | None = None,
+        account_provider: DisplayNameResolverProtocol | None = None,
     ) -> None:
         self._llm = llm
         self._model_config = model_config
@@ -52,7 +53,7 @@ class LLMGateway:
         )
 
     def resolve_display_name(self, account_id: str) -> str:
-        if account_id and self._account_provider:
+        if account_id and self._account_provider is not None:
             return str(self._account_provider.resolve_display_name(account_id))
         return account_id
 

@@ -88,10 +88,6 @@ class LlmPlugin(PluginProtocol):
 
         manager.provide(DebugCapture, debug_capture)
 
-        from .hooks import register_hooks
-
-        register_hooks(manager)
-
     def start(self, manager: PluginManager) -> None:
         pass
 

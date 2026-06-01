@@ -29,6 +29,3 @@ class AgencyManager:
     def shutdown(self) -> None:
         self.execution.flush_memory()
         self.execution.shutdown()
-
-    def compact_context(self) -> str:
-        return "Compact not available"

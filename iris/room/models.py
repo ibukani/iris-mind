@@ -3,13 +3,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import cast
+from typing import Any
 from uuid import uuid4
 
 
 class RoomState(StrEnum):
     ACTIVE = "active"
     ARCHIVED = "archived"
+
+
+RoomMetadata = dict[str, object]
 
 
 @dataclass
@@ -24,7 +27,7 @@ class Room:
     created_by: str = ""
     created_at: str = ""
     updated_at: str | None = None
-    metadata: dict[str, object] = field(default_factory=dict)
+    metadata: RoomMetadata = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.room_id:
@@ -47,13 +50,10 @@ class Room:
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> Room:
-        updated_at: str | None = None
-        if isinstance(data.get("updated_at"), str):
-            updated_at = cast(str, data["updated_at"])
+        updated_at_raw = data.get("updated_at")
+        updated_at = updated_at_raw if isinstance(updated_at_raw, str) else None
         raw_metadata = data.get("metadata", {})
-        metadata: dict[str, object] = {}
-        if isinstance(raw_metadata, dict):
-            metadata = cast("dict[str, object]", raw_metadata)
+        metadata: RoomMetadata = dict(raw_metadata) if isinstance(raw_metadata, dict) else {}
         state_str = str(data.get("state", RoomState.ACTIVE.value))
         try:
             state = RoomState(state_str)
@@ -105,18 +105,18 @@ class RoomMember:
 
     @classmethod
     def from_dict(cls, data: dict[str, object]) -> RoomMember:
-        last_active: str | None = None
-        if isinstance(data.get("last_active"), str):
-            last_active = cast(str, data["last_active"])
-        disconnected_at: str | None = None
-        if isinstance(data.get("disconnected_at"), str):
-            disconnected_at = cast(str, data["disconnected_at"])
+        last_active_val = data.get("last_active")
+        last_active = last_active_val if isinstance(last_active_val, str) else None
+        disconnected_at_val = data.get("disconnected_at")
+        disconnected_at = disconnected_at_val if isinstance(disconnected_at_val, str) else None
         raw_session_ids = data.get("session_ids", [])
-        session_ids: list[str] = []
-        if isinstance(raw_session_ids, list):
-            session_ids = [str(s) for s in raw_session_ids]
-        elif isinstance(data.get("session_id"), str) and data["session_id"]:
-            session_ids = [str(data["session_id"])]
+        session_ids: list[str] = (
+            [str(s) for s in raw_session_ids]
+            if isinstance(raw_session_ids, list)
+            else (
+                [str(data["session_id"])] if isinstance(data.get("session_id"), str) and data.get("session_id") else []
+            )
+        )
         return cls(
             room_id=str(data.get("room_id", "")),
             account_id=str(data.get("account_id", "")),
@@ -126,3 +126,37 @@ class RoomMember:
             last_active=last_active,
             disconnected_at=disconnected_at,
         )
+
+
+@dataclass(frozen=True, slots=True)
+class RoomUpdate:
+    """ルーム更新要求。"""
+
+    name: str | None = None
+    description: str | None = None
+    topic: str | None = None
+    state: RoomState | None = None
+    metadata: RoomMetadata | None = None
+
+    def to_field_kwargs(self) -> dict[str, Any]:
+        result: dict[str, Any] = {}
+        if self.name is not None:
+            result["name"] = self.name
+        if self.description is not None:
+            result["description"] = self.description
+        if self.topic is not None:
+            result["topic"] = self.topic
+        if self.state is not None:
+            result["state"] = self.state
+        if self.metadata is not None:
+            result["metadata"] = self.metadata
+        return result
+
+
+__all__ = [
+    "Room",
+    "RoomMember",
+    "RoomMetadata",
+    "RoomState",
+    "RoomUpdate",
+]

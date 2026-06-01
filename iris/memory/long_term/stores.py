@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
 from iris.memory.base import _JsonlStore
+from iris.memory.long_term.models import EpisodicEntry, EpisodicScope, SemanticEntry
 from iris.memory.long_term.vector_store import VectorStore
 
 
@@ -61,6 +63,14 @@ class AgentsMdStore:
         return "\n".join(lines)
 
 
+def _scope_filter(entries: list[dict], scope: EpisodicScope) -> list[dict]:
+    if scope.account_id:
+        entries = [e for e in entries if e.get("account_id") == scope.account_id]
+    if scope.room_id:
+        entries = [e for e in entries if e.get("room_id") == scope.room_id]
+    return entries
+
+
 class EpisodicStore(_JsonlStore):
     """エピソード記憶。上限到達時は古いものを削除。"""
 
@@ -73,25 +83,44 @@ class EpisodicStore(_JsonlStore):
             self.path.unlink()
         logger.info("EpisodicStore: cleared")
 
-    def add(self, summary: str, metadata: dict | None = None, room_id: str = "", account_id: str = "") -> None:
-        entry: dict[str, object] = {
+    def add(
+        self,
+        summary: str,
+        metadata: dict | None = None,
+        room_id: str = "",
+        account_id: str = "",
+    ) -> EpisodicEntry:
+        entry_dict: dict[str, Any] = {
             "summary": summary,
             "timestamp": datetime.now(UTC).isoformat(),
             "room_id": room_id,
             "account_id": account_id,
         }
         if metadata:
-            entry["metadata"] = metadata
-        self._add_entry(entry, self.max_entries)
+            entry_dict["metadata"] = metadata
+        self._add_entry(entry_dict, self.max_entries)
         logger.info("EpisodicStore: added entry")
+        return EpisodicEntry.from_dict(entry_dict)
 
-    def get_recent(self, n: int = 5, room_id: str = "", account_id: str = "") -> list[dict]:
-        entries = self.load_all()
-        if account_id:
-            entries = [e for e in entries if e.get("account_id") == account_id]
-        if room_id:
-            entries = [e for e in entries if e.get("room_id") == room_id]
-        return entries[-n:]
+    def get_recent(
+        self,
+        n: int = 5,
+        room_id: str = "",
+        account_id: str = "",
+    ) -> list[dict]:
+        scope = EpisodicScope(room_id=room_id, account_id=account_id)
+        return _scope_filter(self.load_all(), scope)[-n:]
+
+    def get_recent_entries(
+        self,
+        n: int = 5,
+        room_id: str = "",
+        account_id: str = "",
+    ) -> list[EpisodicEntry]:
+        return [EpisodicEntry.from_dict(r) for r in self.get_recent(n, room_id=room_id, account_id=account_id)]
+
+    def list_by_scope(self, scope: EpisodicScope) -> list[EpisodicEntry]:
+        return [EpisodicEntry.from_dict(r) for r in _scope_filter(self.load_all(), scope)]
 
 
 class SemanticStore(_JsonlStore):
@@ -119,11 +148,11 @@ class SemanticStore(_JsonlStore):
             self._synced_count = len(entries)
             logger.info("SemanticStore: synced {} entries to vector store", unsynced)
 
-    def add(self, entry: dict, room_id: str = "", account_id: str = "") -> None:
+    def add(self, entry: dict, room_id: str = "", account_id: str = "") -> SemanticEntry:
         with self._lock:
             entries = self.load_all()
             if self._is_duplicate(entry.get("content", ""), entries):
-                return
+                return SemanticEntry.from_dict(entries[-1]) if entries else SemanticEntry(content="")
             entry["id"] = f"lesson_{len(entries) + 1:03d}"
             entry.setdefault("timestamp", "")
             entry.setdefault("tags", [])
@@ -137,6 +166,7 @@ class SemanticStore(_JsonlStore):
             self.vector.add(entry, account_id=account_id)
             self._synced_count = len(entries)
             logger.info("SemanticStore: added entry, type={}", entry.get("type", "unknown"))
+            return SemanticEntry.from_dict(entry)
 
     def clear(self) -> None:
         if self.path.exists():
@@ -148,5 +178,19 @@ class SemanticStore(_JsonlStore):
     def search(self, query: str, max_results: int = 3, account_id: str = "") -> list[dict]:
         return self.vector.search(query, max_results=max_results, account_id=account_id)
 
+    def search_entries(
+        self,
+        query: str,
+        max_results: int = 3,
+        account_id: str = "",
+    ) -> list[SemanticEntry]:
+        return [SemanticEntry.from_dict(r) for r in self.search(query, max_results=max_results, account_id=account_id)]
+
+    def list_all_entries(self) -> list[SemanticEntry]:
+        return [SemanticEntry.from_dict(r) for r in self.load_all()]
+
     def _is_duplicate(self, content: str, entries: list[dict]) -> bool:
         return any(e.get("content") == content for e in entries)
+
+
+__all__ = ["AgentsMdStore", "EpisodicStore", "SemanticStore"]

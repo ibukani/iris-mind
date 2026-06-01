@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import Any
 
 from iris.memory.models import ContentBlock, blocks_text
-from iris.memory.short_term.models import MAX_TURN_LENGTH, ShortTermTurn
+from iris.memory.short_term.models import (
+    MAX_TURN_LENGTH,
+    ShortTermScope,
+    ShortTermSearchResult,
+    ShortTermTurn,
+)
 
 
 def _truncate_blocks(blocks: list[ContentBlock], max_chars: int) -> list[ContentBlock]:
@@ -45,41 +51,53 @@ class ShortTermStore:
         room_id: str = "",
     ) -> ShortTermTurn:
         truncated = _truncate_blocks(blocks, MAX_TURN_LENGTH)
-        entry: ShortTermTurn = {
-            "role": role,
-            "blocks": truncated,
-            "timestamp": datetime.now(UTC).isoformat(),
-            "consolidated": False,
-            "importance": importance,
-            "account_id": account_id,
-            "room_id": room_id,
-        }
+        entry = ShortTermTurn(
+            role=role,
+            blocks=truncated,
+            timestamp=datetime.now(UTC).isoformat(),
+            consolidated=False,
+            importance=importance,
+            account_id=account_id,
+            room_id=room_id,
+        )
         self._turns.append(entry)
         if len(self._turns) > self._max_turns:
             self._turns.pop(0)
         return entry
 
-    def scope_turns(self, room_id: str = "", account_id: str = "") -> list[ShortTermTurn]:
+    def _scope(self, scope: ShortTermScope) -> list[ShortTermTurn]:
         turns = self._turns
-        if account_id:
-            turns = [t for t in turns if t.get("account_id") == account_id]
-        if room_id:
-            turns = [t for t in turns if t.get("room_id") == room_id]
+        if scope.account_id:
+            turns = [t for t in turns if t.account_id == scope.account_id]
+        if scope.room_id:
+            turns = [t for t in turns if t.room_id == scope.room_id]
         return turns
 
-    def get_recent_turns(self, n: int = 4, room_id: str = "", account_id: str = "") -> list[ShortTermTurn]:
-        return self.scope_turns(room_id=room_id, account_id=account_id)[-n:]
+    def scope_turns(self, room_id: str = "", account_id: str = "") -> list[ShortTermTurn]:
+        return self._scope(ShortTermScope(room_id=room_id, account_id=account_id))
 
-    def get_unconsolidated_turns(self, room_id: str = "", account_id: str = "") -> list[ShortTermTurn]:
-        return [t for t in self.scope_turns(room_id=room_id, account_id=account_id) if not t.get("consolidated")]
+    def get_recent_turns(
+        self,
+        n: int = 4,
+        room_id: str = "",
+        account_id: str = "",
+    ) -> list[ShortTermTurn]:
+        return self._scope(ShortTermScope(room_id=room_id, account_id=account_id))[-n:]
+
+    def get_unconsolidated_turns(
+        self,
+        room_id: str = "",
+        account_id: str = "",
+    ) -> list[ShortTermTurn]:
+        return [t for t in self._scope(ShortTermScope(room_id=room_id, account_id=account_id)) if not t.consolidated]
 
     def mark_consolidated(self, room_id: str = "", account_id: str = "") -> None:
         """指定スコープ内の未consolidated turnをconsolidatedにする。"""
-        for t in self.scope_turns(room_id=room_id, account_id=account_id):
-            t["consolidated"] = True
+        for t in self._scope(ShortTermScope(room_id=room_id, account_id=account_id)):
+            t.consolidated = True
 
     def turn_text(self, turn: ShortTermTurn) -> str:
-        return blocks_text(turn.get("blocks", []))
+        return blocks_text(turn.blocks)
 
     def add_topic(self, topic: str) -> None:
         if topic not in self._current_topics:
@@ -114,3 +132,10 @@ class ShortTermStore:
         self._turns.clear()
         self._current_topics.clear()
         self._active_references.clear()
+
+
+__all__ = ["ShortTermScope", "ShortTermSearchResult", "ShortTermStore"]
+
+
+def _legacy_to_dict(turn: ShortTermTurn) -> dict[str, Any]:
+    return turn.to_dict()

@@ -4,7 +4,12 @@ import threading
 import time
 from typing import TYPE_CHECKING
 
-from iris.agency.inhibition.models import GateDecision, Pathway
+from iris.agency.inhibition.models import (
+    GateDecision,
+    GateState,
+    Pathway,
+    RoomGateState,
+)
 
 if TYPE_CHECKING:
     from iris.kernel.config import InhibitionConfig
@@ -69,11 +74,11 @@ class _RoomGate:
             self._executing = False
             self._cooldown_until = 0.0
 
-    def get_state(self) -> dict:
-        return {
-            "executing": self._executing,
-            "cooldown_remaining": self.remaining_cooldown,
-        }
+    def get_state(self) -> RoomGateState:
+        return RoomGateState(
+            executing=self._executing,
+            cooldown_remaining=self.remaining_cooldown,
+        )
 
 
 class _Gate:
@@ -112,8 +117,8 @@ class _Gate:
     def is_room_on_cooldown(self, room_id: str) -> bool:
         return self._get_gate(room_id).is_on_cooldown
 
-    def get_state(self) -> dict:
-        return {
-            "global": self._global_gate.get_state(),
-            "rooms": {rid: g.get_state() for rid, g in self._gates.items()},
-        }
+    def get_state(self) -> GateState:
+        return GateState(
+            global_state=self._global_gate.get_state(),
+            rooms={rid: g.get_state() for rid, g in self._gates.items()},
+        )

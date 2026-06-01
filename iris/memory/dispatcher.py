@@ -1,21 +1,45 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Any
 
 from loguru import logger
 
-from iris.memory.models import text_block
+from iris.memory.long_term.models import EpisodicInput, SemanticInput
+from iris.memory.models import ContentBlock, text_block
 
 
-def _extract_scope(data: Any) -> tuple[str, str]:
-    if not isinstance(data, dict):
-        return "", ""
-    return data.get("room_id", ""), data.get("account_id", "")
+@dataclass(frozen=True, slots=True)
+class StoreScope:
+    """Dispatcher が抽出する room/account スコープ。"""
+
+    room_id: str
+    account_id: str
+
+    @classmethod
+    def of(cls, data: Any) -> StoreScope:
+        if not isinstance(data, dict):
+            return cls("", "")
+        return cls(str(data.get("room_id", "")), str(data.get("account_id", "")))
 
 
 def _extract_int(value: Any, default: int) -> int:
     return value if isinstance(value, int) else default
+
+
+def _coerce_short_term_turn(
+    data: Any,
+    *,
+    role_default: str = "system",
+) -> tuple[str, list[ContentBlock]] | None:
+    if isinstance(data, str):
+        return role_default, [text_block(data)]
+    if isinstance(data, dict):
+        role = str(data.get("role", role_default))
+        content = data.get("content") or data.get("summary") or str(data)
+        return role, [text_block(str(content))]
+    return None
 
 
 def build_store_handlers(
@@ -23,46 +47,59 @@ def build_store_handlers(
     short_term: Any,
     long_term: Any,
 ) -> dict[str, Callable[[Any], None]]:
+    """stream ごとの保存ハンドラを構築する。"""
+
+    def _store_sensory(data: Any) -> None:
+        if isinstance(data, dict) and data.get("raw"):
+            sensory.store_raw(str(data["raw"]))
+        else:
+            sensory.add_fragment(str(data), is_final=True)
+
+    def _store_short_term(data: Any) -> None:
+        scope = StoreScope.of(data)
+        coerced = _coerce_short_term_turn(data)
+        if coerced is None:
+            return
+        role, blocks = coerced
+        short_term.add_turn(role, blocks, room_id=scope.room_id, account_id=scope.account_id)
+
+    def _store_episodic(data: Any) -> None:
+        scope = StoreScope.of(data)
+        if scope.room_id or scope.account_id:
+            long_term.store_episodic(
+                data,
+                kind="",
+                room_id=scope.room_id,
+                account_id=scope.account_id,
+            )
+        else:
+            long_term.store_episodic(data)
+        coerced = _coerce_short_term_turn(data, role_default="system")
+        if coerced is not None:
+            role, blocks = coerced
+            short_term.add_turn(role, blocks, account_id=scope.account_id)
+
+    def _store_semantic(data: Any) -> None:
+        scope = StoreScope.of(data)
+        if scope.room_id or scope.account_id:
+            long_term.store_semantic(
+                data,
+                room_id=scope.room_id,
+                account_id=scope.account_id,
+            )
+        else:
+            long_term.store_semantic(data)
+        if isinstance(data, dict):
+            content = str(data.get("content", ""))
+            if content:
+                short_term.add_turn("system", [text_block(content)], account_id=scope.account_id)
+
     return {
-        "sensory": lambda data: _store_sensory(sensory, data),
-        "short_term": lambda data: _store_short_term(short_term, data, *_extract_scope(data)),
-        "episodic": lambda data: _store_episodic(long_term, short_term, data, *_extract_scope(data)),
-        "semantic": lambda data: _store_semantic(long_term, short_term, data, *_extract_scope(data)),
+        "sensory": _store_sensory,
+        "short_term": _store_short_term,
+        "episodic": _store_episodic,
+        "semantic": _store_semantic,
     }
-
-
-def _store_sensory(sensory: Any, data: Any) -> None:
-    if isinstance(data, dict) and data.get("raw"):
-        sensory.store_raw(data["raw"])
-    else:
-        sensory.add_fragment(str(data), is_final=True)
-
-
-def _store_short_term(short_term: Any, data: Any, room_id: str = "", account_id: str = "") -> None:
-    if isinstance(data, str):
-        short_term.add_turn("system", [text_block(data)], room_id=room_id, account_id=account_id)
-    elif isinstance(data, dict):
-        role = data.get("role", "system")
-        content = data.get("content") or data.get("summary") or str(data)
-        short_term.add_turn(role, [text_block(content)], room_id=room_id, account_id=account_id)
-
-
-def _store_episodic(long_term: Any, short_term: Any, data: Any, room_id: str = "", account_id: str = "") -> None:
-    long_term.store_episodic(data, room_id, account_id=account_id)
-    if isinstance(data, dict):
-        short_term.add_turn(
-            "system",
-            [text_block(data.get("content") or data.get("summary") or str(data))],
-            account_id=account_id,
-        )
-
-
-def _store_semantic(long_term: Any, short_term: Any, data: Any, room_id: str = "", account_id: str = "") -> None:
-    long_term.store_semantic(data, room_id, account_id=account_id)
-    if isinstance(data, dict):
-        content = data.get("content", "")
-        if content:
-            short_term.add_turn("system", [text_block(content)], account_id=account_id)
 
 
 def dispatch_retrieve(
@@ -118,3 +155,14 @@ def dispatch_clear(
         long_term.clear_episodic()
     if stream == "semantic" or stream is None:
         long_term.clear_semantic()
+
+
+__all__ = [
+    "EpisodicInput",
+    "SemanticInput",
+    "StoreScope",
+    "build_store_handlers",
+    "dispatch_clear",
+    "dispatch_retrieve",
+    "dispatch_search",
+]

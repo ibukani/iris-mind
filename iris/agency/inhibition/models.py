@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import TypedDict
 
 
 class Pathway(StrEnum):
@@ -33,6 +34,47 @@ class SuppressionEntry:
     profile: SuppressionProfile
     room_id: str | None = None
     expiry: float = 0.0  # time.monotonic() の絶対時刻。0.0 は永続
+
+
+@dataclass
+class ActiveSuppression:
+    """現在アクティブな抑制状態のスナップショット。"""
+
+    reason: str
+    room_id: str | None
+    priority: int
+    blocked_reasons: list[str] = field(default_factory=list)
+    remaining: float | str = 0.0
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "reason": self.reason,
+            "room_id": self.room_id,
+            "priority": self.priority,
+            "blocked_reasons": list(self.blocked_reasons),
+            "remaining": self.remaining,
+        }
+
+
+class SuppressionStateEntry(TypedDict):
+    reason: str
+    room_id: str | None
+    priority: int
+    remaining: float | str
+
+
+class SuppressionState(TypedDict):
+    suppressions: dict[str, SuppressionStateEntry]
+
+
+class RoomGateState(TypedDict):
+    executing: bool
+    cooldown_remaining: float
+
+
+class GateState(TypedDict):
+    global_state: RoomGateState
+    rooms: dict[str, RoomGateState]
 
 
 def _proactive_only() -> frozenset[str]:

@@ -13,7 +13,7 @@ from iris.room.events import (
     RoomLeftEvent,
     RoomUpdatedEvent,
 )
-from iris.room.models import Room, RoomMember, RoomState
+from iris.room.models import Room, RoomMember, RoomMetadata, RoomState
 from iris.room.store import RoomStore
 
 
@@ -42,9 +42,26 @@ class RoomManager:
     def set_account_manager(self, account_manager: Any) -> None:
         self._account_manager = account_manager
 
-    def create_room(self, name: str, created_by: str = "", **kwargs: Any) -> Room:
+    def create_room(
+        self,
+        name: str,
+        created_by: str = "",
+        *,
+        description: str = "",
+        topic: str = "",
+        state: RoomState | str = RoomState.ACTIVE,
+        metadata: RoomMetadata | None = None,
+    ) -> Room:
         """新規ルームを作成する。"""
-        room = Room(name=name, created_by=created_by, **kwargs)
+        resolved_state = state if isinstance(state, RoomState) else RoomState(state)
+        room = Room(
+            name=name,
+            created_by=created_by,
+            description=description,
+            topic=topic,
+            state=resolved_state,
+            metadata=dict(metadata) if metadata is not None else {},
+        )
         self._store.add_room(room)
 
         if self._event_bus:
@@ -68,19 +85,40 @@ class RoomManager:
         """ルーム一覧を取得する。"""
         return self._store.find_rooms_by_state(state)
 
-    def update_room(self, room_id: str, **fields: Any) -> None:
+    def update_room(
+        self,
+        room_id: str,
+        *,
+        name: str | None = None,
+        description: str | None = None,
+        topic: str | None = None,
+        state: RoomState | str | None = None,
+        metadata: RoomMetadata | None = None,
+    ) -> None:
         """ルームフィールドを更新する。"""
         room = self.get_room(room_id)
         if not room:
             logger.warning("RoomManager: room not found: {}", room_id)
             raise ValueError(f"room not found: {room_id}")
 
-        for key, value in fields.items():
+        updates: list[tuple[str, Any]] = []
+        if name is not None:
+            updates.append(("name", name))
+        if description is not None:
+            updates.append(("description", description))
+        if topic is not None:
+            updates.append(("topic", topic))
+        if state is not None:
+            updates.append(("state", state))
+        if metadata is not None:
+            updates.append(("metadata", metadata))
+
+        for key, value in updates:
             old, new = self._coerce_update_field(room, key, value)
             if old == new:
                 continue
             setattr(room, key, new)
-            if self._event_bus and old != new:
+            if self._event_bus:
                 self._event_bus.publish(
                     RoomUpdatedEvent(
                         timestamp=datetime.now(UTC),
@@ -99,6 +137,13 @@ class RoomManager:
     def archive_room(self, room_id: str) -> None:
         """ルームをアーカイブする。"""
         self.update_room(room_id, state=RoomState.ARCHIVED)
+
+    def update_room_from_update(self, room_id: str, update: Any) -> None:
+        """RoomUpdate データクラスからルームを更新する。"""
+        if hasattr(update, "to_field_kwargs"):
+            self.update_room(room_id, **update.to_field_kwargs())
+        else:  # pragma: no cover - 型注釈用フォールバック
+            self.update_room(room_id)
 
     def delete_room(self, room_id: str) -> None:
         """ルームを削除する。"""

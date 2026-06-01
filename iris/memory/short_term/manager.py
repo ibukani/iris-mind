@@ -4,7 +4,12 @@ from loguru import logger
 
 from iris.memory.models import ContentBlock, blocks_text
 from iris.memory.short_term.extractor import EntityExtractor, RegexEntityExtractor
-from iris.memory.short_term.models import MAX_CONTEXT_CHARS, ActiveUser, ShortTermSearchResult, ShortTermTurn
+from iris.memory.short_term.models import (
+    MAX_CONTEXT_CHARS,
+    ActiveUser,
+    ShortTermSearchResult,
+    ShortTermTurn,
+)
 from iris.memory.short_term.presence import PresenceTracker
 from iris.memory.short_term.protocol import ShortTermMemoryProtocol
 from iris.memory.short_term.reference_tracker import ReferenceTracker
@@ -69,7 +74,11 @@ class ShortTermMemoryManager(ShortTermMemoryProtocol):
     # ── Search ──
 
     def search(
-        self, query: str, max_results: int = 5, room_id: str = "", account_id: str = ""
+        self,
+        query: str,
+        max_results: int = 5,
+        room_id: str = "",
+        account_id: str = "",
     ) -> list[ShortTermSearchResult]:
         return self._searcher.search(query, max_results=max_results, room_id=room_id, account_id=account_id)
 

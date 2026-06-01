@@ -3,6 +3,7 @@ from __future__ import annotations
 from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 from loguru import logger
 
+from iris.tools.models import ToolSchema
 from iris.tools.registry import ToolRegistry
 
 
@@ -10,7 +11,7 @@ class ToolEngine:
     def __init__(self, registry: ToolRegistry) -> None:
         self.registry = registry
 
-    def list_tools_by_name(self, names: list[str], allow_side_effects: bool = True) -> list[dict]:
+    def list_tools_by_name(self, names: list[str], allow_side_effects: bool = True) -> list[ToolSchema]:
         return self.registry.list_tools_by_name(names, allow_side_effects)
 
     def run_tool_calls(self, ctx: list[BaseMessage]) -> list[tuple[str, str, bool]]:

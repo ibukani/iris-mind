@@ -13,7 +13,6 @@ from iris.memory.dispatcher import (
 )
 from iris.memory.long_term.goal_store import GoalStore
 from iris.memory.long_term.protocol import LongTermMemoryProtocol
-from iris.memory.models import blocks_text
 from iris.memory.protocol import MemoryManagerProtocol
 from iris.memory.sensory.protocol import SensoryMemoryProtocol
 from iris.memory.short_term.protocol import ShortTermMemoryProtocol
@@ -103,9 +102,9 @@ class MemoryManager(MemoryManagerProtocol):
         if not unconsolidated:
             return
 
-        user_turns = [t for t in unconsolidated if t.get("role") == "user"]
+        user_turns = [t for t in unconsolidated if t.role == "user"]
         if user_turns:
-            combined = " | ".join(blocks_text(t.get("blocks", []))[:100] for t in user_turns[-3:])
+            combined = " | ".join(t.text[:100] for t in user_turns[-3:])
             self.long_term.store_episodic(
                 {"content": f"[conversation] {combined}", "kind": "conversation"},
                 room_id=room_id,

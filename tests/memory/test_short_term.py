@@ -20,11 +20,11 @@ class TestAddTurn:
     def test_add_turn_user(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("こんにちは"))
         assert stm.turn_count == 1
-        assert stm._store.turns[0]["role"] == "user"
+        assert stm._store.turns[0].role == "user"
 
     def test_add_turn_assistant(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("assistant", _blocks("はい、こちらです"))
-        assert stm._store.turns[0]["role"] == "assistant"
+        assert stm._store.turns[0].role == "assistant"
 
     def test_add_turn_empty(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", [])
@@ -33,7 +33,7 @@ class TestAddTurn:
     def test_add_turn_truncates_long(self, stm: ShortTermMemoryManager) -> None:
         long = "a" * 1000
         stm.add_turn("user", _blocks(long))
-        assert len(blocks_text(stm._store.turns[0].get("blocks", []))) == 500
+        assert len(blocks_text(stm._store.turns[0].blocks)) == 500
 
     def test_add_turn_fifo_eviction(self, stm: ShortTermMemoryManager) -> None:
         stm2 = ShortTermMemoryManager(max_turns=2)
@@ -41,16 +41,16 @@ class TestAddTurn:
         stm2.add_turn("user", _blocks("second"))
         stm2.add_turn("user", _blocks("third"))
         assert stm2.turn_count == 2
-        assert blocks_text(stm2._store.turns[0].get("blocks", [])) == "second"
-        assert blocks_text(stm2._store.turns[1].get("blocks", [])) == "third"
+        assert blocks_text(stm2._store.turns[0].blocks) == "second"
+        assert blocks_text(stm2._store.turns[1].blocks) == "third"
 
     def test_add_turn_importance_marker(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("This is important"))
-        assert stm._store.turns[0]["importance"] >= 3
+        assert stm._store.turns[0].importance >= 3
 
     def test_add_turn_importance_normal(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("hello"))
-        assert stm._store.turns[0]["importance"] == 0
+        assert stm._store.turns[0].importance == 0
 
 
 class TestExtractEntities:
@@ -88,7 +88,7 @@ class TestSearch:
         stm.add_turn("user", _blocks("I like Python programming"))
         results = stm.search("Python", max_results=5)
         assert len(results) == 1
-        assert results[0]["relevance"] > 0
+        assert results[0].relevance > 0
 
     def test_search_no_match(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("hello world"))
@@ -118,7 +118,7 @@ class TestSearch:
         stm.add_turn("user", _blocks("Python is great"))
         stm.add_turn("user", _blocks("I love Python and more Python"))
         results = stm.search("Python")
-        assert results[0]["relevance"] >= results[-1]["relevance"]
+        assert results[0].relevance >= results[-1].relevance
 
 
 class TestSearchEntities:
@@ -171,7 +171,7 @@ class TestGetRecentTurns:
             stm.add_turn("user", _blocks(f"turn {i}"))
         recent = stm.get_recent_turns(3)
         assert len(recent) == 3
-        assert blocks_text(recent[-1].get("blocks", [])) == "turn 4"
+        assert blocks_text(recent[-1].blocks) == "turn 4"
 
 
 class TestActiveUsers:
@@ -207,21 +207,21 @@ class TestConsolidation:
         stm.add_turn("user", _blocks("a"))
         stm.add_turn("user", _blocks("b"))
         stm.mark_consolidated()
-        assert all(t["consolidated"] for t in stm._store.turns)
+        assert all(t.consolidated for t in stm._store.turns)
 
     def test_mark_consolidated_by_room(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("a"), room_id="room-a")
         stm.add_turn("user", _blocks("b"), room_id="room-b")
         stm.mark_consolidated(room_id="room-a")
-        assert stm._store.turns[0]["consolidated"]
-        assert not stm._store.turns[1]["consolidated"]
+        assert stm._store.turns[0].consolidated
+        assert not stm._store.turns[1].consolidated
 
     def test_mark_consolidated_by_account(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("a"), account_id="u1")
         stm.add_turn("user", _blocks("b"), account_id="u2")
         stm.mark_consolidated(account_id="u1")
-        assert stm._store.turns[0]["consolidated"]
-        assert not stm._store.turns[1]["consolidated"]
+        assert stm._store.turns[0].consolidated
+        assert not stm._store.turns[1].consolidated
 
     def test_get_unconsolidated(self, stm: ShortTermMemoryManager) -> None:
         stm.add_turn("user", _blocks("a"), room_id="room-a")
@@ -229,7 +229,7 @@ class TestConsolidation:
         stm.mark_consolidated(room_id="room-a")
         un = stm.get_unconsolidated_turns()
         assert len(un) == 1
-        assert blocks_text(un[0].get("blocks", [])) == "b"
+        assert blocks_text(un[0].blocks) == "b"
 
     def test_should_consolidate_when_full(self, stm: ShortTermMemoryManager) -> None:
         stm_full = ShortTermMemoryManager(max_turns=2)

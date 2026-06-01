@@ -6,7 +6,7 @@ from pathlib import Path
 from loguru import logger
 
 from iris.tools.decorator import get_tool_def, register_decorated_tools
-from iris.tools.models import ToolDef
+from iris.tools.models import ToolDef, ToolSchema
 
 _DEFAULT_ALLOWED_ROLES = {"medium", "high"}
 
@@ -54,7 +54,7 @@ class ToolRegistry:
         """
         return self._tools.get(name)
 
-    def list_tools(self, allow_side_effects: bool = True) -> list[dict]:
+    def list_tools(self, allow_side_effects: bool = True) -> list[ToolSchema]:
         """全ツールを OpenAI JSON スキーマ形式で返す。
 
         Args:
@@ -65,7 +65,7 @@ class ToolRegistry:
         """
         return [t.to_openai_tool() for t in self._tools.values() if allow_side_effects or not t.side_effect]
 
-    def list_tools_for_role(self, role: str, allow_side_effects: bool = True) -> list[dict]:
+    def list_tools_for_role(self, role: str, allow_side_effects: bool = True) -> list[ToolSchema]:
         """指定のロール（モデル役割）で使用可能なツールを返す。
 
         Args:
@@ -81,7 +81,7 @@ class ToolRegistry:
             if (role in (t.allowed_roles or _DEFAULT_ALLOWED_ROLES)) and (allow_side_effects or not t.side_effect)
         ]
 
-    def list_tools_by_name(self, names: list[str], allow_side_effects: bool = True) -> list[dict]:
+    def list_tools_by_name(self, names: list[str], allow_side_effects: bool = True) -> list[ToolSchema]:
         return [
             t.to_openai_tool()
             for t in self._tools.values()

@@ -9,7 +9,7 @@ from .generator import EmotionGenerator
 from .models import AppraisalDimensions, CompanionEmotion, EmotionResult
 from .mood import MoodDynamics
 from .relationship import RelationshipManager
-from .state import EmotionStateManager
+from .state import EmotionFullState, EmotionPromptData, EmotionStateManager
 
 if TYPE_CHECKING:
     from iris.account.manager import AccountManager
@@ -120,10 +120,10 @@ class LimbicOrchestrator:
 
         return ctx
 
-    def get_state(self) -> dict[str, Any]:
+    def get_state(self) -> EmotionFullState:
         return self._state.get_state()
 
-    def get_emotion_for_prompt(self, account_id: str = "") -> dict[str, Any]:
+    def get_emotion_for_prompt(self, account_id: str = "") -> EmotionPromptData:
         return self._state.get_emotion_for_prompt()
 
     def get_modulation_state(self) -> ModulationState:

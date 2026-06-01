@@ -106,7 +106,7 @@ def _publish_snapshot(bus: Any, orchestrator: LimbicOrchestrator, trigger: str) 
                 timestamp=None,
                 source="limbic",
                 category="limbic",
-                data=orchestrator.get_state(),
+                data=dict(orchestrator.get_state()),
                 trigger=trigger,
             ),
         )

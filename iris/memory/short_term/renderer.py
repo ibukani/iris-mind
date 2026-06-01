@@ -31,10 +31,10 @@ def render_short_term_context(
     if not turns:
         return ""
     if room_id:
-        turns = [t for t in turns if t.get("room_id", "") == room_id]
+        turns = [t for t in turns if t.room_id == room_id]
     parts: list[str] = []
 
-    chat_turns = [t for t in turns if t.get("role") not in ("system",)]
+    chat_turns = [t for t in turns if t.role not in ("system",)]
     if not chat_turns and not relevant_results:
         if active_users:
             user_lines = [f"- {u.display_name}" for u in active_users]
@@ -51,20 +51,16 @@ def render_short_term_context(
         shown_ids: set[int] = set()
         for r in relevant_results:
             shown_ids.add(id(r))
-            role = r.get("role", "system")
-            uid = r.get("account_id", "")
-            label = uid or ("User" if role == "user" else "Iris")
-            prefix = "(思考) " if role == "thought" else ""
-            text = _render_blocks(r.get("blocks", []), max_chars=100)
-            parts.append(f"- {label}: {prefix}「{text}」(関連度 {r.get('relevance', 0):.2f})")
+            label = r.account_id or ("User" if r.role == "user" else "Iris")
+            prefix = "(思考) " if r.role == "thought" else ""
+            text = _render_blocks(r.blocks, max_chars=100)
+            parts.append(f"- {label}: {prefix}「{text}」(関連度 {r.relevance:.2f})")
         for t in reversed(chat_turns[-4:]):
             if id(t) in shown_ids:
                 continue
-            role = t.get("role", "system")
-            uid = t.get("account_id", "")
-            label = uid or ("User" if role == "user" else "Iris")
-            prefix = "(思考) " if role == "thought" else ""
-            text = _render_blocks(t.get("blocks", []), max_chars=100)
+            label = t.account_id or ("User" if t.role == "user" else "Iris")
+            prefix = "(思考) " if t.role == "thought" else ""
+            text = _render_blocks(t.blocks, max_chars=100)
             parts.append(f"- {label}: {prefix}「{text}」")
 
     if active_references:

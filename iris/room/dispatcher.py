@@ -152,6 +152,8 @@ class _RoomDispatcher:
         )
 
     def _handle_update(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent:
+        from iris.room.models import RoomUpdate
+
         room_id = msg.room_id
         if not room_id:
             return self._error("room.update", "room_id required")
@@ -173,7 +175,29 @@ class _RoomDispatcher:
             return self._error("room.update", "no fields to update")
 
         try:
-            self._room_manager.update_room(room_id, **updates)
+            state_value = updates.get("state") if "state" in updates else None
+            from iris.room.models import RoomState
+
+            coerced_state: RoomState | None = None
+            if state_value is not None:
+                coerced_state = state_value if isinstance(state_value, RoomState) else RoomState(str(state_value))
+
+            update = RoomUpdate(
+                name=str(updates["name"]) if "name" in updates and updates["name"] is not None else None,
+                description=(
+                    str(updates["description"])
+                    if "description" in updates and updates["description"] is not None
+                    else None
+                ),
+                topic=(str(updates["topic"]) if "topic" in updates and updates["topic"] is not None else None),
+                state=coerced_state,
+                metadata=(
+                    dict(updates["metadata"])
+                    if "metadata" in updates and isinstance(updates["metadata"], dict)
+                    else None
+                ),
+            )
+            self._room_manager.update_room_from_update(room_id, update)
         except ValueError as exc:
             return self._error("room.update", str(exc))
 

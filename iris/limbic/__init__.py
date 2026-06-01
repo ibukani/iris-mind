@@ -77,7 +77,7 @@ class LimbicPlugin(PluginProtocol):
         pass
 
     def get_state(self) -> dict:
-        return self._orchestrator.get_state()
+        return dict(self._orchestrator.get_state())
 
 
 plugin = LimbicPlugin()

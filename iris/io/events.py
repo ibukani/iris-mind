@@ -63,3 +63,13 @@ class InterruptEvent(Event):
 class SessionDisconnectEvent(Event):
     session_id: str = ""
     session_tag: str = ""
+
+
+__all__ = [
+    "ControlMessageEvent",
+    "InputReady",
+    "InterruptEvent",
+    "MessageEvent",
+    "SessionDisconnectEvent",
+    "SpeakerIdentity",
+]

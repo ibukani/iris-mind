@@ -65,6 +65,10 @@ ignore = [
     "S603",
     "S607",
 ]
+[tool.ruff.lint.per-file-ignores]
+"tests/architecture/*.py" = [
+    "PERF401", # Architecture checks prefer explicit loops for readable violation reporting.
+]
 
 [tool.ruff.lint.isort]
 force-single-line = false
@@ -77,6 +81,10 @@ docstring-code-format = true
 
 [tool.mypy]
 python_version = "3.13"
+files = ["iris", "tests/architecture"]
+exclude = [
+  'iris/io/transport/.*_pb2.*\.py',
+]
 warn_unused_configs = true
 warn_redundant_casts = true
 warn_unused_ignores = true
@@ -98,6 +106,14 @@ module = ["ollama", "httpx", "tokenizers", "langgraph.*", "orjson", "tenacity"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+module = "tests.architecture.*"
+ignore_errors = false
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+warn_return_any = true
+
+[[tool.mypy.overrides]]
 module = "tests.*"
 ignore_errors = true
 
@@ -115,6 +131,7 @@ addopts = "-v --strict-markers --tb=short"
 markers = [
   "unit: ユニットテスト",
   "integration: 統合テスト",
+  "architecture: v1.2.1 architecture boundary tests",
   "slow: 低速テスト",
 ]
 filterwarnings = [

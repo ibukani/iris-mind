@@ -16,14 +16,14 @@ def buffer() -> SensoryMemoryManager:
 def test_add_fragment_accumulates(buffer: SensoryMemoryManager) -> None:
     buffer.add_fragment("hello ", is_final=False)
     buffer.add_fragment("world", is_final=True)
-    assert buffer.accumulated_blocks == []
-    assert buffer.fragment_count == 0
+    assert buffer.accumulated_blocks() == []
+    assert buffer.fragment_count() == 0
 
 
 def test_add_fragment_no_flush_until_final(buffer: SensoryMemoryManager) -> None:
     buffer.add_fragment("hello ", is_final=False)
-    assert buffer.fragment_count == 1
-    assert blocks_text(buffer.accumulated_blocks) == "hello "
+    assert buffer.fragment_count() == 1
+    assert blocks_text(buffer.accumulated_blocks()) == "hello "
 
 
 def test_flush_via_is_final() -> None:
@@ -66,14 +66,14 @@ def test_explicit_flush() -> None:
 def test_cancel_clears_and_stops_timer(buffer: SensoryMemoryManager) -> None:
     buffer.add_fragment("hello", is_final=False)
     buffer.cancel()
-    assert buffer.fragment_count == 0
-    assert buffer.accumulated_blocks == []
+    assert buffer.fragment_count() == 0
+    assert buffer.accumulated_blocks() == []
 
 
 def test_close_prevents_further_additions(buffer: SensoryMemoryManager) -> None:
     buffer.close()
     buffer.add_fragment("hello", is_final=True)
-    assert buffer.fragment_count == 0
+    assert buffer.fragment_count() == 0
 
 
 def test_flush_empty_does_not_callback() -> None:
@@ -96,7 +96,7 @@ def test_add_fragment_after_close(buffer: SensoryMemoryManager) -> None:
     buffer.add_fragment("before", is_final=False)
     buffer.close()
     buffer.add_fragment("after", is_final=True)
-    assert buffer.accumulated_blocks == []
+    assert buffer.accumulated_blocks() == []
 
 
 def test_reuse_after_flush() -> None:

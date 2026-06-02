@@ -37,6 +37,7 @@ class ProactiveJudge:
             ScoreContext(
                 now=time.time(),
                 content=event.content,
+                room_id=event.room_id,
                 context=context,
             ),
         )

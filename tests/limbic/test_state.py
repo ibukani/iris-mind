@@ -18,7 +18,14 @@ class TestEmotionStateManager:
         assert result == {}
 
     def test_update_and_get(self) -> None:
-        from iris.limbic.models import CompanionEmotion, Mood, PlutchikEmotion, RelationshipLevel, RelationshipState
+        from iris.limbic.models import (
+            AppraisalDimensions,
+            CompanionEmotion,
+            Mood,
+            PlutchikEmotion,
+            RelationshipLevel,
+            RelationshipState,
+        )
 
         emotion = CompanionEmotion(
             primary=PlutchikEmotion.JOY,
@@ -30,7 +37,7 @@ class TestEmotionStateManager:
         mood = Mood(valence=0.5, arousal=0.3, dominance=0.4)
         relationship = RelationshipState(level=RelationshipLevel.FAMILIAR)
         result = EmotionResult(
-            appraisal=None,  # type: ignore
+            appraisal=AppraisalDimensions(),
             emotion=emotion,
             mood=mood,
             relationship=relationship,
@@ -41,7 +48,14 @@ class TestEmotionStateManager:
         assert latest.emotion.primary == PlutchikEmotion.JOY
 
     def test_get_emotion_for_prompt(self) -> None:
-        from iris.limbic.models import CompanionEmotion, Mood, PlutchikEmotion, RelationshipLevel, RelationshipState
+        from iris.limbic.models import (
+            AppraisalDimensions,
+            CompanionEmotion,
+            Mood,
+            PlutchikEmotion,
+            RelationshipLevel,
+            RelationshipState,
+        )
 
         emotion = CompanionEmotion(
             primary=PlutchikEmotion.JOY,
@@ -53,7 +67,7 @@ class TestEmotionStateManager:
         mood = Mood(valence=0.5, arousal=0.3, dominance=0.4)
         relationship = RelationshipState(level=RelationshipLevel.FAMILIAR)
         result = EmotionResult(
-            appraisal=None,  # type: ignore
+            appraisal=AppraisalDimensions(),
             emotion=emotion,
             mood=mood,
             relationship=relationship,

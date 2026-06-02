@@ -4,6 +4,8 @@ from typing import TYPE_CHECKING
 
 from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
 
+from .builder import build_room
+
 if TYPE_CHECKING:
     from iris.kernel.manager import PluginManager
 
@@ -23,57 +25,23 @@ class RoomPlugin(PluginProtocol):
 
     def init(self, manager: PluginManager) -> None:
         manager.register_manifest(MANIFEST)
-
-        from iris.event.event_bus import EventBus
+        components = build_room(manager)
         from iris.room.batcher import RoomJoinBatcher
         from iris.room.dispatcher import _RoomDispatcher
+        from iris.room.handler import _RoomEventHandler
         from iris.room.manager import RoomManager
         from iris.room.store import RoomStore
 
-        store = RoomStore()
-        event_bus = manager.resolve(EventBus)
-
-        join_batcher = RoomJoinBatcher(event_bus=event_bus)
-
-        from iris.account.manager import AccountManager as AccountManagerCls
-
-        account_manager = manager.resolve_optional(AccountManagerCls)
-        manager_inst = RoomManager(
-            store=store,
-            event_bus=event_bus,
-            account_manager=account_manager,
-            join_batcher=join_batcher,
-        )
-
-        dispatcher = _RoomDispatcher(room_manager=manager_inst, account_manager=account_manager)
-
-        manager.provide(RoomStore, store)
-        manager.provide(RoomJoinBatcher, join_batcher)
-        manager.provide(RoomManager, manager_inst)
-        manager.provide(_RoomDispatcher, dispatcher)
-
-        from iris.room.handler import _RoomEventHandler
-
-        event_handler = _RoomEventHandler(
-            event_bus=event_bus,
-            store=store,
-            room_manager=manager_inst,
-            account_manager=account_manager,
-        )
-        manager.provide(_RoomEventHandler, event_handler)
-
-        from iris.room.hooks import register_hooks
-
-        register_hooks(manager)
+        manager.provide(RoomStore, components["store"])
+        manager.provide(RoomJoinBatcher, components["join_batcher"])
+        manager.provide(RoomManager, components["room_manager"])
+        manager.provide(_RoomDispatcher, components["dispatcher"])
+        manager.provide(_RoomEventHandler, components["event_handler"])
 
     def start(self, manager: PluginManager) -> None:
         pass
 
     def stop(self, manager: PluginManager) -> None:
-        # ルーム参加のバッチ処理を停止（インメモリで保存しているため）
-        # batcher = manager.resolve_optional(RoomJoinBatcher)
-        # if batcher:
-        #     batcher.stop()
         pass
 
 

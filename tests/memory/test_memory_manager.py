@@ -4,6 +4,7 @@ from typing import Any
 
 import pytest
 
+from iris.agency.inhibition.events import InhibitionEvent
 from iris.event import Event, EventBus
 from iris.event.base import TimerTick
 from iris.io.events import InputReady, MessageEvent
@@ -28,22 +29,31 @@ def _message_event(session_id: str = "", content: str = "", account_id: str = ""
     )
 
 
-def _memory_with_handler(event_bus: EventBus, proactive_config: Any = None) -> MemoryManager:
+def _memory_with_handler(
+    event_bus: EventBus,
+    proactive_config: Any = None,
+    *,
+    return_handler: bool = False,
+) -> MemoryManager | tuple[_MemoryEventHandler, MemoryManager]:
     mgr = MemoryManager()
-    _MemoryEventHandler(
-        event_bus, mgr.sensory, proactive_config, short_term=mgr.short_term, account_dispatcher=None, room_provider=None
-    )
-    return mgr
+    mgr.sensory.event_bus = event_bus
+    from iris.memory.events.proactive_trigger import ProactiveTrigger
+    from iris.memory.sensory.handler import SensoryEventHandler
+    from iris.memory.short_term.handler import ShortTermEventHandler
 
+    sensory_handler = SensoryEventHandler(event_bus, mgr.sensory)
+    ShortTermEventHandler(event_bus, mgr.short_term)
+    proactive_trigger = ProactiveTrigger(event_bus, None)
 
-def _memory_with_handler_pair(
-    event_bus: EventBus, proactive_config: Any = None
-) -> tuple[_MemoryEventHandler, MemoryManager]:
-    mgr = MemoryManager()
     handler = _MemoryEventHandler(
-        event_bus, mgr.sensory, proactive_config, short_term=mgr.short_term, account_dispatcher=None, room_provider=None
+        event_bus=event_bus,
+        sensory_handler=sensory_handler,
+        proactive_trigger=proactive_trigger,
+        proactive_config=proactive_config,
     )
-    return handler, mgr
+    if return_handler:
+        return handler, mgr
+    return mgr
 
 
 @pytest.fixture
@@ -70,7 +80,7 @@ class TestMemoryManagerInputPending:
         def handler(event: Event) -> None:
             received.append(event)
 
-        event_bus.subscribe("MessageEvent", handler)
+        event_bus.subscribe(MessageEvent, handler)
         _memory_with_handler(event_bus)
         event_bus.publish(
             _message_event(session_id="s1", content="hello"),
@@ -81,7 +91,7 @@ class TestMemoryManagerInputPending:
     def test_empty_content_ignored(self, event_bus: EventBus) -> None:
         _memory_with_handler(event_bus)
         ready_events: list[InputReady] = []
-        event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
+        event_bus.subscribe(InputReady, _collect_input_ready(ready_events))
 
         event_bus.publish(
             _message_event(session_id="s1", content=""),
@@ -102,7 +112,7 @@ class TestMemoryManagerInputPending:
         )
 
         ready_events: list[InputReady] = []
-        event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
+        event_bus.subscribe(InputReady, _collect_input_ready(ready_events))
         event_bus.publish(
             TimerTick(timestamp=None, source="kernel", tick_count=0),
         )
@@ -113,7 +123,7 @@ class TestMemoryManagerInputPending:
 
     def test_timer_with_pending_produces_input_ready(self, event_bus: EventBus, memory: MemoryManager) -> None:
         ready_events: list[InputReady] = []
-        event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
+        event_bus.subscribe(InputReady, _collect_input_ready(ready_events))
 
         event_bus.publish(
             _message_event(account_id="a1", content="こんにちは"),
@@ -129,7 +139,7 @@ class TestMemoryManagerInputPending:
 
     def test_timer_without_pending_produces_proactive(self, event_bus: EventBus, memory: MemoryManager) -> None:
         ready_events: list[InputReady] = []
-        event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
+        event_bus.subscribe(InputReady, _collect_input_ready(ready_events))
 
         event_bus.publish(
             TimerTick(timestamp=None, source="kernel", tick_count=0),
@@ -142,7 +152,7 @@ class TestMemoryManagerInputPending:
     def test_pending_emptied_after_timer(self, event_bus: EventBus) -> None:
         ready_events: list[InputReady] = []
         _memory_with_handler(event_bus, {"enabled": True})
-        event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
+        event_bus.subscribe(InputReady, _collect_input_ready(ready_events))
 
         event_bus.publish(
             _message_event(account_id="a1", content="hello"),
@@ -161,7 +171,7 @@ class TestMemoryManagerInputPending:
     def test_multiple_inputs_processed_in_one_tick(self, event_bus: EventBus) -> None:
         ready_events: list[InputReady] = []
         _memory_with_handler(event_bus)
-        event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
+        event_bus.subscribe(InputReady, _collect_input_ready(ready_events))
 
         event_bus.publish(
             _message_event(account_id="a1", content="first"),
@@ -186,7 +196,7 @@ class TestMemoryManagerInputPending:
     def test_later_input_overwrites_earlier_same_session(self, event_bus: EventBus) -> None:
         ready_events: list[InputReady] = []
         _memory_with_handler(event_bus)
-        event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
+        event_bus.subscribe(InputReady, _collect_input_ready(ready_events))
 
         event_bus.publish(
             _message_event(account_id="a1", content="old"),
@@ -204,7 +214,7 @@ class TestMemoryManagerInputPending:
     def test_proactive_not_triggered_without_config(self, event_bus: EventBus) -> None:
         ready_events: list[InputReady] = []
         _memory_with_handler(event_bus)
-        event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
+        event_bus.subscribe(InputReady, _collect_input_ready(ready_events))
 
         event_bus.publish(
             TimerTick(timestamp=None, source="kernel", tick_count=0),
@@ -214,7 +224,7 @@ class TestMemoryManagerInputPending:
     def test_user_input_takes_priority_over_proactive(self, event_bus: EventBus) -> None:
         ready_events: list[InputReady] = []
         _memory_with_handler(event_bus)
-        event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
+        event_bus.subscribe(InputReady, _collect_input_ready(ready_events))
 
         event_bus.publish(
             _message_event(session_id="s1", content="user msg"),
@@ -230,7 +240,7 @@ class TestMemoryManagerInputPending:
     def test_timer_removes_published_content(self, event_bus: EventBus) -> None:
         ready_events: list[InputReady] = []
         _memory_with_handler(event_bus)
-        event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
+        event_bus.subscribe(InputReady, _collect_input_ready(ready_events))
 
         event_bus.publish(
             _message_event(session_id="s1", content="hello"),
@@ -257,7 +267,7 @@ class TestInputReadySubscription:
     def test_input_ready_does_not_store_to_sensory(self, event_bus: EventBus) -> None:
         """PlanningHandler が InputReady(source="io") を直接処理するため、
         MemoryHandler は sensory に保存しない（二重処理防止）。"""
-        _, mgr = _memory_with_handler_pair(event_bus)
+        _, mgr = _memory_with_handler(event_bus, return_handler=True)
 
         event = InputReady(
             timestamp=None,
@@ -273,14 +283,14 @@ class TestInputReadySubscription:
         )
         event_bus.publish(event)
 
-        assert not mgr.sensory.has_pending_raw
+        assert not mgr.sensory.has_pending_raw(room_id="")
 
     def test_input_ready_not_chained_to_timer(self, event_bus: EventBus) -> None:
         """InputReady(source="io") は PlanningHandler が直接処理するため、
         sensory に保存されず TimerTick 経由では再 publish されない。"""
         _memory_with_handler(event_bus)
         flushed_events: list[InputReady] = []
-        event_bus.subscribe("InputReady", lambda e: flushed_events.append(e) if e.source == "memory" else None)
+        event_bus.subscribe(InputReady, lambda e: flushed_events.append(e) if e.source == "memory" else None)
 
         event_bus.publish(
             InputReady(
@@ -302,7 +312,7 @@ class TestInputReadySubscription:
         """InputReady(source="io") は sensory/pending に保存されない。"""
         _memory_with_handler(event_bus)
         flushed_events: list[InputReady] = []
-        event_bus.subscribe("InputReady", lambda e: flushed_events.append(e) if e.source == "memory" else None)
+        event_bus.subscribe(InputReady, lambda e: flushed_events.append(e) if e.source == "memory" else None)
 
         event = InputReady(
             timestamp=None,
@@ -325,7 +335,7 @@ class TestInputReadySubscription:
         """Memory層は msg_type=inhibition を無視する（InhibitionEventHandlerが担当）。"""
         _memory_with_handler(event_bus)
         inhibition_events: list = []
-        event_bus.subscribe("InhibitionEvent", lambda e: inhibition_events.append(e))
+        event_bus.subscribe(InhibitionEvent, lambda e: inhibition_events.append(e))
 
         event = InputReady(
             timestamp=None,
@@ -356,7 +366,7 @@ class TestRoomId:
         )
 
         ready_events: list[InputReady] = []
-        event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
+        event_bus.subscribe(InputReady, _collect_input_ready(ready_events))
         event_bus.publish(
             TimerTick(timestamp=None, source="kernel", tick_count=0),
         )
@@ -596,7 +606,7 @@ class TestRoomId:
         _memory_with_handler(event_bus)
 
         ready_events: list[InputReady] = []
-        event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
+        event_bus.subscribe(InputReady, _collect_input_ready(ready_events))
 
         event_bus.publish(
             RoomJoinedEvent(
@@ -619,7 +629,7 @@ class TestRoomId:
         _memory_with_handler(event_bus)
 
         ready_events: list[InputReady] = []
-        event_bus.subscribe("InputReady", _collect_input_ready(ready_events))
+        event_bus.subscribe(InputReady, _collect_input_ready(ready_events))
 
         event_bus.publish(
             RoomJoinedEvent(
@@ -654,17 +664,19 @@ class TestRoomId:
         assert "退室" in ready_events[0].content
 
     def test_pending_input_tracks_room_id(self, event_bus: EventBus) -> None:
-        handler, _ = _memory_with_handler_pair(event_bus)
+        _, mgr = _memory_with_handler(event_bus, return_handler=True)
 
         event_bus.publish(
             _message_event(account_id="a1", content="hello"),
         )
 
-        with handler._pending_lock:
-            assert ("a1", "") in handler._pending_input
+        with mgr.sensory.pending_lock:
+            from iris.memory.sensory.models import PendingInputKey
+
+            assert PendingInputKey(account_id="a1", room_id="") in mgr.sensory.pending_input
 
     def test_pending_input_room_id_keyed(self, event_bus: EventBus) -> None:
-        handler, _ = _memory_with_handler_pair(event_bus)
+        _, mgr = _memory_with_handler(event_bus, return_handler=True)
 
         event_bus.publish(
             _message_event(account_id="a1", content="msg1"),
@@ -673,14 +685,18 @@ class TestRoomId:
             _message_event(account_id="a2", content="msg2"),
         )
 
-        with handler._pending_lock:
-            keys = set(handler._pending_input.keys())
-            assert ("a1", "") in keys
-            assert ("a2", "") in keys
+        with mgr.sensory.pending_lock:
+            from iris.memory.sensory.models import PendingInputKey
+
+            keys = set(mgr.sensory.pending_input.keys())
+            assert PendingInputKey(account_id="a1", room_id="") in keys
+            assert PendingInputKey(account_id="a2", room_id="") in keys
 
     def test_handler_user_tracking_add_room(self, event_bus: EventBus) -> None:
         st = ShortTermMemoryManager()
-        _MemoryEventHandler(event_bus, None, None, short_term=st, account_dispatcher=None, room_provider=None)
+        from iris.memory.short_term.handler import ShortTermEventHandler
+
+        ShortTermEventHandler(event_bus, st)
 
         event_bus.publish(
             RoomJoinedEvent(
@@ -694,11 +710,14 @@ class TestRoomId:
 
         users = st.get_users_by_room("room1")
         assert len(users) == 1
-        assert users[0] == ("user1", "Alice")
+        assert users[0].account_id == "user1"
+        assert users[0].display_name == "Alice"
 
     def test_handler_user_tracking_remove_room(self, event_bus: EventBus) -> None:
         st = ShortTermMemoryManager()
-        _MemoryEventHandler(event_bus, None, None, short_term=st, account_dispatcher=None, room_provider=None)
+        from iris.memory.short_term.handler import ShortTermEventHandler
+
+        ShortTermEventHandler(event_bus, st)
 
         event_bus.publish(
             RoomJoinedEvent(

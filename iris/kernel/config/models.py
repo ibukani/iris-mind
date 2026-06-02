@@ -10,7 +10,7 @@ _VALID_PERFORMANCE_TIERS = {"fast", "balanced", "capable"}
 
 
 def _default_models() -> list[ModelEntry]:
-    return [ModelEntry(name="qwen3.5:9b", roles=["default"], max_tokens=1024, provider="ollama")]
+    return [ModelEntry(name="qwen3.5:9b", roles=["default", "memory"], max_tokens=1024, provider="ollama")]
 
 
 def _default_trigger_weights() -> dict[str, float]:
@@ -176,6 +176,22 @@ class PersonalityConfig(BaseModel):
     node_prompts_dir: str = ".iris/config/node_prompts"
 
 
+class LangMemConfig(BaseModel):
+    """LangMem ベースの長期記憶抽出ジョブの設定。"""
+
+    enabled: bool = False
+    model_role: str = "memory"
+    batch_min_turns: int = 6
+    batch_max_chars: int = 8000
+    temperature: float = 0.1
+    max_tokens: int = 1024
+    enable_updates: bool = False
+    enable_deletes: bool = False
+    auto_promote_min_confidence: float = 0.75
+    max_retry_count: int = 2
+    style_max_in_prompt: int = 4
+
+
 class MemoryConfig(BaseModel):
     episodic_path: str = ".iris/data/episodes.jsonl"
     semantic_path: str = ".iris/data/semantic.jsonl"
@@ -184,6 +200,16 @@ class MemoryConfig(BaseModel):
     semantic_max_entries: int = 100
     agents_md_path: str = ".iris/config/iris_profile.md"
     agents_md_max_bytes: int = 2048
+    archive_dir: str = ".iris/data/conversations"
+    archive_max_per_file_bytes: int = 4_000_000
+    candidate_path: str = ".iris/data/memory_candidates.jsonl"
+    job_path: str = ".iris/data/memory_jobs.jsonl"
+    consolidation_log_path: str = ".iris/data/memory_consolidation.jsonl"
+    style_memory_path: str = ".iris/data/style_memory.jsonl"
+    persona_patch_path: str = ".iris/data/persona_patches.jsonl"
+    relationship_state_path: str = ".iris/data/relationship_states.jsonl"
+    appraisal_episode_path: str = ".iris/data/appraisal_episodes.jsonl"
+    langmem: LangMemConfig = Field(default_factory=LangMemConfig)
 
 
 class ResponseReadinessConfig(BaseModel):

@@ -11,8 +11,8 @@ class TestAccountModel:
 
     def test_to_dict_roundtrip(self) -> None:
         a = Account(display_name="alice", profile={"lang": "ja"})
-        d = a.to_dict()
-        b = Account.from_dict(d)
+        d = a.model_dump(mode="json")
+        b = Account.model_validate(d)
         assert b.account_id == a.account_id
         assert b.display_name == "alice"
         assert b.profile == {"lang": "ja"}
@@ -27,7 +27,7 @@ class TestAccountIdentity:
             provider_name="Alice",
             metadata={"guild_id": "g1"},
         )
-        restored = AccountIdentity.from_dict(identity.to_dict())
+        restored = AccountIdentity.model_validate(identity.model_dump(mode="json"))
         assert restored.provider == Provider.DISCORD
         assert restored.subject == "12345"
         assert restored.account_id == "a1"

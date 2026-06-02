@@ -1,309 +1,51 @@
+"""テスト共通フィクスチャと fakes の再 export。
+
+Fake クラス本体は `tests/fakes/` に領域別 (llm / memory / session / context / tools)
+に分割している。互換性のため、既存テストが `from tests.conftest import FakeLLMProvider`
+等で参照できるよう再 export する。
+"""
+
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass, field
-from typing import Any
+from pathlib import Path
 
 import pytest
 
+from iris.account.dispatcher import AccountDispatcher
+from iris.account.manager import AccountManager
+from iris.account.store import AccountStore
 from iris.event import EventBus
-from iris.io.models import CommandOutput, Message
 from iris.kernel.config import Config, ModelConfig, ProactiveConfig
-
-# ── Fake LLM Provider ─────────────────────────────────────────
-
-
-class FakeLLMProvider:
-    def __init__(self, responses: list[Any] | None = None) -> None:
-        self.call_count = 0
-        from langchain_core.messages import AIMessage
-
-        self._responses: list[Any] = responses or [AIMessage(content="Hello from FakeLLM")]
-        self._messages_log: list[list[dict]] = []
-        self._model_log: list[str | None] = []
-
-    async def chat(
-        self,
-        messages: list[dict],
-        model: str | None = None,
-        enable_thinking: bool = False,
-        temperature: float = 0.7,
-        max_tokens: int = 4096,
-        tools: list[dict] | None = None,
-        on_token: Callable[[str], None] | None = None,
-        **kwargs: Any,
-    ) -> Any:
-        self._messages_log.append(messages)
-        self._model_log.append(model)
-        resp = self._responses[self.call_count % len(self._responses)]
-        self.call_count += 1
-        return resp
-
-    def is_available(self) -> bool:
-        return True
-
-    def unload_model(self, model_name: str) -> None:
-        pass
-
-
-# ── Fake Memory Stores ────────────────────────────────────────
-
-
-class FakeEpisodicStore:
-    def __init__(self) -> None:
-        self._entries: list[dict] = []
-
-    def add(self, summary: str) -> None:
-        self._entries.append({"summary": summary})
-
-    def get_recent(self, n: int = 5) -> list[str]:
-        return [e["summary"] for e in self._entries[-n:]]
-
-    def clear(self) -> None:
-        self._entries.clear()
-
-    @property
-    def count(self) -> int:
-        return len(self._entries)
-
-
-class FakeSemanticStore:
-    def __init__(self) -> None:
-        self._entries: list[dict] = []
-
-    def add(self, entry: dict) -> None:
-        if self._is_duplicate(entry.get("content", "")):
-            return
-        entry.setdefault("id", f"e{len(self._entries) + 1:03d}")
-        entry.setdefault("tags", [])
-        self._entries.append(entry)
-
-    def search(self, query: str, max_results: int = 3) -> list[dict]:
-        results = []
-        for e in self._entries:
-            if any(t in e.get("tags", []) for t in query.lower().split()):
-                results.append({**e, "score": 0.8})
-            elif query.lower() in e.get("content", "").lower():
-                results.append({**e, "score": 0.6})
-        return sorted(results, key=lambda x: x["score"], reverse=True)[:max_results]
-
-    def clear(self) -> None:
-        self._entries.clear()
-
-    def _is_duplicate(self, content: str) -> bool:
-        return any(e.get("content") == content for e in self._entries)
-
-    @property
-    def count(self) -> int:
-        return len(self._entries)
-
-
-class FakeVectorStore:
-    def __init__(self) -> None:
-        self._entries: list[dict] = []
-
-    def add(self, entry: dict) -> None:
-        self._entries.append(entry)
-
-    def update(self, entry: dict) -> None:
-        for i, e in enumerate(self._entries):
-            if e.get("id") == entry.get("id"):
-                self._entries[i] = entry
-                return
-
-    def delete(self, eid: str) -> None:
-        self._entries = [e for e in self._entries if e.get("id") != eid]
-
-    def clear(self) -> None:
-        self._entries.clear()
-
-    def search(self, query: str, max_results: int = 3, min_score: float = 0.0) -> list[dict]:
-        results = []
-        for e in self._entries:
-            content = e.get("content", "")
-            score = 0.7 + len(query) / max(len(content), 1) * 0.3 if query.lower() in content.lower() else 0.1
-            if score >= min_score:
-                results.append({**e, "score": min(score, 1.0)})
-        return sorted(results, key=lambda x: x["score"], reverse=True)[:max_results]
-
-    def count(self) -> int:
-        return len(self._entries)
-
-
-@dataclass
-class FakeMemoryManager:
-    episodic: FakeEpisodicStore = field(default_factory=FakeEpisodicStore)
-    semantic: FakeSemanticStore = field(default_factory=FakeSemanticStore)
-    vector_store: FakeVectorStore = field(default_factory=FakeVectorStore)
-    _preferences: list[dict] = field(default_factory=list)
-
-    def search_semantic(self, query: str, max_results: int = 3) -> list[dict]:
-        return self.semantic.search(query, max_results=max_results)
-
-    def get_user_preferences(self) -> list[dict]:
-        return self._preferences
-
-    def add_episodic(self, content: str, kind: str = "user_input", metadata: dict | None = None) -> None:
-        self.episodic.add(content)
-
-    def add_semantic(self, content: str, tags: list[str] | None = None) -> None:
-        self.semantic.add({"content": content, "tags": tags or []})
-
-    def add_semantic_by_type(self, entry_type: str, content: str, tags: list[str] | None = None) -> None:
-        self.semantic.add({"content": content, "tags": tags or [], "type": entry_type})
-
-    def get_recent(self, n: int = 3) -> list[dict]:
-        entries = self.episodic.get_recent(n)
-        return [{"summary": e} for e in entries]
-
-
-# ── Fake AgentsMdStore ────────────────────────────────────────
-
-
-@dataclass
-class FakeSessionInfo:
-    session_id: str = ""
-    role: str = ""
-    permissions: list = field(default_factory=list)
-    identity: str = ""
-
-
-class FakeSessionManager:
-    def __init__(self) -> None:
-        self.sent: list[Message | CommandOutput] = []
-        self._session_info: FakeSessionInfo | None = None
-
-    def set_session_info(self, info: FakeSessionInfo) -> None:
-        self._session_info = info
-
-    def route_message(self, msg: Message) -> None:
-        self.sent.append(msg)
-
-    def route_command_output(self, session_id: str, msg: CommandOutput) -> None:
-        self.sent.append(msg)
-
-    def is_session_active(self, session_id: str) -> bool:
-        return bool(session_id)
-
-    def get_session_info(self, session_id: str) -> FakeSessionInfo | None:
-        return self._session_info
-
-    def get_sessions_summary(self) -> str:
-        info = self._session_info
-        if info and info.permissions:
-            r = ", ".join(p.value if hasattr(p, "value") else str(p) for p in info.permissions)
-            return f"Connected clients:\n{info.role}: {r}"
-        return ""
-
-
-class FakeAgentsMdStore:
-    def __init__(self, content: str = "") -> None:
-        self._content = content
-        self.update_called_with: str | None = None
-
-    def load(self) -> str:
-        return self._content
-
-    def update(self, new_content: str) -> None:
-        self._content = new_content
-        self.update_called_with = new_content
-
-
-# ── Fake ContextManager ───────────────────────────────────────
-
-
-class FakeContextManager:
-    def __init__(self) -> None:
-        self.has_summary = False
-        self._summary = ""
-        self._compact_messages: list[dict] = []
-
-    def check_and_summarize(
-        self,
-        messages: list[dict],
-        context_window: int,
-        threshold: float = 0.7,
-        preserve_last: int = 4,
-    ) -> str:
-        return self._summary
-
-    def force_summarize(self, messages: list[dict], instructions: str = "", preserve_last: int = 2) -> str:
-        self.has_summary = True
-        self._summary = "Fake summary"
-        return self._summary
-
-    def build_compact_messages(self, messages: list[dict], preserve_last: int = 4) -> list[dict]:
-        return self._compact_messages or [
-            {"role": "system", "content": f"[Compact summary of {len(messages)} messages]"},
-        ]
-
-    def clear(self) -> None:
-        self.has_summary = False
-        self._summary = ""
-        self._compact_messages.clear()
-
-
-# ── Fake ToolExecutionEngine ──────────────────────────────────
-
-
-class FakeCapabilityRegistry:
-    def __init__(self) -> None:
-        self._tools: list[dict] = []
-        self._side_effects: set[str] = set()
-
-    def list_tools(self) -> list[dict]:
-        return self._tools
-
-    def register_func(
-        self,
-        name: str,
-        description: str = "",
-        parameters: dict | None = None,
-        **kwargs: Any,
-    ) -> Callable:
-        def decorator(func: Callable) -> Callable:
-            self._tools.append(
-                {
-                    "type": "function",
-                    "function": {"name": name, "description": description, "parameters": parameters or {}},
-                },
-            )
-            return func
-
-        return decorator
-
-    def execute(self, name: str, **kwargs: Any) -> str:
-        return f"Executed {name} with {kwargs}"
-
-    def register_decorated(self, fn: Any) -> None:
-        pass
-
-    def is_side_effect(self, name: str) -> bool:
-        return name in self._side_effects
-
-
-class FakeToolExecutionEngine:
-    def __init__(self) -> None:
-        self.registry = FakeCapabilityRegistry()
-        self._executed_results: list[tuple[str, str, bool]] = []
-
-    def execute_all(self, ctx: list[dict]) -> list[tuple[str, str, bool]]:
-        results: list[tuple[str, str, bool]] = []
-        for msg in ctx:
-            if msg.get("role") == "assistant" and msg.get("tool_calls"):
-                for tc in msg["tool_calls"]:
-                    name = tc["function"]["name"]
-                    is_side = self.registry.is_side_effect(name)
-                    triple = (name, "ok", is_side)
-                    results.append(triple)
-                    self._executed_results.append(triple)
-                    if not is_side:
-                        ctx.append({"role": "tool", "content": "Result: ok", "tool_call_id": tc.get("id", "")})
-        return results
-
-    @staticmethod
-    def all_side_effects(results: list[tuple[str, str, bool]]) -> bool:
-        return bool(results) and all(r[2] for r in results)
+from iris.memory.handler import _MemoryEventHandler
+from iris.memory.manager import MemoryManager
+from iris.room.dispatcher import _RoomDispatcher
+from iris.room.handler import _RoomEventHandler
+from iris.room.manager import RoomManager
+from iris.room.store import RoomStore
+from tests.fakes import (
+    FakeAgentsMdStore,
+    FakeContextManager,
+    FakeEpisodicStore,
+    FakeLLMProvider,
+    FakeMemoryManager,
+    FakeSemanticStore,
+    FakeSessionManager,
+    FakeToolExecutionEngine,
+    FakeVectorStore,
+)
+
+__all__ = [
+    "FakeAgentsMdStore",
+    "FakeContextManager",
+    "FakeEpisodicStore",
+    "FakeLLMProvider",
+    "FakeMemoryManager",
+    "FakeSemanticStore",
+    "FakeSessionManager",
+    "FakeToolExecutionEngine",
+    "FakeVectorStore",
+]
 
 
 # ── Fixtures ──────────────────────────────────────────────────
@@ -385,3 +127,44 @@ def mock_time_provider() -> Callable[[], float]:
         return current
 
     return _time
+
+
+@pytest.fixture
+def wired_handlers(
+    event_bus: EventBus,
+    tmp_path: Path,
+) -> tuple[AccountDispatcher, _RoomDispatcher, AccountManager, RoomManager]:
+    """Memory/Account/Room プラグインの主要ハンドラを event_bus に配線する。"""
+    from iris.memory.events.proactive_trigger import ProactiveTrigger
+    from iris.memory.sensory.handler import SensoryEventHandler
+    from iris.memory.short_term.handler import ShortTermEventHandler
+
+    memory_mgr = MemoryManager()
+    memory_mgr.sensory.event_bus = event_bus
+
+    account_store = AccountStore(
+        accounts_path=str(tmp_path / "accounts.jsonl"),
+        identities_path=str(tmp_path / "identities.jsonl"),
+    )
+    account_provider = AccountManager(store=account_store, event_bus=event_bus)
+
+    room_store = RoomStore()
+    room_provider = RoomManager(store=room_store, event_bus=event_bus, account_manager=account_provider)
+
+    account_dispatcher = AccountDispatcher(account_manager=account_provider)
+    room_dispatcher = _RoomDispatcher(room_manager=room_provider, account_manager=account_provider)
+
+    _RoomEventHandler(event_bus=event_bus, store=room_store, room_manager=room_provider)
+
+    sensory_handler = SensoryEventHandler(event_bus, memory_mgr.sensory)
+    ShortTermEventHandler(event_bus, memory_mgr.short_term)
+    proactive_trigger = ProactiveTrigger(event_bus, room_provider)
+
+    _MemoryEventHandler(
+        event_bus=event_bus,
+        sensory_handler=sensory_handler,
+        proactive_trigger=proactive_trigger,
+        proactive_config=None,
+    )
+
+    return account_dispatcher, room_dispatcher, account_provider, room_provider

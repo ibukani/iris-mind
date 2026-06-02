@@ -78,13 +78,15 @@ class SensoryMemoryManager:
 class ShortTermMemoryManager:
     """現在処理中の会話内容（ターン・話題・参照エンティティ）を保持。
     長期記憶への転送（consolidation）を担う。
-    脳科学対応: 前頭前野 (PFC) のワーキングメモリ。"""
+    脳科学対応: 前頭前野 (PFC) のワーキングメモリ。
+    内部モデル: ShortTermTurn / ShortTermSearchResult / ShortTermScope / ActiveUser
+    （全て @dataclass(slots=True)）"""
     def add_turn(self, role: str, content: str, account_id: str = "") -> None
-    def search(self, query: str, max_results: int = 5) -> list[dict]
-    def search_entities(self, entity_name: str) -> list[dict]
+    def search(self, query: str, max_results: int = 5) -> list[ShortTermSearchResult]
+    def search_entities(self, entity_name: str) -> list[ShortTermSearchResult]
     def render_context(self, max_chars: int = 600, query: str | None = None) -> str
-    def get_recent_turns(self, n: int = 4) -> list[dict]
-    def get_unconsolidated_turns(self) -> list[dict]
+    def get_recent_turns(self, n: int = 4) -> list[ShortTermTurn]
+    def get_unconsolidated_turns(self) -> list[ShortTermTurn]
     def mark_consolidated(self, up_to_index: int | None = None) -> None
     def should_consolidate(self) -> bool
     def clear(self) -> None
@@ -126,16 +128,22 @@ class LongTermMemoryManager:
 
 ```python
 class EpisodicStore:
-    """エピソード記憶。JSONL 永続化、上限30エントリ。"""
-    def add(self, summary: str, metadata: dict | None = None) -> None
+    """エピソード記憶。JSONL 永続化、上限30エントリ。
+    内部モデル: EpisodicEntry (@dataclass(slots=True))"""
+    def add(self, summary: str, metadata: dict | None = None) -> EpisodicEntry | None
     def get_recent(self, n: int = 5) -> list[dict]
+    def get_recent_entries(self, n: int = 5, room_id: str = "", account_id: str = "") -> list[EpisodicEntry]
+    def list_by_scope(self, scope: EpisodicScope) -> list[dict]
+    def list_all_entries(self) -> list[EpisodicEntry]
     def clear(self) -> None
 
 class SemanticStore:
     """意味記憶。JSONL 永続化 + ChromaDB + BM25 ハイブリッド検索。
-    上限100エントリ。統合スコア = vector * 0.6 + bm25 * 0.4"""
-    def add(self, entry: dict) -> None
+    上限100エントリ。統合スコア = vector * 0.6 + bm25 * 0.4
+    内部モデル: SemanticEntry (@dataclass(slots=True))"""
+    def add(self, entry: dict) -> SemanticEntry | None
     def search(self, query: str, max_results: int = 3) -> list[dict]
+    def search_entries(self, query: str, max_results: int = 3) -> list[SemanticEntry]
     def clear(self) -> None
     def sync(self) -> None
 
@@ -146,24 +154,6 @@ class AgentsMdStore:
 
 ```
 
-### goal_store.py — 長期目標管理
-
-```python
-class LongTermGoal(BaseModel):
-    """エージェントの持続的な目標。
-    description + weight (0.0~1.0) + タイムスタンプ。decay() で減衰可能。"""
-
-class GoalStore:
-    """LongTermGoal をインメモリ管理。永続化は MemoryManager 経由で定期的にダンプ/ロード。
-    目標は時間経過で weight が減衰し、閾値未満で忘却される。"""
-    def add_goal(self, description: str, weight: float = 1.0) -> str
-    def remove_goal(self, goal_id: str) -> bool
-    def get_goals(self) -> list[LongTermGoal]
-    def get_active_goals(self, threshold: float = 0.3) -> list[LongTermGoal]
-    def decay_goals(self, decay_rate: float, remove_threshold: float = 0.1) -> None
-    def save(self, filepath: str) -> None
-    def load(self, filepath: str) -> None
-```
 
 ### long_term/vector_store.py — ベクトル検索
 
@@ -228,6 +218,124 @@ ContextWindow 圧縮は LLMContextWindowManager（iris/llm/context.py の `LLMCo
 ### publish するイベント
 
 | イベント | タイミング | フィールド |
-|----------|-----------|-----------|
+|----------|-----------|------------|
 | `InputReady` | 入力確定時 / TimerTick / 再接続時 | content, session_id, account_id, context |
 | `InterruptEvent` | 入力確定時 | session_id |
+
+## LangMem ベースの長期記憶抽出 (ローカル LLM)
+
+`iris/memory/langmem/` はローカル LLM (Qwen3.5-9B + Ollama) を使い、LangMem を「候補抽出エンジン」としてのみ用いるパイプライン。**最終的な記憶の確定・保存・関係性更新は必ず Iris 側ロジックが行う。**
+
+### 設計原則
+
+- LangMem は SoT (Source of Truth) ではない。`MemoryCandidateStore` を経由する中間層である。
+- ローカル LLM は fallible 前提。スキーマは小さく・enum 中心・confidence と evidence を必須にする。
+- 抽出は **flush / idle / background** 経路でのみ起動する。チャット応答ホットパスからは外す。
+- チャットフローは抽出失敗で壊れない。失敗は job を `failed` にするだけで例外を伝播しない。
+- Persona ファイル (`iris_profile.md`) は **自動変更しない**。変更は `PersonaPatchCandidateStore` に必ず候補として保存し、`PersonaPatchPolicy.apply_approved()` 経由でのみ適用する。
+
+### データフロー
+
+```mermaid
+flowchart LR
+    ME[MessageEvent] --> ASensory[sensory.handler]
+    ASensory --> RAW[RawConversationArchiveStore<br/>JSONL append-only]
+    ASensory --> STM[ShortTermMemory]
+    STM --> FLUSH[MemoryManager.flush]
+    FLUSH --> PIPE[MemoryPipeline]
+    PIPE --> LJ[LangMemExtractor<br/>local Qwen3.5-9B]
+    LJ --> CAND[MemoryCandidateStore]
+    CAND --> PROM[PromotionPolicy]
+    PROM --> SEM[long_term.semantic]
+    PROM --> EPI[long_term.episodic]
+    PROM --> STY[StyleMemoryStore]
+    PROM --> LOG[MemoryConsolidationLogStore]
+    PIPE --> JOB[MemoryExtractionJobStore]
+    REL[RelationshipStateStore] --> LIM[LimbicOrchestrator]
+    APP[AppraisalEpisodeStore] --> LIM
+```
+
+### パス別スキーマ (small focused passes)
+
+| pass_type | target_store | スキーマ |
+|-----------|--------------|---------|
+| semantic | semantic | `UserPreferenceMemory` (category / content / evidence / confidence / scope) |
+| episodic | episodic | `EpisodicInteractionMemory` (situation / user_intent / assistant_action / result / lesson / confidence) |
+| style | style | `StyleMemory` (kind: tone_preference / successful_pattern / running_gag / avoidance_rule / chaos_preference / conversation_strategy) |
+| relationship | relationship | `RelationshipMemoryCandidate` (signal / evidence / suggested_delta / confidence) |
+| appraisal | appraisal | `AppraisalMemoryCandidate` (dimension / estimated_delta / reason / confidence) |
+| persona_patch | persona_patch | `PersonaPatchMemoryCandidate` (target_file / proposed_patch / reason / evidence / confidence) |
+
+### Promotion ルール (PromotionPolicy)
+
+- `confidence >= auto_promote_min_confidence` (default 0.75) のみ昇格
+- evidence 必須、content 空・短すぎ・危険ワード (`住所/電話/メール/パスワード/SSN/マイナンバー`) は拒否
+- `avoidance` カテゴリは confidence 0.85 必須
+- relationship / appraisal の delta は保守的範囲 (例: -0.1〜0.1) にクランプ
+- target_store 未実装 (`needs_review`)、job 失敗 (`failed`) は promotion log に書く
+- **重複検出**: 同じ `payload_hash` (target_store + 正規化 payload + scope 由来の SHA256) を持つ候補は pending 中は新規追加されない。`PromotionPolicy` も `seen_hashes` で再実行時の重複昇格を防ぐ。
+- **persona_patch**: `confidence >= 0.9` を満たす提案は `PersonaPatchCandidateStore` に `pending` として記録され、`PersonaPatchPolicy.apply_approved()` を経由しなければファイルへ反映されない。confidence が低い提案は `low_confidence: True` メタデータを付与した pending として保存される。
+- **Handler ディスパッチ**: 旧 `style_hooks` は廃止し、`RelationshipPromotionHandler` / `AppraisalPromotionHandler` / `PersonaPatchPromotionHandler` / `StylePromotionHandler` を `PromotionPolicy` に登録する。各 Handler は target_store 固有の保守的ロジック (クランプ / confidence scale / 負方向係数) を内包する。
+
+### ローカルモデルとの接続
+
+`LLMBridge.get_chat_model_for_role("memory")` が `BaseChatModel` (ChatOllama) を返し、それを `langmem.create_thread_extractor` に直接渡す。クラウド推論は使われない。`config.yaml` で `models[0].roles: [default, memory]` として同じ Qwen3.5-9B を参照する。
+
+### Style memory のプロンプト統合
+
+`Personality.build_system_prompt(style_hints=...)` が `## 動的スタイル記憶` セクションを追加する。`MemoryPipeline` の直後にレンダリングされ、最大 4 件 / 800 文字でプロンプトへ注入される。
+
+### テスト戦略
+
+- すべての抽出器 / ストアはローカル Ollama を必要としない
+- `tests.fakes.llm.FakeChatModelForLangMem` + `make_fake_thread_extractor` で LangMem の `Runnable` をスタブ化
+- 抽出器→候補→promotion→最終記憶の経路はユニットテストで網羅
+- 失敗系 (LLM 例外、ジョブ失敗、空 records、corrupt JSONL) もテストする
+- **評価ハーネス** (`tests/memory/langmem/test_extractor_evaluation.py`): explicit preference / 1 度きりジョーク / dislike→avoidance / sensitive 拒否 / relationship delta 上限 / 日本語保持 / 空会話 / 弱い根拠 / persona_patch の高 confidence 経路と低 confidence 経路 / 全パスの target_store 振り分けをスナップショット化。
+- **Scheduler** (`tests/memory/langmem/test_scheduler.py`): イベントループ未起動時の fallback / 同一 scope の重複抑制 / 別 scope の並列実行 / メインループをブロックしない / 例外捕捉 / 統計 / 完了後の再スケジュール / 実 `MemoryPipeline` との統合。
+- **Handlers** (`tests/memory/langmem/test_handlers.py`): RelationshipPromotionHandler の正方向 / 負方向 / 単候補上限 / confidence < 0.6 skip / familiarity field / PromotionPolicy 経由のルーティング、AppraisalPromotionHandler の episode 記録 / 極端 delta のクランプ / source_record_ids 永続化。
+- **Dedup** (`tests/memory/langmem/test_dedup.py` + `test_dedup_store.py`): `compute_payload_signature` のキー順非依存 / trim 吸収 / volatile 無視、`compute_candidate_hash` の target_store / account_id / room_id 差分検出、`MemoryCandidateStore` の pending 重複抑制・スコープ別共存。
+- **Style Index** (`tests/memory/procedural/test_style.py`): `StyleMemoryIndex` Protocol 互換性、`MetadataFilterStyleIndex` の挙動、`StyleMemoryStore.search()` のインデックス有無での挙動切替。
+
+### 非同期スケジューラ (MemoryPipelineScheduler)
+
+`MemoryManager.flush()` の中で ``run_full_cycle()`` を呼ぶと、LangMem は LLM 推論を 6〜8 件並列で走らせるため同期パスで 1 秒以上ブロックしてしまう。これを避けるため ``MemoryPipelineScheduler`` (``iris/memory/langmem/scheduler.py``) を導入した。
+
+- ``schedule_full_cycle(account_id, room_id)`` を呼ぶと、同一 (account_id, room_id) で重複スケジュールを抑止しつつ asyncio task として ``asyncio.to_thread`` でバックグラウンド実行される。
+- 実行中イベントループが無い (Flask 経由や CLI からの同期呼び出し) 場合は None が返り、MemoryManager は同期 ``run_full_cycle()`` にフォールバックする。
+- 失敗してもメイン会話フローを止めない (stats に記録)。
+- ``SchedulerStats`` で ``total_scheduled / total_deduplicated / total_failed / last_error`` を確認できる。
+
+### Style Memory インデックス抽象
+
+``StyleMemoryStore.search()`` は ``StyleMemoryIndex`` Protocol を介して実装を差し替え可能。デフォルト実装 ``MetadataFilterStyleIndex`` は現在のメタデータフィルタと同じ挙動 (全件スキャン O(N))。ベクトル検索が必要になった場合は別実装を ``StyleMemoryStore.set_index()`` で注入できる。
+
+### 設定 (config.yaml)
+
+```yaml
+memory:
+  langmem:
+    enabled: false       # デフォルト無効。明示で有効化する
+    model_role: memory
+    batch_min_turns: 6
+    batch_max_chars: 8000
+    temperature: 0.1
+    max_tokens: 1024
+    enable_updates: false
+    enable_deletes: false
+    auto_promote_min_confidence: 0.75
+    max_retry_count: 2
+    style_max_in_prompt: 4
+```
+
+### データ種類の区別 (重要)
+
+| 種類 | 場所 | 用途 |
+|------|------|------|
+| Raw Archive | `iris/memory/archive/` (JSONL) | 永続ログ・再抽出・障害解析用。意味記憶ではない |
+| Memory Candidate | `iris/memory/langmem/stores.py` (JSONL) | LangMem 出力の**中間**。最終記憶ではない |
+| Semantic / Episodic | `iris/memory/long_term/stores.py` (JSONL+Chroma) | 昇格後の意味・エピソード記憶 |
+| Relationship Snapshot | `iris/limbic/stores/relationship_store.py` | Limbic 計算結果の永続化。LangMem は触らない |
+| Appraisal Episode | `iris/limbic/stores/appraisal_store.py` | limbic 1 ターン履歴。LangMem は触らない |
+| Style Memory | `iris/memory/procedural/` | 応答スタイルを継続最適化。プロンプトに注入 |
+| Persona Patch | `iris/memory/procedural/persona_patch_store.py` | persona ファイルへの変更案。**自動適用禁止** |

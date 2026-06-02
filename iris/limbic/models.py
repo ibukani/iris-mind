@@ -1,14 +1,14 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from enum import Enum, IntEnum
 from typing import Any
+
+from pydantic import BaseModel, Field
 
 # ---- Appraisal 次元 ----
 
 
-@dataclass
-class PrimaryAppraisal:
+class PrimaryAppraisal(BaseModel):
     """Lazarusの第一次評価: Eventの個人的意味づけ"""
 
     novelty: float = 0.0
@@ -18,8 +18,7 @@ class PrimaryAppraisal:
     coping_potential: float = 0.0
 
 
-@dataclass
-class SecondaryAppraisal:
+class SecondaryAppraisal(BaseModel):
     """Lazarusの第二次評価: 自己の対処能力評価"""
 
     accountability: float = 0.0
@@ -28,8 +27,7 @@ class SecondaryAppraisal:
     social_norms: float = 0.0
 
 
-@dataclass
-class AppraisalDimensions:
+class AppraisalDimensions(BaseModel):
     """CAPE framework の 6 次元 (unpleasantness, control, responsibility, certainty, effort, attention)"""
 
     unpleasantness: float = 0.0
@@ -66,8 +64,7 @@ PLUTCHIK_VAD: dict[PlutchikEmotion, tuple[float, float, float]] = {
 }
 
 
-@dataclass
-class CompanionEmotion:
+class CompanionEmotion(BaseModel):
     """コンパニオンの感情状態 (Plutchik + VAD)"""
 
     primary: PlutchikEmotion = PlutchikEmotion.JOY
@@ -81,32 +78,17 @@ class CompanionEmotion:
     def to_vad_dict(self) -> dict[str, float]:
         return {"valence": self.valence, "arousal": self.arousal, "dominance": self.dominance}
 
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "primary": self.primary.value,
-            "intensity": self.intensity,
-            "valence": self.valence,
-            "arousal": self.arousal,
-            "dominance": self.dominance,
-            "secondary": self.secondary.value if self.secondary else None,
-            "secondary_intensity": self.secondary_intensity,
-        }
-
 
 # ---- Mood dynamics ----
 
 
-@dataclass
-class Mood:
+class Mood(BaseModel):
     """slow-moving baseline (時間減衰あり)"""
 
     valence: float = 0.0
     arousal: float = 0.0
     dominance: float = 0.0
     last_updated: float = 0.0
-
-    def to_dict(self) -> dict[str, float]:
-        return {"valence": self.valence, "arousal": self.arousal, "dominance": self.dominance}
 
 
 # ---- 関係性 ----
@@ -125,8 +107,7 @@ class AttachmentStyle(Enum):
     DISORGANIZED = "disorganized"
 
 
-@dataclass
-class RelationshipState:
+class RelationshipState(BaseModel):
     """Bowlby attachment theory ベースの関係性状態"""
 
     level: RelationshipLevel = RelationshipLevel.ACQUAINTANCE
@@ -135,25 +116,16 @@ class RelationshipState:
     attachment_style: AttachmentStyle = AttachmentStyle.SECURE
     interaction_count: int = 0
     disclosure_depth: float = 0.0
-    history: list[dict[str, Any]] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "level": self.level.name,
-            "trust": self.trust,
-            "familiarity": self.familiarity,
-            "attachment_style": self.attachment_style.value,
-            "interaction_count": self.interaction_count,
-            "disclosure_depth": self.disclosure_depth,
-        }
+    history: list[dict[str, Any]] = Field(default_factory=list)
 
 
 # ---- 結果型 ----
 
 
-@dataclass
-class EmotionResult:
+class EmotionResult(BaseModel):
     """Appraisal → Emotion → Relationship パイプラインの出力"""
+
+    model_config = {"arbitrary_types_allowed": True}
 
     appraisal: AppraisalDimensions
     emotion: CompanionEmotion

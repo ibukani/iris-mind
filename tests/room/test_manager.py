@@ -5,6 +5,7 @@ from datetime import UTC, datetime
 from iris.event.base import TimerTick
 from iris.event.event_bus import EventBus
 from iris.io.events import SessionDisconnectEvent
+from iris.room.events import RoomDeletedEvent
 from iris.room.handler import _RoomEventHandler
 from iris.room.manager import RoomManager
 from iris.room.models import RoomMember
@@ -85,7 +86,7 @@ class TestRoomManagerCleanup:
             if hasattr(e, "room_id"):
                 deleted_ids.append(str(e.room_id))
 
-        event_bus.subscribe("RoomDeletedEvent", _on_deleted)
+        event_bus.subscribe(RoomDeletedEvent, _on_deleted)
 
         manager.leave_room(room.room_id, "u1")
 

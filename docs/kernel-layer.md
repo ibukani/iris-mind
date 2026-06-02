@@ -19,7 +19,9 @@
 iris/kernel/
 ├── __init__.py
 ├── manager.py         PluginManager（DI + 全Plugin指揮 + 状態集約）
+├── factory.py         build_kernel / KernelComponents（診断/CommandHandler の DI 配線）
 ├── process.py         KernelProcess（起動・停止, TimerTick発行）
+├── protocols.py       共有 Protocol（EventPublisher / DisplayNameResolver 等）
 ├── supervisor.py      Supervisor（シグナル管理）
 ├── config.py          KernelConfig
 ├── capture_formatter.py   デバッグ出力整形
@@ -78,10 +80,10 @@ class KernelProcess:
     """プロセスの起動と停止を管理する。"""
 
     def __init__(self, config: Config)
-        # PluginManager で全層を構築
+        # build_kernel() で KernelComponents を構築
 
     def start(self) -> None
-        # 1. PluginManager.discover_and_build_all() で全Pluginを構築
+        # 1. start_kernel_io() で IO を起動
         # 2. PluginManager.start_all() で全Pluginを起動
         # 3. TimerTick スレッド開始
 
@@ -93,6 +95,30 @@ class KernelProcess:
     @property
     def shutdown_requested(self) -> bool
 ```
+
+## KernelFactory (kernel/factory.py)
+
+`PluginManager` はサービスコンテナとライフサイクルを担うが、**ロジック層の組み立て
+(SystemDiagnostics ↔ 各層 / CommandHandler の DI 配線)** は service locator
+にならないよう `build_kernel()` に集約する。
+
+```python
+from iris.kernel.factory import build_kernel, start_kernel_io
+
+components = build_kernel(config, debug=debug)
+#   - manager       : PluginManager
+#   - diagnostics   : SystemDiagnostics（layer state provider 接続済み）
+#   - cmd_handler   : CommandHandler（manager.provide() で登録済み）
+#   - process       : KernelProcess（manager を受け取り済み）
+#   - shutdown_fn   : manager.request_shutdown の薄いラッパ
+
+components.process.start()
+start_kernel_io(components)
+```
+
+各 plugin の `__init__.py` / `builder.py` は `manager.resolve_optional(...)` を
+**組み立て時のみ** 使ってよい。ロジッククラス (manager.py / orchestrator.py /
+gateway.py) は PluginManager を持ってはならない（arch テストで禁止）。
 
 ## Supervisor
 
@@ -130,7 +156,6 @@ class CommandHandler:
         # /status        → 設定・状態表示
         # /shutdown      → KernelProcess.shutdown
         # /help          → コマンド一覧
-        # /compact       → AgencyManager.compact_context
         # /memory recent → MemoryManager.retrieve("episodic")
         # /memory search → MemoryManager.search("semantic")
         # /memory clear  → MemoryManager.clear()

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import Any, TypedDict
+
+from pydantic import BaseModel, Field
 
 from iris.agency.modulation import ModulationState
 
@@ -14,8 +15,12 @@ class PlanReason(StrEnum):
     TIMER_EVENT = "timer"
 
 
-@dataclass
-class Plan:
+class PlanningState(TypedDict):
+    strategy_type: str
+    proactive_judge_available: bool
+
+
+class Plan(BaseModel):
     content: str
     task_level: str = "normal"
     silent: bool = False
@@ -24,5 +29,5 @@ class Plan:
     session_id: str = ""
     account_id: str = ""
     room_id: str = ""
-    overrides: dict[str, Any] = field(default_factory=dict)
-    modulation: ModulationState = field(default_factory=ModulationState)
+    overrides: dict[str, Any] = Field(default_factory=dict)
+    modulation: ModulationState = Field(default_factory=ModulationState)

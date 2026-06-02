@@ -14,7 +14,7 @@ class ParticipantsProvider:
             users = self._memory.short_term.get_users_by_room(room_id)
             if len(users) <= 1:
                 return ""
-            names = [nick for _, nick in users]
+            names = [u.display_name for u in users]
             return f"このルームの参加者: {', '.join(names)}"
         except Exception:
             return ""

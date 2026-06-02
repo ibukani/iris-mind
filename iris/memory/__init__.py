@@ -43,9 +43,6 @@ class MemoryPlugin(PluginProtocol):
         components = self._build_components(manager)
         self._provide_components(manager, components)
         self._wire_event_handler(manager, components)
-        from .hooks import register_hooks
-
-        register_hooks(manager)
 
     def _build_components(self, manager: PluginManager) -> MemoryComponents:
         from iris.memory.builder import build_memory
@@ -53,31 +50,16 @@ class MemoryPlugin(PluginProtocol):
         return build_memory(manager)
 
     def _provide_components(self, manager: PluginManager, components: MemoryComponents) -> None:
-        manager.provide(MemoryManager, components["memory"])
-        manager.provide(SensoryMemoryManager, components["sensory"])
-        manager.provide(ShortTermMemoryManager, components["short_term"])
-        manager.provide(LongTermMemoryManager, components["long_term"])
-        manager.provide(VectorStore, components["vector_store"])
+        manager.provide(MemoryManager, components.memory)
+        manager.provide(SensoryMemoryManager, components.sensory)
+        manager.provide(ShortTermMemoryManager, components.short_term)
+        manager.provide(LongTermMemoryManager, components.long_term)
+        manager.provide(VectorStore, components.vector_store)
 
     def _wire_event_handler(self, manager: PluginManager, components: MemoryComponents) -> None:
-        from iris.account.dispatcher import AccountDispatcher
-        from iris.event.event_bus import EventBus
         from iris.memory.handler import _MemoryEventHandler
-        from iris.room.manager import RoomManager as RoomManagerCls
 
-        account_dispatcher = manager.resolve_optional(AccountDispatcher)
-        room_provider = manager.resolve_optional(RoomManagerCls)
-
-        event_handler = _MemoryEventHandler(
-            event_bus=manager.resolve(EventBus),
-            sensory=components["sensory"],
-            proactive_config=manager.config.proactive,
-            short_term=components["short_term"],
-            account_dispatcher=account_dispatcher,
-            room_provider=room_provider,
-        )
-
-        manager.provide(_MemoryEventHandler, event_handler)
+        manager.provide(_MemoryEventHandler, components.event_handler)
 
     def start(self, manager: PluginManager) -> None:
         return None

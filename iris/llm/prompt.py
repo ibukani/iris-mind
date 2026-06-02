@@ -39,6 +39,7 @@ class Personality:
         response_style: str = "",
         governance_principles: str = "",
         affective_guidance: str = "",
+        style_hints: str = "",
     ) -> str:
         if agents_md_content:
             agents_md_content = agents_md_content.replace("{name}", self.name)
@@ -52,6 +53,7 @@ class Personality:
             ("## ユーザー情報", user_preferences),
             ("## 自己規律", governance_principles),
             ("## 応答スタイル", response_style),
+            ("## 動的スタイル記憶", style_hints),
             ("## Irisの現在の応答傾向", affective_guidance),
         ]:
             if content:

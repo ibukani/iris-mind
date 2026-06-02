@@ -5,7 +5,7 @@ import pytest
 
 from iris.llm.context import LLMContextWindowManager
 from iris.llm.token_utils import estimate_messages_tokens, estimate_tokens
-from tests.conftest import FakeLLMProvider
+from tests.fakes import FakeLLMProvider
 
 
 def test_estimate_tokens() -> None:

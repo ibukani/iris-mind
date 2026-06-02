@@ -30,6 +30,7 @@ def _safe_score(fn: Callable[[], float], default: float = 0.0) -> float:
 class ScoreContext:
     now: float
     content: str = ""
+    room_id: str = ""
     context: dict[str, Any] | None = None
 
 
@@ -41,7 +42,7 @@ class ProactiveScorer:
     def compute(self, ctx: ScoreContext) -> tuple[float, dict[str, float]]:
         memory_score = self._compute_memory_score()
         context_score = self._compute_context_score()
-        sensory_score = self._compute_sensory_score()
+        sensory_score = self._compute_sensory_score(ctx.room_id)
         stm_score = self._compute_short_term_score()
         urgency_score = self._compute_content_urgency(ctx.content)
         context_score = max(context_score, stm_score) if stm_score > 0 else context_score
@@ -123,12 +124,12 @@ class ProactiveScorer:
         jaccard = len(bg_a & bg_b) / len(bg_a | bg_b)
         return min(jaccard + 0.2, 1.0)
 
-    def _compute_sensory_score(self) -> float:
-        return _safe_score(self._do_compute_sensory_score, 0.0)
+    def _compute_sensory_score(self, room_id: str) -> float:
+        return _safe_score(lambda: self._do_compute_sensory_score(room_id), 0.0)
 
-    def _do_compute_sensory_score(self) -> float:
-        sensory = self._memory.sensory.retrieve()
-        return 0.6 if sensory.get("raw") else 0.0
+    def _do_compute_sensory_score(self, room_id: str) -> float:
+        sensory = self._memory.sensory.retrieve(room_id)
+        return 0.6 if sensory.raw else 0.0
 
     def _compute_short_term_score(self) -> float:
         return _safe_score(self._do_compute_short_term_score, 0.0)

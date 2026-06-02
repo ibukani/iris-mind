@@ -165,7 +165,7 @@ iris/
 │   ├── __init__.py
 │   ├── manager.py             IOManager
 │   ├── models.py              Message, CommandInput, CommandOutput ...
-│   ├── hooks.py               Hook登録
+│   ├── dispatcher.py          DispatcherRegistry（control / command ルーティング）
 │   ├── gateway.py             gRPC Gateway
 │   ├── handler.py             IO Handler（EventBus連携）
 │   ├── transport/
@@ -192,21 +192,22 @@ iris/
 │
 ├── account/                   # アカウント管理: ユーザー識別・外部ID連携
 │   ├── __init__.py            AccountPlugin (STORE phase)
+│   ├── builder.py             コンポーネント組み立て
 │   ├── models.py              Account, AccountIdentity
 │   ├── store.py               AccountStore（JSONL永続化）
 │   ├── manager.py             AccountManager（コアサービス）
 │   ├── events.py              AccountCreated/Updated/IdentityLinked/Presence
-│   ├── dispatcher.py          AccountDispatcher（ControlMessage処理）
-│   └── hooks.py               EventBus Hook登録
+│   └── dispatcher.py          AccountDispatcher（ControlMessage処理）
 │
 ├── room/                      # ルーム管理: ルームCRUD・メンバーシップ・アカウント連携
 │   ├── __init__.py            RoomPlugin (STORE phase)
-│   ├── models.py              Room, RoomMember, RoomState
+│   ├── builder.py             コンポーネント組み立て
+│   ├── models.py              Room, RoomMember, RoomState, RoomUpdate, RoomMetadata
 │   ├── store.py               RoomStore（インメモリ）
-│   ├── manager.py             RoomManager（コアサービス）
+│   ├── manager.py             RoomManager（コアサービス・create_room/update_room/update_room_from_update）
+│   ├── field_coercion.py      _coerce_update_field（型変換ヘルパ）
 │   ├── events.py              RoomCreated/Updated/Deleted/Joined/Left
-│   ├── dispatcher.py          _RoomDispatcher（ControlMessage処理）
-│   └── hooks.py               EventBus Hook登録
+│   └── dispatcher.py          _RoomDispatcher（ControlMessage処理・RoomUpdate 経由）
 │
 ├── heartbeat/                 # TimerTick heartbeat Plugin
 │   ├── __init__.py
@@ -219,7 +220,6 @@ iris/
 │   ├── handler.py             イベントハンドラ
 │   ├── dispatcher.py          store/retrieve/search ディスパッチ
 │   ├── builder.py             コンポーネント組立
-│   ├── hooks.py               Plugin Hook登録
 │   ├── base.py                _JsonlStore 基底
 │   ├── models.py              ContentBlock等 共通型定義
 │   ├── sensory/               # 感覚記憶: 生入力の一時保持
@@ -237,8 +237,7 @@ iris/
 │       ├── __init__.py
 │       ├── manager.py         LongTermMemoryManager
 │       ├── stores.py          EpisodicStore + SemanticStore + AgentsMdStore
-│       ├── protocols.py       Store プロトコル定義
-│       ├── goal_store.py      GoalStore（長期目標管理）
+│       ├── store_protocols.py  Store プロトコル定義
 │       └── vector_store.py    VectorStore（ChromaDB + BM25 ハイブリッド）
 │
 ├── agency/                    # 高度認知: PFC + 基底核 + 運動野
@@ -247,7 +246,6 @@ iris/
 │   ├── manager.py             AgencyManager
 │   ├── internal_bus.py        Internal EventBus（planning→execution）
 │   ├── builder.py             コンポーネント組み立て
-│   ├── hooks.py               Plugin Hook登録
 │   ├── modulation.py          Agency変調（感情→意思決定への影響）
 │   ├── inhibition/            # 基底核: 抑制制御（Striatum+Gate）
 │   │   ├── __init__.py
@@ -311,14 +309,13 @@ iris/
 │   ├── relationship.py        Bowlby attachment + 3段階関係性
 │   ├── state.py               状態統合
 │   ├── orchestrator.py        パイプライン統合
-│   └── hooks.py               EventBus購読
+│   └── handler.py             EventBus購読（MessageEvent, RoomJoinedEvent 等）
 │
 │   ├── llm/                       # LLM 基盤
 │   │   ├── __init__.py
 │   │   ├── bridge.py              LLMBridge（マルチプロバイダルーター）
 │   │   ├── capability.py          CapabilityChecker
 │   │   ├── context.py             LLMContextWindowManager
-│   │   ├── hooks.py               Plugin Hook登録
 │   │   ├── interrupt_token.py     InterruptToken
 │   │   ├── model_factory.py       ChatModelファクトリ
 │   │   ├── priority_lock.py       PriorityLock
@@ -335,8 +332,8 @@ iris/
 ├── tools/                     # @tool, ToolRegistry
 │   ├── __init__.py
 │   ├── decorator.py           @tool デコレータ
-│   ├── models.py              ToolDef, ToolCall
-│   ├── registry.py            ToolRegistry
+│   ├── models.py              ToolDef, ToolResult, ToolSchema (TypedDict)
+│   ├── registry.py            ToolRegistry（list_tools は list[ToolSchema] 返却）
 │   └── builtins/              組み込みツール
 │
 └── admin/                     # CLI管理
@@ -477,6 +474,36 @@ flowchart LR
 
 - 各層は直接の依存を持たず、EventBus を介して通信する
 - PluginManager が全層の構築、DI、ライフサイクル管理を行う（`kernel/manager.py`）
+- ロジック層（manager.py / orchestrator.py / gateway.py / dispatcher.py）は
+  `PluginManager` を **保持してはならない**（service locator 禁止）。
+  PluginManager への依存は `__init__.py` / `builder.py` のみ。
+  検証: `tests/architecture/test_no_service_locator.py`
+- `EventBus.subscribe(...)` は **`handler.py` / `handlers.py` のみ** が呼んでよい。
+  検証: `tests/architecture/test_handler_only_subscriptions.py`
+- ロジック層間の接続は `iris/kernel/factory.py::build_kernel()` で
+  明示的に組み立てる。`SystemDiagnostics` ↔ 各層 `StateProvider` 、
+  `CommandHandler` ↔ `MemoryManager` / `SessionManager` / `LLMBridge` /
+  `ToolRegistry` / `DebugCapture` を DI で配線する。
 - Agency の planning → execution は内部 EventBus を介する
 - IO 層は gRPC への依存を持つが、`io/transport/` に閉じる
 - 全Pluginの依存は `PluginManifest.dependencies` に宣言、PluginManagerがトポロジカルソートで解決
+
+## 7. 共有 Protocol (`iris/kernel/protocols.py`)
+
+ロジック層が依存してもよい境界の型を `Protocol` で定義し、`iris.kernel.protocols`
+経由でのみ参照する。実装クラスが別プラグインにあっても構造的サブタイピングで
+差し替えられる（テストでは mock で代替可能）。
+
+| Protocol | 役割 |
+|----------|------|
+| `EventPublisherProtocol` | `EventBus.publish` 経由のイベント発行 |
+| `EventSubscriberProtocol` | `EventBus.subscribe` 経由のイベント購読 |
+| `HookRegistryProtocol`   | Hook ポイントへの登録 |
+| `DisplayNameResolverProtocol` | アカウント/ルームの表示名解決 |
+| `AccountResolverProtocol` / `RoomResolverProtocol` | ID → モデル解決 |
+| `MemoryReaderProtocol`   | 記憶検索 |
+| `ProviderResolverProtocol` | LLM プロバイダ解決 |
+| `ToolRegistryProtocol`   | ツール実行 |
+| `StateProviderProtocol`  | 状態スナップショット |
+| `InterruptibleProtocol`  | 実行中断 |
+| `ConfigProtocol`         | 設定参照 |

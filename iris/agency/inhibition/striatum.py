@@ -5,10 +5,12 @@ from typing import TYPE_CHECKING
 
 from iris.agency.inhibition.models import (
     BUILTIN_SUPPRESSION_PROFILES,
+    ActiveSuppression,
     GateDecision,
     Pathway,
     SuppressionEntry,
     SuppressionProfile,
+    SuppressionState,
 )
 from iris.agency.planning.models import Plan, PlanReason
 
@@ -105,21 +107,20 @@ class _Striatum:
                 return True
         return False
 
-    def get_active_suppressions(self) -> list[dict]:
+    def get_active_suppressions(self) -> list[dict[str, object]]:
         now = time.monotonic()
-        result = []
+        result: list[dict[str, object]] = []
         for entry in self._suppressions.values():
             if entry.expiry == 0.0 or now < entry.expiry:
-                remaining = "permanent" if entry.expiry == 0.0 else round(entry.expiry - now, 1)
-                result.append(
-                    {
-                        "reason": entry.reason,
-                        "room_id": entry.room_id,
-                        "priority": entry.profile.priority,
-                        "blocked_reasons": list(entry.profile.blocked_reasons),
-                        "remaining": remaining,
-                    }
+                remaining: float | str = "permanent" if entry.expiry == 0.0 else round(entry.expiry - now, 1)
+                snapshot = ActiveSuppression(
+                    reason=entry.reason,
+                    room_id=entry.room_id,
+                    priority=entry.profile.priority,
+                    blocked_reasons=list(entry.profile.blocked_reasons),
+                    remaining=remaining,
                 )
+                result.append(snapshot.model_dump())
         return result
 
     def evaluate(self, plan: Plan) -> GateDecision:
@@ -186,16 +187,16 @@ class _Striatum:
             reason="gate open",
         )
 
-    def get_state(self) -> dict:
+    def get_state(self) -> SuppressionState:
         now = time.monotonic()
-        return {
-            "suppressions": {
+        return SuppressionState(
+            suppressions={
                 key: {
                     "reason": entry.reason,
                     "room_id": entry.room_id,
                     "priority": entry.profile.priority,
-                    "remaining": "permanent" if entry.expiry == 0.0 else round(entry.expiry - now, 1),
+                    "remaining": ("permanent" if entry.expiry == 0.0 else round(entry.expiry - now, 1)),
                 }
                 for key, entry in self._suppressions.items()
             },
-        }
+        )

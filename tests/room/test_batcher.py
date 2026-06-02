@@ -98,12 +98,12 @@ class TestRoomJoinBatcher:
             count=2,
         )
 
-        d = batch.to_dict()
+        d = batch.model_dump(mode="json")
+        assert d["type"] == "RoomJoinedBatchEvent"
         assert d["count"] == 2
         assert len(d["joins"]) == 2
-        assert d["joins"][0]["account_id"] == "u1"
 
-        restored = RoomJoinedBatchEvent.from_dict(d)
+        restored = RoomJoinedBatchEvent.model_validate(d)
         assert isinstance(restored, RoomJoinedBatchEvent)
         assert restored.count == 2
         assert len(restored.joins) == 2

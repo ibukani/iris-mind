@@ -23,6 +23,7 @@ Read this when organizing or splitting internal files of an existing Plugin, or 
 - **Dependency injection (DI)**: inject dependencies explicitly through constructors. Do not keep `PluginManager` inside logic classes as a service locator.
 - **Separate pure logic from I/O**: scorers and extractors should only transform data. They should not perform file I/O or publish to EventBus.
 - **EventBus subscription belongs in handlers**: managers must not subscribe directly. Put subscription in `handler.py` and wire it from `__init__.py` or `builder.py`.
+- **Type-safe data structures**: prefer `dataclass`, `TypedDict`, `Pydantic BaseModel`, or `NamedTuple` over bare `dict` and `tuple`. Reserve plain `dict`/`tuple` for genuinely flexible data whose shape is intentionally dynamic, such as metadata, plugin manifests, hook payloads, or external API blobs. Internal data that crosses function or module boundaries should be a typed model.
 - **No excessive refactor of existing Plugins**: do not perform a broad refactor only to force perfect compliance. Split only responsibilities relevant to the current change.
 
 ## Standard Directory Structure
@@ -61,13 +62,13 @@ iris/<plugin_name>/
 | `handler.py` | EventBus subscriptions | `_XxxEventHandler` private | `_MemoryEventHandler` |
 | `dispatcher.py` | operation dispatch | `build_xxx_handlers()` + `_xxx_yyy()` | `build_store_handlers()` + `_store_sensory()` |
 | `router.py` | conditional branching | `route_xxx_yyy()` | `route_after_llm(state) -> str` |
-| `builder.py` | component assembly | `build_xxx(manager)` | `build_agency(manager) -> dict` |
+| `builder.py` | component assembly | `build_xxx(manager) -> XxxComponents` | `build_agency(manager) -> AgencyComponents` |
 
 ### Data Structures
 
 | File | Contents | Class pattern | Example |
 |---|---|---|---|
-| `models.py` | data type definitions | `XxxData`, `XxxState` | `TurnData`, `SearchResult`, `ExecutionState` |
+| `models.py` | typed data definitions (dataclass / TypedDict / Pydantic / NamedTuple); avoid bare `dict`/`tuple` | `XxxData`, `XxxState` | `TurnData`, `SearchResult`, `ExecutionState` |
 | `protocol.py` | single Protocol | `XxxProtocol` | `MemoryManagerProtocol` |
 | `protocols.py` | multiple Protocols | `XxxProtocol` | `EpisodicStoreProtocol`, `SemanticStoreProtocol` |
 | `base.py` | abstract base | `_XxxBase` private | `_JsonlStore` |
@@ -191,7 +192,8 @@ class XxxPlugin(PluginProtocol):
 ```python
 # iris/<plugin>/builder.py
 from __future__ import annotations
-from typing import Any, TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from iris.event.event_bus import EventBus
 
@@ -201,11 +203,16 @@ if TYPE_CHECKING:
     from iris.kernel.manager import PluginManager
 
 
-def build_components(manager: PluginManager) -> dict[str, Any]:
+@dataclass(frozen=True)
+class XxxComponents:
+    manager: XxxManager
+
+
+def build_components(manager: PluginManager) -> XxxComponents:
     event_bus = manager.resolve(EventBus)
     component = XxxManager(event_bus=event_bus)
     manager.provide(XxxManager, component)
-    return {"manager": component}
+    return XxxComponents(manager=component)
 ```
 
 ### Handler for EventBus Subscription
@@ -242,11 +249,27 @@ class XxxStoreProtocol(Protocol):
 ### Dispatcher
 
 ```python
-def build_store_handlers(manager):
-    return {
-        "sensory": lambda item: manager.store_sensory(item),
-        "short_term": lambda item: manager.store_short_term(item),
-    }
+# iris/<plugin>/dispatcher.py
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
+
+from .manager import XxxManager
+
+
+type StoreHandler = Callable[[object], Awaitable[None]]
+
+
+@dataclass(frozen=True)
+class StoreHandlers:
+    sensory: StoreHandler
+    short_term: StoreHandler
+
+
+def build_store_handlers(manager: XxxManager) -> StoreHandlers:
+    return StoreHandlers(
+        sensory=manager.store_sensory,
+        short_term=manager.store_short_term,
+    )
 ```
 
 ## Existing Plugin Structure Examples

@@ -14,5 +14,6 @@ Review the current diff.
 - Did protobuf dependency leak into domain code?
 - Are managers / gateways / orchestrators growing too large?
 - Are there unnecessary compatibility layers or dead code?
-- Are tests sufficient?
+- Are tests sufficient and behavior-focused?
+- Were stale or misleading tests preserved?
 - Are validation results reported honestly?

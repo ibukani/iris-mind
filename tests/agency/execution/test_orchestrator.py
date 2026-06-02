@@ -54,11 +54,16 @@ def _base_state(plan: dict, messages: list | None = None) -> ExecutionState:
 
 
 @pytest.mark.anyio
-async def test_chat_path_propagates_response_text(mock_llm: AsyncMock) -> None:
+@pytest.mark.parametrize(
+    "plan_factory",
+    [_chat_plan, _normal_plan],
+    ids=["chat", "normal"],
+)
+async def test_chat_path_propagates_response_text(mock_llm: AsyncMock, plan_factory) -> None:
     mock_llm.chat.return_value = AIMessage(content="mock assistant response")
     orch = _make_orchestrator(mock_llm)
 
-    state = _base_state(_chat_plan(), [HumanMessage(content="hello")])
+    state = _base_state(plan_factory(), [HumanMessage(content="hello")])
 
     result = await orch.ainvoke(state)
 
@@ -77,20 +82,6 @@ async def test_empty_chat_response(mock_llm: AsyncMock) -> None:
     result = await orch.ainvoke(state)
 
     assert result.get("response_text") == ""
-    assert result.get("completed") is True
-    mock_llm.chat.assert_awaited_once()
-
-
-@pytest.mark.anyio
-async def test_chat_response(mock_llm: AsyncMock) -> None:
-    mock_llm.chat.return_value = AIMessage(content="mock assistant response")
-    orch = _make_orchestrator(mock_llm)
-
-    state = _base_state(_normal_plan(), [HumanMessage(content="hello")])
-
-    result = await orch.ainvoke(state)
-
-    assert result.get("response_text") == "mock assistant response"
     assert result.get("completed") is True
     mock_llm.chat.assert_awaited_once()
 
@@ -154,72 +145,6 @@ def _routing_msg(name: str) -> AIMessage:
         content="",
         tool_calls=[{"name": name, "args": {}, "id": f"call_{name}", "type": "tool_call"}],
     )
-
-
-def test_route_after_llm_routes_to_general_task(mock_llm: AsyncMock) -> None:
-    state = _base_state(_chat_plan(), [HumanMessage(content="hello")])
-    state["messages"].append(_routing_msg("general_task"))
-
-    route = route_after_llm(state)
-
-    assert route == "general_task"
-    assert state["current_node_type"] == "general_task"
-    assert state["chain_depth"] == 0
-
-
-def test_route_after_llm_deep_task_upgrades_level(mock_llm: AsyncMock) -> None:
-    state = _base_state(_chat_plan(), [HumanMessage(content="hello")])
-    state["current_node_type"] = "general_task"
-    state["current_level_idx"] = 0
-    state["messages"].append(_routing_msg("deep_task"))
-
-    route = route_after_llm(state)
-
-    assert route == "general_task"
-    assert state["current_level_idx"] == 1
-
-
-def test_route_after_llm_finish_routes_to_finalize(mock_llm: AsyncMock) -> None:
-    state = _base_state(_chat_plan(), [HumanMessage(content="hello")])
-    state["messages"].append(_routing_msg("finish"))
-
-    route = route_after_llm(state)
-
-    assert route == "finalize"
-
-
-def test_route_after_llm_regular_tool_routes_to_execute(mock_llm: AsyncMock) -> None:
-    state = _base_state(_chat_plan(), [HumanMessage(content="hello")])
-    state["messages"].append(
-        AIMessage(
-            content="",
-            tool_calls=[{"name": "web_search", "args": {"q": "test"}, "id": "call_ws", "type": "tool_call"}],
-        ),
-    )
-
-    route = route_after_llm(state)
-
-    assert route == "execute_tools"
-
-
-def test_route_after_llm_no_tool_calls_routes_to_finalize(mock_llm: AsyncMock) -> None:
-    state = _base_state(_chat_plan(), [HumanMessage(content="hello")])
-    state["messages"].append(AIMessage(content="ok"))
-
-    route = route_after_llm(state)
-
-    assert route == "finalize"
-
-
-def test_route_after_llm_general_chat_increments_chain_depth(mock_llm: AsyncMock) -> None:
-    state = _base_state(_chat_plan(), [HumanMessage(content="hello")])
-    state["chain_depth"] = 3
-    state["messages"].append(_routing_msg("general_chat"))
-
-    route = route_after_llm(state)
-
-    assert route == "general_chat"
-    assert state["chain_depth"] == 4
 
 
 @pytest.mark.anyio

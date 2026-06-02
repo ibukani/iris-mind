@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -11,34 +11,27 @@ from iris.memory.dispatcher import (
     dispatch_retrieve,
     dispatch_search,
 )
-from iris.memory.long_term.goal_store import GoalStore
 from iris.memory.long_term.protocol import LongTermMemoryProtocol
-from iris.memory.models import blocks_text
 from iris.memory.protocol import MemoryManagerProtocol
 from iris.memory.sensory.protocol import SensoryMemoryProtocol
 from iris.memory.short_term.protocol import ShortTermMemoryProtocol
 
+if TYPE_CHECKING:
+    from iris.memory.archive.store import RawConversationArchiveStore
+    from iris.memory.langmem.pipeline import MemoryPipeline
+    from iris.memory.langmem.scheduler import MemoryPipelineScheduler
+
 
 class MemoryManager(MemoryManagerProtocol):
-    """記憶マネージャー — 各記憶種別の管理クラスへのディスパッチャ。
-
-    脳科学に基づく3層構造:
-    - SensoryMemoryManager   (感覚記憶): 生入力の一時保持
-    - ShortTermMemoryManager (短期記憶): 現在の会話内容（ワーキングメモリ）
-    - LongTermMemoryManager  (長期記憶): エピソード記憶 + 意味記憶
-
-    このクラスは以下を責務とする:
-    1. イベント処理 (pending / timer / InputReady)
-    2. store() / retrieve() / search() / clear() のディスパッチ
-    3. 後方互換 API (add_episodic, get_recent, 等)
-    """
-
     def __init__(
         self,
         *,
         sensory: SensoryMemoryProtocol | None = None,
         short_term: ShortTermMemoryProtocol | None = None,
         long_term: LongTermMemoryProtocol | None = None,
+        archive: RawConversationArchiveStore | None = None,
+        pipeline: MemoryPipeline | None = None,
+        pipeline_scheduler: MemoryPipelineScheduler | None = None,
     ) -> None:
         from iris.memory.long_term.manager import LongTermMemoryManager
         from iris.memory.sensory.manager import SensoryMemoryManager
@@ -47,7 +40,13 @@ class MemoryManager(MemoryManagerProtocol):
         self.sensory: SensoryMemoryProtocol = sensory or SensoryMemoryManager()
         self.short_term: ShortTermMemoryProtocol = short_term or ShortTermMemoryManager()
         self.long_term: LongTermMemoryProtocol = long_term or LongTermMemoryManager()
-        self.goals: GoalStore = GoalStore()
+        self.archive = archive
+        self.pipeline = pipeline
+        self._pipeline_scheduler: MemoryPipelineScheduler | None = pipeline_scheduler
+        if self._pipeline_scheduler is None and pipeline is not None:
+            from iris.memory.langmem.scheduler import MemoryPipelineScheduler
+
+            self._pipeline_scheduler = MemoryPipelineScheduler(pipeline)
 
         self._store_handlers: dict[str, Callable[[Any], None]] = build_store_handlers(
             self.sensory,
@@ -98,14 +97,13 @@ class MemoryManager(MemoryManagerProtocol):
         dispatch_clear(stream, self.sensory, self.short_term, self.long_term)
 
     def flush(self, room_id: str = "", account_id: str = "") -> None:
-        """未定着の短期記憶を長期記憶に書き出してからクリアする。"""
         unconsolidated = self.short_term.get_unconsolidated_turns(account_id=account_id)
         if not unconsolidated:
             return
 
-        user_turns = [t for t in unconsolidated if t.get("role") == "user"]
+        user_turns = [t for t in unconsolidated if t.role == "user"]
         if user_turns:
-            combined = " | ".join(blocks_text(t.get("blocks", []))[:100] for t in user_turns[-3:])
+            combined = " | ".join(t.text[:100] for t in user_turns[-3:])
             self.long_term.store_episodic(
                 {"content": f"[conversation] {combined}", "kind": "conversation"},
                 room_id=room_id,
@@ -120,8 +118,31 @@ class MemoryManager(MemoryManagerProtocol):
                 account_id=account_id,
             )
 
-        self.short_term.mark_consolidated()
+        self.short_term.mark_consolidated(room_id=room_id, account_id=account_id)
         logger.info("MemoryManager: flushed {} turns, {} topics", len(unconsolidated), len(topics))
+
+        self._trigger_pipeline(len(unconsolidated), room_id=room_id, account_id=account_id)
+
+    def _trigger_pipeline(
+        self,
+        turn_count: int,
+        *,
+        room_id: str = "",
+        account_id: str = "",
+    ) -> None:
+        scheduler = self._pipeline_scheduler
+        if scheduler is None:
+            return
+        pipeline = self.pipeline
+        min_turns = int(getattr(pipeline._config, "batch_min_turns", 6)) if pipeline else 6
+        enabled = bool(getattr(pipeline, "enabled", False)) if pipeline else False
+        scheduler.run_if_needed(
+            turn_count,
+            account_id=account_id,
+            room_id=room_id,
+            min_turns=min_turns,
+            enabled=enabled,
+        )
 
     def get_user_preferences(self, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:
         return self.long_term.search_semantic(

@@ -56,10 +56,6 @@ class AgencyPlugin(PluginProtocol):
         manager.provide(LLMGateway, components["pipeline"])
         manager.provide(ToolEngine, components["tool_exec"])
 
-        from .hooks import register_hooks
-
-        register_hooks(manager)
-
         from iris.agency.execution.handler import _FlowExecutionHandler
         from iris.agency.planning.handler import _PlanningEventHandler
         from iris.event.event_bus import EventBus

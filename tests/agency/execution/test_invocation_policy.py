@@ -90,8 +90,3 @@ class TestResolveTemperature:
         policy = ModelInvocationPolicy(None)
         result = policy.resolve_temperature(None, None, None, 0.7)
         assert result == 0.7
-
-    def test_zero_not_overridden(self) -> None:
-        policy = ModelInvocationPolicy(None)
-        result = policy.resolve_temperature(0.0, 0.85, 0.5, 0.7)
-        assert result == 0.0

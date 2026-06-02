@@ -64,7 +64,7 @@ class _RoomDispatcher:
 
     def _handle_list(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent:
         rooms = self._room_manager.list_rooms()
-        data = [r.to_dict() for r in rooms]
+        data = [r.model_dump() for r in rooms]
         return ControlMessageEvent(
             timestamp=None,
             source="room",
@@ -83,7 +83,7 @@ class _RoomDispatcher:
         if not room:
             return self._error("room.info", f"room not found: {room_id}")
 
-        data = room.to_dict()
+        data = room.model_dump()
         return ControlMessageEvent(
             timestamp=None,
             source="room",
@@ -152,6 +152,8 @@ class _RoomDispatcher:
         )
 
     def _handle_update(self, msg: ControlMessageEvent, session_id: str) -> ControlMessageEvent:
+        from iris.room.models import RoomUpdate
+
         room_id = msg.room_id
         if not room_id:
             return self._error("room.update", "room_id required")
@@ -173,7 +175,29 @@ class _RoomDispatcher:
             return self._error("room.update", "no fields to update")
 
         try:
-            self._room_manager.update_room(room_id, **updates)
+            state_value = updates.get("state") if "state" in updates else None
+            from iris.room.models import RoomState
+
+            coerced_state: RoomState | None = None
+            if state_value is not None:
+                coerced_state = state_value if isinstance(state_value, RoomState) else RoomState(str(state_value))
+
+            update = RoomUpdate(
+                name=str(updates["name"]) if "name" in updates and updates["name"] is not None else None,
+                description=(
+                    str(updates["description"])
+                    if "description" in updates and updates["description"] is not None
+                    else None
+                ),
+                topic=(str(updates["topic"]) if "topic" in updates and updates["topic"] is not None else None),
+                state=coerced_state,
+                metadata=(
+                    dict(updates["metadata"])
+                    if "metadata" in updates and isinstance(updates["metadata"], dict)
+                    else None
+                ),
+            )
+            self._room_manager.update_room_from_update(room_id, update)
         except ValueError as exc:
             return self._error("room.update", str(exc))
 
@@ -216,7 +240,7 @@ class _RoomDispatcher:
             return self._error("room.members", f"room not found: {room_id}")
 
         members = self._room_manager.get_members(room_id)
-        data = [m.to_dict() for m in members]
+        data = [m.model_dump() for m in members]
         return ControlMessageEvent(
             timestamp=None,
             source="room",
@@ -229,14 +253,14 @@ class _RoomDispatcher:
     def _resolve_or_create_account(self, msg: ControlMessageEvent) -> Any:
         if not self._account_manager:
             return None
-        provider, subject, provider_name, metadata = parse_identity(msg.identity)
-        if provider is None or not subject:
+        resolved = parse_identity(msg.identity)
+        if resolved.provider is None or not resolved.subject:
             return None
         return self._account_manager.resolve_or_create_identity(
-            provider,
-            subject,
-            provider_name=provider_name or msg.display_name,
-            metadata=metadata,
+            resolved.provider,
+            resolved.subject,
+            provider_name=resolved.provider_name or msg.display_name,
+            metadata=resolved.metadata,
         )
 
     @staticmethod

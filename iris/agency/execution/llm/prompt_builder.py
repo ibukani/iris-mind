@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from iris.llm.prompt import Personality
     from iris.memory.long_term.stores import AgentsMdStore
     from iris.memory.manager import MemoryManager
+    from iris.memory.short_term.models import ActiveUser
 
 
 class SystemPromptBuilder:
@@ -43,7 +44,7 @@ class SystemPromptBuilder:
         chaos_level: float = 0.0,
         room_id: str = "",
         account_id: str = "",
-        active_users: list[tuple[str, str]] | None = None,
+        active_users: list[ActiveUser] | None = None,
         modulation: ModulationState | None = None,
     ) -> list[BaseMessage]:
         msgs: list[BaseMessage] = []

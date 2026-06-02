@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from tests.conftest import FakeToolExecutionEngine
+from tests.fakes import FakeToolExecutionEngine
 
 
 def test_execute_all_empty_context() -> None:

@@ -1,24 +1,27 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from typing import Any
 
 from loguru import logger
 
 from iris.event.event_bus import EventBus
 from iris.event.tracer import EventTracer
+from iris.kernel.plugin.hooks import HookRegistry
+from iris.kernel.plugin.service_container import ServiceContainer
 
 from .config import Config
 from .plugin import (
-    HookRegistry,
     KernelState,
     PluginLifecycle,
     PluginManifest,
-    ServiceContainer,
     discover_plugin_manifests,
 )
 
 
 class PluginManager:
+    """Plugin の発見・組み立て・ライフサイクル管理。"""
+
     def __init__(self, config: Config, debug: bool = False) -> None:
         self._config = config
         self._debug = debug
@@ -29,8 +32,6 @@ class PluginManager:
         self._di = ServiceContainer()
         self._state = KernelState()
         self._lifecycle = PluginLifecycle(builtin_service_types={EventBus})
-        self._cmd_handler: Any = None
-        self._diagnostics: Any = None
 
     # ── Infrastructure accessors ──
 
@@ -66,7 +67,6 @@ class PluginManager:
         self._lifecycle.load(manifests, self._config.plugins.disabled)
         self._lifecycle.init_all(self)
         self._lifecycle.notify_config_loaded(self)
-        self._init_builtin()
         self._hook_registry.freeze()
         self._di.freeze()
 
@@ -133,73 +133,10 @@ class PluginManager:
     def reload_plugin(self, plugin_name: str) -> bool:
         return self._lifecycle.reload_plugin(plugin_name, self)
 
-    # ── Built-in ──
+    # ── Hook helpers ──
 
-    @property
-    def cmd_handler(self) -> Any:
-        return self._cmd_handler
+    def register_hook(self, hook_name: str, handler: Callable[..., Any], priority: int = 500) -> None:
+        self._hook_registry.register(hook_name, handler, priority=priority)
 
-    @property
-    def diagnostics(self) -> Any:
-        return self._diagnostics
 
-    # ── Internal ──
-
-    def _init_builtin(self) -> None:
-        self._create_diagnostics()
-        self._create_command_handler()
-
-    def _create_diagnostics(self) -> None:
-        from iris.agency.manager import AgencyManager
-        from iris.io.manager import IOManager
-        from iris.kernel.diagnostics import SystemDiagnostics
-        from iris.memory.manager import MemoryManager
-
-        self._diagnostics = SystemDiagnostics(
-            event_bus=self._event_bus,
-            tracer=self._tracer,
-            kernel=self,
-            io=self._di.resolve_optional(IOManager),
-            memory=self._di.resolve_optional(MemoryManager),
-            agency=self._di.resolve_optional(AgencyManager),
-        )
-
-    def _create_command_handler(self) -> None:
-        from iris.agency.manager import AgencyManager
-        from iris.io.session.manager import SessionManager
-        from iris.kernel.commands.handler import CommandHandler
-        from iris.kernel.debug_capture import DebugCapture
-        from iris.llm.bridge import LLMBridge
-        from iris.memory.manager import MemoryManager
-        from iris.tools.registry import ToolRegistry
-
-        agency = self._di.resolve_optional(AgencyManager)
-
-        def _on_shutdown() -> None:
-            self._state.request_shutdown()
-
-        def _default_compact() -> str:
-            return "Compact not available"
-
-        on_compact = (
-            agency.compact_context if agency is not None and hasattr(agency, "compact_context") else _default_compact
-        )
-
-        self._cmd_handler = CommandHandler(
-            config=self._config,
-            on_shutdown=_on_shutdown,
-            on_compact=on_compact,
-            memory=self._di.resolve_optional(MemoryManager),
-            session_mgr=self._di.resolve_optional(SessionManager),
-            llm=self._di.resolve_optional(LLMBridge),
-            registry=self._di.resolve_optional(ToolRegistry),
-            debug_capture=self._di.resolve_optional(DebugCapture),
-            diagnostics=self._diagnostics,
-        )
-
-        def _on_command_dispatch(ctx: dict) -> dict:
-            if ctx["type"] == "command":
-                ctx["response"] = self._cmd_handler.handle(ctx["name"], ctx["args"], ctx["session_id"])
-            return ctx
-
-        self._hook_registry.register("io.dispatch", _on_command_dispatch, priority=50)
+__all__ = ["PluginManager"]

@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from loguru import logger
 
 from iris.agency.inhibition.events import InhibitionAction, InhibitionEvent
-from iris.io.events import MessageEvent
+from iris.io.events import InhibitionRequestEvent
 
 if TYPE_CHECKING:
     from iris.agency.inhibition import InhibitionManager
@@ -16,12 +16,10 @@ class _InhibitionEventHandler:
     """EventBus経由の外部抑制要請を受け付け、InhibitionManagerに委譲する。
 
     購読イベント:
-      - MessageEvent (msg_type="inhibition"): クライアントからの抑制制御信号
-        content フォーマット: "reason:action[:duration]"
-          - "voice_recording:true"       → suppress
-          - "voice_recording:false"      → unsuppress
-          - "speaking:true:30.0"         → suppress（30秒間）
-          - "hyperdirect:true"           → 緊急停止
+      - InhibitionRequestEvent: クライアントからの抑制制御信号（IO 層が型付きに変換済み）
+        - action="suppress"   → suppress
+        - action="unsuppress" → unsuppress
+        - action="hyperdirect"→ 緊急停止
       - InhibitionEvent: 既存の抑制イベント（executor等からの直接発行）
     """
 
@@ -31,39 +29,22 @@ class _InhibitionEventHandler:
         inhibition: InhibitionManager,
     ) -> None:
         self._inhibition = inhibition
-        event_bus.subscribe(MessageEvent, self._on_message_event)
+        event_bus.subscribe(InhibitionRequestEvent, self._on_request_event)
         event_bus.subscribe(InhibitionEvent, self._on_inhibition_event)
 
-    def _on_message_event(self, event: MessageEvent) -> None:
-        """msg_type="inhibition" の MessageEvent を InhibitionEvent に変換する。"""
-        if event.msg_type != "inhibition":
-            return
-
-        content = event.content
-        parts = content.split(":")
-        if len(parts) < 2:
-            logger.warning(
-                "Inhibition: invalid content format '{}', expected 'reason:action[:duration]'",
-                content,
-            )
-            return
-
-        reason = parts[0]
-        activate = parts[1] == "true"
-
-        duration = 0.0
-        if len(parts) >= 3:
-            try:
-                duration = float(parts[2])
-            except ValueError:
-                logger.warning("Inhibition: invalid duration '{}', ignoring", parts[2])
-                return
-
+    def _on_request_event(self, event: InhibitionRequestEvent) -> None:
+        """型付き InhibitionRequestEvent を InhibitionManager に委譲する。"""
         room_id = event.room_id or None
-        if activate:
-            self._inhibition.suppress(reason, duration, room_id=room_id)
+        action = event.action
+
+        if action in ("suppress", "true", "1"):
+            self._inhibition.suppress(event.reason, event.duration, room_id=room_id)
+        elif action in ("unsuppress", "false", "0"):
+            self._inhibition.unsuppress(event.reason, room_id=room_id)
+        elif action == "hyperdirect":
+            self._inhibition.suppress("hyperdirect", event.duration, room_id=room_id)
         else:
-            self._inhibition.unsuppress(reason, room_id=room_id)
+            logger.warning("Inhibition: unknown action '{}', ignoring", action)
 
     def _on_inhibition_event(self, event: InhibitionEvent) -> None:
         """InhibitionEvent を InhibitionManager に委譲する。"""

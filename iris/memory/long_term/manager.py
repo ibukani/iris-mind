@@ -1,41 +1,38 @@
+"""長期記憶マネージャ (Episodic + Semantic + Vector)。
+
+責務:
+- エピソード記憶の CRUD
+- 意味記憶の CRUD
+- ベクトル検索 (VectorStore)
+- 感情タグ付き記憶の検索 (emotion_search)
+- 入力型強制 (coercion) と検索結果フォーマット (formatting) の委譲
+"""
+
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING, Any
 
-if TYPE_CHECKING:
-    from collections.abc import Mapping
-
-
+from iris.memory.long_term.coercion import coerce_episodic_input, coerce_semantic_input
+from iris.memory.long_term.emotion_search import search_emotional_typed
+from iris.memory.long_term.formatting import format_search_result
+from iris.memory.long_term.models import (
+    EpisodicInput,
+    EpisodicScope,
+    SearchHit,
+    SemanticInput,
+    SemanticScope,
+)
 from iris.memory.long_term.protocol import LongTermMemoryProtocol
 from iris.memory.long_term.store_protocols import EpisodicStoreProtocol, SemanticStoreProtocol
 from iris.memory.long_term.vector_store import VectorStore
 
-
-def _format_search_result(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """検索結果を統一された辞書フォーマットに整形する。
-
-    なぜこの設計にしたか:
-    意味検索とベクトル検索で返却形式を同一にし、将来的な項目追加時の変更を一箇所に閉じるため。
-    """
-    return [
-        {
-            "content": r.get("content", ""),
-            "tags": r.get("tags", []),
-            "type": r.get("type", "unknown"),
-            "score": round(r.get("score", 0.0), 4),
-            "timestamp": r.get("timestamp", ""),
-        }
-        for r in results
-    ]
+if TYPE_CHECKING:
+    from iris.memory.long_term.models import EmotionMemory
 
 
 class LongTermMemoryManager(LongTermMemoryProtocol):
     """長期記憶 (Long-Term Memory)。
-    エピソード記憶 (EpisodicStore) + 意味記憶 (SemanticStore) を統合管理する。
-
-    エピソード記憶: 具体的な出来事・会話セッションの要約（JSONL）
-    意味記憶: 知識・教訓・嗜好・性格特性（JSONL + ChromaDB ベクトル検索）
+    エピソード記憶 (EpisodicStore) + 意味記憶 (SemanticStore) + ベクトル検索を統合管理する。
 
     脳科学対応: 海馬体 (hippocampal formation) と大脳皮質連合野。
     エピソード記憶は海馬、意味記憶は側頭葉・前頭葉が担う。
@@ -56,22 +53,37 @@ class LongTermMemoryManager(LongTermMemoryProtocol):
     def store_episodic(self, data: Any, kind: str = "", room_id: str = "", account_id: str = "") -> None:
         if self._episodic is None:
             return
-        summary = ""
-        if isinstance(data, str):
-            summary = data
-        elif isinstance(data, dict):
-            summary = data.get("content") or data.get("summary") or str(data)
-            kind = data.get("kind", kind)
-            room_id = data.get("room_id", room_id)
-            account_id = data.get("account_id", account_id)
-        if kind and not summary.startswith(f"[{kind}]"):
-            summary = f"[{kind}] {summary}"
-        self._episodic.add(summary, room_id=room_id, account_id=account_id)
+        payload = coerce_episodic_input(data, kind=kind)
+        if not payload.room_id and room_id:
+            payload.room_id = room_id
+        if not payload.account_id and account_id:
+            payload.account_id = account_id
+        summary = payload.content
+        if payload.kind and not summary.startswith(f"[{payload.kind}]"):
+            summary = f"[{payload.kind}] {summary}"
+        if payload.metadata is not None:
+            self._episodic.add(
+                summary,
+                metadata=payload.metadata,
+                room_id=payload.room_id,
+                account_id=payload.account_id,
+            )
+        else:
+            self._episodic.add(
+                summary,
+                room_id=payload.room_id,
+                account_id=payload.account_id,
+            )
 
     def get_episodic_recent(self, n: int = 5, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:
         if self._episodic is None:
             return []
         return self._episodic.get_recent(n, room_id=room_id, account_id=account_id)
+
+    def get_episodic_scope(self, scope: EpisodicScope) -> list[dict[str, Any]]:
+        if self._episodic is None:
+            return []
+        return self._episodic.get_recent(self._episodic.max_entries, room_id=scope.room_id, account_id=scope.account_id)
 
     def clear_episodic(self) -> None:
         if self._episodic is not None:
@@ -82,27 +94,46 @@ class LongTermMemoryManager(LongTermMemoryProtocol):
     def store_semantic(self, data: Any, room_id: str = "", account_id: str = "") -> None:
         if self._semantic is None:
             return
-        if isinstance(data, dict):
-            room_id = data.get("room_id", room_id)
-            account_id = data.get("account_id", account_id)
-            self._semantic.add(data, room_id=room_id, account_id=account_id)
-        else:
-            self._semantic.add({"content": str(data)}, room_id=room_id, account_id=account_id)
+        payload = coerce_semantic_input(data)
+        if not payload.room_id and room_id:
+            payload.room_id = room_id
+        if not payload.account_id and account_id:
+            payload.account_id = account_id
+        self._semantic.add(payload.model_dump(), room_id=payload.room_id, account_id=payload.account_id)
 
     def search_semantic(
-        self, query: str, max_results: int = 3, room_id: str = "", account_id: str = ""
+        self,
+        query: str,
+        max_results: int = 3,
+        room_id: str = "",
+        account_id: str = "",
     ) -> list[dict[str, Any]]:
         if self._semantic is not None:
             results = self._semantic.search(query=query, max_results=max_results, account_id=account_id)
             if room_id:
                 results = [r for r in results if r.get("room_id") == room_id]
-            return _format_search_result(results)
+            return format_search_result(results)
         if self._vector_store is not None:
             results = self._vector_store.search(query=query, max_results=max_results, account_id=account_id)
             if room_id:
                 results = [r for r in results if r.get("room_id") == room_id]
-            return _format_search_result(results)
+            return format_search_result(results)
         return []
+
+    def search_semantic_typed(
+        self,
+        query: str,
+        max_results: int = 3,
+        scope: SemanticScope | None = None,
+    ) -> list[SearchHit]:
+        scope = scope or SemanticScope()
+        rows = self.search_semantic(
+            query,
+            max_results=max_results,
+            room_id=scope.room_id,
+            account_id=scope.account_id,
+        )
+        return [SearchHit.model_validate(r) for r in rows]
 
     def clear_semantic(self) -> None:
         if self._semantic is not None:
@@ -114,7 +145,10 @@ class LongTermMemoryManager(LongTermMemoryProtocol):
         if self._vector_store is None:
             return []
         results = self._vector_store.search(query=query, max_results=max_results)
-        return _format_search_result(results)
+        return format_search_result(results)
+
+    def search_vector_typed(self, query: str, max_results: int = 3) -> list[SearchHit]:
+        return [SearchHit.model_validate(r) for r in self.search_vector(query, max_results=max_results)]
 
     # ---- 感情タグ検索 ----
 
@@ -124,33 +158,27 @@ class LongTermMemoryManager(LongTermMemoryProtocol):
         max_results: int = 5,
         room_id: str = "",
     ) -> list[dict[str, Any]]:
-        if not self._episodic:
+        results = self.search_emotional_typed(
+            current_emotion=current_emotion,
+            max_results=max_results,
+            room_id=room_id,
+        )
+        return [r.model_dump() for r in results]
+
+    def search_emotional_typed(
+        self,
+        current_emotion: Any | None = None,
+        max_results: int = 5,
+        room_id: str = "",
+    ) -> list[EmotionMemory]:
+        if self._episodic is None:
             return []
-        all_entries = self._episodic.get_recent(self._episodic.max_entries)
-        if room_id:
-            all_entries = [e for e in all_entries if e.get("room_id") == room_id]
-        emotion_entries = [e for e in all_entries if e.get("metadata", {}).get("type") == "emotion_tag"]
-        if not emotion_entries:
-            return []
-
-        if current_emotion is None:
-            return sorted(
-                emotion_entries,
-                key=lambda e: e.get("metadata", {}).get("intensity", 0),
-                reverse=True,
-            )[:max_results]
-
-        scored: list[tuple[float, dict]] = []
-        for e in emotion_entries:
-            meta = e.get("metadata", {})
-            meta_emotion = meta.get("emotion", {})
-            distance = _pad_distance(current_emotion, meta_emotion)
-            intensity = meta.get("intensity", 0)
-            score = intensity / max(distance, 0.01)
-            scored.append((score, e))
-
-        scored.sort(key=lambda x: x[0], reverse=True)
-        return [e for _, e in scored[:max_results]]
+        return search_emotional_typed(
+            self._episodic,
+            current_emotion=current_emotion,
+            max_results=max_results,
+            room_id=room_id,
+        )
 
     @property
     def episodic(self) -> EpisodicStoreProtocol | None:
@@ -161,17 +189,4 @@ class LongTermMemoryManager(LongTermMemoryProtocol):
         return self._semantic
 
 
-__all__ = ["LongTermMemoryManager", "LongTermMemoryProtocol"]
-
-
-def _pad_distance(
-    a: Any,
-    b: Mapping[str, Any],
-) -> float:
-    a_val = a.valence
-    a_aro = a.arousal
-    a_dom = a.dominance
-    b_val = float(b.get("valence", 0))
-    b_aro = float(b.get("arousal", 0))
-    b_dom = float(b.get("dominance", 0))
-    return math.sqrt((a_val - b_val) ** 2 + (a_aro - b_aro) ** 2 + (a_dom - b_dom) ** 2)
+__all__ = ["EpisodicInput", "LongTermMemoryManager", "LongTermMemoryProtocol", "SemanticInput"]

@@ -1,3 +1,12 @@
+"""gRPC サーバ (GrpcServer)。
+
+責務:
+- サーバ lifecycle (start / stop)
+- 認証ハンドシェイク
+- 双方向ストリームの送受信ループ
+- フレーム種別 (message / command / control) の振り分け
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -21,32 +30,11 @@ from iris.io.transport.formatter import (
     parse_message_metadata,
     parse_stream_state,
 )
+from iris.io.transport.grpc_connection import GrpcConnection, set_proto_from_dict
 
 
 def _noop(_msg: Message) -> None:
     return
-
-
-def _set_proto_from_dict(proto_repeated: Any, value: Any, builder: Any) -> None:
-    if isinstance(value, dict):
-        result = builder(value)
-        if isinstance(result, dict):
-            for k, v in result.items():
-                proto_repeated[str(k)] = str(v)
-        else:
-            proto_repeated.CopyFrom(result)
-
-
-class GrpcConnection:
-    def __init__(self, loop: asyncio.AbstractEventLoop) -> None:
-        self.queue: asyncio.Queue[bytes] = asyncio.Queue()
-        self.loop = loop
-
-    def send_bytes(self, raw: bytes) -> None:
-        self.loop.call_soon_threadsafe(self.queue.put_nowait, raw)
-
-    def close(self) -> None:
-        pass
 
 
 class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
@@ -85,6 +73,8 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
         await self._server.stop(grace=1.0)
         self._server = None
         logger.info("GrpcServer stopped")
+
+    # ---- 認証 ----
 
     def _parse_permissions(self, perms_str: str) -> list[Permission]:
         if not perms_str:
@@ -129,6 +119,8 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
         logger.warning("GrpcServer: authentication failed: {}", auth_res.error_message)
         await context.abort(grpc.StatusCode.UNAUTHENTICATED, auth_res.error_message or "Auth failed")
         raise ConnectionError("Authentication failed")
+
+    # ---- ストリーム ----
 
     async def BidirectionalStream(self, request_iterator: Any, context: Any) -> Any:
         metadata = dict(context.invocation_metadata())
@@ -192,9 +184,9 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
         text = data.get("text")
         if text:
             control_out.text = text
-        _set_proto_from_dict(control_out.identity, data.get("identity"), build_identity_frame)
-        _set_proto_from_dict(control_out.profile, data.get("profile"), lambda v: {str(k): str(v) for k, v in v.items()})
-        _set_proto_from_dict(
+        set_proto_from_dict(control_out.identity, data.get("identity"), build_identity_frame)
+        set_proto_from_dict(control_out.profile, data.get("profile"), lambda v: {str(k): str(v) for k, v in v.items()})
+        set_proto_from_dict(
             control_out.metadata, data.get("metadata"), lambda v: {str(k): str(v) for k, v in v.items()}
         )
         frame.control.CopyFrom(control_out)
@@ -223,6 +215,8 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             pass
         except Exception:
             logger.exception("GrpcServer error in receive loop for session {}", session_id)
+
+    # ---- フレーム ディスパッチ ----
 
     def _validate_session(self, session_id: str, msg_type: str, log_label: str = "message") -> bool:
         if not self._session_manager.is_session_active(session_id):
@@ -317,3 +311,6 @@ class GrpcServer(grpc_service_pb2_grpc.IrisServiceServicer):
             return
 
         await asyncio.to_thread(self._on_control_message, control_msg, session_id, session_role)
+
+
+__all__ = ["GrpcServer"]

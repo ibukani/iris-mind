@@ -10,6 +10,7 @@ from iris.agency.execution.node_type import NODE_TYPES, ROUTING_TOOLS
 from iris.agency.planning.models import Plan
 from iris.agency.task_level import TASK_LEVELS, TaskLevel
 from iris.memory.models import text_block
+from iris.tools.models import ToolSchema
 
 if TYPE_CHECKING:
     from iris.agency.execution.engine import ToolEngine
@@ -20,16 +21,16 @@ if TYPE_CHECKING:
 from loguru import logger
 
 
-def _routing_tool_schema(name: str) -> dict[str, Any]:
+def _routing_tool_schema(name: str) -> ToolSchema:
     desc = ROUTING_TOOLS[name]["description"]
-    return {
-        "type": "function",
-        "function": {
+    return ToolSchema(
+        type="function",
+        function={
             "name": name,
             "description": desc,
             "parameters": {"type": "object", "properties": {}, "required": []},
         },
-    }
+    )
 
 
 class BaseLLMNode(ABC):
@@ -59,7 +60,7 @@ class BaseLLMNode(ABC):
         logger.warning("level_idx {} out of range for {}, fallback to entry", idx, nt.name)
         return nt.entry_level
 
-    def _get_tools(self, level_name: str, plan: Plan) -> list[dict[str, Any]] | None:
+    def _get_tools(self, level_name: str, plan: Plan) -> list[ToolSchema] | None:
         if self._tool_executor is None:
             return None
         nt = NODE_TYPES[self.node_type_name]
@@ -69,7 +70,7 @@ class BaseLLMNode(ABC):
             return self._tool_executor.list_tools_by_name(names, allow_side_effects) or None
         return self._tool_executor.registry.list_tools(allow_side_effects=allow_side_effects) or None
 
-    def _build_routing_tools(self, state: ExecutionState, level: TaskLevel) -> list[dict[str, Any]]:
+    def _build_routing_tools(self, state: ExecutionState, level: TaskLevel) -> list[ToolSchema]:
         nt = NODE_TYPES[self.node_type_name]
         if state["chain_depth"] >= nt.max_chain_depth:
             targets = [t for t in nt.routing_targets if t != nt.name]
@@ -131,18 +132,17 @@ class BaseLLMNode(ABC):
         level = TASK_LEVELS[level_name]
 
         try:
-            system_msgs = self._build_system_prompt(state, level, plan)
+            self._build_system_prompt(state, level, plan)
             tools = self._get_tools(level_name, plan)
             routing_tools = self._build_routing_tools(state, level)
 
-            all_tools: list[dict[str, Any]] | None = None
+            all_tools: list[ToolSchema] | None = None
             if tools or routing_tools:
                 all_tools = (tools or []) + routing_tools
 
             resp = await self._pipeline.chat(
                 messages=list(state["messages"]),
-                system_msgs=system_msgs,
-                tools=all_tools,
+                tools=all_tools,  # type: ignore[arg-type]
                 on_token=self._dynamic.on_token,
                 interrupt_token=self._dynamic.interrupt_token,
                 **self._resolve_chat_params(state, level, plan),

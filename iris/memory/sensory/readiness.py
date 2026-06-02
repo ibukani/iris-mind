@@ -1,33 +1,25 @@
 from __future__ import annotations
 
-import asyncio
 import re
-from typing import Protocol
-
-from langchain_core.messages import HumanMessage
-from loguru import logger
 
 _QUESTION_RE = re.compile(r"[？?]$")
 
 
-class _LLMChatProtocol(Protocol):
-    async def chat(self, **kwargs: object) -> object: ...
-
-
 class ReadinessEvaluator:
+    """Tier1 ルールベース評価のみ行う ReadinessEvaluator。
+
+    Tier2 (LLM による評価) は削除された。必要な場合は非同期版を別途設計すること。
+    """
+
     def __init__(
         self,
         min_fragments: int = 2,
         question_detect: bool = True,
         confidence_threshold: float = 0.6,
-        llm: _LLMChatProtocol | None = None,
-        llm_model_role: str = "low",
     ) -> None:
         self._min_fragments = min_fragments
         self._question_detect = question_detect
         self._confidence_threshold = confidence_threshold
-        self._llm = llm
-        self._llm_model_role = llm_model_role
 
     def evaluate(self, fragments: list[str], is_final: bool) -> bool:
         if is_final:
@@ -36,13 +28,7 @@ class ReadinessEvaluator:
             return False
 
         score = self._tier1_score(fragments)
-        if score >= self._confidence_threshold:
-            return True
-
-        if self._llm is None:
-            return False
-
-        return self._tier2_check(fragments)
+        return score >= self._confidence_threshold
 
     def _tier1_score(self, fragments: list[str]) -> float:
         score = 0.0
@@ -54,34 +40,3 @@ class ReadinessEvaluator:
         if any(f.strip() for f in fragments):
             score += 0.2
         return min(score, 1.0)
-
-    def _tier2_check(self, fragments: list[str]) -> bool:
-        if self._llm is None:
-            return False
-        prompt = self._build_tier2_prompt(fragments)
-        try:
-            resp = asyncio.run(
-                self._llm.chat(
-                    messages=[HumanMessage(content=prompt)],
-                    model=self._llm_model_role,
-                    temperature=0.0,
-                    max_tokens=10,
-                ),
-            )
-            return self._is_yes_response(resp)
-        except Exception:
-            logger.exception("Tier2 readiness evaluation failed")
-            return False
-
-    def _build_tier2_prompt(self, fragments: list[str]) -> str:
-        text = " ".join(fragments)
-        return (
-            "You are evaluating a conversation fragment.\n"
-            f"User said: {text}\n\n"
-            "Can you respond meaningfully right now? Answer Yes or No.\n"
-            "If the user's input is a question, complete thought, or continuation of conversation, answer Yes."
-        )
-
-    def _is_yes_response(self, response: object) -> bool:
-        content = getattr(response, "content", "")
-        return str(content).strip().lower().startswith("yes")

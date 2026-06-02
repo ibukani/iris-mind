@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-from dataclasses import replace
 from typing import Any
 
 from loguru import logger
@@ -85,13 +84,13 @@ class RelationshipManager:
             state.familiarity,
         )
 
-        return replace(state)
+        return state.model_copy()
 
     def get_state(self, account_id: str = "") -> RelationshipState:
-        return replace(self._get_state(account_id))
+        return self._get_state(account_id).model_copy()
 
     def get_all_states(self) -> dict[str, RelationshipState]:
-        return {k: replace(v) for k, v in self._states.items()}
+        return {k: v.model_copy() for k, v in self._states.items()}
 
     def _update_level(self, state: RelationshipState) -> None:
         if state.trust >= _TRUST_THRESHOLDS[RelationshipLevel.FAMILIAR]:
@@ -124,3 +123,29 @@ class RelationshipManager:
             "attachment_style": state.attachment_style.value,
             "disclosure_depth": state.disclosure_depth,
         }
+
+    def apply_candidate_delta(
+        self,
+        *,
+        field: str,
+        delta: float,
+        account_id: str = "",
+    ) -> RelationshipState:
+        """LangMem 候補由来の ``field`` に ``delta`` を加算する。
+
+        通常の ``update()`` は CompanionEmotion と context_type を使う経路だが、
+        候補経由では直接 delta を渡したいケースに使う。
+        ``update()`` の ``interaction_count`` などの副作用は持たない (候補由来は
+        センチネル値の変動を避けるため)。
+        """
+        if field not in ("trust", "familiarity", "disclosure_depth"):
+            raise ValueError(f"unsupported relationship field: {field}")
+        state = self._get_state(account_id)
+        if field == "trust":
+            state.trust = max(0.0, min(1.0, state.trust + delta))
+        elif field == "familiarity":
+            state.familiarity = max(0.0, min(1.0, state.familiarity + delta))
+        else:
+            state.disclosure_depth = max(0.0, min(1.0, state.disclosure_depth + delta))
+        self._update_level(state)
+        return state.model_copy()

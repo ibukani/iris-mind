@@ -49,13 +49,38 @@ class IoPlugin(PluginProtocol):
         )
         grpc_listener = GrpcListener(session_manager=session_mgr)
 
+        from iris.account.dispatcher import AccountDispatcher
+        from iris.account.manager import AccountManager as _AccountMgr
+        from iris.io.dispatcher import build_default_registry
         from iris.io.gateway import _IOGateway
+        from iris.room.dispatcher import _RoomDispatcher
+        from iris.room.store import RoomStore
+
+        room_store = manager.resolve_optional(RoomStore)
+        account_manager = manager.resolve_optional(_AccountMgr)
+        account_dispatcher = manager.resolve_optional(AccountDispatcher)
+        room_dispatcher = manager.resolve_optional(_RoomDispatcher)
+
+        def _on_command(name: str, args: str, session_id: str) -> str | None:
+            from iris.kernel.commands.handler import CommandHandler
+
+            cmd_handler: CommandHandler | None = manager.resolve_optional(CommandHandler)
+            if cmd_handler is None:
+                return None
+            return cmd_handler.handle(name, args, session_id)
+
+        dispatcher = build_default_registry(
+            account_dispatcher=account_dispatcher,
+            room_dispatcher=room_dispatcher,
+            command_handler=_on_command,
+        )
 
         gateway = _IOGateway(
             session_manager=session_mgr,
             event_bus=event_bus,
-            hook_registry=manager.hook_registry,
-            manager=manager,
+            dispatcher=dispatcher,
+            room_store=room_store,
+            account_manager=account_manager,
         )
 
         from iris.io.manager import IOManager
@@ -71,17 +96,12 @@ class IoPlugin(PluginProtocol):
         manager.provide(GrpcListener, grpc_listener)
 
         from iris.io.handler import _IOEventHandler
-        from iris.room.store import RoomStore
 
         _IOEventHandler(
             event_bus=event_bus,
             session_manager=session_mgr,
-            room_store=manager.resolve_optional(RoomStore),
+            room_store=room_store,
         )
-
-        from .hooks import register_hooks
-
-        register_hooks(manager)
 
     def start(self, manager: PluginManager) -> None:
         pass

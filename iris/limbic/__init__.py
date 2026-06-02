@@ -57,27 +57,28 @@ class LimbicPlugin(PluginProtocol):
         )
         manager.provide(LimbicOrchestrator, self._orchestrator)
 
+        from .handler import _LimbicEventHandler
+
+        self._event_handler = _LimbicEventHandler(
+            event_bus=manager.event_bus,
+            orchestrator=self._orchestrator,
+            account_manager=self._account_manager,
+            room_manager=self._room_manager,
+        )
+
     def start(self, manager: PluginManager) -> None:
         if self._emotion_classifier is not None:
             try:
                 self._emotion_classifier.preload()
             except Exception:
                 logger.warning("Limbic: failed to preload emotion model, falling back to keyword classifier")
-
-        from .hooks import subscribe_events
-
-        subscribe_events(
-            manager,
-            self._orchestrator,
-            account_manager=self._account_manager,
-            room_manager=self._room_manager,
-        )
+        self._event_handler.subscribe()
 
     def stop(self, manager: PluginManager) -> None:
         pass
 
     def get_state(self) -> dict:
-        return self._orchestrator.get_state()
+        return dict(self._orchestrator.get_state())
 
 
 plugin = LimbicPlugin()

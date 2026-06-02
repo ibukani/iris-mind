@@ -1,4 +1,4 @@
-# 記憶システム: 3層構造 + GoalStore
+# 記憶システム: 3層構造
 
 ```mermaid
 flowchart LR
@@ -21,10 +21,6 @@ flowchart LR
     subgraph LTM["長期記憶"]
         EPI["EpisodicStore<br/>JSONL 上限30"]
         SEM["SemanticStore<br/>JSONL+ChromaDB 上限100"]
-    end
-
-    subgraph GOALS["GoalStore"]
-        G["LongTermGoal<br/>weight 減衰・忘却"]
     end
 
     FRAG -->|flush| FBUF
@@ -163,40 +159,4 @@ vector_score は ChromaDB のコサイン類似度、bm25_score は BM25 アル�
 
 Embedding 生成: ONNX MiniLM (`all-MiniLM-L6-v2`) が初回使用時に自動ダウンロード。
 
-## GoalStore: 長期目標管理
 
-`LongTermGoal` はエージェントの持続的な目標を管理する Pydantic モデル。
-
-### データ構造
-
-```yaml
-id: str              # UUID自動生成
-description: str     # 目標の説明
-weight: float        # 重要度 (0.0 ~ 1.0)
-created_at: float    # Unix timestamp
-updated_at: float    # 最終更新時刻
-```
-
-### 主要操作
-
-| 操作 | 効果 |
-|------|------|
-| add_goal(desc, weight) | 新規目標追加。weight は自動 clamp(0,1) |
-| remove_goal(id) | 目標削除 |
-| get_goals() | 全目標を weight 降順で返す |
-| get_active_goals(threshold=0.3) | weight >= threshold の目標のみ |
-| decay_goals(rate, remove_threshold=0.1) | 全目標の weight を一定量減衰。閾値未満は忘却 |
-
-### 減衰アルゴリズム
-
-```
-goal.weight = max(0.0, goal.weight - decay_rate)
-if goal.weight < remove_threshold (0.1): 削除
-```
-
-`decay_goals()` が定期的に呼ばれ不要な目標が忘却される。
-
-### 永続化
-
-インメモリ管理。`save(path)` / `load(path)` で JSON ファイルにダンプ可能。
-MemoryManager から定期的に呼ばれる想定。

@@ -79,7 +79,7 @@ class TestMissingAccountRecovery:
 
     def test_resolve_or_create_relinks_missing_account(self, provider: AccountManager) -> None:
         a1 = provider.resolve_or_create_identity(Provider.DISCORD, "777", provider_name="Lucky")
-        provider._store.save_accounts([a for a in provider._store.load_accounts() if a.account_id != a1.account_id])
+        provider.delete_account(a1.account_id)
         assert provider.resolve(a1.account_id) is None
 
         a2 = provider.resolve_or_create_identity(Provider.DISCORD, "777", provider_name="Lucky")
@@ -91,7 +91,7 @@ class TestMissingAccountRecovery:
 
     def test_resolve_or_create_no_duplicates_on_repeated_calls(self, provider: AccountManager) -> None:
         a1 = provider.resolve_or_create_identity(Provider.DISCORD, "888", provider_name="Eight")
-        provider._store.save_accounts([a for a in provider._store.load_accounts() if a.account_id != a1.account_id])
+        provider.delete_account(a1.account_id)
 
         a2 = provider.resolve_or_create_identity(Provider.DISCORD, "888", provider_name="Eight")
         a3 = provider.resolve_or_create_identity(Provider.DISCORD, "888", provider_name="Eight")

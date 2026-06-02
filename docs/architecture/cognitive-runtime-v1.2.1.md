@@ -429,6 +429,9 @@ Neuro-sama 的な突飛さ
 責務は、typed `LLMRequest` を受け取り typed `LLMResponse` を返すことに限定する。
 実プロバイダ呼び出し、モデル選択、認証、ネットワーク I/O は adapter 境界の外へ漏らさない。
 テストと local MVP は deterministic な `FakeLLMClient` を使う。
+OpenAI provider は `adapters/llm/openai.py` に置き、Responses API との変換を adapter 内に閉じ込める。
+real provider configuration は typed config で明示注入し、global discovery や service locator は使わない。
+provider tests は `FakeLLMClient` または mocked provider client を使い、実ネットワークへ接続しない。
 `cognitive/` は `adapters/llm/` を import せず、runtime wiring が constructor injection で接続する。
 
 AppGateway の責務。

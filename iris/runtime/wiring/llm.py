@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from iris.adapters.llm.fake import FakeLLMClient
+from iris.adapters.llm.openai import OpenAIConfig, OpenAILLMClient
 from iris.adapters.llm.ports import LLMClient, LLMMessage, LLMRequest
 from iris.cognitive.action.response import GeneratedResponse, ResponseGenerator, ResponsePrompt
 
@@ -31,3 +32,7 @@ def wire_response_generator(client: LLMClient | None = None) -> LLMResponseGener
     if client is None:
         client = wire_fake_llm_client()
     return LLMResponseGenerator(client)
+
+
+def wire_openai_llm_client(config: OpenAIConfig) -> LLMClient:
+    return OpenAILLMClient(config)

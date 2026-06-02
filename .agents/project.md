@@ -1,52 +1,87 @@
 # Iris Project Brief
 
-This file is a compact helper note for Iris-specific scope and responsibility boundaries. Use `.agents/skills/iris-dev-workflow/SKILL.md` as the source for ordinary development rules, and `docs/architecture.md` as the source for design decisions.
+This file is a compact helper note for Iris-specific scope and responsibility boundaries. Use `.agents/skills/iris-dev-workflow/SKILL.md` as the source for ordinary development rules, and `docs/architecture/cognitive-runtime-v1.2.1.md` as the source for migration design decisions.
+
+## Current Direction
+
+- Iris is migrating to Cognitive Runtime Architecture v1.2.1.
+- The target architecture source of truth is `docs/architecture/cognitive-runtime-v1.2.1.md`.
+- The old Plugin/EventBus-centered architecture is a migration source, not the target architecture.
+- Do not preserve old Plugin/EventBus APIs, shims, wrappers, or compatibility layers unless the user explicitly requests them.
+- During migration, prefer moving existing logic by responsibility into the v1.2.1 structure over wrapping old modules.
 
 ## Scope
 
-- Iris is a Python AI companion / assistant Kernel. It handles autonomous behavior and task execution, and ultimately aims to support self-evolution.
-- This repository contains the Kernel itself. UI and external clients belong to separate projects.
-- LLM providers such as Ollama and OpenRouter are switched through configuration.
-- Models support both a single-model setup and role-based multi-model setups.
-- Configuration lives in `config.yaml`. `model.providers` defines provider connection information, and `model.models[].provider` selects the provider for each model.
+- Iris is a Python AI companion / assistant Cognitive Runtime. It handles autonomous behavior, task execution, memory, relationship, proactive behavior, and presentation policy.
+- This repository contains the Iris runtime core. UI, Discord bot, Voice runtime, Twitch client, and other concrete external apps belong to separate projects.
+- External apps communicate with Iris through `Observation`, `AppAction`, and `ActionResult` style boundaries.
+- LLM providers such as Ollama and OpenRouter are implementation details behind adapters and ports.
+- Configuration lives in `config.yaml` until the runtime configuration is migrated.
 
-## Main Modules
+## Target Main Modules
 
-- `iris/kernel/`: process management, DI, Plugin lifecycle, commands.
-- `iris/event/`: Global EventBus, event types, tracing.
-- `iris/io/`: input/output, gRPC, sessions, permissions.
-- `iris/account/`: user identity, external identity linkage, presence.
-- `iris/room/`: Room CRUD, membership, account linkage.
-- `iris/memory/`: sensory / short-term / long-term memory.
-- `iris/limbic/`: emotion, mood, relationship.
-- `iris/agency/`: planning, inhibition, execution.
-- `iris/llm/`: providers, context window, tokenizer, prompts.
-- `iris/tools/`: `@tool`, ToolRegistry, builtins.
-- `iris/admin/`: CLI administration.
+- `iris/core/`: shared low-level IDs, time, errors, result types, and small utilities.
+- `iris/contracts/`: shared typed contracts such as observations, actions, identity, conversation, memory, affect, and commands.
+- `iris/runtime/`: app startup, configuration, lifecycle, scheduler, background jobs, telemetry, and dependency wiring.
+- `iris/runtime/wiring/`: constructor-injection-only composition split by area.
+- `iris/cognitive/`: CognitiveCycle, workspace, perception, memory, affect, motivation, policy, action, and learning.
+- `iris/cognitive/workspace/`: frozen typed `WorkspaceFrame` snapshots for one cognitive turn.
+- `iris/presentation/`: transforms `ActionPlan` into `PresentedOutput`; decides how to show behavior, not what to do.
+- `iris/safety/`: action and output gates before external execution.
+- `iris/adapters/`: external technology boundaries such as app gateway, LLM, stores, tools, embeddings, and external clients.
+- `iris/features/`: vertical feature definitions registered through `FeatureDefinition`.
+- `iris/admin/`: administration and diagnostics that are still needed.
+
+## Legacy Modules During Migration
+
+These modules currently contain useful implementation pieces but are not the target architecture boundaries.
+
+- `iris/kernel/`: migrate process management, configuration, lifecycle, and composition into `runtime/`; do not keep PluginManager as the center.
+- `iris/event/`: retire as main control flow; if needed later, limit to lifecycle, telemetry, audit, background notification, or diagnostics.
+- `iris/io/`: migrate external app protocol boundaries into `adapters/app_gateway/`; concrete app runtimes should live outside Iris core.
+- `iris/account/`: migrate identity and user context into `contracts/identity.py` and context services.
+- `iris/room/`: migrate room/session concepts into `contracts/conversation.py` and app gateway context.
+- `iris/memory/`: split into `cognitive/memory/`, `features/memory_consolidation/`, and `adapters/stores/`.
+- `iris/limbic/`: migrate appraisal, mood, and relationship into `cognitive/affect/`.
+- `iris/agency/`: split planning/inhibition/execution into `cognitive/policy/` and `cognitive/action/`.
+- `iris/llm/`: migrate provider calls into `adapters/llm/`; prompt/action response policy belongs near `cognitive/action/`.
+- `iris/tools/`: split tool-use decisions into `cognitive/action/` and actual execution into `adapters/tools/`.
+- `iris/heartbeat/`: migrate scheduler behavior into `runtime/scheduler.py` and ObservationSource-based ticks.
 
 ### Design Policy: Iris Identity and Rooms
 
 - **Only one Iris exists as an individual.**
 - Rooms are a system for adding conversation locations, not copies of Iris.
-- Emotion (`limbic`) is global. It is not managed per room.
-- Relationship is per user (`Account`), not per room.
+- Emotion / mood is global unless the v1.2.1 design explicitly introduces a different typed state.
+- Relationship is per user identity, not per room.
 - If the same user talks to Iris in multiple rooms, intimacy and related relationship values are shared.
 
-## Boundaries
+## Target Boundaries
 
-- `iris/kernel/` is a domain layer. Do not put external service implementations directly into it.
-- `iris/llm/` and `iris/tools/` are infrastructure layers injected into the kernel.
-- `iris/io/`, `iris/agency/`, `iris/memory/`, `iris/event/`, `iris/account/`, and `iris/room/` are independent layers separated from the kernel.
-- All layers stay loosely coupled through the EventBus (`iris/event/`).
+- `contracts/` may depend on `core/` only.
+- `cognitive/` may depend on `contracts/` and `core/`, but not on `adapters/`, `runtime/`, or `features/`.
+- `presentation/`, `safety/`, and `adapters/` may depend on `contracts/` and `core/`.
+- `features/` registers extension providers through `FeatureDefinition`; it must not patch cognitive internals directly.
+- `runtime/` is the composition root and may know all layers.
+- `runtime/wiring/` performs constructor injection only; it must not contain cognitive, business, or adapter behavior.
 - `debug_tools/` may depend on `iris/`, but `iris/` must not depend on `debug_tools/`.
-- For IPC and process design details, read `docs/architecture.md`.
+
+## Explicit Non-Targets
+
+- Do not use EventBus as CognitiveCycle main control flow.
+- Do not add PluginManager compatibility layers.
+- Do not add service locator, global registry, or `resolve_optional` paths.
+- Do not add `action: str` dispatcher branches for new behavior.
+- Do not use `dict[str, Any]` or `dict[str, object]` as internal cross-layer context.
+- Do not create unused extension points just because they may be useful later.
 
 ## Workflows
 
+- Cognitive Runtime migration: `.agents/skills/iris-cognitive-runtime/SKILL.md`
 - Ordinary development: `.agents/skills/iris-dev-workflow/SKILL.md`
 - Capability addition: `.agents/skills/capability-pattern/SKILL.md`
 - Documentation update check: `.agents/skills/doc-sync/SKILL.md`
-- Design changes: record them in `docs/architecture.md` and update only the required design documents.
+- Design changes: record them in `docs/architecture/cognitive-runtime-v1.2.1.md` or a focused ADR when the change updates the target architecture.
 
 ## Context Rules
 

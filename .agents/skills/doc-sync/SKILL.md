@@ -17,25 +17,34 @@ This workflow identifies and updates documentation that may need changes after f
 
 ## Documents to Check
 
-### 1. Design documents `docs/*.md`
+### 1. Target architecture documents
 
-Update the relevant document according to the type of change:
+For v1.2.1 migration work, prefer the current target architecture document:
 
 | Change target | Documents to update |
 |---|---|
-| Architecture changes | `docs/architecture.md` |
-| Memory system changes | `docs/memory-layer.md`, `docs/how-it-works/02-memory-system.md` |
-| EventBus changes | `docs/how-it-works/01-eventbus.md`, `docs/architecture.md`, related layer documents |
-| Decision-making / action execution changes | `docs/agency-layer.md`, `docs/how-it-works/05-decision-making.md`, `docs/how-it-works/08-execution-pipeline.md` |
-| Process management changes | `docs/kernel-layer.md` |
-| Input/output changes | `docs/io-layer.md`, `docs/external/*.md` |
-| Configuration changes | `docs/config.md` |
-| Model routing changes | `docs/how-it-works/11-model-routing.md`, `docs/config.md` |
-| General new feature | Consider creating a new relevant document when none exists |
+| Cognitive Runtime architecture changes | `docs/architecture/cognitive-runtime-v1.2.1.md` or a focused ADR |
+| CognitiveCycle / WorkspaceFrame / PipelineStep changes | `docs/architecture/cognitive-runtime-v1.2.1.md` |
+| FeatureDefinition / feature extension changes | `docs/architecture/cognitive-runtime-v1.2.1.md` |
+| AppGateway / external app boundary changes | `docs/architecture/cognitive-runtime-v1.2.1.md`, relevant `docs/external/*.md` if the external protocol changes |
+| Safety / presentation flow changes | `docs/architecture/cognitive-runtime-v1.2.1.md` |
+| Runtime wiring / scheduler / background job changes | `docs/architecture/cognitive-runtime-v1.2.1.md` |
+| Configuration changes | `docs/config.md` and target architecture sections if the runtime model changes |
+| Model routing / LLM adapter changes | `docs/how-it-works/11-model-routing.md`, `docs/config.md`, and target adapter sections when relevant |
 
-When updating docs, also check consistency with related code such as `iris/event/event_types.py`.
+### 2. Legacy documents `docs/*.md`
 
-### 2. Self profile `.iris/config/iris_profile.md`
+Existing documents such as `docs/architecture.md`, `docs/kernel-layer.md`, `docs/io-layer.md`, `docs/agency-layer.md`, `docs/memory-layer.md`, `docs/limbic-layer.md`, and `docs/how-it-works/*.md` may describe the pre-v1.2.1 design.
+
+Update them only when one of these is true:
+
+- the user explicitly asks to keep legacy docs synchronized during migration
+- the changed code still belongs to the pre-migration structure
+- external protocol documentation must remain accurate for existing clients
+
+Do not rewrite all legacy docs during unrelated migration steps. Prefer marking the v1.2.1 target document as the source of truth for migration direction.
+
+### 3. Self profile `.iris/config/iris_profile.md`
 
 Update only when:
 
@@ -43,7 +52,7 @@ Update only when:
 - A capability change affects Iris self-recognition, available capabilities, or behavior.
 - Do not update it for internal implementation-only changes.
 
-### 3. `AGENTS.md`
+### 4. `AGENTS.md`
 
 Update only for:
 
@@ -53,7 +62,7 @@ Update only for:
 
 Do not move detailed coding standards, workflows, or directory structures back into `AGENTS.md`. Put them in the relevant Skill or `.agents/project.md`.
 
-### 4. `.agents/README.md`, `.agents/project.md`
+### 5. `.agents/README.md`, `.agents/project.md`
 
 Update when these change:
 
@@ -63,15 +72,15 @@ Update when these change:
 
 Keep `.agents/` token-efficient. Do not duplicate detailed design information, progress logs, or history. Link to the source of truth instead.
 
-### 5. Skills `.agents/skills/*/SKILL.md`
+### 6. Skills `.agents/skills/*/SKILL.md`
 
-Update when capability addition patterns, development workflow, MVP decisions, or Plugin conventions change.
+Update when capability addition patterns, development workflow, MVP decisions, Cognitive Runtime migration rules, or legacy Plugin conventions change.
 
 ## Procedure
 
 1. Identify what changed.
-2. Use the table above to list documents that may need updates.
-3. Read each document and update the relevant sections.
+2. Use the tables above to list documents that may need updates.
+3. Read each relevant document and update only the affected sections.
    - Remove descriptions of deleted features completely. Do not leave historical residue such as "currently", "previously", or "formerly" notes. Documentation should describe the current state only.
 4. Validate according to the change type.
 

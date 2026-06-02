@@ -20,6 +20,7 @@ from iris.memory.short_term.protocol import ShortTermMemoryProtocol
 if TYPE_CHECKING:
     from iris.memory.archive.store import RawConversationArchiveStore
     from iris.memory.langmem.pipeline import MemoryPipeline
+    from iris.memory.langmem.scheduler import MemoryPipelineScheduler
 
 
 class MemoryManager(MemoryManagerProtocol):
@@ -44,6 +45,7 @@ class MemoryManager(MemoryManagerProtocol):
         long_term: LongTermMemoryProtocol | None = None,
         archive: RawConversationArchiveStore | None = None,
         pipeline: MemoryPipeline | None = None,
+        pipeline_scheduler: MemoryPipelineScheduler | None = None,
     ) -> None:
         from iris.memory.long_term.manager import LongTermMemoryManager
         from iris.memory.sensory.manager import SensoryMemoryManager
@@ -55,6 +57,11 @@ class MemoryManager(MemoryManagerProtocol):
         self.goals: GoalStore = GoalStore()
         self.archive = archive
         self.pipeline = pipeline
+        self._pipeline_scheduler: MemoryPipelineScheduler | None = pipeline_scheduler
+        if self._pipeline_scheduler is None and pipeline is not None:
+            from iris.memory.langmem.scheduler import MemoryPipelineScheduler
+
+            self._pipeline_scheduler = MemoryPipelineScheduler(pipeline)
 
         self._store_handlers: dict[str, Callable[[Any], None]] = build_store_handlers(
             self.sensory,
@@ -207,8 +214,23 @@ class MemoryManager(MemoryManagerProtocol):
             min_turns = 6
         if turn_count < min_turns:
             return
+
+        # 1) イベントループがあれば非同期スケジュール (同一 scope の重複を抑止)
+        scheduler = self._pipeline_scheduler
+        if scheduler is not None and not scheduler.is_already_running(account_id, room_id):
+            try:
+                task = scheduler.schedule_full_cycle(
+                    account_id=account_id,
+                    room_id=room_id,
+                )
+                if task is not None:
+                    return
+            except Exception as e:
+                logger.debug("MemoryManager: scheduler schedule failed, fallback to sync: {}", e)
+
+        # 2) イベントループが無い or スケジュール出来なかった場合は同期フォールバック
         try:
-            pipeline.run_full_cycle()
+            pipeline.run_full_cycle(account_id=account_id, room_id=room_id)
         except Exception as e:
             logger.warning("MemoryManager: pipeline crashed in flush: {}", e)
 

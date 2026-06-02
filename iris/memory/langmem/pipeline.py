@@ -55,6 +55,8 @@ class MemoryPipeline:
         pass_type: PassType,
         *,
         source_record_ids: list[str] | None = None,
+        account_id: str = "",
+        room_id: str = "",
     ) -> list[Any]:
         """``pass_type`` の抽出ジョブを 1 件作成・実行し、生成された候補のリストを返す。"""
         if not self.enabled:
@@ -66,6 +68,8 @@ class MemoryPipeline:
             source_record_ids=record_ids,
             pass_type=pass_type,
             model=self._config.model_role,
+            account_id=account_id,
+            room_id=room_id,
         )
         self._job_store.add(job)
         self._job_store.update(job.id, status="running")
@@ -76,7 +80,11 @@ class MemoryPipeline:
             self._job_store.update(job.id, status="failed", error=str(e))
             return []
         try:
-            self._promotion.evaluate(candidates)
+            self._promotion.evaluate(
+                candidates,
+                room_id=room_id,
+                account_id=account_id,
+            )
         except Exception as e:
             logger.warning("MemoryPipeline: promotion crashed pass={} err={}", pass_type, e)
         self._job_store.update(job.id, status="succeeded")
@@ -86,14 +94,41 @@ class MemoryPipeline:
         self,
         *,
         source_record_ids: list[str] | None = None,
+        account_id: str = "",
+        room_id: str = "",
     ) -> dict[PassType, list[Any]]:
-        """semantic / episodic / style / relationship / appraisal の各パスを順に実行。"""
+        """semantic / episodic / style / relationship / appraisal / persona_patch の各パスを順に実行。"""
         return {
-            "semantic": self.run_pass("semantic", source_record_ids=source_record_ids),
-            "episodic": self.run_pass("episodic", source_record_ids=source_record_ids),
-            "style": self.run_pass("style", source_record_ids=source_record_ids),
-            "relationship": self.run_pass("relationship", source_record_ids=source_record_ids),
-            "appraisal": self.run_pass("appraisal", source_record_ids=source_record_ids),
+            "semantic": self.run_pass(
+                "semantic",
+                source_record_ids=source_record_ids,
+                account_id=account_id,
+                room_id=room_id,
+            ),
+            "episodic": self.run_pass(
+                "episodic",
+                source_record_ids=source_record_ids,
+                account_id=account_id,
+                room_id=room_id,
+            ),
+            "style": self.run_pass(
+                "style",
+                source_record_ids=source_record_ids,
+                account_id=account_id,
+                room_id=room_id,
+            ),
+            "relationship": self.run_pass(
+                "relationship",
+                source_record_ids=source_record_ids,
+                account_id=account_id,
+                room_id=room_id,
+            ),
+            "appraisal": self.run_pass(
+                "appraisal",
+                source_record_ids=source_record_ids,
+                account_id=account_id,
+                room_id=room_id,
+            ),
         }
 
     def _collect_records(

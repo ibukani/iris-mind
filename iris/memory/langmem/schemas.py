@@ -99,6 +99,16 @@ class AppraisalMemoryCandidate(BaseModel):
     confidence: float = Field(ge=0.0, le=1.0)
 
 
+class PersonaPatchMemoryCandidate(BaseModel):
+    """``iris_profile.md`` への更新提案 (承認フロー無しでは適用しない)。"""
+
+    target_file: str = ".iris/config/iris_profile.md"
+    proposed_patch: str
+    reason: str
+    evidence: str = ""
+    confidence: float = Field(ge=0.0, le=1.0)
+
+
 class SemanticExtractionResult(BaseModel):
     """semantic 抽出パスは 0 個以上の UserPreferenceMemory を返す。"""
 
@@ -121,11 +131,17 @@ class AppraisalExtractionResult(BaseModel):
     items: list[AppraisalMemoryCandidate] = Field(default_factory=list)
 
 
+class PersonaPatchExtractionResult(BaseModel):
+    items: list[PersonaPatchMemoryCandidate] = Field(default_factory=list)
+
+
 __all__ = [
     "AppraisalExtractionResult",
     "AppraisalMemoryCandidate",
     "EpisodicExtractionResult",
     "EpisodicInteractionMemory",
+    "PersonaPatchExtractionResult",
+    "PersonaPatchMemoryCandidate",
     "RelationshipExtractionResult",
     "RelationshipMemoryCandidate",
     "SemanticExtractionResult",

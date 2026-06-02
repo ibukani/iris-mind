@@ -59,10 +59,24 @@ APPRAISAL_INSTRUCTIONS = (
 """
 )
 
+PERSONA_PATCH_INSTRUCTIONS = (
+    _BASE_RULES
+    + """
+- このパスは AI ペルソナ (``iris_profile.md``) への恒久的な振る舞い変更提案を抽出します。
+- **明示的なユーザー要求** (「もっとこう振る舞って」「この言葉は使わないで」など) のみを候補にしてください。
+- 観測された一時的な雰囲気・1 度きりの発言は絶対に含めないでください。
+- confidence は 0.9 以上に限ります (低 confidence は抽出自体を行わないでください)。
+- proposed_patch は diff ではなく、最終的なプロファイルへ追加/置換する 1〜3 行のテキスト断片にしてください。
+- target_file は基本 ``.iris/config/iris_profile.md`` のままで構いません。
+- reason には「どの発話を根拠にこの patch が必要か」を必ず日本語で書いてください。
+"""
+)
+
 
 __all__ = [
     "APPRAISAL_INSTRUCTIONS",
     "EPISODIC_INSTRUCTIONS",
+    "PERSONA_PATCH_INSTRUCTIONS",
     "RELATIONSHIP_INSTRUCTIONS",
     "SEMANTIC_INSTRUCTIONS",
     "STYLE_INSTRUCTIONS",

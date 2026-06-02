@@ -7,6 +7,7 @@ from pathlib import Path
 from iris.llm.prompt import Personality
 from iris.memory.procedural.models import StyleMemory
 from iris.memory.procedural.renderer import build_style_hints, render_style_hints
+from iris.memory.procedural.style_index import MetadataFilterStyleIndex, StyleMemoryIndex
 from iris.memory.procedural.style_store import StyleMemoryStore
 
 
@@ -89,3 +90,39 @@ def test_style_hints_absent_when_empty() -> None:
     personality = Personality()
     text = personality.build_system_prompt(agents_md_content="", style_hints="")
     assert "動的スタイル記憶" not in text
+
+
+def test_style_index_protocol_compatible(tmp_path: Path) -> None:
+    store = StyleMemoryStore(str(tmp_path / "s.jsonl"))
+    store.add(StyleMemory(kind="successful_pattern", content="be specific", confidence=0.9))
+    index: StyleMemoryIndex = MetadataFilterStyleIndex(store)
+    # Protocol として isinstance 判定できる
+    assert isinstance(index, StyleMemoryIndex)
+    items = index.search(account_id="acc1", room_id="r1", max_items=2)
+    assert len(items) == 1
+    assert items[0].content == "be specific"
+
+
+def test_style_store_search_falls_back_to_list_enabled(tmp_path: Path) -> None:
+    store = StyleMemoryStore(str(tmp_path / "s.jsonl"))
+    store.add(StyleMemory(kind="tone_preference", content="x", confidence=0.8))
+    # インデックス未設定 → list_enabled と同じ挙動
+    items = store.search(max_items=4)
+    assert len(items) == 1
+
+
+def test_style_store_search_uses_index(tmp_path: Path) -> None:
+    store = StyleMemoryStore(str(tmp_path / "s.jsonl"))
+    store.add(StyleMemory(kind="tone_preference", content="x", confidence=0.8))
+
+    class _StubIndex:
+        def search(
+            self, *, query: str = "", account_id: str = "", room_id: str = "", max_items: int = 8
+        ) -> list[StyleMemory]:
+            return [StyleMemory(kind="successful_pattern", content="from-index", confidence=1.0)]
+
+    index: StyleMemoryIndex = _StubIndex()  # type: ignore[assignment]
+    store.set_index(index)
+    items = store.search(max_items=4)
+    assert len(items) == 1
+    assert items[0].content == "from-index"

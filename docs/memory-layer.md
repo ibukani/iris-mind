@@ -282,6 +282,7 @@ flowchart LR
 | style | style | `StyleMemory` (kind: tone_preference / successful_pattern / running_gag / avoidance_rule / chaos_preference / conversation_strategy) |
 | relationship | relationship | `RelationshipMemoryCandidate` (signal / evidence / suggested_delta / confidence) |
 | appraisal | appraisal | `AppraisalMemoryCandidate` (dimension / estimated_delta / reason / confidence) |
+| persona_patch | persona_patch | `PersonaPatchMemoryCandidate` (target_file / proposed_patch / reason / evidence / confidence) |
 
 ### Promotion ルール (PromotionPolicy)
 
@@ -290,6 +291,9 @@ flowchart LR
 - `avoidance` カテゴリは confidence 0.85 必須
 - relationship / appraisal の delta は保守的範囲 (例: -0.1〜0.1) にクランプ
 - target_store 未実装 (`needs_review`)、job 失敗 (`failed`) は promotion log に書く
+- **重複検出**: 同じ `payload_hash` (target_store + 正規化 payload + scope 由来の SHA256) を持つ候補は pending 中は新規追加されない。`PromotionPolicy` も `seen_hashes` で再実行時の重複昇格を防ぐ。
+- **persona_patch**: `confidence >= 0.9` を満たす提案は `PersonaPatchCandidateStore` に `pending` として記録され、`PersonaPatchPolicy.apply_approved()` を経由しなければファイルへ反映されない。confidence が低い提案は `low_confidence: True` メタデータを付与した pending として保存される。
+- **Handler ディスパッチ**: 旧 `style_hooks` は廃止し、`RelationshipPromotionHandler` / `AppraisalPromotionHandler` / `PersonaPatchPromotionHandler` / `StylePromotionHandler` を `PromotionPolicy` に登録する。各 Handler は target_store 固有の保守的ロジック (クランプ / confidence scale / 負方向係数) を内包する。
 
 ### ローカルモデルとの接続
 
@@ -305,6 +309,24 @@ flowchart LR
 - `tests.fakes.llm.FakeChatModelForLangMem` + `make_fake_thread_extractor` で LangMem の `Runnable` をスタブ化
 - 抽出器→候補→promotion→最終記憶の経路はユニットテストで網羅
 - 失敗系 (LLM 例外、ジョブ失敗、空 records、corrupt JSONL) もテストする
+- **評価ハーネス** (`tests/memory/langmem/test_extractor_evaluation.py`): explicit preference / 1 度きりジョーク / dislike→avoidance / sensitive 拒否 / relationship delta 上限 / 日本語保持 / 空会話 / 弱い根拠 / persona_patch の高 confidence 経路と低 confidence 経路 / 全パスの target_store 振り分けをスナップショット化。
+- **Scheduler** (`tests/memory/langmem/test_scheduler.py`): イベントループ未起動時の fallback / 同一 scope の重複抑制 / 別 scope の並列実行 / メインループをブロックしない / 例外捕捉 / 統計 / 完了後の再スケジュール / 実 `MemoryPipeline` との統合。
+- **Handlers** (`tests/memory/langmem/test_handlers.py`): RelationshipPromotionHandler の正方向 / 負方向 / 単候補上限 / confidence < 0.6 skip / familiarity field / PromotionPolicy 経由のルーティング、AppraisalPromotionHandler の episode 記録 / 極端 delta のクランプ / source_record_ids 永続化。
+- **Dedup** (`tests/memory/langmem/test_dedup.py` + `test_dedup_store.py`): `compute_payload_signature` のキー順非依存 / trim 吸収 / volatile 無視、`compute_candidate_hash` の target_store / account_id / room_id 差分検出、`MemoryCandidateStore` の pending 重複抑制・スコープ別共存。
+- **Style Index** (`tests/memory/procedural/test_style.py`): `StyleMemoryIndex` Protocol 互換性、`MetadataFilterStyleIndex` の挙動、`StyleMemoryStore.search()` のインデックス有無での挙動切替。
+
+### 非同期スケジューラ (MemoryPipelineScheduler)
+
+`MemoryManager.flush()` の中で ``run_full_cycle()`` を呼ぶと、LangMem は LLM 推論を 6〜8 件並列で走らせるため同期パスで 1 秒以上ブロックしてしまう。これを避けるため ``MemoryPipelineScheduler`` (``iris/memory/langmem/scheduler.py``) を導入した。
+
+- ``schedule_full_cycle(account_id, room_id)`` を呼ぶと、同一 (account_id, room_id) で重複スケジュールを抑止しつつ asyncio task として ``asyncio.to_thread`` でバックグラウンド実行される。
+- 実行中イベントループが無い (Flask 経由や CLI からの同期呼び出し) 場合は None が返り、MemoryManager は同期 ``run_full_cycle()`` にフォールバックする。
+- 失敗してもメイン会話フローを止めない (stats に記録)。
+- ``SchedulerStats`` で ``total_scheduled / total_deduplicated / total_failed / last_error`` を確認できる。
+
+### Style Memory インデックス抽象
+
+``StyleMemoryStore.search()`` は ``StyleMemoryIndex`` Protocol を介して実装を差し替え可能。デフォルト実装 ``MetadataFilterStyleIndex`` は現在のメタデータフィルタと同じ挙動 (全件スキャン O(N))。ベクトル検索が必要になった場合は別実装を ``StyleMemoryStore.set_index()`` で注入できる。
 
 ### 設定 (config.yaml)
 

@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 JobStatus = Literal["pending", "running", "succeeded", "failed", "skipped"]
 CandidateStatus = Literal["pending", "promoted", "rejected", "needs_review"]
 TargetStore = Literal["semantic", "episodic", "relationship", "appraisal", "style", "persona_patch"]
-PassType = Literal["semantic", "episodic", "style", "appraisal", "relationship"]
+PassType = Literal["semantic", "episodic", "style", "appraisal", "relationship", "persona_patch"]
 
 
 class MemoryExtractionJob(BaseModel):
@@ -18,6 +18,7 @@ class MemoryExtractionJob(BaseModel):
     - source_record_ids: 入力元 RawArchive レコードの ID 群
     - pass_type: 抽出パス (semantic / episodic / style / appraisal / relationship)
     - retry_count: 失敗時のみインクリメント
+    - account_id / room_id: このジョブが対象とするスコープ (重複検出にも利用)
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -31,6 +32,8 @@ class MemoryExtractionJob(BaseModel):
     retry_count: int = 0
     error: str = ""
     metadata: dict[str, Any] = Field(default_factory=dict)
+    account_id: str = ""
+    room_id: str = ""
 
 
 class MemoryCandidate(BaseModel):
@@ -49,6 +52,9 @@ class MemoryCandidate(BaseModel):
     status: CandidateStatus = "pending"
     rejection_reason: str = ""
     metadata: dict[str, Any] = Field(default_factory=dict)
+    payload_hash: str = ""
+    scope_account_id: str = ""
+    scope_room_id: str = ""
 
 
 __all__ = [

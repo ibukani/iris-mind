@@ -131,3 +131,41 @@ class TestRelationshipManagerPerAccount:
         state_b = self.manager.get_state(account_id="user_b")
         assert state_a.level >= RelationshipLevel.FAMILIAR
         assert state_b.level == RelationshipLevel.ACQUAINTANCE
+
+
+class TestRelationshipManagerApplyCandidateDelta:
+    def setup_method(self) -> None:
+        self.manager = RelationshipManager()
+
+    def test_apply_trust_delta_increases(self) -> None:
+        before = self.manager.get_state(account_id="acc1").trust
+        new = self.manager.apply_candidate_delta(field="trust", delta=0.02, account_id="acc1")
+        assert new.trust == before + 0.02
+        # 状態はそのまま保存されている
+        assert self.manager.get_state(account_id="acc1").trust == new.trust
+
+    def test_apply_trust_delta_clamps_to_unit(self) -> None:
+        # 1.0 を超える delta を与えても 1.0 で止まる
+        new = self.manager.apply_candidate_delta(field="trust", delta=5.0, account_id="acc1")
+        assert new.trust <= 1.0
+
+    def test_apply_trust_delta_clamps_to_zero(self) -> None:
+        new = self.manager.apply_candidate_delta(field="trust", delta=-5.0, account_id="acc1")
+        assert new.trust >= 0.0
+
+    def test_apply_familiarity_delta(self) -> None:
+        before = self.manager.get_state().familiarity
+        new = self.manager.apply_candidate_delta(field="familiarity", delta=0.05, account_id="acc1")
+        assert new.familiarity == before + 0.05
+
+    def test_apply_unknown_field_raises(self) -> None:
+        import pytest
+
+        with pytest.raises(ValueError, match="unsupported relationship field"):
+            self.manager.apply_candidate_delta(field="invalid", delta=0.01, account_id="acc1")
+
+    def test_apply_per_account_isolation(self) -> None:
+        self.manager.apply_candidate_delta(field="trust", delta=0.05, account_id="acc1")
+        state_b = self.manager.get_state(account_id="acc2")
+        # acc1 の操作は acc2 に影響しない
+        assert state_b.trust == 0.1

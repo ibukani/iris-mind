@@ -162,10 +162,13 @@ def _build_pipeline(
     job_store = MemoryExtractionJobStore(mem_cfg.job_path)
     consolidation_log = MemoryConsolidationLogStore(mem_cfg.consolidation_log_path)
     extractor = LangMemExtractor(chat_model=chat_model, candidate_store=candidate_store)
+
+    handlers = _build_promotion_handlers(manager, mem_cfg)
     promotion = PromotionPolicy(
         long_term=long_term,
         consolidation_log=consolidation_log,
         min_confidence=langmem_cfg.auto_promote_min_confidence,
+        handlers=handlers,
     )
     return MemoryPipeline(
         config=langmem_cfg,
@@ -177,3 +180,63 @@ def _build_pipeline(
         promotion_policy=promotion,
         consolidation_log=consolidation_log,
     )
+
+
+def _build_promotion_handlers(
+    manager: PluginManager,
+    mem_cfg: Any,
+) -> dict[Any, Any]:
+    """PromotionPolicy に登録する handler 群を生成する。
+
+    必須: StylePromotionHandler
+    任意: RelationshipPromotionHandler / AppraisalPromotionHandler / PersonaPatchPromotionHandler
+    """
+    from iris.limbic.relationship import RelationshipManager
+    from iris.limbic.stores.appraisal_store import AppraisalEpisodeStore
+    from iris.limbic.stores.relationship_store import RelationshipStateStore
+    from iris.memory.langmem.handlers import (
+        AppraisalPromotionHandler,
+        PersonaPatchPromotionHandler,
+        RelationshipPromotionHandler,
+        StylePromotionHandler,
+    )
+    from iris.memory.procedural.persona_patch_store import PersonaPatchCandidateStore, PersonaPatchPolicy
+    from iris.memory.procedural.style_store import StyleMemoryStore
+
+    style_store = StyleMemoryStore(mem_cfg.style_memory_path)
+    handlers: dict[Any, Any] = {
+        "style": StylePromotionHandler(style_store=style_store),
+    }
+
+    persona_store = PersonaPatchCandidateStore(mem_cfg.persona_patch_path)
+    persona_policy = PersonaPatchPolicy(persona_store)
+    handlers["persona_patch"] = PersonaPatchPromotionHandler(
+        store=persona_store,
+        policy=persona_policy,
+    )
+
+    relationship_manager = manager.resolve_optional(RelationshipManager)
+    if relationship_manager is None:
+        from loguru import logger
+
+        logger.debug("builder: RelationshipManager not registered; relationship handler disabled")
+    else:
+        snapshot_store: RelationshipStateStore | None = None
+        try:
+            snapshot_store = RelationshipStateStore(mem_cfg.relationship_state_path)
+        except Exception:
+            snapshot_store = None
+        handlers["relationship"] = RelationshipPromotionHandler(
+            relationship_manager=relationship_manager,
+            snapshot_store=snapshot_store,
+        )
+
+    try:
+        appraisal_store = AppraisalEpisodeStore(mem_cfg.appraisal_episode_path)
+        handlers["appraisal"] = AppraisalPromotionHandler(episode_store=appraisal_store)
+    except Exception:
+        from loguru import logger
+
+        logger.debug("builder: AppraisalEpisodeStore unavailable; appraisal handler disabled")
+
+    return handlers

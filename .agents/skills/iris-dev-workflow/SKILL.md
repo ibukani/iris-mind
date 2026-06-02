@@ -12,7 +12,7 @@ metadata:
 
 ## Purpose
 
-This is the ordinary Iris development workflow. Avoid overly conservative decisions that block MVP development. Fix the implementation into the smallest working shape that matches the current specification.
+This is the ordinary Iris development workflow. Avoid overly conservative decisions that block MVP development. By default, fix the implementation into the smallest working shape that matches the current specification. When the user explicitly requests code-quality-first refactoring, use Quality-First Refactoring Mode instead of the MVP/minimal-diff defaults.
 
 ## Operating Rules
 
@@ -25,6 +25,7 @@ This is the ordinary Iris development workflow. Avoid overly conservative decisi
 - Do not layer new behavior on top of obsolete implementation. Replace it with a shape that matches the current specification.
 - Add abstraction only when it actually reduces duplication or complexity.
 - Do not create future-only extension points, unused hooks, or compatibility wrappers.
+- When Quality-First Refactoring Mode is active, its rules override MVP/minimal-diff defaults where they conflict.
 
 ## Workflow
 
@@ -44,6 +45,22 @@ This is the ordinary Iris development workflow. Avoid overly conservative decisi
 - Tests should lock the new specification. Delete or rewrite tests for the old specification.
 - Prefer small complete replacements over large redesigns.
 - However, explicitly confirm destructive data changes, authentication changes, external sending, persistent storage deletion, and Git history changes.
+
+## Quality-First Refactoring Mode
+
+Use this mode when the user explicitly requests refactoring for code quality, maintainability, type safety, architecture cleanup, technical-debt reduction, test cleanup, or responsibility separation.
+
+In this mode:
+
+- Code quality is the primary goal.
+- Do not optimize for the smallest diff, the fewest files changed, or MVP delivery.
+- Large structural changes are allowed when they improve maintainability, type safety, responsibility boundaries, test quality, or long-term design clarity.
+- Prefer the best coherent design over the smallest local change.
+- Preserve intended behavior, not the current internal shape.
+- Freely update dependent call sites, internal APIs, tests, fakes, fixtures, and documentation when needed for the cleaner design.
+- Rewrite brittle tests that assert private implementation details; preserve or improve meaningful behavior coverage.
+- Delete obsolete compatibility layers, unused abstractions, old branches, dead tests, and outdated documentation.
+- Still investigate impact, explain behavior changes and risks, validate broadly enough, and respect the Safety and Git rules.
 
 ## Python Rules
 
@@ -72,8 +89,9 @@ This is the ordinary Iris development workflow. Avoid overly conservative decisi
 
 - If forcing a specification change into the current structure would increase mixed responsibilities, duplication, or complex branching, perform the necessary refactor first.
 - When an old design no longer matches the new specification, prefer replacing it with a current-spec structure over preserving compatibility.
-- Limit refactoring to the scope needed to implement the current specification naturally.
-- Do not perform unrelated beautification, broad cleanups, or changes whose only goal is perfect compliance with structure rules.
+- In ordinary MVP work, limit refactoring to the scope needed to implement the current specification naturally.
+- In Quality-First Refactoring Mode, do not apply ordinary scope limits when larger restructuring improves code quality.
+- Do not perform unrelated beautification or changes whose only goal is perfect compliance with structure rules.
 
 ## Validation
 

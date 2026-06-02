@@ -425,6 +425,12 @@ Neuro-sama 的な突飛さ
 `adapters/app_gateway/` は旧 `io/` ではない。
 責務は、外部アプリとの `Observation / AppAction / ActionResult` protocol boundary である。
 
+`adapters/llm/` は LLM 技術境界である。
+責務は、typed `LLMRequest` を受け取り typed `LLMResponse` を返すことに限定する。
+実プロバイダ呼び出し、モデル選択、認証、ネットワーク I/O は adapter 境界の外へ漏らさない。
+テストと local MVP は deterministic な `FakeLLMClient` を使う。
+`cognitive/` は `adapters/llm/` を import せず、runtime wiring が constructor injection で接続する。
+
 AppGateway の責務。
 
 - 外部アプリから Observation を受け取る
@@ -521,6 +527,11 @@ PipelineStep の結果を `FrameBuilder` が統合して作る。
 
 Iris が「何をしたいか」を表す。
 まだ外部アプリ固有ではない。
+
+LLM-backed response generation は `cognitive/action/response.py` の PipelineStep として扱う。
+この step は `WorkspaceFrame` から typed response prompt を作り、注入された response generator から得た text を `ActionPlan.candidate_text` に入れる。
+`WorkspaceFrame` は直接変更せず、`ActionSelectionResult` を返して `FrameBuilder` に統合させる。
+LLM provider 形状への変換は `runtime/wiring/llm.py` が担当する。
 
 例。
 

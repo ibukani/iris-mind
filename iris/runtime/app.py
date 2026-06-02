@@ -20,11 +20,12 @@ from iris.safety.output_filter import AllowAllOutputGate, OutputSafetyGate
 class IrisApp:
     def __init__(
         self,
-        steps: Sequence[PipelineStep[PipelineStepResult]],
+        steps: Sequence[PipelineStep[PipelineStepResult]] | None = None,
         fallback_plan: ActionPlan | None = None,
         presenter: Presenter | None = None,
         action_safety_gate: ActionSafetyGate | None = None,
         output_safety_gate: OutputSafetyGate | None = None,
+        cycle: CognitiveCycle | None = None,
     ) -> None:
         if fallback_plan is None:
             fallback_plan = ActionPlan(
@@ -33,11 +34,16 @@ class IrisApp:
                 should_respond=False,
                 priority=-1,
             )
-        self._cycle = CognitiveCycle(
-            steps=steps,
-            frame_builder=FrameBuilder(),
-            fallback_plan=fallback_plan,
-        )
+        if cycle is not None:
+            self._cycle = cycle
+        else:
+            if steps is None:
+                raise ValueError("steps or cycle must be provided")
+            self._cycle = CognitiveCycle(
+                steps=steps,
+                frame_builder=FrameBuilder(),
+                fallback_plan=fallback_plan,
+            )
         self._presenter = presenter or SimplePresenter()
         self._action_safety_gate = action_safety_gate or AllowAllActionGate()
         self._output_safety_gate = output_safety_gate or AllowAllOutputGate()

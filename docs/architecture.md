@@ -237,8 +237,7 @@ iris/
 │       ├── __init__.py
 │       ├── manager.py         LongTermMemoryManager
 │       ├── stores.py          EpisodicStore + SemanticStore + AgentsMdStore
-│       ├── protocols.py       Store プロトコル定義
-│       ├── goal_store.py      GoalStore（長期目標管理）
+│       ├── store_protocols.py  Store プロトコル定義
 │       └── vector_store.py    VectorStore（ChromaDB + BM25 ハイブリッド）
 │
 ├── agency/                    # 高度認知: PFC + 基底核 + 運動野

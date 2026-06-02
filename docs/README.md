@@ -17,7 +17,7 @@
 | [`agency-layer.md`](./agency-layer.md) | **Agency 層（前頭前野+基底核+運動野）** — 意思決定(planning) と行動実行(execution) |
 | [`io-layer.md`](./io-layer.md) | **IO 層（視床）** — gRPC入出力、セッション管理、認証、EventBusマッピング |
 | [`kernel-layer.md`](./kernel-layer.md) | **Kernel 層（脳幹）** — プロセス管理、PluginManager、CommandHandler、TimerTick |
-| [`memory-layer.md`](./memory-layer.md) | **Memory 層（感覚野+皮質）** — 感覚バッファ、短期/長期記憶、GoalStore長期目標 |
+| [`memory-layer.md`](./memory-layer.md) | **Memory 層（感覚野+皮質）** — 感覚バッファ、短期/長期記憶、長期目標 |
 | [`config.md`](./config.md) | Config 設定一覧 — 全フィールドとデフォルト値 |
 | [`how-it-works/`](./how-it-works/) | **動作原理の詳細解説** — 計算式・条件分岐・Mermaid図を網羅（6ファイル） |
 

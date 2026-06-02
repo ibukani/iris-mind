@@ -156,7 +156,7 @@ class LangMemExtractor:
 
 def _default_thread_extractor_factory(model: Any, schema: type, instructions: str) -> Any:
     """``langmem.create_thread_extractor`` への薄いラッパー。テストで差し替え可能。"""
-    from langmem import create_thread_extractor  # type: ignore[import-not-found]
+    from langmem import create_thread_extractor  # type: ignore[import-untyped]
 
     return create_thread_extractor(model, schema=schema, instructions=instructions)
 

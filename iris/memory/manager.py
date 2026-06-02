@@ -11,7 +11,6 @@ from iris.memory.dispatcher import (
     dispatch_retrieve,
     dispatch_search,
 )
-from iris.memory.long_term.goal_store import GoalStore
 from iris.memory.long_term.protocol import LongTermMemoryProtocol
 from iris.memory.protocol import MemoryManagerProtocol
 from iris.memory.sensory.protocol import SensoryMemoryProtocol
@@ -24,19 +23,6 @@ if TYPE_CHECKING:
 
 
 class MemoryManager(MemoryManagerProtocol):
-    """記憶マネージャー — 各記憶種別の管理クラスへのディスパッチャ。
-
-    脳科学に基づく3層構造:
-    - SensoryMemoryManager   (感覚記憶): 生入力の一時保持
-    - ShortTermMemoryManager (短期記憶): 現在の会話内容（ワーキングメモリ）
-    - LongTermMemoryManager  (長期記憶): エピソード記憶 + 意味記憶
-
-    このクラスは以下を責務とする:
-    1. イベント処理 (pending / timer / InputReady)
-    2. store() / retrieve() / search() / clear() のディスパッチ
-    3. 後方互換 API (add_episodic, get_recent, 等)
-    """
-
     def __init__(
         self,
         *,
@@ -54,7 +40,6 @@ class MemoryManager(MemoryManagerProtocol):
         self.sensory: SensoryMemoryProtocol = sensory or SensoryMemoryManager()
         self.short_term: ShortTermMemoryProtocol = short_term or ShortTermMemoryManager()
         self.long_term: LongTermMemoryProtocol = long_term or LongTermMemoryManager()
-        self.goals: GoalStore = GoalStore()
         self.archive = archive
         self.pipeline = pipeline
         self._pipeline_scheduler: MemoryPipelineScheduler | None = pipeline_scheduler
@@ -62,12 +47,6 @@ class MemoryManager(MemoryManagerProtocol):
             from iris.memory.langmem.scheduler import MemoryPipelineScheduler
 
             self._pipeline_scheduler = MemoryPipelineScheduler(pipeline)
-
-        # 同期コンテキスト (イベントループ無し) で flush されたとき、抽出処理は
-        # チャット応答を 5-30 秒ブロックする危険がある。scheduler が走れない時は
-        # dirty 集合に積むだけで即座に返し、次にイベントループが回った時に
-        # まとめて drain する。
-        self._pipeline_dirty_scopes: set[tuple[str, str]] = set()
 
         self._store_handlers: dict[str, Callable[[Any], None]] = build_store_handlers(
             self.sensory,
@@ -118,11 +97,6 @@ class MemoryManager(MemoryManagerProtocol):
         dispatch_clear(stream, self.sensory, self.short_term, self.long_term)
 
     def flush(self, room_id: str = "", account_id: str = "") -> None:
-        """未定着の短期記憶を長期記憶に書き出してからクリアする。
-
-        LangMem pipeline が設定されていれば、``batch_min_turns`` を超えるターン数が
-        未定着のときバックグラウンド的に抽出を試みる。失敗しても会話を止めない。
-        """
         unconsolidated = self.short_term.get_unconsolidated_turns(account_id=account_id)
         if not unconsolidated:
             return
@@ -147,123 +121,28 @@ class MemoryManager(MemoryManagerProtocol):
         self.short_term.mark_consolidated(room_id=room_id, account_id=account_id)
         logger.info("MemoryManager: flushed {} turns, {} topics", len(unconsolidated), len(topics))
 
-        self._maybe_run_pipeline(len(unconsolidated), room_id=room_id, account_id=account_id)
+        self._trigger_pipeline(len(unconsolidated), room_id=room_id, account_id=account_id)
 
-    def archive_inbound(
-        self,
-        content: str,
-        *,
-        account_id: str = "",
-        room_id: str = "",
-        session_id: str = "",
-        source: str = "",
-        message_type: str = "chat",
-    ) -> None:
-        """入力メッセージをアーカイブするショートカット。"""
-        if self.archive is None:
-            return
-        from iris.memory.archive.models import ConversationRecord
-
-        self.archive.append(
-            ConversationRecord(
-                direction="inbound",
-                role="user",
-                content=content,
-                account_id=account_id,
-                room_id=room_id,
-                session_id=session_id,
-                source=source,
-                message_type=message_type,
-            )
-        )
-
-    def archive_outbound(
-        self,
-        content: str,
-        *,
-        account_id: str = "",
-        room_id: str = "",
-        session_id: str = "",
-        source: str = "assistant",
-    ) -> None:
-        """アシスタント応答をアーカイブするショートカット。"""
-        if self.archive is None:
-            return
-        from iris.memory.archive.models import ConversationRecord
-
-        self.archive.append(
-            ConversationRecord(
-                direction="outbound",
-                role="assistant",
-                content=content,
-                account_id=account_id,
-                room_id=room_id,
-                session_id=session_id,
-                source=source,
-                message_type="chat",
-            )
-        )
-
-    def _maybe_run_pipeline(
+    def _trigger_pipeline(
         self,
         turn_count: int,
         *,
         room_id: str = "",
         account_id: str = "",
     ) -> None:
-        pipeline = self.pipeline
-        if pipeline is None or not getattr(pipeline, "enabled", False):
-            return
-        try:
-            min_turns = int(pipeline._config.batch_min_turns)
-        except Exception:
-            min_turns = 6
-        if turn_count < min_turns:
-            return
-
         scheduler = self._pipeline_scheduler
-        scope = (account_id, room_id)
         if scheduler is None:
             return
-
-        # まず前回同期コンテキストで dirty に積まれた scope を drain する
-        if self._pipeline_dirty_scopes:
-            for acc, rm in list(self._pipeline_dirty_scopes):
-                if scheduler.is_already_running(acc, rm):
-                    self._pipeline_dirty_scopes.discard((acc, rm))
-                    continue
-                try:
-                    task = scheduler.schedule_full_cycle(account_id=acc, room_id=rm)
-                except Exception as e:
-                    logger.debug("MemoryManager: scheduler drain failed: {}", e)
-                    continue
-                if task is not None:
-                    self._pipeline_dirty_scopes.discard((acc, rm))
-                # task is None = イベントループが無い → dirty に残す
-
-        # 1) イベントループがあれば非同期スケジュール (同一 scope の重複を抑止)
-        if not scheduler.is_already_running(account_id, room_id):
-            try:
-                task = scheduler.schedule_full_cycle(
-                    account_id=account_id,
-                    room_id=room_id,
-                )
-            except Exception as e:
-                logger.debug("MemoryManager: scheduler schedule failed: {}", e)
-                return
-            if task is not None:
-                return
-            # イベントループが無い → 同期ブロックを避けるため dirty に積むだけ
-            self._pipeline_dirty_scopes.add(scope)
-            logger.debug(
-                "MemoryManager: pipeline run deferred (no event loop) account={} room={}",
-                account_id,
-                room_id,
-            )
-            return
-
-        # 2) 既に同一 scope が走っているなら何もしない
-        return
+        pipeline = self.pipeline
+        min_turns = int(getattr(pipeline._config, "batch_min_turns", 6)) if pipeline else 6
+        enabled = bool(getattr(pipeline, "enabled", False)) if pipeline else False
+        scheduler.run_if_needed(
+            turn_count,
+            account_id=account_id,
+            room_id=room_id,
+            min_turns=min_turns,
+            enabled=enabled,
+        )
 
     def get_user_preferences(self, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:
         return self.long_term.search_semantic(

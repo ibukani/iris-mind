@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING
 
 from iris.event.base import TimerTick
+from iris.event.event_bus import EventBus
 from iris.memory.events import ProactiveTrigger
 from iris.memory.sensory.handler import SensoryEventHandler
+
+if TYPE_CHECKING:
+    from iris.kernel.config import ProactiveConfig
 
 
 class _MemoryEventHandler:
@@ -24,10 +28,10 @@ class _MemoryEventHandler:
 
     def __init__(
         self,
-        event_bus: Any,
+        event_bus: EventBus,
         sensory_handler: SensoryEventHandler,
         proactive_trigger: ProactiveTrigger,
-        proactive_config: Any,
+        proactive_config: ProactiveConfig | None,
     ) -> None:
 
         self.event_bus = event_bus
@@ -39,8 +43,6 @@ class _MemoryEventHandler:
         event_bus.subscribe(TimerTick, self._on_timer_tick)
 
     def _on_timer_tick(self, event: TimerTick) -> None:
-        if self.event_bus is None:
-            return
         # 感覚記憶のイベント処理を委譲。何か入力を処理した場合はプロアクティブ処理を行わない
         if self._sensory_handler._on_timer_tick(event):
             return

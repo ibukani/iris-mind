@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, TypedDict
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from iris.kernel.manager import PluginManager
@@ -17,7 +18,8 @@ if TYPE_CHECKING:
     from iris.memory.short_term.manager import ShortTermMemoryManager
 
 
-class MemoryComponents(TypedDict):
+@dataclass
+class MemoryComponents:
     memory: MemoryManager
     sensory: SensoryMemoryManager
     short_term: ShortTermMemoryManager
@@ -61,7 +63,7 @@ def build_memory(manager: PluginManager) -> MemoryComponents:
     short_term = ShortTermMemoryManager()
     from iris.event.event_bus import EventBus
 
-    event_bus = manager.resolve_optional(EventBus)
+    event_bus: EventBus = manager.resolve_optional(EventBus)  # type: ignore[assignment]
     sensory = SensoryMemoryManager(event_bus=event_bus)
 
     archive = RawConversationArchiveStore(
@@ -85,8 +87,6 @@ def build_memory(manager: PluginManager) -> MemoryComponents:
         min_fragments=config.quasi_sync.response_readiness.tier1_min_fragments,
         question_detect=config.quasi_sync.response_readiness.tier1_question_detect,
         confidence_threshold=config.quasi_sync.response_readiness.confidence_threshold,
-        llm=None,
-        llm_model_role=config.quasi_sync.response_readiness.llm_model_role,
     )
     sensory.set_readiness_evaluator(readiness)
 
@@ -115,18 +115,18 @@ def build_memory(manager: PluginManager) -> MemoryComponents:
         proactive_config=config.proactive,
     )
 
-    return {
-        "memory": mem,
-        "sensory": sensory,
-        "short_term": short_term,
-        "long_term": long_term,
-        "vector_store": vector_store,
-        "episodic": episodic,
-        "semantic": semantic,
-        "archive": archive,
-        "pipeline": pipeline,
-        "event_handler": event_handler,
-    }
+    return MemoryComponents(
+        memory=mem,
+        sensory=sensory,
+        short_term=short_term,
+        long_term=long_term,
+        vector_store=vector_store,
+        episodic=episodic,
+        semantic=semantic,
+        archive=archive,
+        pipeline=pipeline,
+        event_handler=event_handler,
+    )
 
 
 def _build_pipeline(

@@ -6,8 +6,10 @@ from typing import Any
 
 from loguru import logger
 
-from iris.memory.long_term.models import EpisodicInput, SemanticInput
+from iris.memory.long_term.protocol import LongTermMemoryProtocol
 from iris.memory.models import ContentBlock, text_block
+from iris.memory.sensory.protocol import SensoryMemoryProtocol
+from iris.memory.short_term.protocol import ShortTermMemoryProtocol
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,9 +45,9 @@ def _coerce_short_term_turn(
 
 
 def build_store_handlers(
-    sensory: Any,
-    short_term: Any,
-    long_term: Any,
+    sensory: SensoryMemoryProtocol,
+    short_term: ShortTermMemoryProtocol,
+    long_term: LongTermMemoryProtocol,
 ) -> dict[str, Callable[[Any], None]]:
     """stream ごとの保存ハンドラを構築する。"""
 
@@ -105,20 +107,20 @@ def build_store_handlers(
 def dispatch_retrieve(
     stream: str,
     filters: dict[str, Any],
-    sensory: Any,
-    short_term: Any,
-    long_term: Any,
+    sensory: SensoryMemoryProtocol,
+    short_term: ShortTermMemoryProtocol,
+    long_term: LongTermMemoryProtocol,
     room_id: str = "",
     account_id: str = "",
 ) -> list[dict[str, Any]]:
     if stream == "sensory":
-        result = sensory.retrieve()
-        return [result] if result else []
+        snapshot = sensory.retrieve()
+        return [snapshot.model_dump()] if snapshot.fragments or snapshot.raw else []
     n = _extract_int(filters.get("n"), 5)
     if stream == "short_term":
-        return short_term.get_recent_turns(n, room_id=room_id, account_id=account_id)  # type: ignore[no-any-return]
+        return [t.model_dump() for t in short_term.get_recent_turns(n, room_id=room_id, account_id=account_id)]
     if stream == "episodic":
-        return long_term.get_episodic_recent(n, room_id=room_id, account_id=account_id)  # type: ignore[no-any-return]
+        return long_term.get_episodic_recent(n, room_id=room_id, account_id=account_id)
     return []
 
 
@@ -126,24 +128,27 @@ def dispatch_search(
     query: str,
     stream: str | None,
     kwargs: dict[str, Any],
-    short_term: Any,
-    long_term: Any,
+    short_term: ShortTermMemoryProtocol,
+    long_term: LongTermMemoryProtocol,
     room_id: str = "",
     account_id: str = "",
 ) -> list[dict[str, Any]]:
     max_results = _extract_int(kwargs.get("max_results"), 3)
     if stream == "short_term":
-        return short_term.search(query, max_results=max_results, room_id=room_id, account_id=account_id)  # type: ignore[no-any-return]
+        return [
+            r.model_dump()
+            for r in short_term.search(query, max_results=max_results, room_id=room_id, account_id=account_id)
+        ]
     if stream == "semantic" or stream is None:
-        return long_term.search_semantic(query, max_results=max_results, room_id=room_id, account_id=account_id)  # type: ignore[no-any-return]
+        return long_term.search_semantic(query, max_results=max_results, room_id=room_id, account_id=account_id)
     return []
 
 
 def dispatch_clear(
     stream: str | None,
-    sensory: Any,
-    short_term: Any,
-    long_term: Any,
+    sensory: SensoryMemoryProtocol,
+    short_term: ShortTermMemoryProtocol,
+    long_term: LongTermMemoryProtocol,
     room_id: str = "",
 ) -> None:
     logger.info("MemoryManager: clear stream={}", stream or "all")
@@ -158,8 +163,6 @@ def dispatch_clear(
 
 
 __all__ = [
-    "EpisodicInput",
-    "SemanticInput",
     "StoreScope",
     "build_store_handlers",
     "dispatch_clear",

@@ -81,6 +81,7 @@ class EpisodicStore(_JsonlStore):
     def clear(self) -> None:
         if self.path.exists():
             self.path.unlink()
+        self._cache = None
         logger.info("EpisodicStore: cleared")
 
     def add(
@@ -162,7 +163,8 @@ class SemanticStore(_JsonlStore):
             entries.append(entry)
             if len(entries) > self.max_entries:
                 entries = entries[-self.max_entries :]
-            self._write_file(entries)
+            self._cache = entries
+            self._flush()
             self.vector.add(entry, account_id=account_id)
             self._synced_count = len(entries)
             logger.info("SemanticStore: added entry, type={}", entry.get("type", "unknown"))
@@ -171,6 +173,7 @@ class SemanticStore(_JsonlStore):
     def clear(self) -> None:
         if self.path.exists():
             self.path.unlink()
+        self._cache = None
         self.vector.clear()
         self._synced_count = 0
         logger.info("SemanticStore: cleared")

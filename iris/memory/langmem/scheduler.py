@@ -115,6 +115,56 @@ class MemoryPipelineScheduler:
             ),
         )
 
+    def run_if_needed(
+        self,
+        turn_count: int,
+        *,
+        account_id: str = "",
+        room_id: str = "",
+        min_turns: int = 6,
+        enabled: bool = True,
+    ) -> None:
+        """``flush`` 後に条件を満たせばパイプラインをスケジュールする。
+
+        条件:
+        - ``enabled`` が真
+        - ``turn_count >= min_turns``
+        - 同一 scope が実行中でない
+
+        イベントループが無い場合は deferred queue に積み、
+        次回 ``run_if_needed`` の呼び出しで drain する。
+        """
+        if not enabled or turn_count < min_turns:
+            return
+
+        if not hasattr(self, "_deferred"):
+            self._deferred: set[tuple[str, str]] = set()
+
+        # 前回 deferred に積まれた scope を drain
+        if self._deferred:
+            for acc, rm in list(self._deferred):
+                if self.is_already_running(acc, rm):
+                    self._deferred.discard((acc, rm))
+                    continue
+                try:
+                    task = self.schedule_full_cycle(account_id=acc, room_id=rm)
+                except Exception:
+                    logger.debug("MemoryPipelineScheduler: deferred drain failed acc={} rm={}", acc, rm)
+                    continue
+                if task is not None:
+                    self._deferred.discard((acc, rm))
+
+        if self.is_already_running(account_id, room_id):
+            return
+
+        try:
+            task = self.schedule_full_cycle(account_id=account_id, room_id=room_id)
+        except Exception:
+            return
+        if task is not None:
+            return
+        self._deferred.add((account_id, room_id))
+
     async def shutdown(self, *, cancel: bool = False) -> None:
         """実行中タスクの完了を待つ (必要ならキャンセル)。"""
         async with self._lock:

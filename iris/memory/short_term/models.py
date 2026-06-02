@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
-from typing import Any
-
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from iris.memory.models import ContentBlock
 
@@ -74,12 +71,3 @@ class ActiveUser(BaseModel):
 
     account_id: str
     display_name: str
-
-
-class _HistoryEntry(BaseModel):
-    """EmotionStateManager 用の履歴エントリ。"""
-
-    emotion: dict[str, Any]
-    mood: dict[str, float]
-    relationship: dict[str, Any]
-    timestamp: datetime = Field(default_factory=datetime.utcnow)

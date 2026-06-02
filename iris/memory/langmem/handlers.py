@@ -149,7 +149,12 @@ class RelationshipPromotionHandler:
             account_id=account_id,
         )
         if self._snapshots is not None:
-            self._snapshots.save_snapshot(account_id, new_state, room_id=room_id)
+            self._snapshots.save_snapshot(
+                account_id,
+                new_state,
+                room_id=room_id,
+                source_record_ids=list(candidate.source_record_ids),
+            )
         logger.info(
             "RelationshipPromotionHandler: account={} field={} delta={:.4f} conf={:.2f} before.trust={:.3f} after.trust={:.3f}",
             account_id,

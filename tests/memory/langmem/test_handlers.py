@@ -47,6 +47,7 @@ def test_relationship_handler_applies_positive_delta(tmp_path: Path) -> None:
     )
     before = manager.get_state(account_id="acc1").trust
     candidate = _rel_candidate()
+    candidate.source_record_ids = ["rec1", "rec2"]
     memory_id = handler.apply(candidate, account_id="acc1", room_id="room1")
     assert memory_id is not None
     after = manager.get_state(account_id="acc1").trust
@@ -55,6 +56,8 @@ def test_relationship_handler_applies_positive_delta(tmp_path: Path) -> None:
     snaps = snapshot.list_all()
     assert len(snaps) == 1
     assert snaps[0].account_id == "acc1"
+    assert snaps[0].source_record_ids == ["rec1", "rec2"]
+    assert snaps[0].all_source_record_ids == ["rec1", "rec2"]
 
 
 def test_relationship_handler_clamps_to_max_delta() -> None:

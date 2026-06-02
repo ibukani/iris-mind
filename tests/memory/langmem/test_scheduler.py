@@ -191,6 +191,40 @@ def test_scheduler_does_not_attach_to_unrelated_pipelines() -> None:
     assert scheduler.stats.active_tasks == 0
 
 
+def test_scheduler_concurrent_thread_safety_on_tasks_dict() -> None:
+    """B-006: 複数スレッドから ``is_already_running`` / ``stats`` を叩いても
+    競合せず ``RuntimeError`` にならない (``_tasks_lock`` 保護の確認)。
+    """
+    import threading
+
+    pipeline = _DummyPipeline(slow=True)
+    scheduler = MemoryPipelineScheduler(pipeline)  # type: ignore[arg-type]
+
+    async def _main() -> None:
+        t = scheduler.schedule_full_cycle(account_id="acc1", room_id="r1")
+        assert t is not None
+        # 並行スレッドから _tasks を観測しても例外が出なければ OK
+        errors: list[Exception] = []
+
+        def _probe() -> None:
+            try:
+                for _ in range(50):
+                    _ = scheduler.is_already_running("acc1", "r1")
+                    _ = scheduler.stats
+            except Exception as e:
+                errors.append(e)
+
+        threads = [threading.Thread(target=_probe) for _ in range(4)]
+        for th in threads:
+            th.start()
+        for th in threads:
+            th.join()
+        assert errors == []
+        await t
+
+    asyncio.run(_main())
+
+
 # 実 MemoryPipeline との統合 (低速だが本当の wiring 確認)
 def test_real_pipeline_scheduler_integration(tmp_path: Path) -> None:
     """実 ``MemoryPipeline`` を使い、scheduler 経由で ``run_full_cycle`` が動くことを確認。"""

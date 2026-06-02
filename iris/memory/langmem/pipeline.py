@@ -16,7 +16,7 @@ from loguru import logger
 from iris.kernel.config import LangMemConfig, MemoryConfig
 from iris.memory.archive.store import RawConversationArchiveStore
 from iris.memory.consolidation.log_store import MemoryConsolidationLogStore
-from iris.memory.langmem.extractor import LangMemExtractor
+from iris.memory.langmem.extractor import LangMemExtractor, make_job_scope_resolver
 from iris.memory.langmem.models import MemoryExtractionJob, PassType
 from iris.memory.langmem.promotion import PromotionPolicy
 from iris.memory.langmem.stores import MemoryExtractionJobStore
@@ -74,7 +74,14 @@ class MemoryPipeline:
         self._job_store.add(job)
         self._job_store.update(job.id, status="running")
         try:
-            candidates = self._extractor.run(job, records)
+            # Job のスコープを resolver として明示注入する。
+            # 候補生成時に account_id/room_id を欠落させないため、
+            # デフォルト resolver の空文字フォールバックに依存しない。
+            candidates = self._extractor.run(
+                job,
+                records,
+                scope_resolver=make_job_scope_resolver(account_id, room_id),
+            )
         except Exception as e:
             logger.warning("MemoryPipeline: extractor crashed pass={} err={}", pass_type, e)
             self._job_store.update(job.id, status="failed", error=str(e))
@@ -125,6 +132,12 @@ class MemoryPipeline:
             ),
             "appraisal": self.run_pass(
                 "appraisal",
+                source_record_ids=source_record_ids,
+                account_id=account_id,
+                room_id=room_id,
+            ),
+            "persona_patch": self.run_pass(
+                "persona_patch",
                 source_record_ids=source_record_ids,
                 account_id=account_id,
                 room_id=room_id,

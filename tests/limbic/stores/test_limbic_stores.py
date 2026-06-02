@@ -61,6 +61,28 @@ def test_relationship_state_store_separate_accounts(tmp_path: Path) -> None:
     assert acc2.state.trust == 0.9
 
 
+def test_relationship_state_store_persists_source_record_ids(tmp_path: Path) -> None:
+    store = RelationshipStateStore(str(tmp_path / "r.jsonl"))
+    state = RelationshipState(trust=0.5, familiarity=0.3, interaction_count=2)
+    store.save_snapshot("acc1", state, source_record_ids=["r1", "r2"])
+    snap = store.load_for_account("acc1")
+    assert snap is not None
+    assert snap.source_record_ids == ["r1", "r2"]
+    assert snap.all_source_record_ids == ["r1", "r2"]
+
+
+def test_relationship_state_store_merges_source_record_ids(tmp_path: Path) -> None:
+    store = RelationshipStateStore(str(tmp_path / "r.jsonl"))
+    store.save_snapshot("acc1", RelationshipState(trust=0.3), source_record_ids=["r1", "r2"])
+    store.save_snapshot("acc1", RelationshipState(trust=0.5), source_record_ids=["r3"])
+    snap = store.load_for_account("acc1")
+    assert snap is not None
+    # 直近スナップは最新 source_record_ids
+    assert snap.source_record_ids == ["r3"]
+    # 累計はマージされ重複除去
+    assert snap.all_source_record_ids == ["r1", "r2", "r3"]
+
+
 def test_appraisal_episode_store_from_result(tmp_path: Path) -> None:
     store = AppraisalEpisodeStore(str(tmp_path / "a.jsonl"))
     relationship = RelationshipState(trust=0.6, familiarity=0.4, interaction_count=5)

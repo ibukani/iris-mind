@@ -161,6 +161,11 @@ def _build_pipeline(
     candidate_store = MemoryCandidateStore(mem_cfg.candidate_path)
     job_store = MemoryExtractionJobStore(mem_cfg.job_path)
     consolidation_log = MemoryConsolidationLogStore(mem_cfg.consolidation_log_path)
+    # ``scope_resolver`` はランタイムのスコープを LangMem 出力に投影する責務。
+    # 空文字を返すデフォルトに依存すると候補の scope_account_id/room_id が
+    # 全て空文字になり dedup_hash が機能しなくなるため、``MemoryPipeline.run_pass``
+    # 側で ``make_job_scope_resolver(account_id, room_id)`` を per-job 注入する
+    # 経路を採る。extractor 自体はデフォルトのままで良い。
     extractor = LangMemExtractor(chat_model=chat_model, candidate_store=candidate_store)
 
     handlers = _build_promotion_handlers(manager, mem_cfg)

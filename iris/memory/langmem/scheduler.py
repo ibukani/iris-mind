@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
+import threading
+import time
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
@@ -54,19 +56,26 @@ class MemoryPipelineScheduler:
     def __init__(self, pipeline: MemoryPipeline) -> None:
         self._pipeline = pipeline
         self._tasks: dict[tuple[str, str], _ScheduledTask] = {}
+        # asyncio はシングルスレッドだが、``_schedule`` / ``_run`` の finally が
+        # 別スレッド (ロック競合する sync caller) から呼ばれる可能性を考慮し、
+        # dict 操作は ``_tasks_lock`` で直列化する。``asyncio.Lock`` は
+        # shutdown 時の await が必要な区間のみに使用する。
+        self._tasks_lock = threading.Lock()
         self._lock = asyncio.Lock()
         self._stats = SchedulerStats()
 
     @property
     def stats(self) -> SchedulerStats:
         """現在の統計情報スナップショットを返す。"""
-        self._stats.active_tasks = sum(1 for t in self._tasks.values() if not t.task.done())
+        with self._tasks_lock:
+            self._stats.active_tasks = sum(1 for t in self._tasks.values() if not t.task.done())
         return self._stats
 
     def is_already_running(self, account_id: str, room_id: str) -> bool:
         """指定スコープでタスクが実行中か否か。"""
         key = (account_id, room_id)
-        st = self._tasks.get(key)
+        with self._tasks_lock:
+            st = self._tasks.get(key)
         return st is not None and not st.task.done()
 
     def schedule_full_cycle(
@@ -109,7 +118,9 @@ class MemoryPipelineScheduler:
     async def shutdown(self, *, cancel: bool = False) -> None:
         """実行中タスクの完了を待つ (必要ならキャンセル)。"""
         async with self._lock:
-            pending = list(self._tasks.values())
+            with self._tasks_lock:
+                pending = list(self._tasks.values())
+                self._tasks.clear()
         for st in pending:
             if cancel:
                 st.task.cancel()
@@ -118,8 +129,6 @@ class MemoryPipelineScheduler:
                 await st.task
             except (asyncio.CancelledError, Exception):
                 logger.debug("MemoryPipelineScheduler.shutdown: task ended with exception")
-        async with self._lock:
-            self._tasks.clear()
 
     def _schedule(
         self,
@@ -134,36 +143,30 @@ class MemoryPipelineScheduler:
             logger.debug("MemoryPipelineScheduler: no running event loop, caller should fallback")
             return None
 
-        # de-dup は sync ロックで取る (asyncio.Lock はロック獲得自体が await)
-        if not self._lock.locked():
-            # 単にフラグチェックは lock 不要
-            pass
-
         key = (account_id, room_id)
-        existing = self._tasks.get(key)
-        if existing is not None and not existing.task.done():
-            existing.enqueued_count += 1
-            self._stats.total_deduplicated += 1
-            logger.debug(
-                "MemoryPipelineScheduler: dedup account={} room={} pending_count={}",
-                account_id,
-                room_id,
-                existing.enqueued_count,
+        with self._tasks_lock:
+            existing = self._tasks.get(key)
+            if existing is not None and not existing.task.done():
+                existing.enqueued_count += 1
+                self._stats.total_deduplicated += 1
+                logger.debug(
+                    "MemoryPipelineScheduler: dedup account={} room={} pending_count={}",
+                    account_id,
+                    room_id,
+                    existing.enqueued_count,
+                )
+                return None
+
+            task = loop.create_task(
+                self._run(account_id=account_id, room_id=room_id, run_call=run_call),
+                name=f"MemoryPipelineScheduler[{account_id}:{room_id}]",
             )
-            return None
-
-        import time as _time
-
-        task = loop.create_task(
-            self._run(account_id=account_id, room_id=room_id, run_call=run_call),
-            name=f"MemoryPipelineScheduler[{account_id}:{room_id}]",
-        )
-        self._tasks[key] = _ScheduledTask(
-            key=key,
-            task=task,
-            created_at=_time.time(),
-        )
-        self._stats.total_scheduled += 1
+            self._tasks[key] = _ScheduledTask(
+                key=key,
+                task=task,
+                created_at=time.time(),
+            )
+            self._stats.total_scheduled += 1
         return task
 
     async def _run(
@@ -187,9 +190,11 @@ class MemoryPipelineScheduler:
             )
             return None
         finally:
-            # 完了 (成功/失敗/キャンセル) したタスクは登録から外す
-            async with self._lock:
-                self._tasks.pop((account_id, room_id), None)
+            # 完了 (成功/失敗/キャンセル) したタスクは登録から外す。
+            with self._tasks_lock:
+                st = self._tasks.get((account_id, room_id))
+                if st is not None and st.task.done():
+                    self._tasks.pop((account_id, room_id), None)
 
 
 __all__ = ["MemoryPipelineScheduler", "SchedulerStats"]

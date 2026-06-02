@@ -95,8 +95,15 @@ class LangMemExtractor:
         self,
         job: MemoryExtractionJob,
         records: list[ConversationRecord | dict[str, Any]],
+        *,
+        scope_resolver: Callable[[PassType, dict[str, Any]], tuple[str, str]] | None = None,
     ) -> list[MemoryCandidate]:
-        """``job`` に対応する抽出パスを実行し、生成された候補をストアに書き出す。"""
+        """``job`` に対応する抽出パスを実行し、生成された候補をストアに書き出す。
+
+        ``scope_resolver`` を渡すと ``Job.account_id/room_id`` 以外の文脈で
+        候補ごとのスコープを決定できる。省略時は ``self._scope_resolver``、
+        それも空文字を返す場合は ``Job.account_id/room_id`` にフォールバック。
+        """
         if job.pass_type not in self._extractors:
             logger.warning("LangMemExtractor: no extractor available for pass={}", job.pass_type)
             return []
@@ -111,12 +118,13 @@ class LangMemExtractor:
         items = _extract_items(result)
         if not items:
             return []
+        resolver = scope_resolver or self._scope_resolver
         candidates: list[MemoryCandidate] = []
         target_store: TargetStore = _target_store_for_pass(job.pass_type)  # type: ignore[assignment]
         for it in items:
             payload = it if isinstance(it, dict) else it.model_dump(mode="python")
             confidence = float(payload.get("confidence", 0.0) or 0.0)
-            account_id, room_id = self._scope_resolver(job.pass_type, payload)
+            account_id, room_id = resolver(job.pass_type, payload)
             if not account_id:
                 account_id = job.account_id
             if not room_id:

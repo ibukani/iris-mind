@@ -63,6 +63,12 @@ class MemoryManager(MemoryManagerProtocol):
 
             self._pipeline_scheduler = MemoryPipelineScheduler(pipeline)
 
+        # 同期コンテキスト (イベントループ無し) で flush されたとき、抽出処理は
+        # チャット応答を 5-30 秒ブロックする危険がある。scheduler が走れない時は
+        # dirty 集合に積むだけで即座に返し、次にイベントループが回った時に
+        # まとめて drain する。
+        self._pipeline_dirty_scopes: set[tuple[str, str]] = set()
+
         self._store_handlers: dict[str, Callable[[Any], None]] = build_store_handlers(
             self.sensory,
             self.short_term,
@@ -215,24 +221,49 @@ class MemoryManager(MemoryManagerProtocol):
         if turn_count < min_turns:
             return
 
-        # 1) イベントループがあれば非同期スケジュール (同一 scope の重複を抑止)
         scheduler = self._pipeline_scheduler
-        if scheduler is not None and not scheduler.is_already_running(account_id, room_id):
+        scope = (account_id, room_id)
+        if scheduler is None:
+            return
+
+        # まず前回同期コンテキストで dirty に積まれた scope を drain する
+        if self._pipeline_dirty_scopes:
+            for acc, rm in list(self._pipeline_dirty_scopes):
+                if scheduler.is_already_running(acc, rm):
+                    self._pipeline_dirty_scopes.discard((acc, rm))
+                    continue
+                try:
+                    task = scheduler.schedule_full_cycle(account_id=acc, room_id=rm)
+                except Exception as e:
+                    logger.debug("MemoryManager: scheduler drain failed: {}", e)
+                    continue
+                if task is not None:
+                    self._pipeline_dirty_scopes.discard((acc, rm))
+                # task is None = イベントループが無い → dirty に残す
+
+        # 1) イベントループがあれば非同期スケジュール (同一 scope の重複を抑止)
+        if not scheduler.is_already_running(account_id, room_id):
             try:
                 task = scheduler.schedule_full_cycle(
                     account_id=account_id,
                     room_id=room_id,
                 )
-                if task is not None:
-                    return
             except Exception as e:
-                logger.debug("MemoryManager: scheduler schedule failed, fallback to sync: {}", e)
+                logger.debug("MemoryManager: scheduler schedule failed: {}", e)
+                return
+            if task is not None:
+                return
+            # イベントループが無い → 同期ブロックを避けるため dirty に積むだけ
+            self._pipeline_dirty_scopes.add(scope)
+            logger.debug(
+                "MemoryManager: pipeline run deferred (no event loop) account={} room={}",
+                account_id,
+                room_id,
+            )
+            return
 
-        # 2) イベントループが無い or スケジュール出来なかった場合は同期フォールバック
-        try:
-            pipeline.run_full_cycle(account_id=account_id, room_id=room_id)
-        except Exception as e:
-            logger.warning("MemoryManager: pipeline crashed in flush: {}", e)
+        # 2) 既に同一 scope が走っているなら何もしない
+        return
 
     def get_user_preferences(self, room_id: str = "", account_id: str = "") -> list[dict[str, Any]]:
         return self.long_term.search_semantic(

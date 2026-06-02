@@ -20,6 +20,10 @@ class RelationshipSnapshot(BaseModel):
     room_id: str = ""
     state: RelationshipState = Field(default_factory=RelationshipState)
     updated_at: str = Field(default_factory=lambda: datetime.now(UTC).isoformat())
+    # 直近更新を引き起こした MemoryCandidate の source_record_ids (LangMem 由来なら必須)
+    source_record_ids: list[str] = Field(default_factory=list)
+    # source_record_ids 累計 (重複除去済み)
+    all_source_record_ids: list[str] = Field(default_factory=list)
 
     @classmethod
     def make(
@@ -27,12 +31,14 @@ class RelationshipSnapshot(BaseModel):
         account_id: str,
         state: RelationshipState,
         room_id: str = "",
+        source_record_ids: list[str] | None = None,
     ) -> RelationshipSnapshot:
         return cls(
             id=cls._compose_id(account_id, room_id),
             account_id=account_id,
             room_id=room_id,
             state=state,
+            source_record_ids=list(source_record_ids or []),
         )
 
     @staticmethod
@@ -51,11 +57,24 @@ class RelationshipStateStore(_IdIndexedJsonlStore[RelationshipSnapshot]):
         account_id: str,
         state: RelationshipState,
         room_id: str = "",
+        source_record_ids: list[str] | None = None,
     ) -> RelationshipSnapshot:
-        snap = RelationshipSnapshot.make(account_id, state, room_id=room_id)
+        snap = RelationshipSnapshot.make(
+            account_id,
+            state,
+            room_id=room_id,
+            source_record_ids=source_record_ids,
+        )
         existing = self.find(snap.id)
         if existing is not None:
-            return self.update(snap.id, **snap.model_dump(mode="python"))  # type: ignore[return-value]
+            merged = list(dict.fromkeys([*existing.all_source_record_ids, *snap.source_record_ids]))
+            # orjson が RelationshipState (Pydantic) を直接シリアライズできないので
+            # ``state`` を dict にしてから ``update`` に渡す。元の実装と同じ流儀。
+            changes: dict[str, Any] = snap.model_dump(mode="python")
+            changes["all_source_record_ids"] = merged
+            return self.update(snap.id, **changes)  # type: ignore[return-value]
+        if snap.source_record_ids:
+            snap = snap.model_copy(update={"all_source_record_ids": list(snap.source_record_ids)})
         return self.add(snap)
 
     def load_for_account(self, account_id: str) -> RelationshipSnapshot | None:

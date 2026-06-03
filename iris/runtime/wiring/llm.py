@@ -16,7 +16,7 @@ class LLMResponseGenerator(ResponseGenerator):
             model=self._model,
             messages=(
                 LLMMessage(role="system", content=prompt.system_instruction),
-                LLMMessage(role="user", content=prompt.user_text),
+                LLMMessage(role="user", content=_build_user_content(prompt)),
             ),
             temperature=0.0,
         )
@@ -36,3 +36,10 @@ def wire_response_generator(client: LLMClient | None = None) -> LLMResponseGener
 
 def wire_openai_llm_client(config: OpenAIConfig) -> LLMClient:
     return OpenAILLMClient(config)
+
+
+def _build_user_content(prompt: ResponsePrompt) -> str:
+    if not prompt.memory_snippets:
+        return prompt.user_text
+    snippets = "\n".join(f"- {snippet}" for snippet in prompt.memory_snippets)
+    return f"Relevant memories:\n{snippets}\n\nUser message:\n{prompt.user_text}"

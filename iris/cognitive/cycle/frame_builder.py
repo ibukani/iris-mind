@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import replace
 
 from iris.cognitive.cycle.models import (
@@ -36,10 +38,7 @@ class FrameBuilder:
             case MemoryRetrievalResult():
                 return replace(
                     frame,
-                    memory_summary=MemorySummary(
-                        relevant_facts=result.relevant_facts,
-                        relevant_episodes=result.relevant_episodes,
-                    ),
+                    memory_summary=MemorySummary(retrieved_memories=result.memories),
                 )
             case AppraisalResult():
                 return replace(

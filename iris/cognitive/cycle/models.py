@@ -3,6 +3,7 @@ from enum import StrEnum
 
 from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.actions import ActionPlan
+from iris.contracts.memory import MemorySearchResult
 
 
 class StepStatus(StrEnum):
@@ -27,8 +28,7 @@ class PerceptionResult(PipelineStepResult):
 
 @dataclass(frozen=True)
 class MemoryRetrievalResult(PipelineStepResult):
-    relevant_facts: tuple[str, ...] = ()
-    relevant_episodes: tuple[str, ...] = ()
+    memories: tuple[MemorySearchResult, ...] = ()
 
 
 @dataclass(frozen=True)

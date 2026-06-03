@@ -434,6 +434,12 @@ real provider configuration は typed config で明示注入し、global discove
 provider tests は `FakeLLMClient` または mocked provider client を使い、実ネットワークへ接続しない。
 `cognitive/` は `adapters/llm/` を import せず、runtime wiring が constructor injection で接続する。
 
+`adapters/memory/` は memory store 技術境界である。
+責務は、typed `MemoryQuery` を受け取り typed `MemorySearchResult` を返すことに限定する。
+テストと local MVP は deterministic な `FakeMemoryStore` を使う。
+LangMem、LangChain memory、embeddings、vector DB、永続 storage は後続 phase まで入れない。
+`cognitive/memory/` は store 実装を import せず、runtime wiring が constructor injection で接続する。
+
 AppGateway の責務。
 
 - 外部アプリから Observation を受け取る
@@ -1296,8 +1302,7 @@ class InterpretedInput:
 
 @dataclass(frozen=True)
 class MemorySummary:
-    relevant_facts: tuple[str, ...] = ()
-    relevant_episodes: tuple[str, ...] = ()
+    retrieved_memories: tuple[MemorySearchResult, ...] = ()
 
 @dataclass(frozen=True)
 class AffectSnapshot:
@@ -1375,8 +1380,7 @@ class PerceptionResult(PipelineStepResult):
 
 @dataclass(frozen=True)
 class MemoryRetrievalResult(PipelineStepResult):
-    relevant_facts: tuple[str, ...] = ()
-    relevant_episodes: tuple[str, ...] = ()
+    memories: tuple[MemorySearchResult, ...] = ()
 
 @dataclass(frozen=True)
 class AppraisalResult(PipelineStepResult):
@@ -1473,10 +1477,7 @@ class FrameBuilder:
             case MemoryRetrievalResult():
                 return replace(
                     frame,
-                    memory_summary=MemorySummary(
-                        relevant_facts=result.relevant_facts,
-                        relevant_episodes=result.relevant_episodes,
-                    ),
+                    memory_summary=MemorySummary(retrieved_memories=result.memories),
                 )
             case AppraisalResult():
                 return replace(
@@ -1805,7 +1806,7 @@ await self.discord.send(reply)
 良い例。
 
 ```python
-return replace(frame, memory_summary=MemorySummary(relevant_facts=facts))
+return replace(frame, memory_summary=MemorySummary(retrieved_memories=memories))
 ```
 
 悪い例。

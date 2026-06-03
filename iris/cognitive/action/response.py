@@ -13,6 +13,7 @@ from iris.contracts.actions import ActionPlan
 class ResponsePrompt:
     system_instruction: str
     user_text: str
+    memory_snippets: tuple[str, ...] = ()
     goals: tuple[str, ...] = ()
     constraints: tuple[str, ...] = ()
 
@@ -34,6 +35,7 @@ def build_response_prompt(frame: WorkspaceFrame) -> ResponsePrompt | None:
     return ResponsePrompt(
         system_instruction="Generate a concise text response for Iris.",
         user_text=frame.interpreted_input.text,
+        memory_snippets=tuple(result.record.text for result in frame.memory_summary.retrieved_memories),
         goals=tuple(goal.name for goal in frame.goals),
         constraints=tuple(constraint.name for constraint in frame.constraints),
     )

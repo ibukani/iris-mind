@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 
 from iris.contracts.actions import ActionPlan
+from iris.contracts.memory import MemorySearchResult
 from iris.contracts.observations import Observation
 
 
@@ -13,8 +14,7 @@ class InterpretedInput:
 
 @dataclass(frozen=True)
 class MemorySummary:
-    relevant_facts: tuple[str, ...] = ()
-    relevant_episodes: tuple[str, ...] = ()
+    retrieved_memories: tuple[MemorySearchResult, ...] = ()
 
 
 @dataclass(frozen=True)

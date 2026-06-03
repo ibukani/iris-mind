@@ -7,8 +7,8 @@
 - Read referenced files only when they are needed for the current task.
 - Iris is migrating to Cognitive Runtime Architecture v1.2.1.
 - The current architecture source of truth is `docs/architecture/cognitive-runtime-v1.2.1.md`.
-- Existing Plugin/EventBus-centered documents, Skills, tests, and modules are legacy migration references, not the target architecture.
-- Implementation remains the source of truth for current behavior, but v1.2.1 is the source of truth for migration direction.
+- The legacy Plugin/EventBus-centered architecture has been deleted (Phase 12).
+- Implementation remains the source of truth for current behavior, but v1.2.1 is the source of truth for architecture direction.
 
 ## Response Style
 
@@ -29,7 +29,7 @@
 - Delete unnecessary functions, compatibility layers, old branches, dead tests, and outdated documentation.
 - Do not fear changing or deleting code. Replace it with a small design that matches the current specification.
 - Avoid overlay implementations, temporary wrappers, excessive abstraction, and future-only hooks.
-- During the v1.2.1 migration, do not add PluginManager/EventBus compatibility shims unless the user explicitly requests them.
+- Do not add PluginManager/EventBus compatibility shims.
 - When the user explicitly requests code-quality-first refactoring, use `iris-dev-workflow` Quality-First Refactoring Mode instead of MVP/minimal-diff defaults.
 - Ask only about true blockers. Infer the rest from the implementation and the v1.2.1 architecture document.
 
@@ -40,26 +40,15 @@
 - Ordinary development, MVP decisions, code rules, validation, Git: `.agents/skills/iris-dev-workflow/SKILL.md`
 - Diagrams / Mermaid: `.agents/skills/iris-visualize/SKILL.md`
 - Documentation sync: `.agents/skills/doc-sync/SKILL.md`
-- Capability / tool additions: `.agents/skills/capability-pattern/SKILL.md`
 - Current architecture target: `docs/architecture/cognitive-runtime-v1.2.1.md`
 - Legacy design details: `docs/`
-
-## Legacy References
-
-The following Skills describe the old Plugin/EventBus-centered architecture. Do not use them for new v1.2.1 migration work unless the user explicitly asks for legacy Plugin maintenance.
-
-- `.agents/skills/iris-plugin-create/SKILL.md`
-- `.agents/skills/iris-plugin-hook/SKILL.md`
-- `.agents/skills/iris-plugin-provider/SKILL.md`
-- `.agents/skills/iris-plugin-structure/SKILL.md`
 
 ## When to Read
 
 - Task start: `.agents/project.md` if project boundaries matter.
-- v1.2.1 migration or new architecture work: `iris-cognitive-runtime` and the relevant sections of `docs/architecture/cognitive-runtime-v1.2.1.md`.
+- v1.2.1 architecture work: `iris-cognitive-runtime` and `docs/architecture/cognitive-runtime-v1.2.1.md`.
 - Ordinary code changes: `iris-dev-workflow`.
 - Documentation update check: `doc-sync`.
-- Legacy Plugin-related maintenance only when explicitly requested: the relevant legacy plugin skill.
 
 ## Commands
 

@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 """Iris v1.2.1 target runtime entrypoint.
 
-Target architecture startup — delegates to the Cognitive Runtime.
-Legacy Kernel/Supervisor runtime is not used.
-
 Usage:
     python main.py --text "hello"
     python main.py --text "hello" --llm fake

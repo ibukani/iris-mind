@@ -1,14 +1,13 @@
 # Iris Project Brief
 
-This file is a compact helper note for Iris-specific scope and responsibility boundaries. Use `.agents/skills/iris-dev-workflow/SKILL.md` as the source for ordinary development rules, and `docs/architecture/cognitive-runtime-v1.2.1.md` as the source for migration design decisions.
+This file is a compact helper note for Iris-specific scope and responsibility boundaries. Use `.agents/skills/iris-dev-workflow/SKILL.md` as the source for ordinary development rules, and `docs/architecture/cognitive-runtime-v1.2.1.md` as the source for architecture decisions.
 
 ## Current Direction
 
-- Iris is migrating to Cognitive Runtime Architecture v1.2.1.
-- The target architecture source of truth is `docs/architecture/cognitive-runtime-v1.2.1.md`.
-- The old Plugin/EventBus-centered architecture is a migration source, not the target architecture.
-- Do not preserve old Plugin/EventBus APIs, shims, wrappers, or compatibility layers unless the user explicitly requests them.
-- During migration, prefer moving existing logic by responsibility into the v1.2.1 structure over wrapping old modules.
+- Iris is built on Cognitive Runtime Architecture v1.2.1.
+- The architecture source of truth is `docs/architecture/cognitive-runtime-v1.2.1.md`.
+- The legacy Plugin/EventBus architecture has been deleted (Phase 12).
+- Do not add PluginManager/EventBus compatibility shims unless the user explicitly requests them.
 
 ## Scope
 
@@ -16,9 +15,8 @@ This file is a compact helper note for Iris-specific scope and responsibility bo
 - This repository contains the Iris runtime core. UI, Discord bot, Voice runtime, Twitch client, and other concrete external apps belong to separate projects.
 - External apps communicate with Iris through `Observation`, `AppAction`, and `ActionResult` style boundaries.
 - LLM providers such as Ollama and OpenRouter are implementation details behind adapters and ports.
-- Configuration lives in `config.yaml` until the runtime configuration is migrated.
 
-## Target Main Modules
+## Target Modules
 
 - `iris/core/`: shared low-level IDs, time, errors, result types, and small utilities.
 - `iris/contracts/`: shared typed contracts such as observations, actions, identity, conversation, memory, affect, and commands.
@@ -30,31 +28,7 @@ This file is a compact helper note for Iris-specific scope and responsibility bo
 - `iris/safety/`: action and output gates before external execution.
 - `iris/adapters/`: external technology boundaries such as app gateway, LLM, stores, tools, embeddings, and external clients.
 - `iris/features/`: vertical feature definitions registered through `FeatureDefinition`.
-- `iris/admin/`: administration and diagnostics that are still needed.
-
-## Legacy Modules During Migration
-
-These modules currently contain useful implementation pieces but are not the target architecture boundaries.
-
-- `iris/kernel/`: migrate process management, configuration, lifecycle, and composition into `runtime/`; do not keep PluginManager as the center.
-- `iris/event/`: retire as main control flow; if needed later, limit to lifecycle, telemetry, audit, background notification, or diagnostics.
-- `iris/io/`: migrate external app protocol boundaries into `adapters/app_gateway/`; concrete app runtimes should live outside Iris core.
-- `iris/account/`: migrate identity and user context into `contracts/identity.py` and context services.
-- `iris/room/`: migrate room/session concepts into `contracts/conversation.py` and app gateway context.
-- `iris/memory/`: split into `cognitive/memory/`, `features/memory_consolidation/`, and `adapters/stores/`.
-- `iris/limbic/`: migrate appraisal, mood, and relationship into `cognitive/affect/`.
-- `iris/agency/`: split planning/inhibition/execution into `cognitive/policy/` and `cognitive/action/`.
-- `iris/llm/`: migrate provider calls into `adapters/llm/`; prompt/action response policy belongs near `cognitive/action/`.
-- `iris/tools/`: split tool-use decisions into `cognitive/action/` and actual execution into `adapters/tools/`.
-- `iris/heartbeat/`: migrate scheduler behavior into `runtime/scheduler.py` and ObservationSource-based ticks.
-
-### Design Policy: Iris Identity and Rooms
-
-- **Only one Iris exists as an individual.**
-- Rooms are a system for adding conversation locations, not copies of Iris.
-- Emotion / mood is global unless the v1.2.1 design explicitly introduces a different typed state.
-- Relationship is per user identity, not per room.
-- If the same user talks to Iris in multiple rooms, intimacy and related relationship values are shared.
+- `iris/admin/`: administration and diagnostics.
 
 ## Target Boundaries
 
@@ -79,7 +53,7 @@ These modules currently contain useful implementation pieces but are not the tar
 
 - Cognitive Runtime migration: `.agents/skills/iris-cognitive-runtime/SKILL.md`
 - Ordinary development: `.agents/skills/iris-dev-workflow/SKILL.md`
-- Capability addition: `.agents/skills/capability-pattern/SKILL.md`
+- Diagrams / Mermaid: `.agents/skills/iris-visualize/SKILL.md`
 - Documentation update check: `.agents/skills/doc-sync/SKILL.md`
 - Design changes: record them in `docs/architecture/cognitive-runtime-v1.2.1.md` or a focused ADR when the change updates the target architecture.
 

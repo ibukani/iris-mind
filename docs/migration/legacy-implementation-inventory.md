@@ -1,4 +1,9 @@
-# Legacy Implementation Inventory
+# Legacy Implementation Inventory (HISTORICAL)
+
+> **Warning**: This document describes code that has been deleted (Phase 12).
+> All legacy packages (`iris/limbic/`, `iris/memory/`, `iris/agency/`, `iris/llm/`,
+> `iris/event/`, `iris/kernel/plugin/`, etc.) no longer exist in this repository.
+> This document is retained for historical reference only.
 
 ## Summary
 

@@ -3,7 +3,7 @@ name: iris-dev-workflow
 description: |
   Use when making ordinary Iris code or documentation changes, especially MVP implementation,
   refactoring, deleting or changing existing functions, validation, and commit preparation.
-  For Cognitive Runtime Architecture v1.2.1 migration, also read iris-cognitive-runtime.
+  Do NOT use for plugin-specific creation/provider/hook details; use the dedicated plugin skills.
 license: MIT
 metadata:
   audience: developers
@@ -14,20 +14,17 @@ metadata:
 
 This is the ordinary Iris development workflow. Avoid overly conservative decisions that block MVP development. By default, fix the implementation into the smallest working shape that matches the current specification. When the user explicitly requests code-quality-first refactoring, use Quality-First Refactoring Mode instead of the MVP/minimal-diff defaults.
 
-For v1.2.1 architecture migration tasks, use this workflow together with `.agents/skills/iris-cognitive-runtime/SKILL.md`.
-
 ## Operating Rules
 
 - Narrow the impact area first with `rg` / `rg --files`.
 - Read related files in parallel. As a default, read up to 5 files per turn.
-- Implementation is the primary source for current behavior. For migration direction, `docs/architecture/current.md` is the architecture source of truth.
+- Implementation is the primary source. If documentation or Skills conflict with code, inspect and fix the implementation or documentation as needed.
 - Preserve backward compatibility only when explicitly requested.
 - Specification changes may change, delete, or rename existing functions.
 - Do not keep unnecessary functions, branches, settings, tests, or docs.
 - Do not layer new behavior on top of obsolete implementation. Replace it with a shape that matches the current specification.
 - Add abstraction only when it actually reduces duplication or complexity.
 - Do not create future-only extension points, unused hooks, or compatibility wrappers.
-- During v1.2.1 migration, do not add PluginManager/EventBus compatibility shims unless explicitly requested.
 - When Quality-First Refactoring Mode is active, its rules override MVP/minimal-diff defaults where they conflict.
 
 ## Workflow
@@ -81,17 +78,12 @@ In this mode:
 
 ## Architecture Rules
 
-For v1.2.1 migration, the detailed architecture rules live in `.agents/skills/iris-cognitive-runtime/SKILL.md` and `docs/architecture/current.md`.
-
-Default rules for current work:
-
+- All layers stay loosely coupled through `iris/event/`.
 - `debug_tools/` may depend on `iris/`; the reverse is forbidden.
-- Use explicit constructor injection rather than service locators or hidden global registries.
-- Keep external provider details behind adapters or provider-specific modules.
-- Keep generated transport types out of cognitive/domain logic.
-- Do not use EventBus as a new main control-flow mechanism.
-- Do not add new PluginManager-centered flows for v1.2.1 work.
-- Do not perform a large refactor solely to make existing implementation perfectly match structure rules. Split responsibilities only when it is relevant to the current change or requested refactor.
+- Do not keep `PluginManager` inside logic classes. Use explicit constructor injection.
+- EventBus subscription should generally live in `handler.py`. Managers should not subscribe directly.
+- Do not perform a large refactor solely to make existing implementation perfectly match structure rules. Split responsibilities only when it is relevant to the current change.
+- For Plugin structure details, read `iris-plugin-structure`.
 
 ## Refactor Policy
 

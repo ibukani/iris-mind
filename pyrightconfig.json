@@ -9,7 +9,8 @@
         "dist",
         "venv",
         ".venv",
-        "tests"
+        "tests",
+        "**/grpc_service_pb2*.py"
     ],
     "venvPath": ".",
     "venv": ".venv",

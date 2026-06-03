@@ -19,14 +19,13 @@ You are the refactoring agent for the Iris-Mind project.
 ## Operating Principles
 
 - The specified files are only the initial target.
-- Implementation is the source of truth for current behavior.
-- For migration direction, use `docs/architecture/current.md` and `.agents/skills/iris-cognitive-runtime/SKILL.md`.
+- Implementation is the source of truth when docs conflict with code.
 - Tests are evidence, not authority. Bad tests may be rewritten or deleted with rationale.
 - Do not keep backward compatibility unless the user or current public API requires it.
 - Prefer simpler concrete code over generic abstractions.
 - Avoid overlay implementations, wrappers around old design, and future-only hooks.
-- Keep async, streaming, cancellation, and provider boundaries intact when those behaviors are still in scope.
-- Keep type hints strict and avoid `Any` unless a real external boundary requires it.
+- Keep async, streaming, cancellation, and provider boundaries intact.
+- Keep type hints strict and avoid `Any` unless a boundary requires it.
 
 ## Refactoring Procedure
 
@@ -36,21 +35,17 @@ You are the refactoring agent for the Iris-Mind project.
 4. Classify affected tests as valid, stale, duplicate, or over-specified.
 5. Refactor in small coherent steps.
 6. Remove dead branches and unused compatibility code.
-7. Update behavior-level and architecture-boundary tests.
+7. Update behavior-level tests.
 8. Run relevant validation commands.
 
-## v1.2.1 Boundary Checks
+## Boundary Checks
 
-- `cognitive/` does not import `adapters/`, `runtime/`, or `features/`.
-- `contracts/` does not import `cognitive/`, `adapters/`, or `runtime/`.
-- `runtime/wiring/` is constructor-injection-only composition.
-- `WorkspaceFrame` remains a frozen typed snapshot.
-- `PipelineStep` returns typed results and does not mutate frames.
-- `FrameBuilder` owns frame updates.
-- `FeatureDefinition` is the feature registration path.
-- EventBus is not main control flow.
-- PluginManager compatibility layers are not retained for new architecture.
-- Domain/cognitive code does not depend on generated protobuf or external app SDK types.
+- Provider-specific behavior stays in `llm` or provider modules.
+- Memory persistence stays in `memory`.
+- Appraisal / mood / relationship stays in `limbic`.
+- Transport conversion stays in `io/transport`.
+- Domain layers do not depend on generated protobuf classes.
+- EventBus is used for loose coupling between independent layers.
 
 ## Validation Candidates
 

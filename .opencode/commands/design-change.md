@@ -12,9 +12,7 @@ Create a design plan without changing code.
 
 - Current behavior
 - Desired behavior
-- Relevant v1.2.1 architecture rules
-- Affected target layers
-- Legacy modules used as migration sources
+- Affected layers
 - Candidate files to change
 - Out of scope
 - Test policy
@@ -24,4 +22,3 @@ Create a design plan without changing code.
 ## Note
 
 If files are specified, treat them as initial investigation targets only.
-For Cognitive Runtime migration work, use `docs/architecture/current.md` as the target architecture source of truth.

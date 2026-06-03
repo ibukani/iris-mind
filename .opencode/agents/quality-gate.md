@@ -10,8 +10,8 @@ You are the final quality-gate agent for the Iris-Mind project.
 
 ## Role
 
-- Validate the final state after implementation, refactoring, migration, or test cleanup.
-- Check for v1.2.1 boundary violations, stale docs, weak tests, and incomplete cleanup.
+- Validate the final state after implementation, refactoring, or test cleanup.
+- Check for boundary violations, stale docs, weak tests, and incomplete cleanup.
 - Run or recommend validation commands.
 - Do not change code.
 
@@ -19,14 +19,10 @@ You are the final quality-gate agent for the Iris-Mind project.
 
 - Diff scope matches the request.
 - No unrelated files were changed.
-- v1.2.1 target architecture is not contradicted.
-- No PluginManager/EventBus compatibility layer was added unless explicitly requested.
-- No provider-specific behavior leaked into cognitive/domain layers.
-- No protobuf / gRPC / external app SDK types leaked into cognitive/domain code.
-- No service locator, global registry, `resolve_optional`, or new string-action dispatcher path was added.
-- `cognitive/` does not import `adapters/`, `runtime/`, or `features/`.
-- `contracts/` does not import `cognitive/`, `adapters/`, or `runtime/`.
-- Tests protect behavior and architecture boundaries rather than stale implementation details.
+- No provider-specific behavior leaked into upper layers.
+- No protobuf / gRPC types leaked into domain code.
+- No dead compatibility layers remain.
+- Tests protect behavior rather than implementation details.
 - Removed tests were actually stale, duplicate, or misleading.
 - Docs and examples match implementation.
 - Validation results are honest and reproducible.

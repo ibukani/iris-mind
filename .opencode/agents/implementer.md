@@ -32,26 +32,15 @@ test cases that may be stale / over-specified / misleading
 
 If information is missing, do the minimum extra investigation and clarify the change scope through evidence.
 
-## v1.2.1 Requirements
+## Requirements
 
-For Cognitive Runtime migration work, also read `.agents/skills/iris-cognitive-runtime/SKILL.md`.
-
-- `docs/architecture/current.md` is the target architecture source of truth.
-- Do not preserve PluginManager/EventBus APIs as target architecture unless explicitly requested.
-- Do not add compatibility wrappers, shims, or overlay implementations around old modules.
-- Do not add service locators, global registries, `resolve_optional`, or string-action dispatch for new behavior.
-- Keep `cognitive/` independent from `adapters/`, `runtime/`, and `features/`.
-- Keep `contracts/` independent from `cognitive/`, `adapters/`, and `runtime/`.
-- Use typed contracts and typed results rather than `dict[str, Any]` internal boundaries.
-
-## General Requirements
-
-- Implementation is the source of truth for current behavior. Migration direction comes from the current specification.
+- Implementation is the source of truth. If docs conflict with code, inspect the implementation and update docs only when needed.
 - Tests are evidence, not authority. Rewrite or delete bad tests when they encode invalid behavior.
 - Preserve public behavior only when it is still part of the current specification.
 - Do not leak provider-specific behavior into upper layers.
+- Do not break memory / limbic / execution / transport responsibility boundaries.
 - Keep type hints and strict type-safety.
-- Preserve async cancellation and streaming behavior when modifying existing async paths.
+- Preserve async cancellation and streaming behavior.
 - Tests must not directly require external LLM APIs or a running Ollama instance.
 
 ## Validation

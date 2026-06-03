@@ -25,8 +25,7 @@ You are the debugging agent for the Iris-Mind project.
 - Do not preserve invalid tests that encode obsolete behavior.
 - Do not hide bugs with mocks.
 - Clearly state environment-dependent failures.
-- Keep provider-specific fixes in provider-specific layers or adapters.
-- For v1.2.1 migration paths, do not reintroduce PluginManager/EventBus compatibility shims as a bug fix unless explicitly requested.
+- Keep provider-specific fixes in provider-specific layers.
 
 ## Investigation Checklist
 
@@ -37,7 +36,6 @@ You are the debugging agent for the Iris-Mind project.
 - call sites and imports
 - recent similar implementation
 - boundary where the failure crosses layers
-- for migration code: relevant v1.2.1 boundary rule
 
 ## Output
 

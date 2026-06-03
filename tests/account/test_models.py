@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import pytest
+
 from iris.account.models import Account, AccountIdentity, Provider
+
+pytestmark = pytest.mark.legacy
 
 
 class TestAccountModel:

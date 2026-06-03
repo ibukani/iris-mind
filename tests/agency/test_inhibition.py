@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
 from iris.agency.inhibition.gate import _Gate
 from iris.agency.inhibition.handler import _InhibitionEventHandler
 from iris.agency.inhibition.manager import InhibitionManager
@@ -15,6 +17,8 @@ from iris.agency.planning.models import Plan, PlanReason
 from iris.event.event_bus import EventBus
 from iris.io.events import InhibitionRequestEvent
 from iris.kernel.config import InhibitionConfig
+
+pytestmark = pytest.mark.legacy
 
 
 def _make_plan(reason: PlanReason = PlanReason.USER_INPUT, room_id: str = "") -> Plan:

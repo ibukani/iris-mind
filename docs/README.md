@@ -1,5 +1,12 @@
 # Iris ドキュメント一覧
 
+## 現在の移行状態
+
+現在の移行先は [`architecture/cognitive-runtime-v1.2.1.md`](./architecture/cognitive-runtime-v1.2.1.md) です。
+既存の `architecture.md`、`kernel-layer.md`、`io-layer.md`、`memory-layer.md`、`agency-layer.md` は
+Plugin/EventBus 中心の legacy 実装を理解・移行するための参照資料です。
+legacy 削除判断は [`migration/legacy-deletion-readiness.md`](./migration/legacy-deletion-readiness.md) を優先してください。
+
 ## ドキュメント一覧
 
 ### 外部開発者向け（Client接続）
@@ -13,7 +20,9 @@
 
 | ファイル | 内容 |
 |---|---|---|
-| [`architecture.md`](./architecture.md) | **全体アーキテクチャ設計書** — 脳科学ベース層分割、C4図、イベントフロー、状態管理 |
+| [`architecture/cognitive-runtime-v1.2.1.md`](./architecture/cognitive-runtime-v1.2.1.md) | **現在の移行先アーキテクチャ** — Cognitive Runtime v1.2.1 |
+| [`migration/legacy-deletion-readiness.md`](./migration/legacy-deletion-readiness.md) | **Phase 9 legacy削除準備** — 削除条件、対象分類、検証レーン |
+| [`architecture.md`](./architecture.md) | **legacy全体アーキテクチャ設計書** — Plugin/EventBus中心の旧構造、移行参照用 |
 | [`agency-layer.md`](./agency-layer.md) | **Agency 層（前頭前野+基底核+運動野）** — 意思決定(planning) と行動実行(execution) |
 | [`io-layer.md`](./io-layer.md) | **IO 層（視床）** — gRPC入出力、セッション管理、認証、EventBusマッピング |
 | [`kernel-layer.md`](./kernel-layer.md) | **Kernel 層（脳幹）** — プロセス管理、PluginManager、CommandHandler、TimerTick |
@@ -25,8 +34,8 @@
 
 Iris は脳科学・神経科学の構造を参考にした層分割アーキテクチャを採用する（参考マッピングの正確性については各層設計書の注記を参照）。
 
-各層は独立した責務を持ち、`iris/event/`（神経路）のグローバル EventBus を介して疎結合する。
-詳細は [`architecture.md`](./architecture.md) および各層ドキュメントを参照。
+v1.2.1 では `Observation → CognitiveCycle → ActionPlan → Presentation → Safety → AppAction` の明示パイプラインを目標とします。
+旧実装は `iris/event/` のグローバル EventBus を介して疎結合しており、削除までは移行参照として扱います。
 
 ### 主要設計決定
 

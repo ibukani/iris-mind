@@ -7,6 +7,8 @@ from iris.llm.context import LLMContextWindowManager
 from iris.llm.token_utils import estimate_messages_tokens, estimate_tokens
 from tests.fakes import FakeLLMProvider
 
+pytestmark = pytest.mark.legacy
+
 
 def test_estimate_tokens() -> None:
     # 日本語フォールバックのテスト

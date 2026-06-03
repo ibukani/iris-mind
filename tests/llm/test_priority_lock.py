@@ -4,6 +4,8 @@ import pytest
 
 from iris.llm.priority_lock import PriorityLock
 
+pytestmark = pytest.mark.legacy
+
 
 @pytest.mark.anyio
 async def test_priority_lock_order():

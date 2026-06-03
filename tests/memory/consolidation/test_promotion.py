@@ -5,9 +5,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from iris.memory.consolidation.log_store import MemoryConsolidationLogStore
 from iris.memory.langmem.models import MemoryCandidate
 from iris.memory.langmem.promotion import PromotionPolicy
+
+pytestmark = pytest.mark.legacy
 
 
 class _FakeLongTerm:

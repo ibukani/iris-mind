@@ -2,9 +2,13 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
 from iris.event.event_bus import EventBus
 from iris.room.batcher import RoomJoinBatcher
 from iris.room.events import RoomJoinedBatchEvent, RoomJoinedEvent
+
+pytestmark = pytest.mark.legacy
 
 
 class TestRoomJoinBatcher:

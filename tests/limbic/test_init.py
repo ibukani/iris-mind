@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import pytest
+
 from iris.limbic import MANIFEST, plugin
+
+pytestmark = pytest.mark.legacy
 
 
 class TestLimbicPlugin:

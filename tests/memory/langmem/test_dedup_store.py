@@ -5,8 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 from iris.memory.langmem.models import MemoryCandidate
 from iris.memory.langmem.stores import MemoryCandidateStore
+
+pytestmark = pytest.mark.legacy
 
 
 def _semantic_candidate(**overrides: Any) -> MemoryCandidate:

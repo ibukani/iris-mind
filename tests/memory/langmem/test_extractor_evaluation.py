@@ -34,6 +34,8 @@ from iris.memory.procedural.persona_patch_store import (
 )
 from tests.fakes.llm import FakeChatModelForLangMem, make_fake_thread_extractor
 
+pytestmark = pytest.mark.legacy
+
 
 class _FakeLongTerm:
     def __init__(self) -> None:

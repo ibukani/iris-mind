@@ -10,6 +10,8 @@ from iris.memory.langmem.dedup import (
     normalize_string,
 )
 
+pytestmark = pytest.mark.legacy
+
 
 def test_compute_payload_signature_is_key_order_independent() -> None:
     a = {"content": "ユーザーは Rust を好む", "evidence": "発言"}

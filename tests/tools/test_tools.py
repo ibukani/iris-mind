@@ -4,10 +4,13 @@ from collections.abc import Callable
 from textwrap import dedent
 
 from langchain_core.tools import StructuredTool
+import pytest
 
 from iris.tools.decorator import get_tool_def, register_tools, tool
 from iris.tools.models import ToolDef
 from iris.tools.registry import ToolRegistry
+
+pytestmark = pytest.mark.legacy
 
 # ── ToolDef ────────────────────────────────────────────────────
 
@@ -206,6 +209,8 @@ def test_discover_modules_registers_decorated_tools(tmp_path, monkeypatch) -> No
             """
             from iris.tools.decorator import tool
 
+
+pytestmark = pytest.mark.legacy
             @tool()
             def hello() -> str:
                 return 'hi'

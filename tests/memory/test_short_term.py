@@ -6,6 +6,8 @@ from iris.memory.models import blocks_text, text_block
 from iris.memory.short_term.manager import ShortTermMemoryManager
 from iris.memory.short_term.models import ActiveUser
 
+pytestmark = pytest.mark.legacy
+
 
 @pytest.fixture
 def stm() -> ShortTermMemoryManager:

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from iris.limbic.models import (
     AppraisalDimensions,
     CompanionEmotion,
@@ -14,6 +16,8 @@ from iris.limbic.models import (
 )
 from iris.limbic.stores.appraisal_store import AppraisalEpisode, AppraisalEpisodeStore
 from iris.limbic.stores.relationship_store import RelationshipStateStore
+
+pytestmark = pytest.mark.legacy
 
 
 def _make_emotion_result(relationship: RelationshipState) -> EmotionResult:

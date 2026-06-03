@@ -9,6 +9,8 @@ from iris.llm.providers import GoogleProvider, OpenRouterProvider
 from iris.llm.providers.base import BaseLLMProvider, get_provider_class
 from iris.llm.providers.ollama import OllamaProvider
 
+pytestmark = pytest.mark.legacy
+
 
 def test_openrouter_provider_registered() -> None:
     cls = get_provider_class("openrouter")

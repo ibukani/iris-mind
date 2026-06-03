@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from iris.llm.prompt import Personality
 from iris.memory.procedural.models import StyleMemory
 from iris.memory.procedural.renderer import build_style_hints, render_style_hints
 from iris.memory.procedural.style_index import MetadataFilterStyleIndex, StyleMemoryIndex
 from iris.memory.procedural.style_store import StyleMemoryStore
+
+pytestmark = pytest.mark.legacy
 
 
 def test_style_memory_store_roundtrip(tmp_path: Path) -> None:

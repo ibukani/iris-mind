@@ -11,6 +11,10 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.legacy_architecture
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # High-level domain packages that kernel should not eagerly import in __init__.py.

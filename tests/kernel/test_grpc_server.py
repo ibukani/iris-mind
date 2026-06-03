@@ -8,6 +8,8 @@ from iris.io.session.manager import SessionManager
 from iris.io.transport import grpc_service_pb2, grpc_service_pb2_grpc
 from iris.io.transport.grpc_listener import GrpcListener
 
+pytestmark = pytest.mark.legacy
+
 
 def test_grpc_server_lifecycle():
     session_mgr = SessionManager(SessionConfig(access_token="test_secret"))

@@ -6,6 +6,8 @@ import pytest
 
 from iris.agency.execution.llm.invocation_policy import ModelInvocationPolicy
 
+pytestmark = pytest.mark.legacy
+
 
 @pytest.fixture
 def checker_with_tools() -> MagicMock:

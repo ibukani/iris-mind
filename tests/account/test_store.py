@@ -7,6 +7,8 @@ import pytest
 from iris.account.models import Account, AccountIdentity, Provider
 from iris.account.store import AccountStore
 
+pytestmark = pytest.mark.legacy
+
 
 @pytest.fixture
 def tmp_store(tmp_path: Path) -> AccountStore:

@@ -7,6 +7,8 @@ import pytest
 from iris.memory.models import blocks_text
 from iris.memory.sensory.manager import SensoryMemoryManager
 
+pytestmark = pytest.mark.legacy
+
 
 @pytest.fixture
 def buffer() -> SensoryMemoryManager:

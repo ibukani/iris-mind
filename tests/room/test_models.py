@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import pytest
+
 from iris.room.models import Room, RoomMember, RoomState
+
+pytestmark = pytest.mark.legacy
 
 
 class TestRoomModel:

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import pytest
+
 from iris.agency.execution.llm.prompt_builder import SystemPromptBuilder
 from iris.agency.modulation import ModulationState, check_relax_response_rules, sampling_temperature
 from iris.agency.modulation import prompt_lines as _prompt_lines
 from iris.agency.modulation.prompt_guidance import has_affective_signal
 from iris.agency.modulation.randomizer import SeedableRandom
 from iris.llm.prompt import Personality
+
+pytestmark = pytest.mark.legacy
 
 
 def test_modulation_clamps_vad_axes() -> None:

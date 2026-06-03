@@ -10,6 +10,10 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.legacy_architecture
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Packages that must not import specific higher-level packages.

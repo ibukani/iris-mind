@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from iris.kernel.config import ModelConfig
 from iris.llm.capability import CapabilityChecker
+
+pytestmark = pytest.mark.legacy
 
 
 def _make_checker(

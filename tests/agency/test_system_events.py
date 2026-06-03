@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from iris.account.models import Provider
 from iris.event.event_bus import EventBus
 from iris.io.events import ControlMessageEvent, InputReady, SessionDisconnectEvent
@@ -8,6 +10,8 @@ from iris.io.session.manager import SessionManager
 from iris.kernel.config import SessionConfig
 from iris.memory.manager import MemoryManager
 from iris.memory.models import system_event_block
+
+pytestmark = pytest.mark.legacy
 
 
 class DummyConnection:

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import pytest
+
 from iris.io.events import ControlMessageEvent
 from iris.room.dispatcher import _RoomDispatcher
 from iris.room.manager import RoomManager
 from iris.room.models import RoomState
 from iris.room.store import RoomStore
+
+pytestmark = pytest.mark.legacy
 
 
 def _make_dispatcher() -> tuple[_RoomDispatcher, RoomManager]:

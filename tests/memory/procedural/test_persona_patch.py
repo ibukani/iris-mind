@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from iris.memory.procedural.persona_patch_models import PersonaPatchCandidate
 from iris.memory.procedural.persona_patch_store import (
     PersonaPatchCandidateStore,
     PersonaPatchPolicy,
 )
+
+pytestmark = pytest.mark.legacy
 
 
 def _profile_path(tmp_path: Path) -> str:

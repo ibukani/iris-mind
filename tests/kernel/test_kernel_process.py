@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from iris.kernel.config import Config, ModelConfig
 from iris.kernel.process import KernelProcess
+
+pytestmark = pytest.mark.legacy
 
 
 def _dummy_config() -> Config:

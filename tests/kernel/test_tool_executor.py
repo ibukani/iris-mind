@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+import pytest
+
 from tests.fakes import FakeToolExecutionEngine
+
+pytestmark = pytest.mark.legacy
 
 
 def test_execute_all_empty_context() -> None:

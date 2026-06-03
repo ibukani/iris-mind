@@ -6,6 +6,8 @@ import pytest
 
 from iris.limbic.classifier import NeuralEmotionClassifier
 
+pytestmark = pytest.mark.legacy
+
 
 class _FakePipeline:
     def __init__(self, results: object) -> None:

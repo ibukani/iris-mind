@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 from langchain_core.messages import AIMessage, HumanMessage
+import pytest
 
 from iris.agency.execution.models import ExecutionState
 from iris.agency.execution.node_type import NODE_TYPES
 from iris.agency.execution.routing_decision import RouteDecision, decide_after_tools, decide_next_route
 from iris.agency.execution.state_transition import apply_route_transition
 from iris.agency.planning.models import Plan
+
+pytestmark = pytest.mark.legacy
 
 
 def _chat_plan() -> Plan:

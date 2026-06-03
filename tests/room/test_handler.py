@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from iris.account.manager import AccountManager
 from iris.account.models import Provider
 from iris.account.store import AccountStore
@@ -8,6 +10,8 @@ from iris.io.events import MessageEvent, SpeakerIdentity
 from iris.room.handler import _RoomEventHandler
 from iris.room.manager import RoomManager
 from iris.room.store import RoomStore
+
+pytestmark = pytest.mark.legacy
 
 
 class TestRoomEventHandler:

@@ -10,6 +10,8 @@ import yaml
 
 from iris.kernel.config import Config, ModelConfig, ModelEntry, ProactiveConfig
 
+pytestmark = pytest.mark.legacy
+
 
 def _me(**kwargs: Any) -> ModelEntry:
     return ModelEntry(**kwargs)

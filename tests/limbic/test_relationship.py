@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from iris.limbic.models import CompanionEmotion, PlutchikEmotion, RelationshipLevel
 from iris.limbic.relationship import RelationshipManager
+
+pytestmark = pytest.mark.legacy
 
 
 class TestRelationshipManager:

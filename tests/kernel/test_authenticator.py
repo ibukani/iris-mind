@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from iris.io.auth.authenticator import Authenticator
 from iris.io.models import AuthMessage, Permission
+
+pytestmark = pytest.mark.legacy
 
 
 class TestAuthenticator:

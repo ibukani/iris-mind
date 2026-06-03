@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from iris.limbic.relationship import RelationshipManager
 from iris.limbic.stores.appraisal_store import AppraisalEpisodeStore
 from iris.limbic.stores.relationship_store import RelationshipStateStore
@@ -13,6 +15,7 @@ from iris.memory.langmem.handlers import (
 )
 from iris.memory.langmem.models import MemoryCandidate
 
+pytestmark = pytest.mark.legacy
 # ── RelationshipPromotionHandler ──
 
 

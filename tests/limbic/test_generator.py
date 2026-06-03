@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from iris.limbic.generator import EmotionGenerator
 from iris.limbic.models import AppraisalDimensions, CompanionEmotion, Mood, PlutchikEmotion
+
+pytestmark = pytest.mark.legacy
 
 
 class TestEmotionGenerator:

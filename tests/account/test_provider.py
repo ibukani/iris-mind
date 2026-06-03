@@ -9,6 +9,8 @@ from iris.account.models import Provider
 from iris.account.store import AccountStore
 from iris.event import EventBus
 
+pytestmark = pytest.mark.legacy
+
 
 @pytest.fixture
 def provider(tmp_path: Path) -> AccountManager:

@@ -2,8 +2,12 @@ from __future__ import annotations
 
 import time
 
+import pytest
+
 from iris.limbic.models import CompanionEmotion, PlutchikEmotion
 from iris.limbic.mood import MoodDynamics
+
+pytestmark = pytest.mark.legacy
 
 
 class TestMoodDynamics:

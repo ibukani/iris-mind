@@ -4,11 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from iris.memory.archive.models import ConversationRecord
 from iris.memory.langmem.extractor import LangMemExtractor
 from iris.memory.langmem.models import MemoryExtractionJob
 from iris.memory.langmem.stores import MemoryCandidateStore
 from tests.fakes.llm import FakeChatModelForLangMem, make_fake_thread_extractor
+
+pytestmark = pytest.mark.legacy
 
 
 def _make_extractor(

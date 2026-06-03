@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from iris.memory.langmem.models import (
     MemoryCandidate,
     MemoryExtractionJob,
@@ -12,6 +14,8 @@ from iris.memory.langmem.stores import (
     MemoryCandidateStore,
     MemoryExtractionJobStore,
 )
+
+pytestmark = pytest.mark.legacy
 
 
 def test_job_store_add_and_update(tmp_path: Path) -> None:

@@ -4,8 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from iris.memory.langmem.scheduler import MemoryPipelineScheduler
 from iris.memory.manager import MemoryManager
+
+pytestmark = pytest.mark.legacy
 
 
 class _StubPipeline:

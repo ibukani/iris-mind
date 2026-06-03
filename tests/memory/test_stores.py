@@ -3,7 +3,11 @@ from __future__ import annotations
 import os
 import tempfile
 
+import pytest
+
 from iris.memory.long_term.stores import AgentsMdStore, EpisodicStore, SemanticStore
+
+pytestmark = pytest.mark.legacy
 
 
 def test_agents_md_store_load_missing() -> None:

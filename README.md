@@ -2,6 +2,12 @@
 
 AIコンパニオンであり、AIアシスタントとしても機能するKernel
 
+> **Migration status**: Iris is migrating to Cognitive Runtime Architecture v1.2.1.
+> `docs/architecture/cognitive-runtime-v1.2.1.md` is the target architecture.
+> The Plugin/EventBus-centered Kernel described below remains a legacy runtime
+> until the runtime entrypoint and remaining features are migrated.  See
+> `docs/migration/legacy-deletion-readiness.md` before deleting legacy modules.
+
 Iris はAIコンパニオンであり、AIアシスタントとしても機能するKernel。自律的行動・タスク実行を担い、最終的には自己進化を目指す。Python 製で Ollama または OpenRouter 上で動作する。脳科学・神経科学の構造を参考にした層分割アーキテクチャを採用する。
 
 ## Table of Contents

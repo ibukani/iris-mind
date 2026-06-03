@@ -133,6 +133,10 @@ markers = [
   "unit: ユニットテスト",
   "integration: 統合テスト",
   "architecture: v1.2.1 architecture boundary tests",
+  "target: v1.2.1 target architecture tests and runtime tests",
+  "legacy: legacy Plugin/EventBus-centered implementation tests kept during migration",
+  "legacy_architecture: architecture tests that protect or document legacy Plugin/EventBus constraints",
+  "migration: migration-control tests for phased legacy deletion",
   "slow: 低速テスト",
 ]
 filterwarnings = [

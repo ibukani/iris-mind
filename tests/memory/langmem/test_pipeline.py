@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from iris.kernel.config import LangMemConfig, MemoryConfig
 from iris.memory.archive.policy import ArchivePolicy
 from iris.memory.archive.store import RawConversationArchiveStore
@@ -26,6 +28,8 @@ from iris.memory.langmem.schemas import (
 )
 from iris.memory.langmem.stores import MemoryCandidateStore, MemoryExtractionJobStore
 from tests.fakes.llm import FakeChatModelForLangMem, make_fake_thread_extractor
+
+pytestmark = pytest.mark.legacy
 
 
 def _build_pipeline(tmp_path: Path) -> tuple[MemoryPipeline, FakeChatModelForLangMem, list[str]]:

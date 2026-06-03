@@ -8,6 +8,8 @@ import pytest
 from iris.agency import ExecutionOrchestrator, ExecutionState, Plan
 from iris.agency.execution.router import route_after_llm
 
+pytestmark = pytest.mark.legacy
+
 
 @pytest.fixture
 def mock_llm() -> AsyncMock:

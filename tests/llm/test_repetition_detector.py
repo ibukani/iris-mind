@@ -4,10 +4,13 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage
+import pytest
 
 from iris.kernel.config import ModelConfig
 from iris.llm.bridge import LLMBridge
 from iris.llm.interrupt_token import InterruptToken
+
+pytestmark = pytest.mark.legacy
 
 
 def _make_bridge() -> LLMBridge:

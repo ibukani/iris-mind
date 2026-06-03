@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import pytest
+
 from iris.event.base import TimerTick
 from iris.event.event_bus import EventBus
 from iris.io.events import SessionDisconnectEvent
@@ -10,6 +12,8 @@ from iris.room.handler import _RoomEventHandler
 from iris.room.manager import RoomManager
 from iris.room.models import RoomMember
 from iris.room.store import RoomStore
+
+pytestmark = pytest.mark.legacy
 
 
 def _make_manager() -> tuple[RoomManager, RoomStore]:

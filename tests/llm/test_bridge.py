@@ -6,9 +6,12 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 from langchain_core.messages import AIMessageChunk, HumanMessage
+import pytest
 
 from iris.kernel.config import ModelConfig
 from iris.llm.bridge import LLMBridge, _hash_key
+
+pytestmark = pytest.mark.legacy
 
 
 def test_hash_key_deterministic() -> None:

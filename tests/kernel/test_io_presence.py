@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import pytest
+
 from iris.event.event_bus import EventBus
 from iris.io.handler import _IOEventHandler
 from iris.io.models import AuthMessage, Permission
 from iris.io.session.manager import SessionManager
 from iris.room.events import RoomJoinedEvent, RoomLeftEvent
+
+pytestmark = pytest.mark.legacy
 
 
 def test_room_joined_event_broadcasts_presence() -> None:

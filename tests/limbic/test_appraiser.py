@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from iris.limbic.appraiser import Appraiser
 from iris.limbic.models import PrimaryAppraisal, SecondaryAppraisal
+
+pytestmark = pytest.mark.legacy
 
 
 class _FakeClassifier:

@@ -11,6 +11,8 @@ from iris.memory.archive.models import ConversationRecord
 from iris.memory.archive.policy import ArchivePolicy
 from iris.memory.archive.store import RawConversationArchiveStore
 
+pytestmark = pytest.mark.legacy
+
 
 def _make_store(tmp_path: Path, **overrides: int) -> RawConversationArchiveStore:
     int_overrides: dict[str, int] = {k: int(v) for k, v in overrides.items()}

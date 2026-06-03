@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from iris.limbic.models import PlutchikEmotion
 from iris.limbic.orchestrator import LimbicOrchestrator
+
+pytestmark = pytest.mark.legacy
 
 
 class TestLimbicOrchestrator:

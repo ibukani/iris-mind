@@ -6,6 +6,8 @@ from iris.room.manager import RoomManager
 from iris.room.models import RoomState
 from iris.room.store import RoomStore
 
+pytestmark = pytest.mark.legacy
+
 
 @pytest.fixture
 def tmp_provider() -> RoomManager:

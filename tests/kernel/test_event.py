@@ -13,6 +13,8 @@ from iris.event.base import (
     new_trace_id,
 )
 
+pytestmark = pytest.mark.legacy
+
 
 def test_event_roundtrip_to_dict_and_back() -> None:
     events: list[Event] = [

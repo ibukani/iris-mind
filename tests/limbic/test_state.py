@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from iris.limbic.models import EmotionResult
 from iris.limbic.state import EmotionStateManager
+
+pytestmark = pytest.mark.legacy
 
 
 class TestEmotionStateManager:

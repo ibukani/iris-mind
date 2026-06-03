@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pytest
+
 from iris.memory.models import text_block
 from iris.memory.sensory.manager import SensoryMemoryManager
+
+pytestmark = pytest.mark.legacy
 
 
 class TestSensoryMemoryManager:

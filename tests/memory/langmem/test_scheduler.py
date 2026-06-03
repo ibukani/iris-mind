@@ -8,6 +8,8 @@ import threading
 import time
 from typing import Any
 
+import pytest
+
 from iris.kernel.config import LangMemConfig, MemoryConfig
 from iris.memory.archive.policy import ArchivePolicy
 from iris.memory.archive.store import RawConversationArchiveStore
@@ -15,6 +17,8 @@ from iris.memory.consolidation.log_store import MemoryConsolidationLogStore
 from iris.memory.langmem.pipeline import MemoryPipeline
 from iris.memory.langmem.scheduler import MemoryPipelineScheduler
 from iris.memory.langmem.stores import MemoryCandidateStore, MemoryExtractionJobStore
+
+pytestmark = pytest.mark.legacy
 
 
 class _StubChatModel:

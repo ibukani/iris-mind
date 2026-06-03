@@ -10,6 +10,10 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.legacy_architecture
+
 ROOT = Path(__file__).resolve().parents[2] / "iris"
 
 ALLOWED_PLUGINS_WITH_MANAGER = {"__init__.py", "builder.py"}

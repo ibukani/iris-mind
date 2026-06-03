@@ -4,6 +4,7 @@ from datetime import datetime
 from unittest.mock import MagicMock
 
 from langchain_core.messages import AIMessage
+import pytest
 
 from iris.agency import (
     InternalBus,
@@ -18,6 +19,8 @@ from iris.agency.planning.strategies import ProactivePlanStrategy, ResponsePlanS
 from iris.event.event_bus import EventBus
 from iris.io.events import InputReady
 from iris.kernel.config import Config, ProactiveConfig
+
+pytestmark = pytest.mark.legacy
 
 
 def test_planning_manager_silent_proactive_interest_sampling() -> None:

@@ -8,6 +8,8 @@ from iris.io.models import AuthMessage, ControlMessage, Direction, Message, Perm
 from iris.io.session.config import SessionConfig
 from iris.io.session.manager import SessionManager
 
+pytestmark = pytest.mark.legacy
+
 
 def _get_session_id(manager: SessionManager) -> str:
     conn = MagicMock()

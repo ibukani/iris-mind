@@ -13,6 +13,8 @@ from iris.memory.manager import MemoryManager
 from iris.memory.short_term.manager import ShortTermMemoryManager
 from iris.room.events import RoomJoinedEvent, RoomLeftEvent
 
+pytestmark = pytest.mark.legacy
+
 
 def _message_event(session_id: str = "", content: str = "", account_id: str = "", room_id: str = "") -> MessageEvent:
     return MessageEvent(

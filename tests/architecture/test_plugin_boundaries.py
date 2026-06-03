@@ -12,6 +12,10 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import pytest
+
+pytestmark = pytest.mark.legacy_architecture
+
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 # Plugin packages to check (excludes kernel, event, admin which are not plugins)

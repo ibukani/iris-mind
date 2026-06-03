@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from iris.event.base import (
     AgentAnomalyEvent,
     AgentStateChangeEvent,
@@ -8,6 +10,8 @@ from iris.event.base import (
     TimerTick,
 )
 from iris.event.event_bus import EventBus
+
+pytestmark = pytest.mark.legacy
 
 
 def test_subscribe_and_publish_delivers_to_handler() -> None:

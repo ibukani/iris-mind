@@ -19,7 +19,6 @@ You are the testing agent for the Iris-Mind project.
 ## Test Quality Policy
 
 - Prefer behavior-level tests over implementation-detail tests.
-- For v1.2.1 migration, prefer architecture-boundary tests that enforce the target architecture.
 - Do not keep duplicate tests just to increase count.
 - Do not over-mock in a way that hides real integration behavior.
 - Do not require external LLM APIs or a running Ollama instance.
@@ -27,21 +26,6 @@ You are the testing agent for the Iris-Mind project.
 - Delete or rewrite tests that only preserve obsolete compatibility.
 - Keep tests close to the changed target.
 - Use fakes at boundaries; do not mock the unit under test itself.
-
-## v1.2.1 Architecture Tests
-
-For migration work, consider tests that verify:
-
-- `cognitive/` does not import `adapters/`, `runtime/`, or `features/`.
-- `contracts/` does not import `cognitive/`, `adapters/`, or `runtime/`.
-- `WorkspaceFrame` is a frozen dataclass and avoids mutable context bags.
-- `PipelineStep.run()` returns typed result objects.
-- `PipelineStep` does not mutate `WorkspaceFrame`.
-- `FrameBuilder` owns frame updates.
-- `CognitiveCycle` is coordinator-only.
-- `FeatureDefinition` is the feature registration path.
-- EventBus is not CognitiveCycle main flow.
-- Service locator and string-action dispatch paths are not expanded.
 
 ## Failure Classification
 

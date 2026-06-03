@@ -5,10 +5,7 @@
 - `AGENTS.md` is the entry point. Do not add detailed rules here.
 - Only this file should be read by default.
 - Read referenced files only when they are needed for the current task.
-- Iris uses Cognitive Runtime Architecture v1.2.1.
-- The current architecture source of truth is `docs/architecture/current.md`.
-- The legacy Plugin/EventBus-centered architecture has been deleted (Phase 12).
-- Implementation remains the source of truth for current behavior, but v1.2.1 is the source of truth for architecture direction.
+- Implementation is the source of truth. If documentation conflicts with code, inspect the implementation and update the documentation when necessary.
 
 ## Response Style
 
@@ -29,28 +26,29 @@
 - Delete unnecessary functions, compatibility layers, old branches, dead tests, and outdated documentation.
 - Do not fear changing or deleting code. Replace it with a small design that matches the current specification.
 - Avoid overlay implementations, temporary wrappers, excessive abstraction, and future-only hooks.
-- Do not add PluginManager/EventBus compatibility shims.
 - When the user explicitly requests code-quality-first refactoring, use `iris-dev-workflow` Quality-First Refactoring Mode instead of MVP/minimal-diff defaults.
-- Ask only about true blockers. Infer the rest from the implementation and the v1.2.1 architecture document.
+- Ask only about true blockers. Infer the rest from the implementation.
 
 ## References
 
 - Project summary and responsibility boundaries: `.agents/project.md`
-- Cognitive Runtime migration rules: `.agents/skills/iris-cognitive-runtime/SKILL.md`
 - Ordinary development, MVP decisions, code rules, validation, Git: `.agents/skills/iris-dev-workflow/SKILL.md`
+- New top-level Plugin: `.agents/skills/iris-plugin-create/SKILL.md`
+- Hook additions: `.agents/skills/iris-plugin-hook/SKILL.md`
+- Provider / sub-plugin additions: `.agents/skills/iris-plugin-provider/SKILL.md`
+- Plugin structure cleanup: `.agents/skills/iris-plugin-structure/SKILL.md`
 - Diagrams / Mermaid: `.agents/skills/iris-visualize/SKILL.md`
 - Documentation sync: `.agents/skills/doc-sync/SKILL.md`
-- Current architecture target: `docs/architecture/current.md`
-- Legacy removal record: `docs/archive/legacy-removal-summary.md`
-- Development/testing guide: `docs/development/testing.md`
-- AI agent guidelines: `docs/development/agent-guidelines.md`
+- Capability / tool additions: `.agents/skills/capability-pattern/SKILL.md`
+- Design details: `docs/`
 
 ## When to Read
 
-- Task start: `.agents/project.md` if project boundaries matter.
-- v1.2.1 architecture work: `iris-cognitive-runtime` and `docs/architecture/current.md`.
-- Ordinary code changes: `iris-dev-workflow`.
+- Task start: `.agents/project.md` if needed.
+- Code changes: `iris-dev-workflow`.
+- Plugin-related work: the relevant plugin skill.
 - Documentation update check: `doc-sync`.
+- Design decisions: only the relevant `docs/*.md` files.
 
 ## Commands
 
@@ -78,95 +76,44 @@ uv run ruff format .
 
 
 <!-- headroom:rtk-instructions -->
+# RTK (Rust Token Killer) - Token-Optimized Commands
 
-# RTK (Rust Token Killer) - Selective Token-Optimized Commands
+When running shell commands, **always prefix with `rtk`**. This reduces context
+usage by 60-90% with zero behavior change. If rtk has no filter for a command,
+it passes through unchanged — so it is always safe to use.
 
-RTK is optional. Do not prefix every shell command with `rtk`.
-
-Use RTK only when the command is expected to produce large, repetitive, or low-signal output where lossy filtering is acceptable. Prefer raw commands when exact output is needed for reasoning, debugging, review, or patching.
-
-## Default Policy
-
-* Use raw commands by default.
-* Use `rtk` for noisy exploratory commands.
-* Do not use `rtk` when the exact output matters.
-* If RTK output is missing needed detail, rerun the original command directly and avoid repeated RTK retries.
-* If unsure, prefer the raw command.
-
-## Good RTK Use Cases
-
+## Key Commands
 ```bash
-# Large directory or environment inspection
-rtk ls <path>
-rtk find <pattern>
-rtk env
-rtk deps
+# Git (59-80% savings)
+rtk git status          rtk git diff            rtk git log
 
-# Noisy install/build logs where only errors matter
-rtk npm install
-rtk pnpm install
-rtk cargo build
-rtk pip list
+# Files & Search (60-75% savings)
+rtk ls <path>           rtk read <file>         rtk grep <pattern>
+rtk find <pattern>      rtk diff <file>
 
-# Broad test runs where only failures are needed
-rtk pytest tests/
-rtk cargo test
-rtk test <cmd>
+# Test (90-99% savings) — shows failures only
+rtk pytest tests/       rtk cargo test          rtk test <cmd>
 
-# Large logs or JSON summaries
-rtk log <file>
-rtk json <file>
-rtk summary <cmd>
+# Build & Lint (80-90% savings) — shows errors only
+rtk tsc                 rtk lint                rtk cargo build
+rtk prettier --check    rtk mypy                rtk ruff check
 
-# Infrastructure outputs
-rtk docker ps
-rtk docker logs <container>
-rtk kubectl get <resource>
+# Analysis (70-90%)
+rtk err <cmd>           rtk log <file>          rtk json <file>
+rtk summary <cmd>       rtk deps                rtk env
+
+# GitHub (26-87% savings)
+rtk gh pr view <n>      rtk gh run list         rtk gh issue list
+
+# Infrastructure (85% savings)
+rtk docker ps           rtk kubectl get         rtk docker logs <c>
+
+# Package managers (70-90% savings)
+rtk pip list            rtk pnpm install        rtk npm run <script>
 ```
 
-## Avoid RTK For Exact Reasoning
-
-Do not use RTK for commands where omitted lines may change the conclusion:
-
-```bash
-git diff
-git show
-git status --porcelain
-git log --patch
-pytest <specific failing test>
-mypy
-ruff check
-tsc
-rg <important symbol or pattern>
-grep <important symbol or pattern>
-sed -n ...
-cat <small or important file>
-```
-
-## Git and Review Rules
-
-* Use raw `git diff` for code review and patch verification.
-* Use raw `git show` when inspecting commit contents.
-* Use raw `git status --short` or `git status --porcelain` when deciding what changed.
-* RTK may be used for broad summaries, but raw git output is required before making conclusions.
-
-## Debugging Rules
-
-* For failing tests, first use the raw failing command when the output is small or specific.
-* For large test suites, `rtk pytest tests/` may be used to locate failures.
-* After identifying a failing test, rerun the specific failing test without RTK.
-* For type/lint errors, prefer raw output unless the output is extremely large.
-
-## Command Chains
-
-Do not blindly prefix every segment in command chains. Use RTK only for the noisy segment.
-
-```bash
-git status --short && rtk pytest tests/
-```
-
-## Tracking Without Filtering
-
-Use `rtk proxy <cmd>` only when tracking is useful but filtering is not desired.
-
+## Rules
+- In command chains, prefix each segment: `rtk git add . && rtk git commit -m "msg"`
+- For debugging, use raw command without rtk prefix
+- `rtk proxy <cmd>` runs command without filtering but tracks usage
 <!-- /headroom:rtk-instructions -->

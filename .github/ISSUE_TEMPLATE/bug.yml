@@ -43,15 +43,15 @@ body:
     attributes:
       label: 関連レイヤー
       options:
-        - core/
-        - contracts/
-        - runtime/
-        - cognitive/
-        - presentation/
-        - safety/
-        - adapters/
-        - features/
-        - tests/
+        - kernel/
+        - io/
+        - event/
+        - memory/
+        - limbic/
+        - agency/
+        - llm/
+        - tools/
+        - admin/
         - その他
     validations:
       required: true

@@ -14,7 +14,6 @@ Audit the tests and clean up low-value or harmful coverage.
 - Remove duplicate, stale, misleading, or over-specified tests.
 - Rewrite valuable tests around current public behavior and boundaries.
 - Identify code that should be refactored because bad tests were hiding it.
-- For v1.2.1 migration, distinguish valid architecture-boundary tests from stale Plugin/EventBus compatibility tests.
 
 ## Rules
 

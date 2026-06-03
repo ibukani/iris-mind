@@ -7,7 +7,7 @@ description: |
 
 # Iris Visualize Skill
 
-Represent Iris diagrams according to the relevant architecture source of truth. For v1.2.1 migration diagrams, use `docs/architecture/current.md` and show Cognitive Runtime flow instead of the old EventBus-centered layout.
+Represent Iris layer architecture and the loosely coupled EventBus design accurately, then validate and render Mermaid syntax.
 
 ---
 
@@ -56,70 +56,75 @@ node scripts/render.mjs --input diagram.mmd --format ascii --use-ascii
 
 ## 3. Iris-specific Mermaid Templates
 
-### A. Cognitive Runtime flow, v1.2.1
+### A. Layer architecture diagram, flowchart
 
-Use this for the target migration architecture.
-
-```mermaid
-flowchart TB
-    ext["External App"]
-    obs["Observation"]
-    gateway["AppGateway"]
-    cycle["CognitiveCycle"]
-    results["typed PipelineStep results"]
-    frame["WorkspaceFrame"]
-    plan["ActionPlan"]
-    action_gate["ActionSafetyGate"]
-    presenter["Presentation"]
-    output["PresentedOutput"]
-    output_gate["OutputSafetyGate"]
-    app_action["AppAction"]
-    action_result["ActionResult"]
-    learning["LearningHook"]
-    jobs["BackgroundJob"]
-
-    ext --> obs --> gateway --> cycle --> results --> frame --> plan
-    plan --> action_gate --> presenter --> output --> output_gate --> app_action --> ext
-    ext --> action_result --> learning --> jobs
-```
-
-### B. Target layer dependency diagram, v1.2.1
+Standard structure for showing layer boundaries and loosely coupled relationships through EventBus.
 
 ```mermaid
 flowchart TB
-    core["core"]
-    contracts["contracts"]
-    cognitive["cognitive"]
-    presentation["presentation"]
-    safety["safety"]
-    adapters["adapters"]
-    features["features"]
-    runtime["runtime"]
+    subgraph KernelLayer["kernel (brainstem)"]
+        manager["KernelManager"]
+        process["KernelProcess"]
+        factory["DI Factory"]
+    end
+    subgraph IoLayer["io (thalamus)"]
+        io_mgr["IOManager"]
+        grpc["GrpcListener"]
+    end
+    subgraph EventLayer["event (neural pathway)"]
+        bus["EventBus"]
+    end
+    subgraph HeartbeatLayer["heartbeat (TimerTick)"]
+        hb_svc["HeartbeatService"]
+    end
+    subgraph MemoryLayer["memory"]
+        mem_mgr["MemoryManager"]
+        sensory["SensoryMemory"]
+        stm["ShortTermMemory"]
+        ltm["LongTermMemory"]
+    end
+    subgraph AgencyLayer["agency (higher cognition)"]
+        planning["PlanningManager"]
+        execution["ExecutionOrchestrator"]
+    end
+    subgraph LlmLayer["llm"]
+        bridge["LLMBridge"]
+    end
 
-    contracts --> core
-    cognitive --> contracts
-    cognitive --> core
-    presentation --> contracts
-    presentation --> core
-    safety --> contracts
-    safety --> core
-    adapters --> contracts
-    adapters --> core
-    features --> contracts
-    features --> cognitive
-    features --> core
-    runtime --> cognitive
-    runtime --> features
-    runtime --> adapters
-    runtime --> presentation
-    runtime --> safety
-    runtime --> contracts
-    runtime --> core
+    %% Dependencies through EventBus for loose coupling
+    KernelLayer -.-> bus
+    IoLayer -.-> bus
+    HeartbeatLayer -.-> bus
+    MemoryLayer -.-> bus
+    AgencyLayer -.-> bus
 ```
 
-### C. Legacy EventBus diagrams
+### B. EventBus integration sequence diagram
 
-Use old EventBus-centered diagrams only when the user explicitly asks for legacy architecture documentation or pre-migration behavior. Do not use them to explain the v1.2.1 target architecture.
+Standard structure for showing event publication and parallel processing by layers.
+
+```mermaid
+sequenceDiagram
+    participant A as AgencyManager
+    participant E as EventBus
+    participant H as HeartbeatService
+    participant M as MemoryManager
+
+    A->>E: publish(AgentActionEvent)
+    activate E
+    E-->>H: notify(AgentActionEvent)
+    E-->>M: notify(AgentActionEvent)
+    deactivate E
+
+    activate H
+    H->>H: process TimerTick
+    H->>E: publish(TimerTick)
+    deactivate H
+
+    activate M
+    M->>M: store memory
+    deactivate M
+```
 
 ---
 

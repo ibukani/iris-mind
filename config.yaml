@@ -1,0 +1,140 @@
+# Iris Kernel Configuration
+
+# 人格設定 — Iris の名前とシステムプロンプト
+personality:
+    name: Iris
+    prompt_file: .iris/config/system_prompt.md
+
+# 記憶系 — 各記憶層の保存先と上限
+memory:
+    agents_md_max_bytes: 2048
+    agents_md_path: .iris/config/iris_profile.md
+    archive_dir: .iris/data/conversations
+    archive_max_per_file_bytes: 4000000
+    appraisal_episode_path: .iris/data/appraisal_episodes.jsonl
+    candidate_path: .iris/data/memory_candidates.jsonl
+    consolidation_log_path: .iris/data/memory_consolidation.jsonl
+    episodic_max_entries: 30
+    episodic_path: .iris/data/episodes.jsonl
+    job_path: .iris/data/memory_jobs.jsonl
+    persona_patch_path: .iris/data/persona_patches.jsonl
+    relationship_state_path: .iris/data/relationship_states.jsonl
+    semantic_max_entries: 100
+    semantic_path: .iris/data/semantic.jsonl
+    style_memory_path: .iris/data/style_memory.jsonl
+    vector_db_path: .iris/data/chroma_db
+    # LangMem ベースの長期記憶抽出 (ローカル LLM 利用)
+    langmem:
+        enabled: false
+        model_role: memory
+        batch_min_turns: 6
+        batch_max_chars: 8000
+        temperature: 0.1
+        max_tokens: 1024
+        enable_updates: false
+        enable_deletes: false
+        auto_promote_min_confidence: 0.75
+        max_retry_count: 2
+        style_max_in_prompt: 4
+
+# アカウント管理 — ユーザー識別・外部ID連携
+account:
+    accounts_path: .iris/data/accounts.jsonl
+    identities_path: .iris/data/account_identities.jsonl
+
+# ルーム管理 — ルームCRUD・メンバーシップ管理（インメモリ）
+room: {}
+
+# 辺縁系 — 感情分類器（既定は軽量なキーワード判定）
+limbic:
+    emotion_classifier:
+        type: neural # keyword / neural
+        model_name: YoichiTakenaka/deverta-v3-japanese-large-Anticipation
+        device: auto # auto / cuda / cpu / 0
+
+# 自発発話 — プロアクティブな割り込みの重み・閾値
+proactive:
+    check_interval_sec: 5.0
+    min_interval_sec: 30.0
+    max_interval_sec: 300.0
+    trigger_weights:
+        time: 0.40
+        memory: 0.35
+        context: 0.15
+        mood: 0.10
+    speak_threshold: 0.20
+    idle_reflection_timeout_sec: 180.0
+
+# LLM モデル — プロバイダ・コンテキストサイズ・性能設定
+model:
+    #プロバイダ接続設定（省略時はハードコードデフォルトを使用）
+    providers:
+        ollama:
+            base_url: http://localhost:11434
+        openrouter:
+            base_url: https://openrouter.ai/api/v1
+            api_key: ${OPENROUTER_API_KEY}
+        google:
+            base_url: https://generativelanguage.googleapis.com/v1beta/openai
+            api_key: ${GEMINI_API_KEY}
+
+    # 全体デフォルト
+    default_context_window: 8192
+    default_num_ctx: 8192
+    default_num_gpu: 99
+    default_temperature: 0.85
+
+    # モデル定義（接続情報は providers に集約）
+    # roles: モデルが担当する役割（low/medium/high）。fallbackとしてdefaultも使用可。
+    models:
+        - name: qwen3.5:9b
+          roles: [default, memory]
+          provider: ollama
+          max_tokens: 1024
+          reasoning: false
+          tokenizer_repo_id: Qwen/Qwen3.5-9B
+        # - name: gemini-3.1-flash-lite
+        #   roles: [default]
+        #   provider: google
+        #   max_tokens: 4096
+        #   tokenizer_repo_id: Qwen/Qwen3.5-4B
+
+# TCP サーバー — 外部クライアント接続の listen 設定
+session:
+    host: 127.0.0.1
+    port: 9876
+
+# 準同期的応答 — 割り込み判定のための反応準備
+quasi_sync:
+    response_readiness:
+        confidence_threshold: 0.6
+        llm_model_role: fast
+        tier1_min_fragments: 2
+        tier1_question_detect: true
+
+# デバッグ基盤 — トレーサー・診断
+debug:
+    enabled: false
+    trace_max_entries: 500
+    emotion_history_enabled: true
+    personality_history_enabled: true
+    capture_enabled: true # LLM入出力キャプチャ（/debug on/off でも切替可）
+    capture_auto_dump: true # キャプチャを自動で logs/debug/ にファイル保存
+    capture_max_entries: 10 # メモリ内保持数
+
+# 鼓動タイマー — 自発発話のチェック間隔
+timer:
+    interval_sec: 5.0
+
+# ログ出力 — レベル・保存先・ローテーション
+logging:
+    backup_count: 14
+    console_format: "{time:YYYY-MM-DD HH:mm:ss} [{level}] {message}"
+    console_level: DEBUG
+    dir: logs
+    file_level: DEBUG
+    # 特定ロガーのレベル上書き（例: iris.io: DEBUG）
+    loggers:
+        iris.io: DEBUG
+        iris.limbic: DEBUG
+    max_bytes: 5242880

@@ -1,0 +1,117 @@
+"""
+llm — LLM 基盤層。
+
+プロバイダ管理、コンテキストウィンドウ管理、トークナイザー、
+プロンプト構築、Capability 判定など、LLM との通信基盤を提供する。
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+from iris.kernel.plugin import PluginCategory, PluginManifest, PluginPhase, PluginProtocol
+
+from .bridge import LLMBridge
+from .capability import CapabilityChecker
+from .context import LLMContextWindowManager, SummarizerProtocol
+from .interrupt_token import InterruptToken
+from .priority_lock import PriorityLock
+from .prompt import Personality
+from .providers import (
+    BaseLLMProvider,
+    GoogleProvider,
+    OllamaProvider,
+    OpenRouterProvider,
+    get_provider_class,
+    register_provider,
+)
+from .token_utils import estimate_messages_tokens, estimate_tokens
+from .tokenizer import TokenizerManager
+
+if TYPE_CHECKING:
+    from iris.kernel.manager import PluginManager
+
+MANIFEST = PluginManifest(
+    name="llm",
+    version="0.1.0",
+    category=PluginCategory.CORE,
+    phase=PluginPhase.CORE,
+    dependencies=set(),
+    provides=["LLMBridge", "TokenizerManager", "DebugCapture", "CapabilityChecker"],
+    description="LLM基盤層",
+)
+
+
+class LlmPlugin(PluginProtocol):
+    MANIFEST = MANIFEST
+
+    def init(self, manager: PluginManager) -> None:
+        manager.register_manifest(MANIFEST)
+        config = manager.config
+
+        provider_entries: dict[str, list] = {}
+        for entry in config.model.models:
+            provider_entries.setdefault(entry.provider, []).append(entry)
+
+        for provider_name, entries in provider_entries.items():
+            provider_cls = get_provider_class(provider_name)
+            if not provider_cls.validate_environment(entries, config.model):
+                raise RuntimeError(f"Provider '{provider_name}' environment validation failed")
+
+        llm = LLMBridge(model_config=config.model)
+
+        tokenizers: dict[str, TokenizerManager] = {
+            entry.name: TokenizerManager(
+                repo_id=entry.tokenizer_repo_id,
+                local_path=entry.tokenizer_local_path,
+                hf_token=config.model.hf_token,
+            )
+            for entry in config.model.models
+        }
+
+        from iris.kernel.debug_capture import DebugCapture
+
+        debug_capture = DebugCapture(
+            tokenizer_mgr=next(iter(tokenizers.values()), None),
+            auto_dump=config.debug.capture_auto_dump,
+            max_entries=config.debug.capture_max_entries,
+        )
+        if config.debug.capture_enabled:
+            debug_capture.set_enabled(True)
+
+        capability_checker = CapabilityChecker(config=config.model)
+
+        manager.provide(LLMBridge, llm)
+        manager.provide(CapabilityChecker, capability_checker)
+
+        from iris.kernel.debug_capture import DebugCapture
+
+        manager.provide(DebugCapture, debug_capture)
+
+    def start(self, manager: PluginManager) -> None:
+        pass
+
+    def stop(self, manager: PluginManager) -> None:
+        pass
+
+
+plugin: PluginProtocol = LlmPlugin()
+
+__all__ = [
+    "BaseLLMProvider",
+    "CapabilityChecker",
+    "GoogleProvider",
+    "InterruptToken",
+    "LLMBridge",
+    "LLMContextWindowManager",
+    "OllamaProvider",
+    "OpenRouterProvider",
+    "Personality",
+    "PriorityLock",
+    "SummarizerProtocol",
+    "TokenizerManager",
+    "estimate_messages_tokens",
+    "estimate_tokens",
+    "get_provider_class",
+    "register_provider",
+]

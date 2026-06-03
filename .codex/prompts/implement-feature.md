@@ -30,7 +30,7 @@ Implement the requested feature in Iris-Mind.
 - Add or update tests for behavior changes.
 - Avoid external LLM API calls in tests.
 - Avoid requiring Ollama or external services in unit tests.
-- Keep provider-specific logic inside `iris/adapters/llm`.
+- Keep provider-specific logic inside `iris/llm`.
 
 ## Validation
 

@@ -1,1 +1,20 @@
-"""Iris — Cognitive Runtime Architecture v1.2.1 Target Runtime."""
+from iris.event import (
+    AgentAnomalyEvent,
+    AgentStateChangeEvent,
+    Event,
+    EventBus,
+    MemoryUpdateEvent,
+    TimerTick,
+)
+from iris.kernel.config import Config, ProactiveConfig
+
+__all__ = [
+    "AgentAnomalyEvent",
+    "AgentStateChangeEvent",
+    "Config",
+    "Event",
+    "EventBus",
+    "MemoryUpdateEvent",
+    "ProactiveConfig",
+    "TimerTick",
+]

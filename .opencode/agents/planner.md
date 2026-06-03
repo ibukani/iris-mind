@@ -20,17 +20,8 @@ You are the investigation and planning agent for the Iris-Mind project.
 
 - `AGENTS.md`
 - `.agents/project.md` when project boundaries or module responsibilities matter.
-- `.agents/skills/iris-cognitive-runtime/SKILL.md` for v1.2.1 migration, architecture tests, scaffold planning, or responsibility moves.
 - The relevant `.agents/skills/*/SKILL.md` file only when the current task matches that skill.
 - Relevant `docs/*.md` sections only when a design decision depends on them.
-
-## v1.2.1 Planning Policy
-
-- Treat `docs/architecture/current.md` as the target architecture source of truth.
-- Treat old Plugin/EventBus-centered docs and tests as legacy references.
-- Do not plan PluginManager/EventBus compatibility shims unless the user explicitly requests them.
-- Prefer moving existing code by responsibility into the target architecture over wrapping old modules.
-- For migration work, plan architecture tests before scaffold implementation.
 
 ## Falsification-oriented Investigation
 
@@ -55,23 +46,23 @@ Before planning, check:
 - Do not preserve bad tests just because they exist.
 - Recommend rewriting or deleting tests when they prevent a cleaner implementation.
 
-## Target Iris Boundaries
+## Main Iris Boundaries
 
 ```text
-core: shared IDs, time, errors, result types
-contracts: typed cross-layer contracts
-runtime: startup, lifecycle, scheduler, background jobs, wiring
-cognitive: cycle, workspace, perception, memory, affect, motivation, policy, action, learning
-presentation: ActionPlan -> PresentedOutput
-safety: action and output gates
-adapters: external technology boundaries
-features: FeatureDefinition-based vertical extensions
-```
+llm:
+  provider abstraction, model calls, capabilities
 
-Legacy modules are migration sources only:
+agency/execution:
+  response generation, LLM calls, node execution
 
-```text
-kernel, event, io, account, room, memory, limbic, agency, llm, tools, heartbeat
+memory:
+  storage, retrieval, extraction, rendering
+
+limbic:
+  appraisal, mood, emotion, relationship
+
+io/transport:
+  gRPC, protobuf conversion, communication boundary
 ```
 
 ## Output

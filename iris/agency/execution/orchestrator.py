@@ -1,0 +1,126 @@
+from __future__ import annotations
+
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
+
+from langgraph.graph import END, StateGraph
+
+from iris.agency.execution.models import DynamicState, ExecutionState
+from iris.agency.execution.nodes.finalize import FinalizeNode
+from iris.agency.execution.nodes.general_chat import GeneralChatNode
+from iris.agency.execution.nodes.general_task import GeneralTaskNode
+from iris.agency.execution.nodes.setup import SetupNode
+from iris.agency.execution.nodes.tool_run import ToolRunNode
+from iris.agency.execution.router import route_after_llm, route_after_tools
+from iris.llm.interrupt_token import InterruptToken
+
+if TYPE_CHECKING:
+    from iris.agency.execution.engine import ToolEngine
+    from iris.agency.execution.llm.gateway import LLMGateway
+    from iris.event.event_bus import EventBus
+    from iris.memory.manager import MemoryManager
+
+from loguru import logger
+
+
+def _with_state_trace(name: str, node_fn: Any) -> Any:
+    async def wrapped(state: ExecutionState) -> dict[str, Any] | None:
+        raw: dict[str, Any] = state  # type: ignore[assignment]
+        keys = [k for k in raw if k != "messages"]
+        before = {k: repr(raw[k]) for k in keys}
+        result: dict[str, Any] | None = await node_fn(state)
+        after = {k: repr(raw[k]) for k in keys}
+        changed = {k: {"before": before[k], "after": after[k]} for k in keys if before[k] != after[k]}
+        if changed:
+            logger.debug("NODE[{}] state diff: {}", name, changed)
+        if result is not None:
+            logger.debug("NODE[{}] return: {}", name, {k: repr(v) for k, v in result.items()})
+        return result
+
+    return wrapped
+
+
+class ExecutionOrchestrator:
+    def __init__(
+        self,
+        pipeline: LLMGateway,
+        tool_executor: ToolEngine | None = None,
+        event_bus: EventBus | None = None,
+        memory: MemoryManager | None = None,
+    ) -> None:
+        self._dynamic = DynamicState()
+
+        self._prepare = SetupNode(
+            pipeline=pipeline,
+            event_bus=event_bus,
+            memory=memory,
+            dynamic=self._dynamic,
+        )
+        self._general_chat = GeneralChatNode(
+            pipeline=pipeline,
+            tool_executor=tool_executor,
+            dynamic=self._dynamic,
+            event_bus=event_bus,
+            memory=memory,
+        )
+        self._general_task = GeneralTaskNode(
+            pipeline=pipeline,
+            tool_executor=tool_executor,
+            dynamic=self._dynamic,
+            event_bus=event_bus,
+            memory=memory,
+        )
+        self._execute_tools_node = ToolRunNode(
+            tool_executor=tool_executor,
+        )
+        self._finalize = FinalizeNode(
+            event_bus=event_bus,
+        )
+
+        self._compiled_graph = self._build_graph()
+
+    def set_callbacks(
+        self,
+        on_token: Callable[[str], None] | None = None,
+        interrupt_token: InterruptToken | None = None,
+    ) -> None:
+        self._dynamic.on_token = on_token
+        self._dynamic.interrupt_token = interrupt_token
+
+    async def ainvoke(self, state: ExecutionState) -> dict[str, Any]:
+        result: dict[str, Any] = await self._compiled_graph.ainvoke(state)
+        return result
+
+    def _build_graph(self) -> Any:
+        builder = StateGraph(ExecutionState)
+
+        builder.add_node("prepare_context", _with_state_trace("prepare_context", self._prepare))
+        builder.add_node("general_chat", _with_state_trace("general_chat", self._general_chat))
+        builder.add_node("general_task", _with_state_trace("general_task", self._general_task))
+        builder.add_node("execute_tools", _with_state_trace("execute_tools", self._execute_tools_node))
+        builder.add_node("finalize", _with_state_trace("finalize", self._finalize))
+
+        builder.set_entry_point("prepare_context")
+        builder.add_edge("prepare_context", "general_chat")
+
+        for llm_node in ("general_chat", "general_task"):
+            builder.add_conditional_edges(
+                llm_node,
+                route_after_llm,
+                {
+                    "general_chat": "general_chat",
+                    "general_task": "general_task",
+                    "execute_tools": "execute_tools",
+                    "finalize": "finalize",
+                },
+            )
+
+        builder.add_conditional_edges(
+            "execute_tools",
+            route_after_tools,
+            {"general_chat": "general_chat", "general_task": "general_task", "finalize": "finalize"},
+        )
+
+        builder.add_edge("finalize", END)
+
+        return builder.compile()

@@ -949,6 +949,19 @@ tool execution
 → cognitive/action/tool_use.py + adapters/tools/
 ```
 
+Phase 7 の policy / inhibition は、`WorkspaceFrame` 上の typed context として
+`PolicyConstraint` と action preference を追加する最小基盤に限定する。Policy は
+global mutable state でも安全ゲートでもなく、affect、relationship、memory、
+interpreted input、candidate action plan を読んで応答生成へ渡す制約を作る。
+
+Safety は `safety/` の ActionSafetyGate / OutputSafetyGate が責任を持つ。Policy
+は self-harm や abuse などの兆候を frame context に注記できるが、allow/block の
+最終判断は行わない。
+
+legacy `agency/` の EventBus、InhibitionManager、modulation orchestrator、
+proactive behavior、complex planner、LangGraph execution、tool calling、
+長期学習 policy は移植しない。
+
 ---
 
 ### Phase 8: proactive 実装

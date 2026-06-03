@@ -17,7 +17,6 @@ from iris.cognitive.workspace.frame import (
     GoalCandidate,
     InterpretedInput,
     MemorySummary,
-    PolicyConstraint,
     RelationshipSnapshot,
     WorkspaceFrame,
 )
@@ -73,7 +72,9 @@ class FrameBuilder:
             case PolicyResult():
                 return replace(
                     frame,
-                    constraints=tuple(PolicyConstraint(name=item, reason="pipeline") for item in result.constraints),
+                    constraints=result.constraints,
+                    action_preferences=result.action_preferences,
+                    policy_summary=result.policy_summary,
                 )
             case ActionSelectionResult():
                 return replace(frame, candidate_action_plans=result.action_plans)

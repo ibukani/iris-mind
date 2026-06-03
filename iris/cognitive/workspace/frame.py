@@ -48,7 +48,15 @@ class GoalCandidate:
 class PolicyConstraint:
     name: str
     reason: str
+    prompt_instruction: str | None = None
     blocks_response: bool = False
+
+
+@dataclass(frozen=True)
+class ActionPreference:
+    name: str
+    reason: str
+    priority_delta: int = 0
 
 
 @dataclass(frozen=True)
@@ -60,4 +68,6 @@ class WorkspaceFrame:
     relationship: RelationshipSnapshot = field(default_factory=RelationshipSnapshot)
     goals: tuple[GoalCandidate, ...] = ()
     constraints: tuple[PolicyConstraint, ...] = ()
+    action_preferences: tuple[ActionPreference, ...] = ()
+    policy_summary: str | None = None
     candidate_action_plans: tuple[ActionPlan, ...] = ()

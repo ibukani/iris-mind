@@ -19,6 +19,7 @@ from iris.cognitive.cycle.pipeline import PipelineStep
 from iris.cognitive.cycle.service import CognitiveCycle
 from iris.cognitive.memory.retrieval import MemoryRetrievalStep
 from iris.cognitive.perception.basic import SimplePerceptionStep
+from iris.cognitive.policy.inhibition import PolicyInhibitionStep
 from iris.contracts.actions import ActionPlan
 from iris.runtime.wiring.llm import wire_response_generator
 
@@ -75,6 +76,25 @@ def wire_affect_memory_aware_text_response_cognitive_cycle(
         (
             AppraisalStep(),
             RelationshipStep(relationship_state),
+            ResponseGenerationStep(wire_response_generator(llm_client)),
+        )
+    )
+    return wire_cognitive_cycle(steps=tuple(steps))
+
+
+def wire_policy_affect_memory_aware_text_response_cognitive_cycle(
+    memory_store: MemoryStore | None = None,
+    llm_client: LLMClient | None = None,
+    relationship_state: InMemoryRelationshipState | None = None,
+) -> CognitiveCycle:
+    steps: list[PipelineStep[PipelineStepResult]] = [SimplePerceptionStep()]
+    if memory_store is not None:
+        steps.append(MemoryRetrievalStep(memory_store))
+    steps.extend(
+        (
+            AppraisalStep(),
+            RelationshipStep(relationship_state or InMemoryRelationshipState()),
+            PolicyInhibitionStep(),
             ResponseGenerationStep(wire_response_generator(llm_client)),
         )
     )

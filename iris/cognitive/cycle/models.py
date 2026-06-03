@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from iris.cognitive.workspace.frame import WorkspaceFrame
+from iris.cognitive.workspace.frame import ActionPreference, PolicyConstraint, WorkspaceFrame
 from iris.contracts.actions import ActionPlan
 from iris.contracts.memory import MemorySearchResult
 
@@ -58,8 +58,10 @@ class MotivationResult(PipelineStepResult):
 
 @dataclass(frozen=True)
 class PolicyResult(PipelineStepResult):
-    constraints: tuple[str, ...] = ()
+    constraints: tuple[PolicyConstraint, ...] = ()
+    action_preferences: tuple[ActionPreference, ...] = ()
     response_allowed: bool = True
+    policy_summary: str | None = None
 
 
 @dataclass(frozen=True)

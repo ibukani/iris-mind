@@ -47,6 +47,10 @@ def _build_user_content(prompt: ResponsePrompt) -> str:
         sections.append(f"Affect context:\n{prompt.affect_context}")
     if prompt.relationship_context is not None:
         sections.append(f"Relationship context:\n{prompt.relationship_context}")
+    if prompt.constraints:
+        sections.append(f"Policy constraints: {'; '.join(prompt.constraints)}")
+    if prompt.goals:
+        sections.append(f"Goals: {'; '.join(prompt.goals)}")
     if not sections:
         return prompt.user_text
     sections.append(f"User message:\n{prompt.user_text}")

@@ -5,7 +5,7 @@ from typing import Protocol
 
 from iris.cognitive.cycle.models import ActionSelectionResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
-from iris.cognitive.workspace.frame import WorkspaceFrame
+from iris.cognitive.workspace.frame import PolicyConstraint, WorkspaceFrame
 from iris.contracts.actions import ActionPlan
 
 
@@ -41,8 +41,12 @@ def build_response_prompt(frame: WorkspaceFrame) -> ResponsePrompt | None:
         affect_context=frame.affect.affect_summary,
         relationship_context=frame.relationship.relationship_summary,
         goals=tuple(goal.name for goal in frame.goals),
-        constraints=tuple(constraint.name for constraint in frame.constraints),
+        constraints=tuple(_format_policy_constraint(constraint) for constraint in frame.constraints),
     )
+
+
+def _format_policy_constraint(constraint: PolicyConstraint) -> str:
+    return constraint.prompt_instruction or constraint.name
 
 
 class ResponseGenerationStep(PipelineStep[ActionSelectionResult]):

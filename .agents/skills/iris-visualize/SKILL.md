@@ -7,7 +7,7 @@ description: |
 
 # Iris Visualize Skill
 
-Represent Iris diagrams according to the relevant architecture source of truth. For v1.2.1 migration diagrams, use `docs/architecture/cognitive-runtime-v1.2.1.md` and show Cognitive Runtime flow instead of the old EventBus-centered layout.
+Represent Iris diagrams according to the relevant architecture source of truth. For v1.2.1 migration diagrams, use `docs/architecture/current.md` and show Cognitive Runtime flow instead of the old EventBus-centered layout.
 
 ---
 

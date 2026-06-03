@@ -23,12 +23,12 @@ For v1.2.1 migration work, prefer the current target architecture document:
 
 | Change target | Documents to update |
 |---|---|
-| Cognitive Runtime architecture changes | `docs/architecture/cognitive-runtime-v1.2.1.md` or a focused ADR |
-| CognitiveCycle / WorkspaceFrame / PipelineStep changes | `docs/architecture/cognitive-runtime-v1.2.1.md` |
-| FeatureDefinition / feature extension changes | `docs/architecture/cognitive-runtime-v1.2.1.md` |
-| AppGateway / external app boundary changes | `docs/architecture/cognitive-runtime-v1.2.1.md`, relevant `docs/external/*.md` if the external protocol changes |
-| Safety / presentation flow changes | `docs/architecture/cognitive-runtime-v1.2.1.md` |
-| Runtime wiring / scheduler / background job changes | `docs/architecture/cognitive-runtime-v1.2.1.md` |
+| Cognitive Runtime architecture changes | `docs/architecture/current.md` or a focused ADR |
+| CognitiveCycle / WorkspaceFrame / PipelineStep changes | `docs/architecture/current.md` |
+| FeatureDefinition / feature extension changes | `docs/architecture/current.md` |
+| AppGateway / external app boundary changes | `docs/architecture/current.md`, relevant `docs/external/*.md` if the external protocol changes |
+| Safety / presentation flow changes | `docs/architecture/current.md` |
+| Runtime wiring / scheduler / background job changes | `docs/architecture/current.md` |
 | Configuration changes | `docs/config.md` and target architecture sections if the runtime model changes |
 | Model routing / LLM adapter changes | `docs/how-it-works/11-model-routing.md`, `docs/config.md`, and target adapter sections when relevant |
 

@@ -775,7 +775,7 @@ EventBus は初期設計に入れない。
 作るもの。
 
 ```text
-docs/architecture/cognitive-runtime-v1.2.1.md
+docs/archive/cognitive-runtime-v1.2.1.md
 AGENTS.md の最小更新
 AIコーディング向けルール
 ```

@@ -5,8 +5,8 @@
 - `AGENTS.md` is the entry point. Do not add detailed rules here.
 - Only this file should be read by default.
 - Read referenced files only when they are needed for the current task.
-- Iris is migrating to Cognitive Runtime Architecture v1.2.1.
-- The current architecture source of truth is `docs/architecture/cognitive-runtime-v1.2.1.md`.
+- Iris uses Cognitive Runtime Architecture v1.2.1.
+- The current architecture source of truth is `docs/architecture/current.md`.
 - The legacy Plugin/EventBus-centered architecture has been deleted (Phase 12).
 - Implementation remains the source of truth for current behavior, but v1.2.1 is the source of truth for architecture direction.
 
@@ -40,13 +40,15 @@
 - Ordinary development, MVP decisions, code rules, validation, Git: `.agents/skills/iris-dev-workflow/SKILL.md`
 - Diagrams / Mermaid: `.agents/skills/iris-visualize/SKILL.md`
 - Documentation sync: `.agents/skills/doc-sync/SKILL.md`
-- Current architecture target: `docs/architecture/cognitive-runtime-v1.2.1.md`
-- Legacy design details: `docs/`
+- Current architecture target: `docs/architecture/current.md`
+- Legacy removal record: `docs/archive/legacy-removal-summary.md`
+- Development/testing guide: `docs/development/testing.md`
+- AI agent guidelines: `docs/development/agent-guidelines.md`
 
 ## When to Read
 
 - Task start: `.agents/project.md` if project boundaries matter.
-- v1.2.1 architecture work: `iris-cognitive-runtime` and `docs/architecture/cognitive-runtime-v1.2.1.md`.
+- v1.2.1 architecture work: `iris-cognitive-runtime` and `docs/architecture/current.md`.
 - Ordinary code changes: `iris-dev-workflow`.
 - Documentation update check: `doc-sync`.
 

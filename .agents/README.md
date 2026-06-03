@@ -38,7 +38,7 @@ The following Skills describe the old Plugin/EventBus-centered architecture. The
 ## Source of Truth
 
 - Agent entry point: `AGENTS.md`
-- Target architecture: `docs/architecture/cognitive-runtime-v1.2.1.md`
+- Target architecture: `docs/architecture/current.md`
 - Cognitive Runtime migration rules: `skills/iris-cognitive-runtime/SKILL.md`
 - Ordinary development rules: `skills/iris-dev-workflow/SKILL.md`
 - Legacy architecture documents: existing `docs/*.md` files that describe pre-v1.2.1 behavior
@@ -48,6 +48,6 @@ The following Skills describe the old Plugin/EventBus-centered architecture. The
 ## Rules
 
 - Do not keep progress logs or branch status permanently in `.agents/`.
-- Record target architecture decisions in `docs/architecture/cognitive-runtime-v1.2.1.md` or a focused ADR.
+- Record target architecture decisions in `docs/architecture/current.md` or a focused ADR.
 - If an operational procedure changes, update the corresponding Skill. Keep `AGENTS.md` limited to minimal references.
 - Prefer references over summaries. Do not write the same fact in multiple files unless doing so prevents incorrect agent routing.

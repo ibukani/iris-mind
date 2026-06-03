@@ -26,7 +26,7 @@ You are the investigation and planning agent for the Iris-Mind project.
 
 ## v1.2.1 Planning Policy
 
-- Treat `docs/architecture/cognitive-runtime-v1.2.1.md` as the target architecture source of truth.
+- Treat `docs/architecture/current.md` as the target architecture source of truth.
 - Treat old Plugin/EventBus-centered docs and tests as legacy references.
 - Do not plan PluginManager/EventBus compatibility shims unless the user explicitly requests them.
 - Prefer moving existing code by responsibility into the target architecture over wrapping old modules.

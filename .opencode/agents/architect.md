@@ -19,7 +19,7 @@ You are the architecture agent for the Iris-Mind project.
 
 ## Architecture Source of Truth
 
-- Target architecture: `docs/architecture/cognitive-runtime-v1.2.1.md`
+- Target architecture: `docs/architecture/current.md`
 - Project routing: `AGENTS.md` and `.agents/project.md`
 - Migration rules: `.agents/skills/iris-cognitive-runtime/SKILL.md`
 

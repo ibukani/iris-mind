@@ -81,7 +81,6 @@ markers = [
     "integration: 統合テスト",
     "architecture: v1.2.1 architecture boundary tests",
     "target: v1.2.1 target architecture tests and runtime tests",
-    "migration: migration-control tests for phased legacy deletion",
     "slow: 低速テスト",
     "anyio: anyio-based async tests",
 ]

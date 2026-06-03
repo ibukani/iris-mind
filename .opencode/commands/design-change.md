@@ -24,4 +24,4 @@ Create a design plan without changing code.
 ## Note
 
 If files are specified, treat them as initial investigation targets only.
-For Cognitive Runtime migration work, use `docs/architecture/cognitive-runtime-v1.2.1.md` as the target architecture source of truth.
+For Cognitive Runtime migration work, use `docs/architecture/current.md` as the target architecture source of truth.

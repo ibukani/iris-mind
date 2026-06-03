@@ -2,9 +2,9 @@
 
 AI コンパニオン — Cognitive Runtime Architecture v1.2.1 ターゲット MVP。
 
-> **Architecture status**: Legacy Plugin/EventBus architecture has been deleted.
-> The Cognitive Runtime v1.2.1 is the sole source of truth.
-> See `docs/migration/legacy-deletion-readiness.md` for the deletion record.
+> **Architecture status**: Cognitive Runtime v1.2.1 is the sole source of truth.
+> The legacy Plugin/EventBus architecture has been deleted.
+> See `docs/archive/legacy-removal-summary.md` for the deletion record.
 
 ## Usage
 

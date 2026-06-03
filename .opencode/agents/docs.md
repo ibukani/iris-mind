@@ -18,7 +18,7 @@ You are the documentation agent for the Iris-Mind project.
 ## Policy
 
 - Treat implementation as the source of truth for current behavior.
-- Treat `docs/architecture/cognitive-runtime-v1.2.1.md` as the source of truth for migration direction.
+- Treat `docs/architecture/current.md` as the source of truth for migration direction.
 - Update only documents related to the change.
 - Do not write excessive architecture prose.
 - Keep code examples consistent with the actual API.
@@ -30,7 +30,7 @@ You are the documentation agent for the Iris-Mind project.
 When documentation may be affected, inspect:
 
 - `README.md`
-- `docs/architecture/cognitive-runtime-v1.2.1.md` for migration architecture changes
+- `docs/architecture/current.md` for migration architecture changes
 - relevant legacy `docs/*.md` only when current pre-migration behavior or external protocols changed
 - relevant `.agents/skills/*/SKILL.md`
 - config examples

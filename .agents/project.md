@@ -1,11 +1,11 @@
 # Iris Project Brief
 
-This file is a compact helper note for Iris-specific scope and responsibility boundaries. Use `.agents/skills/iris-dev-workflow/SKILL.md` as the source for ordinary development rules, and `docs/architecture/cognitive-runtime-v1.2.1.md` as the source for architecture decisions.
+This file is a compact helper note for Iris-specific scope and responsibility boundaries. Use `.agents/skills/iris-dev-workflow/SKILL.md` as the source for ordinary development rules, and `docs/architecture/current.md` as the source for architecture decisions.
 
 ## Current Direction
 
 - Iris is built on Cognitive Runtime Architecture v1.2.1.
-- The architecture source of truth is `docs/architecture/cognitive-runtime-v1.2.1.md`.
+- The architecture source of truth is `docs/architecture/current.md`.
 - The legacy Plugin/EventBus architecture has been deleted (Phase 12).
 - Do not add PluginManager/EventBus compatibility shims unless the user explicitly requests them.
 
@@ -55,7 +55,7 @@ This file is a compact helper note for Iris-specific scope and responsibility bo
 - Ordinary development: `.agents/skills/iris-dev-workflow/SKILL.md`
 - Diagrams / Mermaid: `.agents/skills/iris-visualize/SKILL.md`
 - Documentation update check: `.agents/skills/doc-sync/SKILL.md`
-- Design changes: record them in `docs/architecture/cognitive-runtime-v1.2.1.md` or a focused ADR when the change updates the target architecture.
+- Design changes: record them in `docs/architecture/current.md` or a focused ADR when the change updates the target architecture.
 
 ## Context Rules
 

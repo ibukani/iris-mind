@@ -20,7 +20,7 @@ For v1.2.1 architecture migration tasks, use this workflow together with `.agent
 
 - Narrow the impact area first with `rg` / `rg --files`.
 - Read related files in parallel. As a default, read up to 5 files per turn.
-- Implementation is the primary source for current behavior. For migration direction, `docs/architecture/cognitive-runtime-v1.2.1.md` is the architecture source of truth.
+- Implementation is the primary source for current behavior. For migration direction, `docs/architecture/current.md` is the architecture source of truth.
 - Preserve backward compatibility only when explicitly requested.
 - Specification changes may change, delete, or rename existing functions.
 - Do not keep unnecessary functions, branches, settings, tests, or docs.
@@ -81,7 +81,7 @@ In this mode:
 
 ## Architecture Rules
 
-For v1.2.1 migration, the detailed architecture rules live in `.agents/skills/iris-cognitive-runtime/SKILL.md` and `docs/architecture/cognitive-runtime-v1.2.1.md`.
+For v1.2.1 migration, the detailed architecture rules live in `.agents/skills/iris-cognitive-runtime/SKILL.md` and `docs/architecture/current.md`.
 
 Default rules for current work:
 

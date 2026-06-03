@@ -12,7 +12,7 @@ Implement the specified feature or change.
 
 - Investigate the necessary scope first.
 - Keep the change scope as small as necessary for the requested outcome.
-- For Cognitive Runtime migration work, read `.agents/skills/iris-cognitive-runtime/SKILL.md` and relevant sections of `docs/architecture/cognitive-runtime-v1.2.1.md`.
+- For Cognitive Runtime migration work, read `.agents/skills/iris-cognitive-runtime/SKILL.md` and relevant sections of `docs/architecture/current.md`.
 - Add, update, or delete tests according to current behavior and current architecture.
 - Do not preserve obsolete compatibility unless explicitly required.
 - Do not add PluginManager/EventBus compatibility shims unless explicitly requested.

@@ -14,7 +14,7 @@ metadata:
 
 This Skill is the migration route for Cognitive Runtime Architecture v1.2.1. It prevents AI-coding agents from mixing the old Plugin/EventBus-centered structure with the new target structure.
 
-Read the relevant sections of `docs/architecture/cognitive-runtime-v1.2.1.md` before making architecture decisions.
+Read the relevant sections of `docs/architecture/current.md` before making architecture decisions.
 
 ## Migration Priority
 
@@ -211,7 +211,7 @@ Phase 0 is instruction and documentation preparation only.
 
 Allowed:
 
-- add `docs/architecture/cognitive-runtime-v1.2.1.md`
+- add `docs/architecture/current.md`
 - update `AGENTS.md`
 - update `.agents/project.md`
 - add or update Skills

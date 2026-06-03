@@ -36,7 +36,7 @@ If information is missing, do the minimum extra investigation and clarify the ch
 
 For Cognitive Runtime migration work, also read `.agents/skills/iris-cognitive-runtime/SKILL.md`.
 
-- `docs/architecture/cognitive-runtime-v1.2.1.md` is the target architecture source of truth.
+- `docs/architecture/current.md` is the target architecture source of truth.
 - Do not preserve PluginManager/EventBus APIs as target architecture unless explicitly requested.
 - Do not add compatibility wrappers, shims, or overlay implementations around old modules.
 - Do not add service locators, global registries, `resolve_optional`, or string-action dispatch for new behavior.

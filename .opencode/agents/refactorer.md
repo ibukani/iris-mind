@@ -20,7 +20,7 @@ You are the refactoring agent for the Iris-Mind project.
 
 - The specified files are only the initial target.
 - Implementation is the source of truth for current behavior.
-- For migration direction, use `docs/architecture/cognitive-runtime-v1.2.1.md` and `.agents/skills/iris-cognitive-runtime/SKILL.md`.
+- For migration direction, use `docs/architecture/current.md` and `.agents/skills/iris-cognitive-runtime/SKILL.md`.
 - Tests are evidence, not authority. Bad tests may be rewritten or deleted with rationale.
 - Do not keep backward compatibility unless the user or current public API requires it.
 - Prefer simpler concrete code over generic abstractions.

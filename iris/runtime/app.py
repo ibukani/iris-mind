@@ -51,6 +51,8 @@ class IrisApp:
     async def process_observation(self, observation: Observation) -> PresentedOutput:
         cycle_result: CycleResult = await self._cycle.run(observation)
         plan: ActionPlan = cycle_result.selected_plan
+        if plan.is_no_action:
+            return PresentedOutput(text=None)
         safety_decision = await self._action_safety_gate.check_plan(plan)
         if safety_decision.decision is GateDecision.BLOCK:
             return PresentedOutput(text=None)

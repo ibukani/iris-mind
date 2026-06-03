@@ -556,6 +556,26 @@ LLM provider 形状への変換は `runtime/wiring/llm.py` が担当する。
 tool を使いたい
 ```
 
+#### 5.3.1 no-action セマンティクス
+
+no-action の正規の表現は以下に固定する。
+
+```python
+ActionPlan(turn_intent="no_action", candidate_text=None, should_respond=False)
+```
+
+`ActionPlan.is_no_action` プロパティがこの条件を判定する（`turn_intent == "no_action" and not should_respond`）。
+
+no-action のルール。
+
+- no-action は LLM を呼び出してはならない。
+- no-action はユーザーに見えるテキスト出力を生成してはならない。
+- no-action は外部送信を行ってはならない。
+- no-action は proactive 発話として振る舞ってはならない。
+- no-action は provider-neutral であり、Discord/TTS/STT 固有フィールドを含まない。
+- runtime (`IrisApp.process_observation()`) は no-action 計画を検出し、action safety gate、presenter、output safety gate をスキップし、即座に `PresentedOutput(text=None)`（`is_sendable=False`）を返す。
+- 実用的なスケジューリング、バックグラウンド自律ループ、Discord 送信は後続 phase に委譲し、no-action 本体には含めない。
+
 ---
 
 ### 5.4 `PresentedOutput`

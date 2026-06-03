@@ -20,6 +20,10 @@ class ActionPlan:
     priority: int
     interruptible: bool = True
 
+    @property
+    def is_no_action(self) -> bool:
+        return self.turn_intent == "no_action" and not self.should_respond
+
 
 @dataclass(frozen=True)
 class PresentedOutput:
@@ -30,6 +34,10 @@ class PresentedOutput:
     delay_ms: int = 0
     priority: int = 0
     interruptible: bool = True
+
+    @property
+    def is_sendable(self) -> bool:
+        return self.text is not None
 
 
 @dataclass(frozen=True)

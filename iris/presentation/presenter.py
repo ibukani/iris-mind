@@ -9,6 +9,8 @@ class Presenter(Protocol):
 
 class SimplePresenter:
     async def present(self, plan: ActionPlan) -> PresentedOutput:
+        if plan.is_no_action:
+            return PresentedOutput(text=None)
         return PresentedOutput(
             text=plan.candidate_text,
             priority=plan.priority,

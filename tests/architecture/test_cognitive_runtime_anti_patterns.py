@@ -33,8 +33,8 @@ TARGET_DIRS: list[str] = [
     "iris/runtime",
 ]
 
-# Legacy directories — these are migration sources and are NOT scanned.
-LEGACY_DIRS: set[str] = {
+# Legacy directories — deleted in Phase 12; kept for documentation.
+_DELETED_LEGACY_DIRS: set[str] = {
     "iris/event",
     "iris/kernel",
     "iris/agency",

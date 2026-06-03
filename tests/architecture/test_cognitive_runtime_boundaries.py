@@ -86,9 +86,6 @@ LEGACY_PREFIXES: set[str] = {
 }
 
 # New target layers that must not import from legacy modules.
-# runtime/ and adapters/ are excluded — they may need to bridge
-# during migration, but individual files in those trees should
-# also migrate away from legacy dependencies.
 QUARANTINE_LAYERS: set[str] = {
     "iris/contracts",
     "iris/core",
@@ -98,10 +95,7 @@ QUARANTINE_LAYERS: set[str] = {
 }
 
 # Permitted exceptions for legacy quarantine: (layer_dir, relative_path, import_prefix, reason)
-QUARANTINE_EXCEPTIONS: list[tuple[str, str, str, str]] = [
-    # TYPE_CHECKING-only forward references are architecturally acceptable.
-    # Add entries here with documented migration paths if needed.
-]
+QUARANTINE_EXCEPTIONS: list[tuple[str, str, str, str]] = []
 
 # Permitted exceptions for layer direction rules: (layer_dir, relative_path, import_prefix, reason)
 DIRECTION_EXCEPTIONS: list[tuple[str, str, str, str]] = [

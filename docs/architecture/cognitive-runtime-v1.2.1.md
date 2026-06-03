@@ -906,6 +906,29 @@ limbic/relationship.py
 ただし、`affect` が `memory` や `policy` を直接呼ばないようにする。
 `CognitiveCycle` が順番に呼ぶ形にする。
 
+Phase 6 の affect / relationship は既存の `AffectSnapshot`、
+`RelationshipSnapshot`、`AppraisalResult`、`RelationshipResult` を再利用する。
+keyword-based appraisal が最小の VAD-like 値と `affect_summary` を作り、
+`FrameBuilder` が immutable な `WorkspaceFrame.affect` に写す。
+mood dynamics は明示的な `elapsed_seconds` を受ける純粋な減衰/更新関数とし、
+永続 mood store や global singleton は持たない。
+relationship は明示的に注入された per-user state に限定し、trust / affinity /
+familiarity と `relationship_summary` を `WorkspaceFrame.relationship` に写す。
+response generation はこの typed frame context を短く prompt context に含めるだけで、
+persona、agency policy、proactive behavior は決めない。
+
+移行対象外:
+
+- neural emotion classifier
+- LimbicOrchestrator / LimbicPlugin / EventBus affect flow
+- appraisal / relationship persistence
+- full Lazarus appraisal
+- attachment style
+- disclosure depth
+- emotion history
+- agency modulation / inhibition
+- LangMem promotion / memory consolidation
+
 ---
 
 ### Phase 7: policy / inhibition 移植

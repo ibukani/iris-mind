@@ -14,6 +14,8 @@ class ResponsePrompt:
     system_instruction: str
     user_text: str
     memory_snippets: tuple[str, ...] = ()
+    affect_context: str | None = None
+    relationship_context: str | None = None
     goals: tuple[str, ...] = ()
     constraints: tuple[str, ...] = ()
 
@@ -36,6 +38,8 @@ def build_response_prompt(frame: WorkspaceFrame) -> ResponsePrompt | None:
         system_instruction="Generate a concise text response for Iris.",
         user_text=frame.interpreted_input.text,
         memory_snippets=tuple(result.record.text for result in frame.memory_summary.retrieved_memories),
+        affect_context=frame.affect.affect_summary,
+        relationship_context=frame.relationship.relationship_summary,
         goals=tuple(goal.name for goal in frame.goals),
         constraints=tuple(constraint.name for constraint in frame.constraints),
     )
@@ -55,7 +59,6 @@ class ResponseGenerationStep(PipelineStep[ActionSelectionResult]):
                 step_name=self.name,
                 status=StepStatus.SKIPPED,
                 reason="no interpreted input text",
-                action_plans=(),
             )
 
         generated = await self._generator.generate_response(prompt)

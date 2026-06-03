@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -36,6 +38,8 @@ class AppraisalResult(PipelineStepResult):
     mood_label: str | None = None
     arousal: float = 0.0
     valence: float = 0.0
+    dominance: float = 0.0
+    affect_summary: str | None = None
 
 
 @dataclass(frozen=True)
@@ -44,6 +48,7 @@ class RelationshipResult(PipelineStepResult):
     affinity: float = 0.0
     trust: float = 0.0
     familiarity: float = 0.0
+    relationship_summary: str | None = None
 
 
 @dataclass(frozen=True)

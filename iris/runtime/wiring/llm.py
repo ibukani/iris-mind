@@ -39,7 +39,15 @@ def wire_openai_llm_client(config: OpenAIConfig) -> LLMClient:
 
 
 def _build_user_content(prompt: ResponsePrompt) -> str:
-    if not prompt.memory_snippets:
+    sections: list[str] = []
+    if prompt.memory_snippets:
+        snippets = "\n".join(f"- {snippet}" for snippet in prompt.memory_snippets)
+        sections.append(f"Relevant memories:\n{snippets}")
+    if prompt.affect_context is not None:
+        sections.append(f"Affect context:\n{prompt.affect_context}")
+    if prompt.relationship_context is not None:
+        sections.append(f"Relationship context:\n{prompt.relationship_context}")
+    if not sections:
         return prompt.user_text
-    snippets = "\n".join(f"- {snippet}" for snippet in prompt.memory_snippets)
-    return f"Relevant memories:\n{snippets}\n\nUser message:\n{prompt.user_text}"
+    sections.append(f"User message:\n{prompt.user_text}")
+    return "\n\n".join(sections)

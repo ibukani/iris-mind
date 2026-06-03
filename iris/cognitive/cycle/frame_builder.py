@@ -47,6 +47,8 @@ class FrameBuilder:
                         mood_label=result.mood_label,
                         arousal=result.arousal,
                         valence=result.valence,
+                        dominance=result.dominance,
+                        affect_summary=result.affect_summary,
                     ),
                 )
             case RelationshipResult():
@@ -57,6 +59,7 @@ class FrameBuilder:
                         affinity=result.affinity,
                         trust=result.trust,
                         familiarity=result.familiarity,
+                        relationship_summary=result.relationship_summary,
                     ),
                 )
             case MotivationResult():

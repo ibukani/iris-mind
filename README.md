@@ -78,10 +78,24 @@ OPENROUTER_API_KEY=sk-or-...
 
 ### Starting Iris
 
+#### Legacy Runtime (main.py)
+
 ```powershell
 uv run python main.py
 uv run python main.py --verbose
 ```
+
+#### v1.2.1 Target Runtime (one-turn CLI)
+
+```powershell
+uv run python -m iris.runtime.cli --text "hello"
+uv run python -m iris.runtime.cli --text "hello" --llm fake
+uv run python -m iris.runtime.cli --text "こんにちは" --llm openai
+```
+
+- `--llm fake` (default): Deterministic response without network or API key.
+- `--llm openai`: Uses `OPENAI_API_KEY` from environment. Configure model with `--model`.
+- `main.py` remains the legacy runtime entrypoint and has not been removed.
 
 ### Slash Commands
 

@@ -8,10 +8,11 @@ The target architecture is `docs/architecture/cognitive-runtime-v1.2.1.md`.
 Existing Plugin/EventBus modules are migration sources only; they are not the
 shape to reproduce in the new runtime.
 
-## Phase 9 status
+## Phase 9+ status
 
-Phase 9 (Legacy Migration Control and Runtime Cutover Preparation) is
-**complete**.  The following controls are now in place:
+Phase 9 (Legacy Migration Control) is **complete**.
+
+Phase 10 (Runtime Cutover Preparation) is **complete**.  The following controls are now in place:
 
 - **Test isolation**: `tests/conftest.py` is target-safe at import time.
   Legacy fixtures live in `tests/legacy/conftest.py` and are imported lazily
@@ -70,7 +71,7 @@ Delete a legacy file only after all of the following are true.
 | `iris/event` | C/D | No direct target equivalent; `runtime/telemetry.py` only if needed | Old entrypoint and legacy fixtures still use EventBus | Remove only after runtime cutover and handler tests are retired |
 | `iris/heartbeat` | B/C | future `runtime/tasks/heartbeat.py` or `features/heartbeat/` | TimerTick/EventBus-based old runtime remains | Rebuild as runtime task, not EventBus plugin |
 | `iris/io` | B/C | `adapters/app_gateway/`, future `adapters/io/`, `contracts/transport.py` | gRPC/session path is still Plugin/EventBus-based | Convert inbound/outbound flow to Observation/PresentedOutput gateway |
-| `iris/kernel` | C/D | `runtime/`, `runtime/wiring/`, future `runtime/config.py` | `main.py` still starts Supervisor/KernelProcess/PluginManager | Build new runtime entrypoint before deleting Supervisor/PluginManager |
+| `iris/kernel` | C/D | `runtime/`, `runtime/wiring/`, `runtime/cli.py`, future `runtime/config.py` | `main.py` still starts Supervisor/KernelProcess/PluginManager; target CLI exists but is not the default entrypoint | Build new runtime entrypoint is done (Phase 10). Replace `main.py` in a later phase. |
 | `iris/limbic` | B/C | `cognitive/affect/`, future `adapters/affect/` | Stores/classifier/persistence not fully moved | Port stores/classifier only; do not port orchestrator/plugin |
 | `iris/llm` | B/C | `adapters/llm/`, `cognitive/action/response.py` | Provider discovery/context utilities remain legacy | Port provider adapters and token/context utilities, then delete bridge/registry |
 | `iris/memory` | B/C | `contracts/memory.py`, `cognitive/memory/`, `adapters/memory/`, future `features/memory_consolidation/` | Short-term/sensory/long-term/procedural/LangMem not fully moved | Migrate in slices: short-term, sensory, long-term, procedural, LangMem |
@@ -95,7 +96,7 @@ Start with small slices that do not require preserving Plugin/EventBus shape.
 1. **LLM utilities**: repetition/token/context helpers → `adapters/llm/`
 2. **Limbic classifier/store**: retain behavior, drop plugin/orchestrator → `cognitive/affect/`
 3. **Memory short-term/sensory**: rebuild as perception/memory steps → `cognitive/memory/`
-4. **Runtime entrypoint**: `runtime` owns startup before kernel deletion → `runtime/wiring/`
+4. **Runtime entrypoint**: `runtime` owns startup before kernel deletion → `runtime/wiring/` (Phase 10: target CLI exists; legacy `main.py` still active)
 5. **IO/session gateway**: convert gRPC/session events → `adapters/app_gateway/`
 6. **Account/Room**: model identity/session in target contracts → `contracts/identity.py`
 7. **Agency/Planning**: split by planning, inhibition, execution → `cognitive/policy/`
@@ -123,6 +124,47 @@ Start with small slices that do not require preserving Plugin/EventBus shape.
 - `pyproject.toml` defines `target`, `legacy`, `legacy_architecture`, and
   `migration` markers under strict marker validation.
 
+## Phase 10 controls implemented in code
+
+Phase 10 (Runtime Cutover Preparation) adds the following:
+
+- **Target runtime CLI**: `iris/runtime/cli.py` provides a one-turn text
+  interaction entrypoint without importing legacy Kernel/EventBus modules.
+- **Wiring helper**: `iris/runtime/wiring/app.py` wires `IrisApp` with
+  deterministic FakeLLM or OpenAI backend.
+- **CLI tests**: `tests/runtime/test_cli.py` verifies one-turn execution,
+  deterministic output, observation structure, and request recording.
+- **Architecture guard expansion**: `tests/architecture/test_phase10_runtime_cutover.py`
+  enforces:
+  - `iris/runtime/cli.py`, `iris/runtime/app.py`, and all `iris/runtime/wiring/`
+    files do not import legacy modules
+  - `iris/runtime` package has no eager legacy imports
+  - `main.py`, `iris/kernel`, and `iris/event` remain intact (Phase 10 is
+    non-destructive)
+  - CLI structure requirements (`main()`, `run_one_turn()`)
+- **README**: New target runtime usage documented alongside legacy runtime.
+- **Runtime command**:
+  ```bash
+  python -m iris.runtime.cli --text "hello"
+  python -m iris.runtime.cli --text "hello" --llm fake
+  ```
+
+## Phase 10 remaining blockers
+
+The new target runtime CLI works for one-turn FakeLLM execution, but the
+following remain before deleting `iris/kernel` and `iris/event`:
+
+- The target CLI does not yet manage long-running sessions, multi-turn
+  conversation, or streaming IO.
+- `main.py` still starts the legacy Supervisor; no process-supervision
+  equivalent exists in the target runtime.
+- gRPC, Discord, heartbeat, proactive, and LangMem features are not
+  wired into the target runtime yet.
+- Full memory, tool execution, account, room, and agency subsystems
+  are not migrated.
+
+These are tasks for Phase 11 and beyond.
+
 ## Recommended validation lanes
 
 Use target validation for v1.2.1 work:
@@ -131,6 +173,7 @@ Use target validation for v1.2.1 work:
 uv run pytest \
   tests/architecture/test_cognitive_runtime_*.py \
   tests/architecture/test_phase9_migration_control.py \
+  tests/architecture/test_phase10_runtime_cutover.py \
   tests/contracts tests/adapters tests/cognitive tests/features tests/runtime \
   -q -m "not legacy and not legacy_architecture"
 ```

@@ -437,7 +437,12 @@ provider tests は `FakeLLMClient` または mocked provider client を使い、
 `adapters/memory/` は memory store 技術境界である。
 責務は、typed `MemoryQuery` を受け取り typed `MemorySearchResult` を返すことに限定する。
 テストと local MVP は deterministic な `FakeMemoryStore` を使う。
-LangMem、LangChain memory、embeddings、vector DB、永続 storage は後続 phase まで入れない。
+LangChain / LangMem / vector store は `MemoryStore` 背後の optional adapter としてだけ扱う。
+`cognitive/` は `MemoryQuery` と `MemorySearchResult` だけに依存し、LangChain、LangMem、vector DB SDK、adapter 型を import しない。
+`runtime/wiring/` は constructor injection で adapter を明示的に組み立てる。
+LangChain adapter は LangChain document / vectorstore 型を Iris contracts に漏らさない薄い変換層である。
+In-memory vector adapter は外部サービスなしの deterministic adapter に限定する。
+LangMem promotion / consolidation、実 embeddings provider、vector DB persistence、旧 LangChain memory API の core memory 化は後続 phase まで入れない。
 `cognitive/memory/` は store 実装を import せず、runtime wiring が constructor injection で接続する。
 
 AppGateway の責務。

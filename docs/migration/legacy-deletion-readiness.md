@@ -1,18 +1,36 @@
-# Phase 9 Legacy Deletion Readiness
+# Legacy Deletion Readiness
 
-Phase 9 is not a bulk deletion phase.  Its purpose is to make every later
-feature migration and deletion reviewable, testable, and reversible before old
-Plugin/EventBus-centered code is removed.
+## Strategy change (Phase 11)
 
-The target architecture is `docs/architecture/cognitive-runtime-v1.2.1.md`.
-Existing Plugin/EventBus modules are migration sources only; they are not the
-shape to reproduce in the new runtime.
+Full feature-by-feature legacy migration has been **abandoned**.
 
-## Phase 9+ status
+The project is now on an **early legacy deletion / MVP reconstruction route**:
 
-Phase 9 (Legacy Migration Control) is **complete**.
+- The target runtime (`main.py` → `iris.runtime.*`) is the **source of truth**.
+- Legacy Plugin/EventBus code is **reference-only**, not runtime material.
+- Removed features (gRPC, Discord, LangMem, proactive, heartbeat, tools,
+  room/account, full memory) may be rebuilt later as target-native
+  implementations.
+- Do not preserve legacy runtime compatibility.
 
-Phase 10 (Runtime Cutover Preparation) is **complete**.  The following controls are now in place:
+Phase 11 has cut over `main.py` to the target runtime.  The legacy
+Supervisor/Kernel/PluginManager/EventBus path is no longer the default.
+
+## Phase 11 status
+
+Phase 11 (MVP Runtime Cutover) is **complete**.  Changes:
+
+- `main.py` now delegates to `iris.runtime.cli` (target Cognitive Runtime).
+  It no longer imports `iris.kernel` or `iris.event`.
+- Architecture guards verify `main.py`, `iris/runtime/cli.py`, and
+  `iris/runtime/wiring/` do not import legacy packages and do not
+  reference PluginManager/EventBus.
+- Architecture guards no longer require `iris/kernel` or `iris/event` to
+  exist (deletion is now the intended direction).
+- Tests added for the main.py entrypoint (`tests/runtime/test_main_entrypoint.py`).
+- Documentation now states the early deletion / MVP reconstruction strategy.
+- Legacy test suite remains quarantined behind markers and is not part of
+  the default validation path.
 
 - **Test isolation**: `tests/conftest.py` is target-safe at import time.
   Legacy fixtures live in `tests/legacy/conftest.py` and are imported lazily
@@ -66,17 +84,13 @@ Delete a legacy file only after all of the following are true.
 
 | Legacy package | Status | Target owner | Current blocker | Next action |
 |---|---:|---|---|---|
-| `iris/account` | B/C | `contracts/identity.py`, future `adapters/account/` | Legacy room/account handlers and tests still use EventBus fixtures | Introduce target account/identity ports before deletion |
-| `iris/agency` | B/C | `cognitive/policy/`, `cognitive/action/`, `features/proactive_talk/` | Planning/execution/modulation behavior not fully target-owned | Split by planning, inhibition, execution, modulation, proactive |
-| `iris/event` | C/D | No direct target equivalent; `runtime/telemetry.py` only if needed | Old entrypoint and legacy fixtures still use EventBus | Remove only after runtime cutover and handler tests are retired |
-| `iris/heartbeat` | B/C | future `runtime/tasks/heartbeat.py` or `features/heartbeat/` | TimerTick/EventBus-based old runtime remains | Rebuild as runtime task, not EventBus plugin |
-| `iris/io` | B/C | `adapters/app_gateway/`, future `adapters/io/`, `contracts/transport.py` | gRPC/session path is still Plugin/EventBus-based | Convert inbound/outbound flow to Observation/PresentedOutput gateway |
-| `iris/kernel` | C/D | `runtime/`, `runtime/wiring/`, `runtime/cli.py`, future `runtime/config.py` | `main.py` still starts Supervisor/KernelProcess/PluginManager; target CLI exists but is not the default entrypoint | Build new runtime entrypoint is done (Phase 10). Replace `main.py` in a later phase. |
-| `iris/limbic` | B/C | `cognitive/affect/`, future `adapters/affect/` | Stores/classifier/persistence not fully moved | Port stores/classifier only; do not port orchestrator/plugin |
-| `iris/llm` | B/C | `adapters/llm/`, `cognitive/action/response.py` | Provider discovery/context utilities remain legacy | Port provider adapters and token/context utilities, then delete bridge/registry |
-| `iris/memory` | B/C | `contracts/memory.py`, `cognitive/memory/`, `adapters/memory/`, future `features/memory_consolidation/` | Short-term/sensory/long-term/procedural/LangMem not fully moved | Migrate in slices: short-term, sensory, long-term, procedural, LangMem |
-| `iris/room` | B/C | future `contracts/session.py`, `adapters/room/` | Room lifecycle still tied to account/io/event handlers | Model RoomId/Session context in target contracts before deletion |
-| `iris/tools` | B/C | future `contracts/tools.py`, `adapters/tools/`, `safety/tool_gate.py` | Tool execution still tied to legacy execution path | Move tool execution behind ActionSafetyGate/ToolExecutor |
+| `iris/account` | A/D | `contracts/identity.py` | main.py no longer reaches iris/account; legacy-only | Safe to delete |
+| `iris/agency` | A/D | `cognitive/policy/`, `cognitive/action/` | main.py no longer reaches iris/agency; target policy exists | Safe to delete |
+| `iris/limbic` | A/D | `cognitive/affect/` | Target appraisal/relationship steps exist; legacy limbic is unused | Safe to delete |
+| `iris/llm` | A/D | `adapters/llm/` | Target LLM adapters exist; legacy provider discovery is unused | Safe to delete |
+| `iris/memory` | A/D | `contracts/memory.py`, `cognitive/memory/`, `adapters/memory/` | Target memory contracts/adapters exist; legacy memory is unused | Safe to delete |
+| `iris/room` | A/D | future `contracts/session.py` | main.py no longer reaches iris/room; legacy-only | Safe to delete |
+| `iris/tools` | A/D | future `contracts/tools.py` | main.py no longer reaches iris/tools; legacy-only | Safe to delete |
 
 ## Per-package deletion gates
 
@@ -89,20 +103,11 @@ Before deleting any legacy package, verify these gates are satisfied:
 | **Runtime gate** | `main.py` or the active entrypoint no longer imports or starts the package |
 | **Docs gate** | README, architecture docs, and this document no longer reference the package as current |
 
-## Phase 10+ recommended deletion order
+## Superseded: Phase 10+ recommended deletion order
 
-Start with small slices that do not require preserving Plugin/EventBus shape.
-
-1. **LLM utilities**: repetition/token/context helpers → `adapters/llm/`
-2. **Limbic classifier/store**: retain behavior, drop plugin/orchestrator → `cognitive/affect/`
-3. **Memory short-term/sensory**: rebuild as perception/memory steps → `cognitive/memory/`
-4. **Runtime entrypoint**: `runtime` owns startup before kernel deletion → `runtime/wiring/` (Phase 10: target CLI exists; legacy `main.py` still active)
-5. **IO/session gateway**: convert gRPC/session events → `adapters/app_gateway/`
-6. **Account/Room**: model identity/session in target contracts → `contracts/identity.py`
-7. **Agency/Planning**: split by planning, inhibition, execution → `cognitive/policy/`
-8. **Tools**: move behind ActionSafetyGate → `safety/tool_gate.py`
-9. **Event/Heartbeat**: remove only after runtime cutover
-10. **Kernel**: delete Supervisor/PluginManager after new entrypoint is active
+The feature-by-feature migration plan below has been superseded by the
+early deletion / MVP reconstruction strategy.  All legacy packages are
+now rated A/D (safe to delete) because `main.py` no longer reaches them.
 
 ## Phase 9 controls implemented in code
 
@@ -149,21 +154,47 @@ Phase 10 (Runtime Cutover Preparation) adds the following:
   python -m iris.runtime.cli --text "hello" --llm fake
   ```
 
-## Phase 10 remaining blockers
+## Phase 11 remaining blockers before hard legacy deletion
 
-The new target runtime CLI works for one-turn FakeLLM execution, but the
-following remain before deleting `iris/kernel` and `iris/event`:
+The target runtime is now the default execution path.  Legacy packages
+(`iris/kernel`, `iris/event`, etc.) are no longer reached via `main.py`.
 
-- The target CLI does not yet manage long-running sessions, multi-turn
-  conversation, or streaming IO.
-- `main.py` still starts the legacy Supervisor; no process-supervision
-  equivalent exists in the target runtime.
-- gRPC, Discord, heartbeat, proactive, and LangMem features are not
-  wired into the target runtime yet.
-- Full memory, tool execution, account, room, and agency subsystems
-  are not migrated.
+Remaining before hard deletion:
 
-These are tasks for Phase 11 and beyond.
+- Add `iris/admin` to forbidden imports in architecture guards, or
+  confirm it is no longer needed.
+- Remove or archive legacy tests that reference deleted packages.
+- Verify `config.yaml` / `iris/kernel/config.py` is not imported by
+  any target path.
+- Run full test suite with markers to confirm legacy tests are
+  quarantined and target tests pass independently.
+- Delete legacy packages in a single atomic commit after all of the
+  above are confirmed.
+
+## What is now safe to delete
+
+After Phase 11, the following packages have no runtime dependency from
+`main.py` or any target module:
+
+- `iris/event`
+- `iris/kernel`
+- `iris/io`
+- `iris/account`
+- `iris/room`
+- `iris/agency`
+- `iris/memory`
+- `iris/limbic`
+- `iris/llm`
+- `iris/tools`
+- `iris/heartbeat`
+- `iris/admin`
+
+Architecture tests at `tests/architecture/test_phase10_runtime_cutover.py`
+and `tests/architecture/test_phase9_migration_control.py` enforce target
+package isolation.  The import gate is satisfied for all target packages.
+
+The runtime gate is now satisfied — `main.py` no longer imports or starts
+any legacy package.
 
 ## Recommended validation lanes
 

@@ -1,7 +1,7 @@
 """v1.2.1 target runtime CLI entrypoint.
 
 This is a thin adapter around target runtime wiring.  It does not import
-or use legacy Kernel / EventBus modules.
+or use legacy Kernel modules.
 
 Usage:
     python -m iris.runtime.cli --text "hello"

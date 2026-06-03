@@ -2,11 +2,12 @@
 
 AIコンパニオンであり、AIアシスタントとしても機能するKernel
 
-> **Migration status**: Iris is migrating to Cognitive Runtime Architecture v1.2.1.
-> `docs/architecture/cognitive-runtime-v1.2.1.md` is the target architecture.
-> The Plugin/EventBus-centered Kernel described below remains a legacy runtime
-> until the runtime entrypoint and remaining features are migrated.  See
-> `docs/migration/legacy-deletion-readiness.md` before deleting legacy modules.
+> **Migration status**: Iris has moved to Cognitive Runtime Architecture v1.2.1
+> as the default runtime. `docs/architecture/cognitive-runtime-v1.2.1.md` is the
+> target architecture. The Plugin/EventBus-centered Kernel is now reference-only.
+> Full feature-by-feature legacy migration has been superseded by an early
+> deletion / MVP reconstruction strategy. See
+> `docs/migration/legacy-deletion-readiness.md` for details.
 
 Iris はAIコンパニオンであり、AIアシスタントとしても機能するKernel。自律的行動・タスク実行を担い、最終的には自己進化を目指す。Python 製で Ollama または OpenRouter 上で動作する。脳科学・神経科学の構造を参考にした層分割アーキテクチャを採用する。
 
@@ -78,24 +79,18 @@ OPENROUTER_API_KEY=sk-or-...
 
 ### Starting Iris
 
-#### Legacy Runtime (main.py)
+#### Target Runtime (default)
 
 ```powershell
-uv run python main.py
-uv run python main.py --verbose
-```
-
-#### v1.2.1 Target Runtime (one-turn CLI)
-
-```powershell
+uv run python main.py --text "hello"
+uv run python main.py --text "hello" --llm fake
 uv run python -m iris.runtime.cli --text "hello"
-uv run python -m iris.runtime.cli --text "hello" --llm fake
-uv run python -m iris.runtime.cli --text "こんにちは" --llm openai
 ```
 
+- `main.py` now delegates to the v1.2.1 Cognitive Runtime.
 - `--llm fake` (default): Deterministic response without network or API key.
 - `--llm openai`: Uses `OPENAI_API_KEY` from environment. Configure model with `--model`.
-- `main.py` remains the legacy runtime entrypoint and has not been removed.
+- Legacy Supervisor/Kernel startup is no longer the default runtime path.
 
 ### Slash Commands
 

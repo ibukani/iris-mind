@@ -11,8 +11,10 @@ Check the current diff or specified target before considering the work complete.
 ## Check
 
 - scope
-- responsibility boundaries
+- v1.2.1 responsibility boundaries
 - stale compatibility code
+- PluginManager/EventBus compatibility shims
+- service locator / global registry additions
 - test quality
 - documentation consistency
 - validation results

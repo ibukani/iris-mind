@@ -3,9 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from iris.cognitive.workspace.frame import ActionPreference, PolicyConstraint, WorkspaceFrame
+from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.actions import ActionPlan
 from iris.contracts.memory import MemorySearchResult
+from iris.contracts.policy import ActionPreference, PolicyConstraint
 
 
 class StepStatus(StrEnum):

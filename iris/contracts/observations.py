@@ -31,4 +31,5 @@ class UserMessageObservation(Observation):
 
 @dataclass(frozen=True)
 class IdleTickObservation(Observation):
-    reason: str
+    reason: str | None = None
+    idle_seconds: float = 0.0

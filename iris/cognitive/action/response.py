@@ -5,8 +5,9 @@ from typing import Protocol
 
 from iris.cognitive.cycle.models import ActionSelectionResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
-from iris.cognitive.workspace.frame import PolicyConstraint, WorkspaceFrame
+from iris.cognitive.workspace.frame import WorkspaceFrame
 from iris.contracts.actions import ActionPlan
+from iris.contracts.policy import PolicyConstraint
 
 
 @dataclass(frozen=True)

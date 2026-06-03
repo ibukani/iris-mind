@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from iris.cognitive.cycle.models import PolicyResult, StepStatus
 from iris.cognitive.cycle.pipeline import PipelineStep
-from iris.cognitive.workspace.frame import ActionPreference, PolicyConstraint, WorkspaceFrame
+from iris.cognitive.workspace.frame import WorkspaceFrame
+from iris.contracts.policy import ActionPreference, PolicyConstraint
 
 _HIGH_AROUSAL_THRESHOLD = 0.75
 _NEGATIVE_VALENCE_THRESHOLD = -0.55

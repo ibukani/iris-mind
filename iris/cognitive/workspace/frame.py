@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from iris.contracts.actions import ActionPlan
 from iris.contracts.memory import MemorySearchResult
 from iris.contracts.observations import Observation
+from iris.contracts.policy import ActionPreference, PolicyConstraint
 
 
 @dataclass(frozen=True)
@@ -42,21 +43,6 @@ class GoalCandidate:
     name: str
     reason: str
     priority: int
-
-
-@dataclass(frozen=True)
-class PolicyConstraint:
-    name: str
-    reason: str
-    prompt_instruction: str | None = None
-    blocks_response: bool = False
-
-
-@dataclass(frozen=True)
-class ActionPreference:
-    name: str
-    reason: str
-    priority_delta: int = 0
 
 
 @dataclass(frozen=True)

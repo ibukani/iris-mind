@@ -989,6 +989,17 @@ IdleTickObservation
 → SpeakAction or NoAction
 ```
 
+Phase 8 の `features/proactive_talk/` は optional feature boundary として追加する。
+FeatureDefinition が境界であり、proactive salience scoring、goal proposal、
+proactive policy guidance、ActionPlan 選択を deterministic な基盤として提供する。
+
+Runtime wiring は feature を明示的に compose する。Feature の auto-discovery、
+global registry、service locator は使わない。
+
+Phase 8 では production proactive behavior は実装しない。EventBus、
+PluginManager、InternalBus、background scheduler、自律 runtime loop、Discord
+adapter、TTS/STT、外部送信、complex planner、LangGraph execution は deferred とする。
+
 ---
 
 ### Phase 9: 旧構造削除
